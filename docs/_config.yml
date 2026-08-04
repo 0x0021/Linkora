@@ -1,5 +1,8 @@
 # GitHub Pages 站点配置（部署源：仓库 main 分支 /docs 目录）
-# 使用 GitHub Pages 白名单内的 cayman 主题，轻量且可读性好。
+# 使用 GitHub Pages 白名单内的 cayman 主题承载 .md 文档；
+# 落地首页 docs/index.html 为独立静态页（无 front matter），自带高级 UI，不受主题影响。
+title: Linkora · 灵桥
+description: 面向企业的 AI 分身运行时 —— 统一接入钉钉 / 飞书 / 企业微信，具备智能路由、长期记忆与安全合规。
 theme: jekyll-theme-cayman
 
 # 关闭相对链接插件可能造成的构建噪音

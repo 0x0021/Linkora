@@ -8,8 +8,10 @@
 —— 连接企业智能，桥接无限可能。
 
 ![Python](https://img.shields.io/badge/Python-%E2%89%A53.9-3776AB?logo=python&logoColor=white)![FastAPI](https://img.shields.io/badge/Web-FastAPI-009688?logo=fastapi&logoColor=white)![Platforms](https://img.shields.io/badge/平台-钉钉%20%7C%20飞书%20%7C%20企微-4a86e8)![Docker](https://img.shields.io/badge/部署-Docker%20Compose-2496ED?logo=docker&logoColor=white)
+![CI](https://github.com/0x0021/Linkora/actions/workflows/ci.yml/badge.svg)![Release](https://img.shields.io/github/v/release/0x0021/Linkora?label=Release&color=blue)![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
 [快速开始](#快速开始) · [核心能力](#核心能力) · [配置](#配置速查) · [项目结构](#项目结构) · [贡献指南](#贡献指南) · [文档索引](#文档索引)
+· [安全政策](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md)
 
 </div>
 

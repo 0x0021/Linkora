@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔒 安全漏洞上报
+    url: https://github.com/0x0021/Linkora/security/advisories/new
+    about: 安全漏洞请走私有漏洞上报通道，不要公开提交 Issue。
+  - name: 💬 一般讨论 / 提问
+    url: https://github.com/0x0021/Linkora/discussions
+    about: 使用问题、设计讨论欢迎到 Discussions。

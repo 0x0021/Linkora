@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class DwsAdapterChatMixin:
+    # 类级冷却表：key = "start|end" 时间窗，value = 上次打印上限提示的 unix timestamp。
+    # 用类级而非实例级，避免多实例/多线程场景下 5 分钟冷却失效导致刷屏。
+    _list_all_cap_warn_at: dict[str, float] = {}
+
     def contact_user_get_self(self, timeout: int | None = None) -> dict:
         try:
             data = self.run(["contact", "user", "get-self"],
@@ -198,16 +202,19 @@ class DwsAdapterChatMixin:
                 merged["nextCursor"] = next_cursor
                 if not has_more or not next_cursor or pages >= effective_max_pages:
                     if pages >= effective_max_pages and has_more:
-                        # 同窗口 5 分钟内只告警一次，避免每轮轮询刷屏（实际仍会停止翻页）。
+                        # 同窗口 5 分钟内只提示一次，避免每轮轮询刷屏（实际仍会停止翻页）。
+                        # 该上限是设计内的保护机制：实时轮询触顶说明窗口内消息过多，
+                        # 应缩小时间窗或走 sync_history 做深度回填，不是需要立即处理的异常。
                         now_ts = time.time()
-                        last = self.__dict__.get("_list_all_cap_warn_at", 0.0)
+                        warn_key = f"{start}|{end}"
+                        last = self._list_all_cap_warn_at.get(warn_key, 0.0)
                         if now_ts - last >= 300:
-                            logger.warning(
+                            logger.info(
                                 "list-all 分页达到上限 %d 页（时间窗 %s~%s），"
                                 "停止翻页，窗口内可能仍有未拉取消息",
                                 effective_max_pages, start, end
                             )
-                            self._list_all_cap_warn_at = now_ts
+                            self._list_all_cap_warn_at[warn_key] = now_ts
                     break
                 cursor = next_cursor
             return merged

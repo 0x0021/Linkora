@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v11
         with:
           # Issue：60 天无活动打标，再 14 天无活动保持标记（不自动关）
           days-before-stale: 60

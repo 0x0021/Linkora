@@ -1,0 +1,110 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Secrets (env files with credentials — keep local only)
+.env
+.env.*
+!.env.example
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Project specific
+config.yaml
+config.local.yaml
+data/
+logs/
+*.log
+*.pid
+*.db
+*.db-shm
+*.db-wal
+# Config backups (contain plaintext keys, never commit!)
+data/config-backups/
+
+# Test files (仅忽略根目录临时测试，不忽略 tests/ 下的正式测试)
+/test_*.py
+*_test.py
+pytest.ini
+.coverage
+
+# Documentation (if generated)
+docs/_build/
+*.md.bak
+
+# 配置文件备份（含明文密钥，禁止入库！）
+config.yaml
+config.yaml.bak*
+*.bak
+*.secret
+*.env
+
+# dws 凭证目录（宿主绑定 ./dingtalk，含登录态，禁止入库！）
+dingtalk/
+
+# Workbuddy (if used)
+.workbuddy/
+
+# Node (if web uses npm)
+node_modules/
+package-lock.json
+npm-debug.log
+
+# pytest-cov residual
+.coverage 2
+.coverage 3
+
+# ---- 开源加固：凭据 / 证书 / OS 垃圾 / 缓存（防御性，防止将来误提交）----
+# 私钥 / TLS 证书
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+id_rsa
+id_ed25519
+id_dsa
+id_ecdsa
+# 本地数据库衍生
+*.sqlite
+*.sqlite3
+*.dump
+# OS / 编辑器垃圾
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# Python 缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

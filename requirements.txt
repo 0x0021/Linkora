@@ -1,0 +1,47 @@
+# Linkora 运行时依赖（已钉版 ==，保证 PyInstaller 可复现构建）
+# 版本来源：基于 .venv 当前安装版本锁定，避免浮动范围导致构建漂移。
+# 如需升级依赖，请在本机 .venv 升级后重新核对版本再改此处。
+
+# ---- 配置 / 环境 ----
+PyYAML==6.0.3
+pydantic==2.13.4
+python-dotenv==1.2.2
+platformdirs==4.11.0
+
+# ---- LLM / 嵌入模型 ----
+openai==2.48.0
+numpy==2.5.1
+sentence-transformers==5.6.1
+huggingface_hub==1.23.0
+tokenizers==0.22.2
+
+# ---- Web 服务 ----
+fastapi==0.140.0
+uvicorn==0.51.0
+jinja2==3.1.6
+python-multipart==0.0.32
+
+# ---- 向量检索 / OCR ----
+faiss-cpu==1.14.3
+requests==2.34.2
+jieba==0.42.1
+regex==2026.7.19
+rapidocr-onnxruntime==1.2.3
+
+# ---- 文档解析 ----
+pdfplumber==0.11.10
+pymupdf==1.28.0
+python-pptx==1.0.2
+python-docx==1.2.0
+pytesseract==0.3.13
+Pillow==12.3.0
+openpyxl==3.1.5
+
+# ---- 系统 / 工具 ----
+rich==15.0.0
+psutil==7.2.2
+
+# ---- 测试（构建二进制时不会被打包，仅在开发/CI 安装）----
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-timeout==2.4.0

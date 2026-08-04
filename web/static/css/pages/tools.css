@@ -1,0 +1,271 @@
+.tools-page-content {
+    padding: 0;
+}
+
+/* ── 统计概览 ── */
+.tools-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+    padding: 0 0 var(--space-lg);
+    font-size: 0.875rem;
+}
+
+.tools-summary-item {
+    color: var(--text-secondary);
+}
+
+.tools-summary-item strong {
+    color: var(--text-primary);
+}
+
+.tools-summary-item.warn strong {
+    color: #ef4444;
+}
+
+.tools-summary-item.ok strong {
+    color: #22c55e;
+}
+
+/* ── 过滤栏 ── */
+.tools-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: nowrap;
+    padding: 0 0 var(--space-md);
+}
+
+/* ── 列表容器 ── */
+.tools-list {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    overflow-x: auto;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ── 列表行 ── */
+.tool-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1.2fr 2.2fr 1.4fr 80px 110px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.875rem;
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.15s;
+}
+
+.tool-row:last-child {
+    border-bottom: none;
+}
+
+.tool-row:hover {
+    background: var(--brand-primary-light);
+}
+
+/* ── 表头行 ── */
+.tool-row-header {
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.0375em;
+    color: var(--text-tertiary);
+    background: var(--bg-subtle);
+}
+
+.tool-row-header:hover {
+    background: var(--bg-subtle);
+}
+
+/* ── 被屏蔽行 ── */
+.tool-row-blocked {
+    background: rgba(239, 68, 68, 0.04);
+}
+
+/* ── 工具名称列 ── */
+.tool-name-col .tool-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tool-id-col .tool-id {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tool-desc-col {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* ── 分类标签列 ── */
+.tool-cats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.tool-source {
+    text-align: center;
+}
+
+.tool-status-col {
+    text-align: right;
+}
+
+/* ── 空状态行 ── */
+.tool-empty-row {
+    border-bottom: none;
+}
+
+.tool-empty-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tool-empty-placeholder i {
+    font-size: 2rem;
+    opacity: 0.5;
+}
+
+.tool-empty-placeholder p {
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+}
+
+/* ── 标签样式 ── */
+.pill-category {
+    display: inline-block;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.4375rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.pill-skill {
+    display: inline-block;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.4375rem;
+    border-radius: var(--radius-sm);
+    background: var(--brand-primary-light);
+    color: var(--brand-primary);
+    white-space: nowrap;
+}
+
+.pill-intent {
+    display: inline-block;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.4375rem;
+    border-radius: var(--radius-sm);
+    background: rgba(139, 92, 246, 0.1);
+    color: #7c3aed;
+    white-space: nowrap;
+}
+
+/* ── 状态徽章 ── */
+.badge-success {
+    display: inline-block;
+    padding: 0.1875rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    background: #dcfce7;
+    color: #166534;
+}
+
+.badge-warning {
+    display: inline-block;
+    padding: 0.1875rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.badge-danger {
+    display: inline-block;
+    padding: 0.1875rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-secondary {
+    display: inline-block;
+    padding: 0.1875rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+}
+
+/* ── 响应式 ── */
+@media (max-width: 768px) {
+    .tools-filter-bar input {
+        width: auto !important;
+        max-width: 140px;
+    }
+    .tools-filter-bar select {
+        max-width: none !important;
+    }
+}
+
+@media (max-width: 900px) {
+    .tool-row {
+        grid-template-columns: 1.4fr 1fr 1.4fr 80px 110px;
+    }
+    .tool-row .tool-desc-col {
+        display: none;
+    }
+    .tool-row-header .tool-desc-col {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .tool-row {
+        grid-template-columns: 1.4fr 1fr 110px;
+        gap: 0.375rem;
+    }
+    .tool-row .tool-desc-col,
+    .tool-row .tool-id-col,
+    .tool-row .tool-source {
+        display: none;
+    }
+    .tool-row-header .tool-desc-col,
+    .tool-row-header .tool-id-col,
+    .tool-row-header .tool-source {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .tools-filter-bar {
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+    .tools-filter-bar input,
+    .tools-filter-bar select {
+        width: auto !important;
+        max-width: 120px;
+    }
+}

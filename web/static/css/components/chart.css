@@ -1,0 +1,6 @@
+/* components/chart.css — 图表容器辅助（多数图表已置于 .panel 内） */
+.chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+}

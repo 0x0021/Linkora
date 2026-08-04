@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  linkora:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linkora
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      # ===== DWS 配置
+      - DWS_PROFILE=
+      - DWS_HEADLESS_AUTH=1
+      # dws 凭证真实目录（代码读 DWS_CONFIG_DIR / ~/.dws，与 /root/.dingtalk 无关）。
+      # 必须显式注入，使 Python 适配器与 dws CLI 子进程指向同一目录。
+      - DWS_CONFIG_DIR=/home/app/.dws
+      # ===== Web 界面 (可选；默认开启以便健康检查探 /health 与管理台可用)
+      - ENABLE_WEB=${ENABLE_WEB:-1}
+      - WEB_PORT=${WEB_PORT:-8080}
+      # ===== LLM 配置（环境变量优先）
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      # ===== Embedding 配置
+      - HF_HUB_OFFLINE=1
+    volumes:
+      # 数据持久化
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # dws 凭证（重要：保存登录态）。代码实际读 /home/app/.dws，
+      # 宿主落盘到 ./dingtalk（相公指定路径），与容器非 root 用户 app 一致。
+      - ./dingtalk:/home/app/.dws
+      # 配置文件
+      - ./config.yaml:/app/config.yaml:ro
+    # 如果启用 Web 界面则暴露端口
+    ports:
+      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
+    networks:
+      - linkora
+    healthcheck:
+      # 默认（ENABLE_WEB=1）探应用 HTTP 端点 /health，真正反映应用存活；
+      # 若关闭 Web，则回退用 dws doctor 精确校验 auth 检查项（忽略网络/版本噪声，
+      # 避免网络抖动误判 unhealthy）。
+      test: ["CMD-SHELL", "if [ \"${ENABLE_WEB:-0}\" = \"1\" ]; then curl -fsS http://localhost:${WEB_PORT:-8080}/health || exit 1; else DWS_CONFIG_DIR=/home/app/.dws dws doctor --json 2>/dev/null | python3 -c \"import sys,json; d=json.load(sys.stdin); ok=any(c.get('name')=='auth' and c.get('status')=='pass' for c in d.get('checks',[])); sys.exit(0 if ok else 1)\"; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    mem_limit: 1g
+    cpus: 2
+
+networks:
+  linkora:
+    driver: bridge

@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.3.0"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  },
+  "scripts": {
+    "test:frontend": "vitest run",
+    "test:frontend:watch": "vitest"
+  }
+}

@@ -1,0 +1,28 @@
+# Linkora Linux 二进制容器化构建（仅产出 Linux ELF）
+# 用法见 scripts/docker-build-linux.sh
+# 注意：本 Dockerfile 只解决 Linux 二进制；macOS/Windows 需各自原生环境（见 docs/BINARY_PACKAGING_PLAN.md §3.1）。
+FROM python:3.13-slim
+
+# 系统依赖：
+# - libgomp1      : torch 运行时需 OpenMP
+# - tesseract-ocr : pytesseract OCR（缺了仅 OCR 功能不可用，不影响主程序启动）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# 先装依赖层（利用 Docker 缓存：只有 requirements 变才重装）
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt pyinstaller
+
+# 再拷源码与打包配置（.dockerignore 已排除 .venv/node_modules/data/dist 等）
+COPY . .
+# 备份一份配置模板（首次运行无 config 时由二进制复制）
+RUN test -f config.yaml && cp config.yaml config.example.yaml || true
+
+# 打 Linux 二进制（linkora.spec 在 P1 阶段生成；--onefile）
+RUN pyinstaller linkora.spec --clean --noconfirm
+
+# 产物：/build/dist/linkora

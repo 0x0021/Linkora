@@ -1,0 +1,55 @@
+# Linkora gitleaks 配置 — 密钥扫描门禁
+#
+# 目的：在 pre-commit / CI 中拦截「真实密钥被提交」。
+# 默认继承 gitleaks 内置规则集（AWS / GCP / GitHub / Slack / 私钥 /
+# Stripe / OpenAI 等数百种检测器），此处只做范围裁剪与已知误报豁免。
+#
+# 范围裁剪原则：
+#   - dist/        冻结二进制（torch/cv2 等第三方），必然含大量哈希/随机串，跳过
+#   - data/        运行时 SQLite / 本地缓存，非源码，跳过
+#   - *.lock       依赖锁文件（uv.lock / requirements.lock），含的是版本哈希
+#   - tests/       测试夹具（对话样本 / mock key），非真实凭据
+#   - *.md         文档（含示例片段）
+#   - __pycache__/.venv  生成物
+# 真实密钥只会落在 src/ web/ scripts/ main.py 与各类配置样例里，这些保留扫描。
+
+title = "Linkora gitleaks config"
+
+[extend]
+useDefault = true
+
+[path]
+global-ignores = [
+  "dist/**",
+  "data/**",
+  ".venv/**",
+  "__pycache__/**",
+  "*.lock",
+  "uv.lock",
+  "requirements.lock",
+  "tests/**",
+  "**/*.md",
+  "**/fixtures/**",
+  "**/node_modules/**",
+]
+
+[allowlist]
+description = "已知占位/示例值豁免，避免误报（paths 为正则，非 glob）"
+paths = [
+  '''(?i)config\.yaml\.example$''',
+  '''(?i)\.example$''',
+  '''(?i)\.example\.[a-z]+$''',
+]
+regexes = [
+  # gitleaks 自检占位串
+  '''gitleaks-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+  # 形如 your-api-key / <API_KEY> 的文档占位
+  '''(?i)your[-_][a-z]+[-_](key|token|secret|password)''',
+  '''(?i)<[a-z_]+[_-]?(key|token|secret|password)>''',
+  # 测试夹具中的明显假值（非真实密钥，仅用于单测）
+  '''disk-plain''',
+  '''(?i)oc_(dead|good)''',
+  '''img_v3_''',
+  '''REDACTED_SENTINEL''',
+  '''(?i)(fake|dummy|mock|placeholder|example)[-_]?(key|token|secret|password)?''',
+]

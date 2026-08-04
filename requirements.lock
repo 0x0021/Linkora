@@ -1,0 +1,344 @@
+# Linkora 依赖锁文件 —— requirements.txt 的完整传递闭包（含精确版本）。
+#
+# 生成方式（需要 uv >= 0.11）：
+#     bash scripts/lock_deps.sh
+#
+# 约定：
+#   - requirements.txt 是【直接依赖】的唯一真源（全部 == 钉版），同时镜像到
+#     pyproject.toml 的 [project].dependencies；本文件是解析后的完整闭包（含传递依赖）。
+#   - CI 与 Docker 均安装本文件，保证「测试环境 == 发布环境」可复现。
+#   - --universal 表示跨平台解析：带 ; 环境标记的条目按 OS/架构条件安装
+#     （如 linux 上 torch 的 nvidia-* / triton），因此同一份锁文件在 macOS 与 Linux 均可用。
+#   - 改动 requirements.txt 后必须重新生成本文件并提交，
+#     否则 `python scripts/check_deps.py` 会在 CI 报错。
+annotated-doc==0.0.4
+    # via
+    #   -c (workspace)
+    #   fastapi
+    #   typer
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.14.2
+    # via
+    #   httpx
+    #   openai
+    #   starlette
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
+cffi==2.1.0 ; platform_python_implementation != 'PyPy'
+    # via cryptography
+charset-normalizer==3.4.9
+    # via
+    #   pdfminer-six
+    #   requests
+click==8.4.2
+    # via
+    #   huggingface-hub
+    #   uvicorn
+colorama==0.4.6 ; sys_platform == 'win32'
+    # via
+    #   click
+    #   pytest
+    #   tqdm
+    #   typer
+coverage==7.15.2
+    # via pytest-cov
+cryptography==50.0.0
+    # via pdfminer-six
+cuda-bindings==13.3.1 ; python_full_version < '3.15' and sys_platform == 'linux'
+    # via torch
+cuda-pathfinder==1.6.0 ; python_full_version < '3.15' and sys_platform == 'linux'
+    # via cuda-bindings
+cuda-toolkit==13.0.3.0 ; sys_platform == 'linux'
+    # via torch
+distro==1.9.0
+    # via openai
+et-xmlfile==2.0.0
+    # via openpyxl
+faiss-cpu==1.14.3
+    # via -r requirements.txt
+fastapi==0.140.0
+    # via -r requirements.txt
+filelock==3.32.0
+    # via
+    #   -c (workspace)
+    #   huggingface-hub
+    #   torch
+flatbuffers==25.12.19
+    # via onnxruntime
+fsspec==2026.6.0
+    # via
+    #   -c (workspace)
+    #   huggingface-hub
+    #   torch
+h11==0.16.0
+    # via
+    #   httpcore
+    #   uvicorn
+hf-xet==1.5.2 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
+    # via huggingface-hub
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via
+    #   huggingface-hub
+    #   openai
+huggingface-hub==1.23.0
+    # via
+    #   -r requirements.txt
+    #   sentence-transformers
+    #   tokenizers
+    #   transformers
+idna==3.18
+    # via
+    #   anyio
+    #   httpx
+    #   requests
+iniconfig==2.3.0
+    # via pytest
+jieba==0.42.1
+    # via -r requirements.txt
+jinja2==3.1.6
+    # via
+    #   -r requirements.txt
+    #   torch
+jiter==0.16.0
+    # via openai
+joblib==1.5.3
+    # via scikit-learn
+lxml==6.1.1
+    # via
+    #   python-docx
+    #   python-pptx
+markdown-it-py==4.2.0
+    # via rich
+markupsafe==3.0.3
+    # via jinja2
+mdurl==0.1.2
+    # via markdown-it-py
+mpmath==1.3.0
+    # via sympy
+narwhals==2.24.0
+    # via scikit-learn
+networkx==3.6.1
+    # via torch
+numpy==2.5.1
+    # via
+    #   -r requirements.txt
+    #   faiss-cpu
+    #   onnxruntime
+    #   opencv-python
+    #   rapidocr-onnxruntime
+    #   scikit-learn
+    #   scipy
+    #   sentence-transformers
+    #   shapely
+    #   transformers
+nvidia-cublas==13.1.1.3 ; sys_platform == 'linux'
+    # via
+    #   cuda-toolkit
+    #   nvidia-cudnn-cu13
+    #   nvidia-cusolver
+nvidia-cuda-cupti==13.0.85 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+nvidia-cuda-nvrtc==13.0.88 ; sys_platform == 'linux'
+    # via
+    #   cuda-toolkit
+    #   nvidia-cublas
+nvidia-cuda-runtime==13.0.96 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+nvidia-cudnn-cu13==9.20.0.48 ; sys_platform == 'linux'
+    # via torch
+nvidia-cufft==12.0.0.61 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+nvidia-cufile==1.15.1.6 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+nvidia-curand==10.4.0.35 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+nvidia-cusolver==12.0.4.66 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+nvidia-cusparse==12.6.3.3 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via
+    #   cuda-toolkit
+    #   nvidia-cusolver
+nvidia-cusparselt-cu13==0.8.1 ; sys_platform == 'linux'
+    # via torch
+nvidia-nccl-cu13==2.29.7 ; sys_platform == 'linux'
+    # via torch
+nvidia-nvjitlink==13.3.33 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via
+    #   cuda-toolkit
+    #   nvidia-cufft
+    #   nvidia-cusolver
+    #   nvidia-cusparse
+nvidia-nvshmem-cu13==3.4.5 ; sys_platform == 'linux'
+    # via torch
+nvidia-nvtx==13.0.85 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+    # via cuda-toolkit
+onnxruntime==1.27.0
+    # via
+    #   -c (workspace)
+    #   rapidocr-onnxruntime
+openai==2.48.0
+    # via -r requirements.txt
+opencv-python==5.0.0.93
+    # via rapidocr-onnxruntime
+openpyxl==3.1.5
+    # via -r requirements.txt
+packaging==26.2
+    # via
+    #   faiss-cpu
+    #   huggingface-hub
+    #   onnxruntime
+    #   pytesseract
+    #   pytest
+    #   transformers
+pdfminer-six==20260107
+    # via pdfplumber
+pdfplumber==0.11.10
+    # via -r requirements.txt
+pillow==12.3.0
+    # via
+    #   -r requirements.txt
+    #   pdfplumber
+    #   pytesseract
+    #   python-pptx
+    #   rapidocr-onnxruntime
+platformdirs==4.11.0
+    # via -r requirements.txt
+pluggy==1.6.0
+    # via
+    #   pytest
+    #   pytest-cov
+protobuf==7.35.1
+    # via onnxruntime
+psutil==7.2.2
+    # via -r requirements.txt
+pyclipper==1.4.0
+    # via rapidocr-onnxruntime
+pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+    # via cffi
+pydantic==2.13.4
+    # via
+    #   -r requirements.txt
+    #   fastapi
+    #   openai
+pydantic-core==2.46.4
+    # via pydantic
+pygments==2.20.0
+    # via
+    #   pytest
+    #   rich
+pymupdf==1.28.0
+    # via -r requirements.txt
+pypdfium2==5.12.1
+    # via pdfplumber
+pytesseract==0.3.13
+    # via -r requirements.txt
+pytest==9.1.1
+    # via
+    #   -r requirements.txt
+    #   pytest-cov
+    #   pytest-timeout
+pytest-cov==7.1.0
+    # via -r requirements.txt
+pytest-timeout==2.4.0
+    # via -r requirements.txt
+python-docx==1.2.0
+    # via -r requirements.txt
+python-dotenv==1.2.2
+    # via -r requirements.txt
+python-multipart==0.0.32
+    # via -r requirements.txt
+python-pptx==1.0.2
+    # via -r requirements.txt
+pyyaml==6.0.3
+    # via
+    #   -r requirements.txt
+    #   huggingface-hub
+    #   rapidocr-onnxruntime
+    #   transformers
+rapidocr-onnxruntime==1.2.3
+    # via -r requirements.txt
+regex==2026.7.19
+    # via
+    #   -r requirements.txt
+    #   transformers
+requests==2.34.2
+    # via -r requirements.txt
+rich==15.0.0
+    # via
+    #   -r requirements.txt
+    #   typer
+safetensors==0.8.0
+    # via transformers
+scikit-learn==1.9.0
+    # via sentence-transformers
+scipy==1.18.0
+    # via
+    #   scikit-learn
+    #   sentence-transformers
+sentence-transformers==5.6.1
+    # via -r requirements.txt
+setuptools==83.0.0
+    # via torch
+shapely==2.1.2
+    # via rapidocr-onnxruntime
+shellingham==1.5.4
+    # via typer
+six==1.17.0
+    # via rapidocr-onnxruntime
+sniffio==1.3.1
+    # via openai
+starlette==1.3.1
+    # via fastapi
+sympy==1.14.0
+    # via torch
+threadpoolctl==3.6.0
+    # via scikit-learn
+tokenizers==0.22.2
+    # via
+    #   -r requirements.txt
+    #   transformers
+torch==2.13.0
+    # via sentence-transformers
+tqdm==4.69.0
+    # via
+    #   -c (workspace)
+    #   huggingface-hub
+    #   openai
+    #   sentence-transformers
+    #   transformers
+transformers==5.14.1
+    # via sentence-transformers
+triton==3.7.1 ; python_full_version < '3.15' and sys_platform == 'linux'
+    # via torch
+typer==0.27.0
+    # via transformers
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   fastapi
+    #   huggingface-hub
+    #   openai
+    #   pydantic
+    #   pydantic-core
+    #   python-docx
+    #   python-pptx
+    #   sentence-transformers
+    #   starlette
+    #   torch
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via
+    #   fastapi
+    #   pydantic
+urllib3==2.7.0
+    # via requests
+uvicorn==0.51.0
+    # via -r requirements.txt
+xlsxwriter==3.2.9
+    # via python-pptx

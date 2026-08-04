@@ -1,0 +1,556 @@
+/* ===== 意图 & 路由页：统一到设计系统令牌 ===== */
+
+/* ── 概览卡片 ── */
+.intent-overview {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-xl);
+}
+
+.io-card {
+    flex: 1 1 12.5rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg) var(--space-xl);
+}
+
+.io-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-bottom: 0.375rem;
+}
+
+.io-value {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--brand-primary);
+    line-height: 1.2;
+}
+
+.io-desc {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: 0.25rem;
+}
+
+/* ── 意图卡片 ── */
+.intent-card {
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--brand-primary);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 0.875rem;
+    margin-bottom: 0.75rem;
+    background: color-mix(in srgb, var(--brand-primary) 4%, transparent);
+}
+
+.intent-card.disposition {
+    border-left-color: var(--brand-warning);
+    background: color-mix(in srgb, var(--brand-warning) 7%, transparent);
+}
+
+.ic-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.375rem;
+}
+
+.ic-id {
+    font-weight: 700;
+    font-size: 0.875rem;
+}
+
+.ic-badge {
+    font-size: 0.6875rem;
+    padding: 0.0625rem 0.5rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+}
+
+.ic-def {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.ic-meta {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    margin-top: 0.375rem;
+}
+
+.ic-meta b {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* ── 层级摘要 ── */
+.layer-summary {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    margin-bottom: 0.625rem;
+    padding: 0.375rem 0.625rem;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+.layer-summary b {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+/* ── 意图分组 ── */
+.intent-group {
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--brand-warning);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 0.875rem;
+    margin-bottom: 0.75rem;
+    background: color-mix(in srgb, var(--brand-warning) 5%, transparent);
+}
+
+.intent-group:last-child {
+    margin-bottom: 0;
+}
+
+.ig-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.375rem;
+}
+
+.ig-children {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4375rem;
+}
+
+.intent-subcard {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.625rem;
+}
+
+.isc-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4375rem;
+    margin-bottom: 0.1875rem;
+}
+
+.isc-name {
+    font-weight: 700;
+    font-size: 0.8125rem;
+}
+
+.ic-tools {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    margin-top: 0.375rem;
+}
+
+.ic-tools b {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.ic-tool-wrap {
+    display: inline-flex;
+    gap: 0.3125rem;
+    flex-wrap: wrap;
+    margin-left: 0.125rem;
+    vertical-align: middle;
+}
+
+.ic-tool {
+    font-size: 0.6875rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: var(--radius-md);
+    background: var(--brand-primary-light);
+    color: var(--brand-primary);
+}
+
+.intent-card.action.proactive {
+    border-left-color: var(--brand-purple);
+    background: color-mix(in srgb, var(--brand-purple) 7%, transparent);
+}
+
+#intent-tab-overview .intent-card.action.proactive .pill-mode {
+    font-size: 0.625rem;
+    padding: 0.0625rem 0.4375rem;
+}
+
+.ic-more {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+}
+
+.ic-count {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    margin-left: 0.25rem;
+    opacity: 0.85;
+}
+
+/* ── 工具-动作映射行 ── */
+.tam-row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.4375rem 0;
+    border-bottom: 1px dashed var(--border-color);
+    flex-wrap: wrap;
+}
+
+.tam-row:last-child {
+    border-bottom: none;
+}
+
+.tam-tool {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    min-width: 9.375rem;
+}
+
+.tam-tags {
+    display: flex;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+}
+
+.tam-tag {
+    font-size: 0.6875rem;
+    padding: 0.0625rem 0.5rem;
+    border-radius: var(--radius-md);
+    background: var(--brand-primary-light);
+    color: var(--brand-primary);
+}
+
+/* ── 决策记录行 ── */
+.decision-row {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+    align-items: flex-start;
+}
+
+.decision-row:last-child {
+    border-bottom: none;
+}
+
+.dec-ts {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    min-width: 8.125rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.dec-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.dec-line1 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.1875rem;
+}
+
+.dec-sender {
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.dec-chat {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.dec-content {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    word-break: break-word;
+}
+
+.dec-tools {
+    display: flex;
+    gap: 0.3125rem;
+    flex-wrap: wrap;
+    margin-top: 0.3125rem;
+}
+
+.dec-reply {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+
+/* ── 标签 Pill ── */
+.pill {
+    font-size: 0.6875rem;
+    padding: 0.0625rem 0.5625rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+}
+
+.pill-skip   { background: color-mix(in srgb, var(--brand-danger) 12%, transparent);   color: var(--brand-danger); }
+.pill-reply  { background: color-mix(in srgb, var(--brand-primary) 12%, transparent);  color: var(--brand-primary); }
+.pill-llm    { background: color-mix(in srgb, var(--brand-success) 12%, transparent);  color: var(--brand-success); }
+.pill-intent { background: color-mix(in srgb, var(--brand-warning) 14%, transparent);  color: var(--brand-warning); }
+.pill-mode   { background: color-mix(in srgb, var(--brand-purple) 14%, transparent);   color: var(--brand-purple); }
+.pill-skill  { background: color-mix(in srgb, var(--brand-success) 12%, transparent);  color: var(--brand-success); }
+
+[data-theme="dark"] .pill-skip   { background: color-mix(in srgb, var(--brand-danger) 22%, transparent);  color: color-mix(in srgb, var(--brand-danger) 72%, #fff); }
+[data-theme="dark"] .pill-reply  { background: color-mix(in srgb, var(--brand-primary) 22%, transparent); color: color-mix(in srgb, var(--brand-primary) 72%, #fff); }
+[data-theme="dark"] .pill-llm    { background: color-mix(in srgb, var(--brand-success) 22%, transparent); color: color-mix(in srgb, var(--brand-success) 72%, #fff); }
+[data-theme="dark"] .pill-intent { background: color-mix(in srgb, var(--brand-warning) 22%, transparent); color: color-mix(in srgb, var(--brand-warning) 72%, #fff); }
+[data-theme="dark"] .pill-mode   { background: color-mix(in srgb, var(--brand-purple) 22%, transparent);  color: color-mix(in srgb, var(--brand-purple) 72%, #fff); }
+[data-theme="dark"] .pill-skill  { background: color-mix(in srgb, var(--brand-success) 22%, transparent); color: color-mix(in srgb, var(--brand-success) 72%, #fff); }
+
+/* ── Tab 导航 ── */
+.intent-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: var(--space-xl);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.intent-tab-btn {
+    padding: 0.625rem 1.25rem;
+    border: none;
+    background: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.intent-tab-btn:hover {
+    color: var(--text-secondary);
+}
+
+.intent-tab-btn.active {
+    color: var(--brand-primary);
+    border-bottom-color: var(--brand-primary);
+}
+
+/* ── 概览页紧凑布局 ── */
+#intent-tab-overview .intent-overview { gap: 0.625rem; margin-bottom: 0.75rem; }
+#intent-tab-overview .io-card { flex: 1 1 10rem; padding: 0.625rem 0.875rem; border-radius: var(--radius-md); }
+#intent-tab-overview .io-label { margin-bottom: 0.1875rem; font-size: 0.6875rem; }
+#intent-tab-overview .io-value { font-size: 1.125rem; }
+#intent-tab-overview .io-desc { margin-top: 0.125rem; font-size: 0.6875rem; }
+
+#intent-tab-overview .panel { margin-bottom: 0.75rem; }
+#intent-tab-overview .panel-header { padding: 0.4375rem 0.75rem; }
+#intent-tab-overview .panel-header h3 { font-size: 0.8125rem; }
+#intent-tab-overview .panel-body { padding: 0.625rem 0.75rem; }
+
+#intent-tab-overview .intent-card { padding: 0.5625rem 0.6875rem; margin-bottom: 0.5rem; border-radius: var(--radius-sm); }
+#intent-tab-overview .intent-card:last-child { margin-bottom: 0; }
+#intent-tab-overview .intent-card .ic-head { margin-bottom: 0.25rem; }
+#intent-tab-overview .intent-card .ic-def { font-size: 0.75rem; line-height: 1.45; }
+#intent-tab-overview .intent-card .ic-meta { margin-top: 0.25rem; font-size: 0.6875rem; }
+#intent-tab-overview .layer-summary { margin-bottom: 0.5rem; padding: 0.3125rem 0.5625rem; font-size: 0.6875rem; }
+#intent-tab-overview .intent-group { padding: 0.5625rem 0.6875rem; margin-bottom: 0.5rem; border-radius: var(--radius-sm); }
+#intent-tab-overview .ig-children { margin-top: 0.375rem; gap: 0.375rem; }
+#intent-tab-overview .intent-subcard { padding: 0.375rem 0.5rem; }
+#intent-tab-overview .isc-name { font-size: 0.75rem; }
+#intent-tab-overview .intent-subcard .ic-def { font-size: 0.6875rem; line-height: 1.4; }
+#intent-tab-overview .ic-tools { margin-top: 0.3125rem; font-size: 0.6875rem; }
+#intent-tab-overview .ic-tool { font-size: 0.625rem; padding: 0.0625rem 0.375rem; }
+
+#intent-tab-overview .tam-row { padding: 0.3125rem 0; gap: 0.5rem; }
+#intent-tab-overview .tam-tool { min-width: 6.875rem; font-size: 0.75rem; }
+#intent-tab-overview .tam-tag { font-size: 0.6875rem; padding: 0.0625rem 0.4375rem; }
+
+#intent-tab-overview .decision-row { padding: 0.5rem 0; gap: 0.5625rem; }
+#intent-tab-overview .decision-row .dec-ts { min-width: 7.25rem; font-size: 0.6875rem; }
+#intent-tab-overview .decision-row .dec-sender { font-size: 0.75rem; }
+#intent-tab-overview .decision-row .dec-content { font-size: 0.75rem; }
+#intent-tab-overview .decision-row .dec-tools { margin-top: 0.1875rem; gap: 0.25rem; }
+#intent-tab-overview .pill { font-size: 0.6875rem; padding: 0.0625rem 0.5rem; }
+
+/* ── 意图路由流水线 ── */
+.intent-pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 0.75rem;
+}
+
+.intent-stage {
+    flex: 1 1 0;
+    min-width: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 0.875rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.stage-disposition { border-top: 3px solid var(--brand-warning); }
+.stage-action     { border-top: 3px solid var(--brand-primary); }
+.stage-tool       { border-top: 3px solid var(--brand-success); }
+
+.stage-head {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin-bottom: 0.625rem;
+}
+
+.stage-no {
+    flex: 0 0 auto;
+    width: 1.625rem;
+    height: 1.625rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--brand-primary);
+}
+
+.stage-disposition .stage-no { background: var(--brand-warning); color: #1a1a1a; }
+.stage-tool .stage-no { background: var(--brand-success); }
+
+.stage-titles { min-width: 0; }
+
+.stage-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.25;
+}
+
+.stage-desc {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    margin-top: 0.125rem;
+}
+
+.stage-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.pipeline-arrow {
+    flex: 0 0 auto;
+    align-self: center;
+    padding: 0 0.5rem;
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--text-tertiary);
+}
+
+/* ── 路由映射并排 ── */
+.map-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+    min-height: 0;
+}
+
+.map-col {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.map-col-head {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.375rem;
+    position: sticky;
+    top: 0;
+    background: var(--bg-surface);
+    padding-bottom: 0.25rem;
+}
+
+.sim-none {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.sim-disabled {
+    opacity: 0.45;
+}
+
+/* ── 路由追踪 Tab 内部页眉 ── */
+.rt-section-header {
+    margin: 0.375rem 0 var(--space-xl);
+}
+
+.rt-section-header h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.rt-section-header p {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+}
+
+/* ── 筛选面板 ── */
+.intent-filter-panel {
+    margin-bottom: var(--space-md);
+}
+
+.intent-filter-body {
+    display: flex;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.intent-filter-body .btn {
+    margin-left: auto;
+}
+
+/* ── 分页 ── */
+.intent-pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--space-md);
+}
+
+.intent-pagination-footer {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: var(--space-md);
+}
+
+/* ── 响应式 ── */
+@media (max-width: 1000px) {
+    .intent-pipeline { flex-direction: column; }
+    .pipeline-arrow { transform: rotate(90deg); padding: 0.375rem 0; }
+    .map-cols { grid-template-columns: 1fr; }
+}

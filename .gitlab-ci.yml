@@ -1,0 +1,87 @@
+# 灵桥 (Linkora) CI — GitLab 流水线
+# 与 .github/workflows/ci.yml 保持等价：lint + test(py39/py313) + 覆盖率 + 漏洞扫描
+
+stages:
+  - lint
+  - test
+
+# ============================================================================
+# Secret Scan (F22) — 密钥扫描门禁
+# ============================================================================
+secret-scan:
+  stage: lint
+  image: gitleaks/gitleaks:v8.18.4
+  timeout: 10m
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - gitleaks detect --config .gitleaks.toml --redact=100 --no-banner
+  # 失败即阻断流水线；基线误报已收录于 .gitleaksignore
+  allow_failure: false
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .cache/pip/
+
+# ============================================================================
+# Lint
+# ============================================================================
+lint:
+  stage: lint
+  image: python:3.13-slim
+  timeout: 10m
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install ruff
+  script:
+    - ruff check src tests web scripts --output-format=gitlab || true
+    # 语法门（P0-2026-07-26）：杜绝 f-string 嵌套引号等导致 uvicorn 启动失败的
+    # SyntaxError。此前 _clone_reply 内英文双引号嵌套把 f-string 提前终结，
+    # uvicorn --reload 检测到语法错误不会自动恢复，整服务挂掉。AST 解析零依赖、毫秒级。
+    - python - <<'PY'
+import ast, glob, sys
+bad = []
+for pat in ('src/**/*.py', 'web/**/*.py', 'main.py', 'scripts/**/*.py'):
+    for f in glob.glob(pat, recursive=True) or []:
+        try:
+            ast.parse(open(f, encoding='utf-8').read())
+        except SyntaxError as e:
+            bad.append(f"{f}:{e.lineno}: {e.msg}")
+if bad:
+    print("SyntaxError in:")
+    print("\n".join(bad))
+    sys.exit(1)
+print("OK: all Python modules parse")
+PY
+  allow_failure: true
+
+# ============================================================================
+# Test Matrix (Python 3.9 / 3.13)
+# ============================================================================
+.test_base:
+  stage: test
+  timeout: 20m
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r requirements.txt
+    - cp config.yaml.example config.yaml
+  script:
+    - pip install pip-audit
+    - pip-audit -r requirements.txt || true
+    - pytest --cov=src --cov-report=term-missing --cov-report=xml
+  artifacts:
+    when: always
+    paths:
+      - coverage.xml
+    expire_in: 30 days
+
+test:py39:
+  extends: .test_base
+  image: python:3.9-slim
+
+test:py313:
+  extends: .test_base
+  image: python:3.13-slim

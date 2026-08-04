@@ -1,0 +1,294 @@
+.rules-container {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.rules-sidebar {
+    width: 280px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.rules-sidebar-header {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.rules-sidebar-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.rules-search {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.rules-search-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+    font-size: 0.8125rem;
+    transition: border-color 0.15s ease;
+}
+
+.rules-search-input:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+}
+
+.rules-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.rule-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.rule-item:hover {
+    background: var(--bg-subtle);
+}
+
+.rule-item.active {
+    background: var(--brand-primary-light);
+}
+
+.rule-item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.rule-item-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rule-item-status {
+    font-size: 0.65rem;
+    padding: 0.125rem 0.3125rem;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+.rule-item-status.active {
+    background: var(--brand-success);
+    color: #fff;
+}
+
+.rule-item-status.inactive {
+    background: var(--gray-200);
+    color: var(--text-tertiary);
+}
+
+.rule-item-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rules-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rules-header {
+    padding: 0.875rem 1rem;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.rules-header-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.rules-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.rule-form {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.rule-form-section {
+    margin-bottom: 1.25rem;
+}
+
+.rule-form-section:last-child {
+    margin-bottom: 0;
+}
+
+.rule-form-section-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.375rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.rule-form-group {
+    margin-bottom: 0.875rem;
+}
+
+.rule-form-group:last-child {
+    margin-bottom: 0;
+}
+
+.rule-form-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.3125rem;
+}
+
+.rule-form-control {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    transition: border-color 0.15s ease;
+}
+
+.rule-form-control:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-light);
+}
+
+.rule-form-textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.rule-form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+}
+
+.rule-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-light);
+}
+
+.rule-preview {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    margin-top: 1rem;
+}
+
+.rule-preview-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 0.75rem;
+}
+
+.rule-preview-content {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    background: var(--bg-subtle);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    font-family: var(--font-mono);
+}
+
+.rule-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.rule-stat-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    padding: 0.875rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-xs);
+    text-align: center;
+}
+
+.rule-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.rule-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.rule-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+}
+
+.rule-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.rule-empty-text {
+    font-size: 0.875rem;
+}

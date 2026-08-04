@@ -1,0 +1,89 @@
+/* ============ 图标系统 (Font Awesome 配色与尺寸预设) ============ */
+/* 项目使用 Font Awesome；本文件提供 .icon 尺寸/颜色预设及旧 SVG 兼容样式 */
+
+.icon {
+    display: inline-block;
+    vertical-align: -0.18em;
+    width: 1em;
+    height: 1em;
+    stroke-width: 2;
+    stroke: currentColor;
+    fill: none;
+    flex-shrink: 0;
+    /* 让 viewBox 24x24 下 1em 渲染更锐利 */
+    shape-rendering: geometricPrecision;
+}
+
+/* ============ 尺寸预设 ============ */
+.icon-xs { font-size: 12px; }
+.icon-sm { font-size: 14px; }
+.icon-md { font-size: 18px; }
+.icon-lg { font-size: 22px; }
+.icon-xl { font-size: 28px; }
+.icon-2x { font-size: 36px; }
+
+/* ============ 颜色预设（统一使用主题变量，随亮/暗主题切换） ============ */
+.icon-primary  { color: var(--brand-primary); }
+.icon-success  { color: var(--brand-success); }
+.icon-warning  { color: var(--brand-warning); }
+.icon-danger   { color: var(--brand-danger); }
+.icon-muted    { color: var(--gray-400); }
+.icon-info     { color: var(--brand-primary); }
+
+/* ============ 旋转动画 ============ */
+.icon-spin {
+    animation: icon-spin 1.4s linear infinite;
+}
+@keyframes icon-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ============ 旧 emoji 元素的 reset（不再用 emoji 后避免残留） ============ */
+.nav-icon .icon,
+.stat-icon .icon,
+.empty-icon .icon,
+.upload-icon .icon,
+.onboarding-icon .icon,
+.chat-avatar .icon,
+.dept-toggle .icon,
+.dept-icon .icon,
+.dept-member-avatar .icon,
+.logo-icon .icon,
+.user-avatar .icon,
+.btn .icon {
+    pointer-events: none;
+}
+
+/* 空状态图标加大 */
+.empty-icon .icon {
+    font-size: 42px;
+    color: var(--gray-400);
+}
+.empty-icon .icon.icon-primary { color: var(--brand-primary); }
+.empty-icon .icon.icon-danger  { color: var(--brand-danger); }
+.empty-icon .icon.icon-warning { color: var(--brand-warning); }
+
+/* 部门树图标 */
+.dept-toggle .icon { font-size: 12px; transition: transform 0.2s; }
+.dept-toggle .icon.expanded { transform: rotate(90deg); }
+.dept-icon .icon { font-size: 16px; color: var(--brand-primary); }
+.dept-member-avatar .icon { font-size: 14px; color: #fff; }
+
+/* 聊天机器人头像 */
+.chat-avatar .icon { font-size: 22px; color: #fff; }
+.user-avatar .icon { font-size: 18px; color: #fff; }
+.logo-icon .icon { font-size: 22px; color: #fff; }
+
+/* 侧边栏导航 */
+.nav-icon .icon { font-size: 18px; }
+.stat-icon .icon { font-size: 26px; color: var(--brand-primary); }
+.onboarding-icon .icon { font-size: 36px; color: var(--brand-primary); }
+.upload-icon .icon { font-size: 38px; color: var(--brand-primary); }
+
+/* 按钮内 icon 间距 */
+.btn .icon { margin-right: 4px; }
+.btn .icon:last-child { margin-right: 0; margin-left: 4px; }
+
+/* 标题前缀 */
+h3 .icon, h4 .icon { margin-right: 6px; color: var(--brand-primary); }

@@ -1,0 +1,357 @@
+/* ============================================
+   Bootstrap 5 覆盖样式
+   最佳实践：通过变量覆盖 + 适度选择器优先级，
+   避免滥用 !important。
+   
+   设计原则：
+   1. 品牌色统一用 CSS 变量，方便全局换肤
+   2. 组件尽量用 Bootstrap 原生 class，这里只补少量定制
+   3. 布局（sidebar 等）由 theme.css 负责
+   ============================================ */
+
+/* ---- 品牌色变量 ---- */
+:root {
+    --bs-primary: #2563eb;
+    --bs-primary-rgb: 37, 99, 235;
+    --bs-primary-hover: #1d4ed8;
+    --bs-primary-light: rgba(37, 99, 235, 0.1);
+    --bs-success: #16a34a;
+    --bs-warning: #f59e0b;
+    --bs-danger: #dc2626;
+    --bs-border-color: #e2e8f0;
+    --bs-border-radius: 10px;
+    --bs-border-radius-sm: 8px;
+    --bs-border-radius-lg: 14px;
+}
+
+/* ---- 按钮 ---- */
+.btn {
+    border-radius: var(--bs-border-radius-sm);
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: var(--bs-primary-hover);
+    --bs-btn-hover-border-color: var(--bs-primary-hover);
+    --bs-btn-active-bg: var(--bs-primary-hover);
+    --bs-btn-active-border-color: var(--bs-primary-hover);
+    --bs-btn-disabled-bg: var(--bs-primary);
+    --bs-btn-disabled-border-color: var(--bs-primary);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 2px 8px rgba(var(--bs-primary-rgb), 0.35);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: var(--bs-primary-light);
+    --bs-btn-hover-color: var(--bs-primary);
+    --bs-btn-hover-border-color: var(--bs-primary);
+    --bs-btn-active-bg: var(--bs-primary-light);
+    --bs-btn-active-color: var(--bs-primary);
+}
+
+/* 圆角胶囊按钮（保留项目原有风格） */
+.btn-pill {
+    border-radius: 999px;
+}
+
+/* ---- 卡片 ---- */
+.card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+    background: #f8fafc;
+    border-bottom: 1px solid var(--bs-border-color);
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+}
+
+/* ---- 技能管理页 ---- */
+#skills-content {
+    overflow: hidden;
+}
+#skills-content .skill-card {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.skill-tools-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    min-width: 0;
+}
+.skill-tools-wrap code {
+    white-space: nowrap;
+}
+.skill-path-code {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    display: block;
+}
+
+/* ---- 表格 ---- */
+.table {
+    --bs-table-striped-bg: #f8fafc;
+    --bs-table-hover-bg: rgba(var(--bs-primary-rgb), 0.04);
+    margin-bottom: 0;
+}
+
+.table th {
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    border-bottom-width: 1px;
+    padding: 0.625rem 0.875rem;
+}
+
+.table td {
+    padding: 0.75rem 0.875rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    font-size: 0.875rem;
+}
+
+/* ---- 表单 ---- */
+.form-control,
+.form-select {
+    border-radius: var(--bs-border-radius-sm);
+    border-color: #cbd5e1;
+    font-size: 0.875rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.2);
+}
+
+.form-label {
+    font-weight: 500;
+    color: #334155;
+    font-size: 0.875rem;
+    margin-bottom: 0.375rem;
+}
+
+.form-text {
+    font-size: 0.8rem;
+}
+
+/* ---- 徽章 ---- */
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+/* ---- 弹窗 ---- */
+.modal-content {
+    border: none;
+    border-radius: var(--bs-border-radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom-color: var(--bs-border-color);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top-color: var(--bs-border-color);
+}
+
+/* ---- Alert ---- */
+.alert {
+    border: none;
+    border-radius: var(--bs-border-radius-sm);
+    font-size: 0.875rem;
+    padding: 0.75rem 1rem;
+}
+
+/* ---- 导航标签 ---- */
+.nav-tabs {
+    border-bottom-color: var(--bs-border-color);
+}
+
+.nav-tabs .nav-link {
+    color: #64748b;
+    font-weight: 500;
+    font-size: 0.875rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.5rem 1rem;
+    margin-bottom: -1px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--bs-primary);
+    border-bottom-color: rgba(var(--bs-primary-rgb), 0.3);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--bs-primary);
+    border-bottom-color: var(--bs-primary);
+    background: transparent;
+}
+
+/* ---- 下拉菜单 ---- */
+.dropdown-menu {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    padding: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.dropdown-item {
+    border-radius: 6px;
+    padding: 0.375rem 0.75rem;
+    transition: background 0.1s ease;
+}
+
+.dropdown-item:hover {
+    background: rgba(var(--bs-primary-rgb), 0.06);
+    color: var(--bs-primary);
+}
+
+/* ---- 分页 ---- */
+.pagination {
+    --bs-pagination-border-color: var(--bs-border-color);
+    --bs-pagination-hover-border-color: var(--bs-border-color);
+    --bs-pagination-active-bg: var(--bs-primary);
+    --bs-pagination-active-border-color: var(--bs-primary);
+    --bs-pagination-border-radius: var(--bs-border-radius-sm);
+    font-size: 0.875rem;
+}
+
+/* ---- 工具提示 ---- */
+.tooltip {
+    font-size: 0.8rem;
+}
+
+/* ---- 滚动条（WebKit） ---- */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* ---- 通用微调 ---- */
+.text-secondary {
+    color: #64748b !important;
+}
+
+.bg-light-2 {
+    background-color: #f1f5f9 !important;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* ==========================================
+   暗色模式：Bootstrap 组件与硬编码浅色覆盖
+   ========================================== */
+[data-theme="dark"] {
+    --bs-body-bg: #151e2e;
+    --bs-body-color: #e8eef6;
+    --bs-border-color: #243044;
+    --bs-emphasis-color: #e8eef6;
+    --bs-secondary-color: #aab6c6;
+    --bs-tertiary-color: #6b7a90;
+    --bs-table-bg: #151e2e;
+    --bs-table-striped-bg: #0f172a;
+    --bs-table-border-color: #243044;
+}
+
+[data-theme="dark"] .table {
+    color: #e8eef6;
+    border-color: #243044;
+}
+[data-theme="dark"] .table thead th,
+[data-theme="dark"] .table td,
+[data-theme="dark"] .table th {
+    border-color: #243044;
+}
+
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .card,
+[data-theme="dark"] .dropdown-menu {
+    background: #151e2e;
+    color: #e8eef6;
+    border-color: #243044;
+}
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .card-header {
+    background: #1a2436;
+    border-color: #243044;
+    color: #e8eef6;
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background: #0f172a;
+    color: #e8eef6;
+    border-color: #243044;
+}
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+    background: #0f172a;
+    color: #e8eef6;
+    border-color: var(--brand-primary);
+}
+[data-theme="dark"] .form-control::placeholder {
+    color: #6b7a90;
+}
+
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+[data-theme="dark"] .text-secondary {
+    color: #aab6c6 !important;
+}
+[data-theme="dark"] .bg-light-2 {
+    background-color: #0f172a !important;
+}
+[data-theme="dark"] .border,
+[data-theme="dark"] .border-top,
+[data-theme="dark"] .border-bottom,
+[data-theme="dark"] .border-start,
+[data-theme="dark"] .border-end {
+    border-color: #243044 !important;
+}

@@ -1,0 +1,506 @@
+# ============================================================
+# 灵桥 (Linkora) — 企业 AI 智能连接平台 · 配置文件示例
+# ============================================================
+#
+# 使用方法：
+#   1. 复制本文件为 config.yaml：cp config.yaml.example config.yaml
+#   2. 修改以下配置项（带 * 为必填项；涉及密钥/密码的请务必修改）
+#   3. 启动程序：python main.py --web 8080
+#   4. 修改配置后无需重启，程序会自动热重载（Hot Reload）
+#
+# 配置结构总览：
+#   ★ platforms  —— 多平台隔离主配置段（每个 IM 平台独立适配器/数据库/轮询器），运行期以本段为准
+#   ① dws / ② embedding / ③ llm / ③b llm_throttle / ④ logging / ⑤ memory
+#   ⑥ poller(legacy) / ⑦ rules / ⑧ safety / ⑨ rag / ⑩ skills / ⑪ dead_letter / ⑫ web / ⑬ tools / ⑭ storage(legacy)
+#   说明：legacy 段（dws / poller / storage）由 config_manage 工具读取状态，请与 platforms 中对应平台保持一致。
+
+# ============================================================
+# ★ 多平台隔离配置（platforms）—— 主配置段
+#  - 每个 IM 平台一个独立配置：独立适配器 / 独立数据库(./data/<id>-ai.db) / 独立轮询器。
+#  - 运行期以本段为准；新增飞书/企微时在列表内追加对应条目
+#    （adapter_type: feishu / wecom，并配置 adapter.cli_path 为 lark-cli / wecom-cli）。
+#  - 下方 ① dws / ⑥ poller / ⑭ storage 为 legacy 兼容段（config_manage 读取），
+#    值与本段 dingtalk 平台保持一致即可。
+# ============================================================
+platforms:
+  - id: dingtalk
+    display_name: 钉钉
+    enabled: true
+    adapter_type: dingtalk
+    storage:
+      type: sqlite                                   # 数据库类型（当前仅支持 sqlite）
+      path: ./data/linkora.db                    # 数据库文件路径（按平台隔离，勿与 legacy 段混淆）
+      backup_enabled: true                           # 是否启用自动备份
+      backup_dir: ./data/backups                     # 备份文件目录
+      backup_interval_hours: 24                      # 备份间隔（小时），24 = 每天一次
+      backup_max_count: 7                            # 保留最近多少份备份
+      backup_on_start: true                          # 启动时立即备份一次
+      decisions_retention_days: 14                   # 决策追踪表留存天数（≤0 表示不按时间清理）
+      messages_retention_days: 90                    # 消息记录留存天数（≤0 表示不清理）
+      doc_sync_interval_hours: 1                     # 钉钉文档自动同步间隔（小时），≤0 禁用
+    poller:
+      # —— 基础轮询 ——
+      interval_seconds: 10                           # 轮询间隔（秒）
+      unread_conversation_count: 50                  # 单轮拉取的未读会话数上限
+      messages_per_conversation: 16                  # 每个会话单次拉取的最大消息数
+      merge_window_seconds: 5                        # 同会话多条消息在此时间内合并处理
+      history_window: 6                              # 带入 LLM 上下文的历史消息条数（= max_recent + 2，原料窗需 > 近期条数才能触发 H2-A 异步摘要；feishu/wecom 同为 6）
+      history_days: 3                                # 历史消息取最近 N 天
+      history_session_gap_minutes: 360               # 会话切分间隔：相邻历史消息间隔超此值视为新对话轮次（0=禁用切分）
+      max_processed_msg_ids: 500                     # 跨轮次去重内存缓存上限（LRU）
+      first_run_ignore_older_than_minutes: 5         # 首次运行/重启后忽略超过 N 分钟的老消息（0=不忽略）
+      reply_cooldown_seconds: 10                     # 同一会话回复冷却时间（秒），防止短时间反复回复
+      mark_read_after_process: true                  # 处理完后将该会话消息标记为已读
+      # —— 背压 / 并发 ——
+      max_dispatch_per_cycle: 30                     # 单轮最多派发给 handler 的消息数（0=不限制）
+      max_concurrent_replies: 4                      # 同时进行的回复（LLM 调用）上限
+      reply_concurrency_timeout_seconds: 30         # 等待并发槽位超时（秒）；超时降级串行，不丢消息
+      # —— list-all 主通道 ——
+      list_all_time_window_minutes: 30               # list-all 时间窗口（分钟）
+      list_all_first_run_minutes: 5                  # list-all 首次运行时间窗口（分钟）
+      list_all_full_scan_interval_minutes: 60        # 飞书全量扫描间隔（分钟）：每隔这么久做一次完整 +chat-list 翻页发现新会话；0=永不自动全量扫描
+      list_all_empty_alert_rounds: 6                 # 连续 N 轮 list-all 零新消息则告警（0=关闭）
+      empty_poll_protection_minutes: 5               # 空转保护间隔（分钟）
+      # —— list-all 分页与窗口保护（防止宽时间窗每轮重扫全部历史、永远撞分页上限）——
+      list_all_max_pages: 50                         # list-all 单轮分页硬上限（每页 limit 条，默认 100）；0=不限制。原硬编码 20 在活跃群易触顶漏消息
+      list_all_max_window_days: 14                   # list-all 实时轮询扫描窗口上限（天）：把误配的 22 天等超宽窗钳制到最近 N 天。深度回填请走 sync_history
+      # —— 跳过策略 ——
+      skip_msg_types:                                # 直接跳过的消息类型（不处理）
+        - system
+        - app
+        - file
+        - call
+        - voice
+        - video
+        - read_receipt                           # 已读回执类系统通知（[已读]/已读回执/英文 read receipt 等）
+      graceful_fallback_msg_types: []                # 优雅回退类型：当前 voice/video 已并入 skip_msg_types 彻底静默跳过，故留空
+      # 通知抑制（结构优先 + 窄签名）：
+      # 绝大多数通知已由 msgType（skip_msg_types）+ 系统/机器人发送者（系统账号名单）结构层静默拦截。
+      # 本字段仅作「以真人身份推送的纯文本机器通知」的安全网：
+      #   - 只写【机器生成物】的窄正则（固定模板/报错栈），绝不写宽泛裸词，以免误伤真人消息。
+      #   - 默认空=不静默，交给 LLM 处理（如 U9C 报错由 AI 提炼要点）。
+      #   - 例：r"^\d{4}-\d{2}-\d{2}\d+发货通知单[：:]" 可精确命中某 ERP 推送。
+      skip_notification_patterns: []
+      # 按发送者 ID 精确静默机器人/三方应用账号（结构性静音，强于按名匹配）
+      skip_notification_sender_ids: []
+      # —— 图片 OCR ——
+      image_ocr_enabled: true                       # 启用后下载截图并 OCR，让 LLM 能"看懂"图片
+      image_temp_dir: ./data/tmp_images             # OCR 临时下载目录（处理完即删）
+      # —— 多组织 / 跨组织 ——
+      target_org_corp_id: ''                        # 多组织环境下仅轮询该组织；留空=当前登录 profile 所属组织
+      # —— 会话黑名单容错 ——
+      blacklist_min_consecutive_failures: 3         # 群聊权限错误需连续失败达此次数才拉黑（0=立即拉黑）
+      blacklist_reconcile_every: 10                 # 黑名单自愈对账间隔（轮数）
+      reconcile_probe_batch_size: 5                 # 自愈每轮直接探测上限（轮转分批）
+      # —— 缓存 / 限频 ——
+      top_convs_cache_ttl_seconds: 120              # 置顶/最近会话列表缓存 TTL（秒）
+      min_conversation_poll_interval_seconds: 60    # 长尾会话最小抓取间隔（秒）；未读会话不受影响
+      # —— 合规透明 ——
+      ai_tag_enabled: true                          # 发送时携带"由AI发送"标签（合规透明）；false=与本人手发无区别
+    adapter:                                         # 钉钉 → DwsConfig 字段
+      cli_path: dws                                  # DWS CLI 可执行文件路径（默认 "dws" 表示使用 PATH 中的命令）
+      dry_run: false                                # true = 只模拟，不真正发送消息
+      profile: ''                                   # DWS 登录 profile（多账号场景；默认空=默认账号）
+      retries: 2                                    # DWS 命令重试次数
+      timeout: 30                                   # DWS 命令超时（秒）
+  # - id: feishu
+  #   display_name: 飞书
+  #   enabled: false
+  #   adapter_type: feishu
+  #   storage:
+  #     type: sqlite
+  #     path: ./data/feishu-ai.db
+  #   poller:
+  #     interval_seconds: 10
+  #   adapter:
+  #     cli_path: lark-cli                          # 已安装的飞书 CLI（lark-cli v1.0.72+）
+  #     dry_run: false
+  # - id: wecom
+  #   display_name: 企业微信
+  #   enabled: false
+  #   adapter_type: wecom
+  #   storage:
+  #     type: sqlite
+  #     path: ./data/wecom-ai.db
+  #   poller:
+  #     interval_seconds: 10
+  #   adapter:
+  #     cli_path: wecom-cli                         # 已安装的企业微信 CLI（wecom-cli v0.1.9+）
+  #     dry_run: false
+
+# ============================================================
+# ① DWS 适配器配置（钉钉 CLI 接口）—— legacy 兼容段（config_manage 读取）
+#    值与上方 platforms.dingtalk.adapter 保持一致即可。
+# ============================================================
+dws:
+  cli_path: dws                                     # * DWS CLI 可执行文件路径（默认 "dws" 使用 PATH 中的命令）
+  dry_run: false                                   # 是否启用 dry_run 模式（true = 只模拟，不真正发送消息）
+  profile: ''                                      # DWS 登录 profile 名称（多账号场景；默认空=默认账号）
+  retries: 2                                       # DWS 命令重试次数
+  timeout: 30                                      # DWS 命令超时时间（秒）
+
+# ============================================================
+# ② Embedding 模型配置（用于 RAG 知识库检索）
+# ============================================================
+embedding:
+  api_key: ''                                      # Embedding API Key（使用 local 模式时可为空）
+  base_url: ''                                     # Embedding API Base URL（使用 local 模式时可为空）
+  enabled: true                                    # * 是否启用 Embedding（false = 禁用 RAG 知识库检索）
+  hf_token: ''                                     # HuggingFace Token（用于下载模型，可选）
+  model: BAAI/bge-base-zh-v1.5                     # * Embedding 模型名称（local 模式自动下载到 ~/.cache/huggingface）
+  provider: local                                  # * 提供商类型（local = 本地模型，openai = OpenAI API 等）
+  top_k: 5                                         # 向量检索返回的候选数量（top-k）
+  offline: false                                   # 是否纯离线（true=禁止联网下载，仅用本地缓存）
+  heartbeat_interval: 300                           # 心跳保活间隔（秒）：模型就绪后周期 dummy 推理，防闲置被卸载；下限 30s
+
+# ============================================================
+# ③ LLM 客户端配置（大模型接口）
+# ============================================================
+llm:
+  advanced:                                         # 高级限制参数（防止输出过长或过短）
+    hard_truncation_chars: 300                     # 硬质截断字符数（极端超长安全网）
+    max_chars_daily_chat: 50                       # 日常闲聊场景最大字符数
+    max_chars_tech_issue: 100                       # 技术问题场景最大字符数
+    rag_auto_inject: true                          # 是否自动注入 RAG 相关知识到 system prompt
+    rag_intent_only: false                         # 总是注入 RAG 相关知识（每个问题先查 KB 再答，强抗幻觉；闲聊也会检索，算力略升）
+    rag_min_similarity: 0.30                       # 自动注入最低相似度门槛（v3: 降低门控让更多查询走RAG）
+    rag_max_results: 4                             # 自动注入最多返回几条（v3: 增加上下文给LLM更多知识）
+    rag_max_content_chars: 1200                    # 单条注入知识展示上限（>= 分块大小，避免答案被切）
+    rag_empty_fallback_enabled: true               # 空-RAG 强制兜底：知识库无匹配时，架构层硬编码固定回复（防止 LLM 编造）
+    rag_empty_fallback_reply: "知识库中暂未收录相关信息，请联系IT部门或查阅内部文档确认。"  # 空-RAG 兜底回复文案
+    low_confidence_handoff_enabled: true           # 低置信度转人工/草稿（RAG 未命中时推主人审签）
+    low_confidence_threshold: 0.35                 # RAG 最佳相似度低于此值视为低置信（默认放宽以减少草稿审签打扰）
+    # Phase 2 RAG 引文溯源+置信度页脚（默认关，灰度开；开启后回复末尾附「依据：《标题》（相关度88%）」）
+    citation_enabled: false                        # 引文页脚总开关（默认关）
+    citation_in_group: false                       # 群聊是否也附引文（默认关，更克制）
+    citation_high_threshold: 0.75                  # ≥此值标「依据」，[low,high) 标「参考」
+    citation_low_threshold: 0.5                    # 相关度低于此值不追加页脚
+    citation_max_items: 2                          # 页脚最多列几条引文
+    # Phase 2 P2-6 BGE 本地离线重排（默认关；开启需本地已缓存 bge-reranker-base 权重）
+    rerank_enabled: false                          # 重排总开关（默认关）
+    rerank_model: BAAI/bge-reranker-base           # 重排模型
+    rerank_offline: false                          # 纯离线加载（local_files_only）
+    rerank_top_k: 10                               # 参与重排的候选窗口（0=全部）
+    rerank_timeout: 2.0                            # 重排超时（秒），超时降级原始顺序
+    # H5/H6 + H2-A 历史分级注入 / 后台异步摘要阈值（未配置时全部走代码内保守默认值，向后兼容）
+    history_tiering_recent: 6                      # 注入 LLM 的近期完整条数（默认 6=原硬编码行为；调小如 4 可省 token 并激活 H2-A 异步摘要）
+    summary_async_enabled: true                    # H2-A 后台异步摘要总开关（True=主回复只快读缓存，摘要在 daemon 线程写回）
+    summary_max_age_seconds: 600                   # H2-A 缓存摘要新鲜度窗口（秒），过期则降级并补算
+    summary_min_coverage_ratio: 0.6                # H2-A 缓存摘要需覆盖 older 段的至少该比例才采用
+    summary_max_messages: 0                        # H2-A 透传 summarize_conversation 的 max_messages（0=不限制）
+    summary_min_older: 2                           # H2-A older 段至少 N 条才压摘要（不足则仅注入 recent）
+  api_key: ''                                      # * LLM API Key（必填）
+  base_url: ''                                     # * LLM API Base URL（必填，如 https://api.deepseek.com/v1 或本地 http://localhost:11434/v1）
+  fallback_api_key: ''                             # 备用 API Key（主 API 失败时自动切换）
+  fallback_base_url: ''                            # 备用 API Base URL
+  fallback_model: ''                               # 备用模型（单模型，旧）：主模型+主池全部失败时使用
+  fallback_model_pool: []                          # 备用模型池（跨服务商兜底）：主模型+主池全失败按列表顺序逐个尝试；401/403 立即终止
+  model: gpt-4o                                    # * 使用的模型名称（如 deepseek-chat / gpt-4o / 本地 llama3）
+  model_pool: []                                   # 同服务商模型池（免费额度轮换）：与主模型共用 base_url/api_key 的备选模型
+  provider: openai-compatible                      # * 提供商类型（openai-compatible = OpenAI 兼容接口）
+  system_prompt: '你是 {user_name} 的 {platform} 数字分身，代表 {user_name} 回复消息。语气专业、简洁、有礼貌。'  # * System Prompt，可用 {user_name} / {platform}
+  temperature: 0.3                                 # 生成温度（0.0 = 确定性，1.0 = 创造性；0.3 抑制编造+思考外显）
+  max_tokens: 2048                                 # * 每次请求最大生成 Token 数
+  max_tool_rounds: 5                               # * 工具调用最大轮次（防止死循环）
+  converge_after_tool_rounds: 3                    # 连续 N 轮都在调工具则强制收敛（0=关闭）
+  max_retries: 3                                   # 主模型单轮最大重试次数（含首次；耗尽后切备用模型）
+  base_backoff: 2.0                                # 退避基数（秒）：第 n 次等待 base_backoff * 2**n
+  timeout: 60                                      # LLM API 超时时间（秒）
+  few_shot_examples: []                            # 本人语气 few-shot 样例（让数字分路口吻更像本人）
+  persona_style_prompt: ''                         # 主人沟通风格覆盖（留空则由历史消息自动画像兜底）
+  persona_history_max_versions: 10                # 画像历史版本最大保留数（超量滚动删除旧版本）
+
+# ============================================================
+# ③b 后台 LLM 任务限速（对话摘要 / 记忆提取）—— 保护免费额度
+# ============================================================
+llm_throttle:
+  enabled: true                                    # 是否启用后台限速
+  background_min_interval_seconds: 20              # 活跃时两次后台 LLM 调用最小间隔（秒）
+  idle_threshold_seconds: 300                      # 多久无真实消息处理算"空闲"
+  idle_min_interval_seconds: 180                   # 空闲时两次后台调用最小间隔（秒）
+  rate_limit_backoff_seconds: 600                  # 主模型触发 429/超时时后台任务暂停时长（秒）
+  extract_memory_cooldown_seconds: 600             # 同一会话记忆提取最小冷却（秒）
+  extract_memory_min_new_chars: 30                 # 本轮新增内容低于此字符数则不提取记忆
+  max_summaries_per_cycle: 20                      # 单周期最多处理的摘要会话数
+  summary_history_limit: 40                        # 摘要时最多取的非归档近期消息条数
+
+# ============================================================
+# ④ 日志配置
+# ============================================================
+logging:
+  file: ./logs/linkora.log                         # 日志文件路径（相对于项目根目录）
+  level: info                                      # 日志级别（debug / info / warning / error）
+  max_backups: 7                                   # 最大备份文件数（超过后自动删除最旧的）
+  max_size_mb: 50                                  # 单个日志文件最大大小（MB）
+
+# ============================================================
+# ⑤ 记忆管理配置（长期记忆清理、检索与对话摘要）
+# ============================================================
+memory:
+  cleanup:                                         # 记忆清理策略
+    enabled: true                                  # 是否启用自动清理
+    check_interval_days: 7                         # 清理检查间隔（天）
+    max_age_days: 90                               # 记忆最大保留天数（超过后标记过期）
+    min_similarity_threshold: 0.3                  # 相似度阈值（低于此值的记忆会被清理）
+  retrieval:                                       # 记忆检索策略
+    min_similarity: 0.6                            # 检索最小相似度阈值（低于此值的结果会被过滤）
+  conversation_summary:                            # 对话摘要策略
+    enabled: true                                  # 是否启用对话摘要
+    max_messages_per_conversation: 50              # 单会话参与摘要的最大消息数
+    summary_interval_hours: 24                      # 摘要间隔（小时）
+    summary_ratio: 0.4                             # 摘要压缩比
+
+
+# ============================================================
+# ⑦ 规则引擎配置（关键词回复、意图过滤、黑白名单）
+# ============================================================
+rules:
+  enabled: true                                    # 是否启用规则引擎
+  regex_timeout_seconds: 1.0                       # ReDoS 防护：用户/DB 正则单次匹配超时（秒）；0/负=禁用
+  blacklist:                                       # 黑名单（黑名单中的用户/群组消息不处理；置空 [] 即不生效）
+    groups: []                                     # 黑名单群组 ID 列表
+    users:                                         # 黑名单用户名称列表
+      - 张三
+  whitelist:                                       # 白名单（仅处理白名单中的用户/群组；空=不启用）
+    enabled: false                                 # 是否启用白名单模式
+    groups: []                                     # 白名单群组 ID 列表
+    users: []                                      # 白名单用户名称列表
+  keywords:                                        # 关键词自动回复（匹配到关键词直接回复，不调 LLM）
+    - match: 在吗|在不在|您好                        # 匹配的正则表达式
+      reply: 在的，请问有什么事？                     # 自动回复内容（可用 {now} 变量插入当前时间）
+  stop_words:                                      # 停用词（消息仅含这些词时不触发 LLM）
+    - 好的, 嗯, 哦
+    - 谢谢, 感谢, 请问, 麻烦, 帮我
+    - 你好, 您好, 请, 劳驾
+  keyword_denylist:                                # 高频关键词黑名单：从词云强制剔除的机器生成 token
+    - dingtalkclient
+    - mobilelink
+    - dingtalk
+    - mobile
+    - client
+    - link
+    - oauth
+    - callback
+    - redirect
+    - android
+    - ios
+    - robot
+    - webbot
+    - miniapp
+  intent_filter:                                    # 意图过滤：识别并跳过无业务价值的消息
+    enabled: true
+    pure_thank_max_length: 20                       # 纯感谢消息最大长度（超过可能含业务内容）
+    pure_ack_max_length: 10                         # 纯确认收到最大长度
+    business_ratio_threshold: 0.3                   # 业务关键词占比阈值（低于则视为主要是感谢）
+    thank_you:                                      # 感谢类关键词
+      - 谢谢
+      - 感谢
+      - 辛苦了
+      - 多谢
+    acknowledge:                                    # 确认收到类关键词
+      - 收到
+      - 好的
+      - 明白
+      - 知道了
+      - 了解
+    closing:                                        # 结束语类关键词
+      - 再见
+      - 拜拜
+      - 晚安
+      - 先忙了
+    polite:                                         # 礼貌开场类关键词
+      - 你好
+      - 您好
+      - 在吗
+      - 请问
+    compliment:                                     # 称赞/夸奖类关键词（扩充子型）
+      - 厉害
+      - 太棒了
+      - 666
+      - yyds
+    smalltalk:                                      # 闲聊/寒暄类关键词（扩充子型）
+      - 在忙吗
+      - 最近好吗
+      - 吃饭了吗
+    emotion:                                        # 情绪/感叹类关键词（扩充子型）
+      - 哈哈
+      - 无语
+      - 服了
+      - emo
+    business_keywords:                              # 业务关键词（用于判断消息是否含业务内容）
+      - 问题
+      - 错误
+      - 故障
+      - 怎么
+      - 如何
+      - 为什么
+      - 帮我
+      - 配置
+      - 设置
+      - 安装
+      - 排查
+      - 解决
+      - 查询
+      - 审批
+      - 账号
+      - 密码
+      - 权限
+      - 登录
+      - 接口
+      - 服务
+      - 系统
+      - 数据
+      - 文档
+      - 资料
+      - 文件
+
+# ============================================================
+# ⑧ 安全配置（敏感词过滤和默认回复）
+# ============================================================
+safety:
+  default_fallback: 抱歉，我暂时无法回答这个问题。   # 默认兜底回复（LLM 处理失败或返回空时使用）
+  media_fallback_text: 请发文字，我暂时无法处理语音/视频消息，谢谢理解～  # 媒体类型优雅回退文案
+  sensitive_words: []                              # 敏感词列表（回复内容包含这些词时会被过滤）
+
+# ============================================================
+# ⑨ RAG 知识库分块配置
+# ============================================================
+rag:
+  chunk_size: 500                                  # 分块大小（字符数）
+  chunk_overlap: 50                                # 分块重叠大小（字符数）
+
+# ============================================================
+# ⑩ 技能引擎配置（Skills）
+# ============================================================
+skills:
+  enabled: true                                    # 是否启用技能引擎
+  auto_activate: true                              # 是否允许关键词自动激活技能
+  semantic_routing: true                           # Phase 2 语义路由：max(关键词命中, 语义相似度×weight)
+  semantic_skill_threshold: 0.40                   # 技能语义命中阈值（余弦相似度，0~1）
+  combo_enabled: true                              # Phase 3 组合激活：接近平局的多个 composable 技能同时激活
+  combo_gap: 0.12                                  # 平局判定阈值（top1 - top2 <= combo_gap 视为接近平局）
+  hot_reload: false                                # 生产默认关闭：避免运行时自动加载 skills 目录新文件（供应链风险）；开发态显式开启
+  hot_reload_interval: 15.0                        # 热加载轮询间隔（秒）
+  ai_intent_generation_enabled: false             # AI 意图词生成（默认关闭，避免意外消耗 LLM 额度）
+
+# ============================================================
+# ⑩½ SkillHub 市场（skill 榜单）配置
+# ============================================================
+skillhub:
+  # 是否允许 Web 运行时自动拉取并执行 skillhub 安装脚本。
+  # 安全默认关闭——开启后仅当 skillhub CLI 未安装时，才会下载白名单内的安装脚本
+  # 并做 SHA256 钉值校验后以非 shell 方式执行（钉值经环境变量 SKILLHUB_INSTALL_SHA256 注入，
+  # 或钉死在 web/dependencies.py）。生产环境建议由 Dockerfile/部署脚本预装 CLI，保持关闭。
+  auto_install: false
+
+# ============================================================
+# ⑪ 死信队列（Dead Letter）—— LLM/发消息彻底失败时落库而非静默丢弃
+# ============================================================
+dead_letter:
+  enabled: true                                    # 是否启用 DLQ（关闭则退回旧行为：仅回 fallback 文本）
+
+# ============================================================
+# ⑫ Web 管理后台配置
+# ============================================================
+web:
+  port: 8080                                       # 监听端口
+  host: 127.0.0.1                                  # 监听地址（安全默认仅本机回环；公网访问请经反代+认证）
+  auth_enabled: true                               # 是否开启认证（安全默认开启；关闭=管理后台裸奔，高危）
+  auth_username: admin                             # * 登录用户名
+  auth_password: 'please-change-me'                # * 登录密码——务必修改！auth_enabled=true 且密码为空会启动报错（fail-closed 拒绝启动）
+
+# ============================================================
+# ⑬ 工具配置（可用工具和速率限制）
+# ============================================================
+tools:
+  enabled: true                                    # 是否启用工具调用
+  allow_skill_tools: true                          # 是否允许技能引擎自动包装未声明白名单的技能为标准 Tool
+  expose_all_tools: true                           # 是否每轮全量暴露所有工具（详见 tool_routing_mode）
+  tool_routing_mode: smart                         # 工具按需暴露策略：smart(推荐) / all / keyword
+  semantic_routing: true                           # 语义路由：substring 未命中时用 embedding 兜底补充相关工具
+  semantic_tool_threshold: 0.42                    # 工具语义命中阈值（余弦相似度，0~1）
+  available:                                       # 启用的工具列表
+    - kb_search                                    # 知识库语义检索（RAG）
+    - send_message                                 # 发送消息
+    - search_doc                                   # 搜索文档
+    - get_doc_content                              # 获取文档内容
+    - search_contact                               # 搜索联系人
+    - get_calendar_events                          # 获取日历事件
+    - create_todo                                  # 创建待办事项
+    - recall_memory                                # 回忆长期记忆
+    - save_memory                                  # 保存长期记忆
+    - web_search                                   # 联网搜索
+    - get_weather                                  # 获取天气信息
+    - system_status                                # 系统状态查询
+    - message_stats                                # 消息统计
+    - keyword_rules                                # 关键词规则管理
+    - config_manage                                # 配置管理
+    - get_unread                                   # 获取未读消息
+    - get_conversation_info                        # 获取会话信息
+    - search_messages                              # 搜索消息
+    - get_my_profile                               # 获取我的资料
+    - list_orgs                                    # 列出组织
+    - get_current_org                              # 获取当前组织
+    - get_my_approvals                             # 获取我的审批
+    - get_approval_detail                          # 获取审批详情
+    - transfer_approval                            # 转交审批任务（原审批人离职等场景，仅钉钉）
+    - get_attendance                               # 获取考勤
+    - send_ding                                    # 发送钉（DING）
+    - upload_image                                 # 上传图片
+    - list_minutes                                 # 列出 AI 听记/会议纪要（仅钉钉）
+    - get_minutes                                  # 获取听记摘要/待办/转写/信息（仅钉钉）
+    - wiki_space_list                              # 列出钉钉知识库空间（仅钉钉）
+    - wiki_space_search                            # 在知识库中搜索空间（仅钉钉）
+    - wiki_node_list                               # 列出知识库空间下的节点（仅钉钉）
+    - wiki_node_search                             # 在知识库内搜索节点（仅钉钉）
+    - approval_list_forms                          # 列出审批表单模板（仅钉钉）
+    - approval_search_forms                        # 搜索审批表单模板（仅钉钉）
+    - approval_get_detail                          # 查看审批实例详情（仅钉钉）
+    - approval_list_pending                        # 查询待我审批（仅钉钉）
+    - approval_list_tasks                          # 查询审批实例下的审批任务（仅钉钉）
+    - approval_list_initiated                      # 查询已发起审批记录（仅钉钉）
+    - approval_list_executed                       # 查询我已处理的审批（仅钉钉）
+  rate_limit:                                      # 工具速率限制（防止滥用，单位：每小时）
+    create_todo: { per_hour: 20 }
+    get_approval_detail: { per_hour: 30 }
+    get_attendance: { per_hour: 20 }
+    get_conversation_info: { per_hour: 60 }
+    get_current_org: { per_hour: 30 }
+    get_my_approvals: { per_hour: 30 }
+    transfer_approval: { per_hour: 10 }
+    get_my_profile: { per_hour: 30 }
+    get_unread: { per_hour: 60 }
+    get_weather: { per_hour: 30 }
+    list_orgs: { per_hour: 30 }
+    search_messages: { per_hour: 60 }
+    send_ding: { per_hour: 20 }
+    send_message: { per_hour: 30 }
+    upload_image: { per_hour: 30 }
+    web_search: { per_hour: 50 }
+
+# ============================================================
+# ⑭ 存储配置（数据库）—— legacy 兼容段（config_manage 读取）
+#    值与上方 platforms.dingtalk.storage 保持一致即可。
+# ============================================================
+storage:
+  path: ./data/linkora.db                      # 数据库文件路径（按平台隔离）
+  type: sqlite                                     # 数据库类型（当前仅支持 sqlite）
+  backup_enabled: true                             # 是否启用自动备份
+  backup_dir: ./data/backups                       # 备份文件目录
+  backup_interval_hours: 24                        # 备份间隔（小时）
+  backup_max_count: 7                              # 保留最近多少份备份
+  backup_on_start: true                            # 启动时立即备份一次
+  decisions_retention_days: 14                     # 决策追踪表留存天数（≤0 表示不按时间清理）
+  messages_retention_days: 90                      # 消息记录留存天数（≤0 表示不清理）
+  doc_sync_interval_hours: 1                       # 钉钉文档自动同步间隔（小时），≤0 禁用
+
+# ============================================================
+# 配置文件结束
+# ============================================================
+# 提示：
+#   1. 所有带 * 的配置项为必填项（密钥/密码请务必修改，勿留空或默认值）
+#   2. 列表类型的配置项（如 skip_notification_patterns）可留空（[]）
+#   3. 布尔类型配置项：true / false（小写）
+#   4. 修改配置后无需重启，程序会自动热重载（Hot Reload）
+#   5. 多平台：运行期以 platforms 段为准；legacy 段（dws/poller/storage）仅供 config_manage 工具读取，保持一致即可
+# ============================================================

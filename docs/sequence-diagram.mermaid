@@ -1,0 +1,71 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户/IM
+    participant P as Poller(main线程)
+    participant A as LLMAgent(请求线程)
+    participant S as SQLiteStore
+    participant Q as SummaryScheduler队列
+    participant W as SummaryScheduler Worker(daemon线程)
+    participant L as LLMClient(摘要)
+
+    Note over P: 每轮：history = store.get_conversation_history(limit=history_window)
+
+    %% ===== 场景1：缓存命中（热路径零 LLM 阻塞，H2-A 主收益）=====
+    rect rgb(235,245,235)
+    Note over A: 场景1 · 缓存命中（首条之后常态）
+    P->>A: process_message(message, history)
+    A->>A: _apply_history_tiering(history)
+    alt len(history) > max_recent（需要摘要）
+        A->>S: get_conversation_summary(chat_id)
+        S-->>A: 摘要(新鲜且覆盖≥阈值)
+        A->>A: 用缓存摘要构造 system 占位 Message
+        A->>Q: schedule(chat_id, older) 仅入队(非阻塞)
+        Q-->>A: 立即返回
+    end
+    A-->>P: 主回复（早已不等摘要 LLM）
+    P->>U: 发送回复
+    end
+
+    %% ===== 场景2：缓存未命中 → 降级 + 异步补算 =====
+    rect rgb(245,240,235)
+    Note over A: 场景2 · 缓存未命中（首次/缓存过期）
+    P->>A: process_message(message, history)
+    A->>A: _apply_history_tiering(history)
+    A->>S: get_conversation_summary(chat_id)
+    S-->>A: 无 / 过期
+    A->>A: 降级：仅返回 recent（无摘要，安全不失忆）
+    A->>Q: schedule(chat_id, older) —— pending 去重后入队
+    Q-->>A: 立即返回（主回复不阻塞）
+    A-->>P: 主回复
+    P->>U: 发送回复
+    Q->>W: worker 取出 job
+    W->>S: 自有 per-thread 连接（WAL）
+    W->>L: summarize_conversation(older)
+    L-->>W: 摘要文本
+    W->>S: upsert_conversation_summary(WHERE generation=job.gen CAS)
+    Note right of W: 成功写回 → 下一轮场景1命中
+    end
+
+    %% ===== 场景3：异步摘要失败兜底 =====
+    rect rgb(248,235,235)
+    Note over W: 场景3 · 失败兜底（不脏写、不影响主回复）
+    Q->>W: job
+    W->>L: summarize_conversation(older)
+    L-->>W: 超时 / 异常 / 空串
+    W->>W: if not summary: return（不写库）
+    Note right of W: 缓存保持旧值/空；主回复早已发出，无影响
+    end
+
+    %% ===== 场景4：同 chat 并发两回合 → 写回竞态边界 =====
+    rect rgb(235,240,248)
+    Note over A,W: 场景4 · 同 chat_id 并发（pending 去重 + 单 worker 串行）
+    par 回合T
+        A->>Q: schedule(chat_id, older_T) → pending.add → 入队
+    and 回合T+1（几乎同时）
+        A->>Q: schedule(chat_id, older_T1) → 已在 pending → 跳过
+    end
+    Q->>W: 仅 older_T 一个 job 执行
+    W->>S: upsert(older_T, gen=g)
+    W->>W: pending.discard(chat_id)
+    Note right of W: 单 daemon 线程 + pending 去重 → 同 chat 不会双写/错乱
+    end

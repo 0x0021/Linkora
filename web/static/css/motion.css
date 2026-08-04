@@ -1,0 +1,135 @@
+/* =========================================================
+   Premium Motion System — 微交互与动效体系
+   设计原则：
+   - 仅使用 transform / opacity（GPU 友好，目标 60fps）
+   - 主题切换平滑过渡仅在切换瞬间启用，不干扰日常交互
+   - 尊重 prefers-reduced-motion 无障碍偏好
+   ========================================================= */
+:root {
+  --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+}
+
+/* ---------- 主题切换全局平滑过渡（仅切换瞬间生效） ---------- */
+html.theme-anim,
+html.theme-anim *,
+html.theme-anim *::before,
+html.theme-anim *::after {
+  transition:
+    background-color var(--dur-slow) var(--ease-premium),
+    color var(--dur-slow) var(--ease-premium),
+    border-color var(--dur-slow) var(--ease-premium),
+    box-shadow var(--dur-slow) var(--ease-premium),
+    fill var(--dur-slow) var(--ease-premium) !important;
+}
+
+/* ---------- 应用外壳入场（一次性，安全不重播） ---------- */
+.app-layout {
+  animation: dt-shell-in var(--dur-slow) var(--ease-out-soft) both;
+}
+@keyframes dt-shell-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ---------- 卡片悬浮抬升 + 图标微动 ---------- */
+.stat-card,
+.panel {
+  transition:
+    transform var(--dur-base) var(--ease-premium),
+    box-shadow var(--dur-base) var(--ease-premium),
+    border-color var(--dur-base) var(--ease-premium);
+}
+.stat-card:hover,
+.panel:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 34px -14px rgba(15, 23, 42, 0.30);
+}
+.stat-card:hover {
+  border-color: rgba(37, 99, 235, 0.20);
+}
+.stat-icon {
+  transition: transform var(--dur-base) var(--ease-premium);
+}
+.stat-card:hover .stat-icon {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+/* ---------- 按钮按压反馈 ---------- */
+.btn {
+  transition:
+    transform var(--dur-fast) var(--ease-premium),
+    filter var(--dur-fast) ease,
+    box-shadow var(--dur-base) ease;
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: scale(0.96); }
+
+/* ---------- 侧栏导航项 ---------- */
+.nav-item {
+  transition:
+    background-color var(--dur-base) var(--ease-premium),
+    color var(--dur-base) var(--ease-premium);
+}
+.nav-item::before {
+  transition:
+    transform var(--dur-base) var(--ease-premium),
+    opacity var(--dur-base) ease;
+}
+.nav-item:hover {
+  transform: translateX(3px);
+}
+
+/* ---------- 主题切换器按钮（旋转磁吸感） ---------- */
+#theme-toggle {
+  transition:
+    transform var(--dur-base) var(--ease-premium),
+    background-color var(--dur-base) ease,
+    color var(--dur-base) ease;
+}
+#theme-toggle:hover {
+  transform: rotate(18deg) scale(1.08);
+}
+#theme-toggle:active {
+  transform: scale(0.92);
+}
+
+/* ---------- 表格行悬浮微反馈 ---------- */
+.table > tbody > tr {
+  transition: background-color var(--dur-fast) ease;
+}
+
+/* ---------- 链接与可点击卡片 ---------- */
+a, .clickable {
+  transition: color var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+
+/* ---------- 统一焦点可见性（无障碍 + 精致感） ---------- */
+:focus-visible {
+  outline: 2px solid var(--brand-primary, #2563eb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- 无障碍：减少动态效果 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html.theme-anim *,
+  html.theme-anim *::before,
+  html.theme-anim *::after {
+    transition: none !important;
+  }
+  .app-layout {
+    animation: none !important;
+  }
+  .stat-card:hover,
+  .panel:hover,
+  .nav-item:hover,
+  #theme-toggle:hover,
+  .btn:active {
+    transform: none !important;
+  }
+  .btn:hover { filter: none; }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "question": "七楼打印机IP是多少",
+    "expect_keyword": "192.168"
+  },
+  {
+    "question": "打印机怎么连接",
+    "expect_keyword": "USB"
+  },
+  {
+    "question": "VPN怎么配置",
+    "expect_keyword": "VPN"
+  },
+  {
+    "question": "报销流程是什么",
+    "expect_keyword": "审批"
+  },
+  {
+    "question": "年假怎么申请",
+    "expect_keyword": "请假"
+  }
+]

@@ -1,0 +1,12 @@
+# gitleaks 基线忽略文件（手动复核后的已知误报）
+#
+# 这些 finding 均来自「测试夹具中的明显假值」或「本地 gitignored 的 config.yaml」，
+# 非真实密钥。指纹格式：<commit>:<file>:<rule>:<line>。
+# 仅抑制此处列出的历史误报；任何新提交的密钥仍会被拦截。
+# 若某行后续引入了真实密钥，因其 commit 指纹变化，会自动重新触发告警。
+
+615f3824d8827625621d8bf5069b1a8b1e536442:tests/test_feishu_adapter 2.py:generic-api-key:468
+615f3824d8827625621d8bf5069b1a8b1e536442:tests/test_feishu_adapter 2.py:generic-api-key:474
+043800f8839cc3471accd1e6a76c1fff6ac51126:config.yaml:generic-api-key:70
+d17784c8ae8c48fc815bbbf1472f12ebbd7fb648:tests/test_feishu_adapter.py:generic-api-key:437
+d17784c8ae8c48fc815bbbf1472f12ebbd7fb648:tests/test_feishu_adapter.py:generic-api-key:443

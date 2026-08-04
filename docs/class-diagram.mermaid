@@ -1,0 +1,95 @@
+classDiagram
+    %% ===== 新增 / 修改 标记 =====
+    %% [NEW]   新增类或方法
+    %% [MOD]   修改既有方法/类
+
+    class LLMAgent {
+        <<MOD>>
+        +config: LlmConfig
+        +client: LLMClient
+        +store: SQLiteStore
+        +_summary_scheduler: SummaryScheduler
+        +_cache_advanced_config()
+        +_apply_history_tiering(history, max_recent) list~Message~
+        +_build_user_message(message, history, query_embedding) list~dict~
+        +summarize_conversation(messages, max_messages) str
+        +_read_cached_summary(chat_id, older) str
+        +_maybe_schedule_summary(chat_id, older) void
+    }
+
+    class SummaryScheduler {
+        <<NEW>>
+        -_agent: LLMAgent
+        -_store: SQLiteStore
+        -_queue: Queue~SummaryJob~
+        -_pending: set~str~
+        -_pending_lock: Lock
+        -_stop_event: Event
+        -_thread: Thread
+        +__init__(agent, store)
+        +start() void
+        +stop() void
+        +schedule(chat_id, older) void
+        -_worker_loop() void
+        -_process_job(job) void
+    }
+
+    class SummaryJob {
+        <<NEW>> dataclass
+        +chat_id: str
+        +older: list~Message~
+        +generation: int
+        +created_at: str
+    }
+
+    class SQLiteStore {
+        <<MOD>>
+        +conn: Connection
+        +get_conversation_summary(chat_id) SummaryRow
+        +upsert_conversation_summary(chat_id, summary, older_boundary_msg_id, covered_count) bool
+        +get_conversation_history(chat_id, limit, days, session_gap_minutes) list~Message~
+    }
+
+    class ConversationSummary {
+        <<NEW>> table-row (conversation_summaries)
+        +chat_id: str PRIMARY KEY
+        +summary_text: str
+        +older_boundary_msg_id: str
+        +covered_count: int
+        +generation: int
+        +updated_at: str
+    }
+
+    class Message {
+        <<src.models 既有>>
+        +msg_id: str
+        +chat_id: str
+        +chat_type: str
+        +content: str
+        +sender_name: str
+        +sender_id: str
+        +role: str
+        +created_at: str
+    }
+
+    class AdvancedConfig {
+        <<MOD>> config.py
+        +rag_auto_inject: bool
+        +max_input_tokens: int
+        +history_tiering_recent: int = 6
+        +summary_async_enabled: bool = True
+        +summary_max_age_seconds: int = 600
+        +summary_min_coverage_ratio: float = 0.6
+        +summary_max_messages: int = 0
+        +summary_min_older: int = 2
+    }
+
+    LLMAgent --> SQLiteStore : 读缓存 / 写回经由Scheduler
+    LLMAgent --> SummaryScheduler : 调度异步摘要 [NEW]
+    SummaryScheduler --> LLMAgent : 调用 summarize_conversation [NEW]
+    SummaryScheduler --> SQLiteStore : upsert 写回 [NEW]
+    SummaryScheduler --> SummaryJob : 队列元素 [NEW]
+    SummaryScheduler ..> ConversationSummary : 持久化目标 [NEW]
+    LLMAgent ..> Message : 构造摘要占位 Message
+    AdvancedConfig ..> LLMAgent : 注入阈值参数
+    SQLiteStore ..> ConversationSummary : 表迁移/读写

@@ -1,0 +1,1196 @@
+/* ============ 模拟测试页面 ============ */
+
+#page-simulate.active {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    padding: 1.25rem 1.5rem;
+}
+
+#page-simulate.active .sim-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 1rem;
+}
+
+#page-simulate.active .page-header-text {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+#page-simulate.active .page-header-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+#page-simulate.active .page-header-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.3;
+}
+
+#page-simulate.active .page-header-desc {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+    margin-top: 0.125rem;
+}
+
+.sim-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.sim-status-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
+    font-size: 0.7rem;
+    transition: all 0.15s ease;
+}
+
+.sim-status-chip:hover {
+    background: var(--bg-surface);
+    border-color: var(--border-color);
+}
+
+.sim-status-chip i {
+    font-size: 0.65rem;
+}
+
+.sim-status-chip.success {
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.sim-status-chip.success i,
+.sim-status-chip.success .sim-status-chip-value {
+    color: var(--brand-success);
+}
+
+.sim-status-chip.error {
+    background: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.2);
+}
+
+.sim-status-chip.error i,
+.sim-status-chip.error .sim-status-chip-value {
+    color: var(--brand-danger);
+}
+
+.sim-status-chip.warning {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.2);
+}
+
+.sim-status-chip.warning i,
+.sim-status-chip.warning .sim-status-chip-value {
+    color: var(--brand-warning);
+}
+
+.sim-status-chip-label {
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+.sim-status-chip-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+#page-simulate.active .sim-main-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 1.5rem;
+    flex: 1;
+    min-height: 0;
+    /* height: 0 让两栏在 flex 容器内能精确撑开，overflow: hidden 避免整页滚动 */
+    height: 0;
+    padding: 1.25rem 0 1.5rem;
+    overflow: hidden;
+}
+
+.sim-left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* 现在只有一个 panel，无需间距 */
+    min-height: 0;
+}
+
+/* ---- 左栏：输入区（撑满左栏高度，与右栏执行结果对齐） ---- */
+.sim-input-panel {
+    flex: 1 1 auto;  /* 独占整个左栏高度 */
+    min-height: 0;
+    margin-bottom: 0; /* 覆盖 .panel 全局 margin-bottom: 1rem，避免与右栏底部不对齐 */
+}
+
+/* 让「测试输入」的 .panel-header 与「执行结果」的 .sim-result-header 高度/样式完全一致，
+   确保左右两个面板顶部严格对齐（灰底 + 底边线 + 同 padding + 同 min-height + 同标题字号） */
+.sim-input-panel .panel-header {
+    min-height: 52px;   /* 与右栏 .sim-result-header 实际渲染高度（被刷新按钮撑到 52px）一致 */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.625rem 0.875rem;   /* 与 .sim-result-header 完全一致 */
+    background: var(--bg-subtle); /* 灰底，与 .sim-result-header 一致 */
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+/* 左栏 header 标题字号对齐右栏 .sim-result-title，视觉统一 */
+.sim-input-panel .panel-header h3 {
+    font-size: 0.8125rem;
+}
+
+.sim-input-panel .panel-body {
+    padding: 1rem; /* 覆盖 .panel-body 默认 0.4rem：输入区需更大内边距 */
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem; /* 上半输入区与下半历史区分隔 */
+    overflow: hidden; /* 改为内部分区各自滚动，避免整块溢出 */
+}
+
+/* 上半：发送者 / 文本 / 选项 / 样本 / 按钮 —— 固定自然高度，不滚动 */
+.sim-input-top {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* 下半：测试历史 —— 撑满 panel-body 剩余高度，内部列表可滚动 */
+.sim-input-history-section {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.sim-input-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-bottom: 0.5rem;
+}
+
+.sim-input-history-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.sim-input-history-title i {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+}
+
+.sim-sender-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.sim-sender-row .sim-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand-primary), var(--brand-purple));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.sim-sender-row .form-control {
+    flex: 1;
+}
+
+.sim-textarea {
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    padding: 0.75rem;
+    resize: vertical;
+    min-height: 100px;
+    max-height: 260px; /* 输入区不超 260px，panel-body 由下半历史区撑满；超出 textarea 自身滚动 */
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    font-family: var(--font-sans);
+}
+
+.sim-textarea:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-light);
+    background: var(--bg-surface);
+}
+
+.sim-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    margin-top: 0.25rem;
+}
+
+.sim-options-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* ---- 快捷样本 ---- */
+.sim-samples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.sim-sample-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sim-sample-btn:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+    background: var(--brand-primary-light);
+}
+
+.sim-sample-btn i {
+    font-size: 0.625rem;
+}
+
+/* ---- 发送按钮区 ---- */
+.sim-send-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.sim-send-btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.sim-clear-btn {
+    flex-shrink: 0;
+}
+
+/* ---- 测试历史（嵌套在测试输入 panel 内部） ---- */
+.sim-history-list {
+    padding: 0.25rem;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.sim-history-empty {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-tertiary);
+    font-size: 0.8125rem;
+}
+
+.sim-history-item {
+    padding: 0.5rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    margin-bottom: 0.25rem;
+}
+
+.sim-history-item:hover {
+    background: var(--bg-subtle);
+}
+
+.sim-history-content {
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.1875rem;
+}
+
+.sim-history-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+}
+
+.sim-history-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.sim-history-meta i {
+    font-size: 0.625rem;
+}
+
+/* ---- 右栏：执行结果控制台 ---- */
+.sim-result-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    min-height: 0;
+}
+
+.sim-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;   /* 与左栏 .panel-header 严格等高（被刷新按钮撑到 52px） */
+    padding: 0.625rem 0.875rem;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.sim-result-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sim-result-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-disabled);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.sim-result-status-dot.idle {
+    background: var(--text-disabled);
+}
+
+.sim-result-status-dot.running {
+    background: var(--brand-warning);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+    animation: sim-pulse 1.5s ease-in-out infinite;
+}
+
+.sim-result-status-dot.success {
+    background: var(--brand-success);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+}
+
+.sim-result-status-dot.error {
+    background: var(--brand-danger);
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.15);
+}
+
+@keyframes sim-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.sim-result-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.sim-result-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sim-result-timing {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+/* 结果区 body：flex 容器，让 .sim-result-content 撑满，3 张固定卡贴底 */
+.sim-result-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    display: flex;          /* 让 .sim-result-content 撑满 body */
+    flex-direction: column;
+    overflow: auto;         /* 内容超出面板时滚动，确保回复卡 + 3 卡始终可达 */
+}
+
+/* 空状态 */
+.sim-result-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    color: var(--text-tertiary);
+    text-align: center;
+    height: 100%;
+}
+
+.sim-result-empty-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--bg-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    font-size: 1.25rem;
+    color: var(--text-disabled);
+}
+
+.sim-result-empty-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.sim-result-empty-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* 加载中 */
+.sim-result-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    gap: 0.75rem;
+}
+
+.sim-result-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-light);
+    border-top-color: var(--brand-primary);
+    border-radius: 50%;
+    animation: sim-spin 0.7s linear infinite;
+}
+
+@keyframes sim-spin {
+    to { transform: rotate(360deg); }
+}
+
+.sim-result-loading-text {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* 结果区域容器：上半部分（banner 或 AI 回复）撑满，下半 3 张固定卡贴底 */
+.sim-result-content {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1 1 auto;   /* 撑满父 panel，让 AI 回复卡获得更多垂直空间 */
+    min-height: 0;
+    overflow: auto;   /* 内容溢出时在自身滚动 */
+}
+
+/* 当状态提示作为 banner（包在 .sim-result-content 里）时——
+   减小 min-height，避免空/loading banner 撑满空间把下方的 3 张卡片挤出可视区
+   （配合 .sim-result-content overflow:auto，超出会滚动）；卡片靠 flex-shrink:0 保证
+   自然高度，banner 通过 flex:1 1 auto 填充剩余垂直空间。 */
+.sim-result-content > #sim-result-banner {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+
+.sim-result-content > #sim-result-banner .sim-result-empty,
+.sim-result-content > #sim-result-banner .sim-result-loading {
+    height: auto;
+    min-height: 0;
+    padding: 0.5rem 1rem;
+    gap: 0.25rem;
+}
+
+/* banner 内的结果插槽：参与 flex 布局，将 banner 剩余空间下传给 AI 回复卡 */
+#sim-result-banner > #sim-result-slot {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* banner 内的回复卡片：跟 flex 撑满上半部分，高度仅设最小下限避免无内容时塌陷 */
+.sim-result-content > #sim-result-banner .sim-card-reply {
+    flex: 1 1 auto;
+    min-height: 320px;
+    max-height: none;
+    height: auto;
+}
+
+/* 兼容旧 selector：当 .sim-result-empty/.sim-result-loading 直接作为 .sim-result-content 子元素时（已弃用） */
+.sim-result-content > .sim-result-empty,
+.sim-result-content > .sim-result-loading {
+    flex: 0 0 auto;
+    min-height: 140px;
+    height: auto;
+    padding: 1rem 1rem;
+}
+
+/* 提示框 */
+.sim-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    animation: sim-slideIn 0.3s ease;
+}
+
+.sim-alert-info {
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    color: var(--brand-primary);
+}
+
+.sim-alert-icon {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    margin-top: 0.0625rem;
+}
+
+.sim-alert-text {
+    flex: 1;
+    line-height: 1.5;
+}
+
+@keyframes sim-slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============ 卡片组件 ============ */
+.sim-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    flex-shrink: 0;   /* 防止卡片在窄高度下被压成 0 高 */
+    animation: sim-cardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sim-cardIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ============ 固定卡（路由/工具/证据）：横向仪表盘 ============ */
+.sim-card-dashboard {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    flex-shrink: 0;       /* 贴结果区底部，不被压缩 */
+    align-items: stretch;
+    margin-top: auto;     /* 始终贴 AI 回复卡下方推到面板底部 */
+    height: 240px;        /* 固定高度；内容溢出时卡片内 scroll */
+}
+
+/* 仪表盘卡片卡片体：长内容内部滚动 */
+.sim-card-dashboard .sim-card-body {
+    overflow-y: auto;
+}
+
+/* 卡片外壳：玻璃质感 + 顶 accent bar（accent 用 ::before 实现） */
+.sim-card {
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.25s ease,
+                border-color 0.25s ease;
+}
+
+/* 顶 accent bar：三色系（绿=路由 / 橙=工具 / 紫=证据），回复卡用品牌色 */
+.sim-card-route::before,
+.sim-card-tools::before,
+.sim-card-evidence::before,
+.sim-card-reply::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    z-index: 1;
+}
+.sim-card-route::before    { background: linear-gradient(90deg, var(--brand-success), #34d399); }
+.sim-card-tools::before    { background: linear-gradient(90deg, var(--brand-warning), #fb923c); }
+.sim-card-evidence::before { background: linear-gradient(90deg, #818cf8, #6366f1); }
+.sim-card-reply::before    { background: linear-gradient(90deg, var(--brand-primary), #818cf8); }
+
+.sim-card-kicker {
+    display: block;
+    font-size: 0.5625rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    line-height: 1.1;
+}
+
+.sim-card-head-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.sim-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-color);
+}
+
+.sim-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.875rem 0.875rem 0.5rem;
+}
+
+.sim-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.sim-icon-robot {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
+    color: var(--brand-primary);
+}
+
+.sim-icon-route {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(20, 184, 166, 0.15));
+    color: var(--brand-success);
+}
+
+.sim-icon-tools {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(236, 72, 153, 0.1));
+    color: var(--brand-warning);
+}
+
+.sim-icon-evidence {
+    background: linear-gradient(135deg, rgba(147, 197, 253, 0.2), rgba(139, 92, 246, 0.1));
+    color: #6366f1;
+}
+
+.sim-card-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.sim-card-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 0.375rem;
+    border-radius: 999px;
+    font-size: 0.625rem;
+    font-weight: 600;
+    background: var(--brand-primary);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.sim-card-body {
+    padding: 0.625rem 0.875rem 0.875rem;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ============ AI 回复卡片（撑满上半部分，长回复内部滚）============ */
+.sim-card-reply {
+    flex: 1 1 auto;     /* 撑满 .sim-result-content 的可用空间 */
+    min-height: 220px;  /* 最小高度，避免无内容时塌陷 */
+    overflow: hidden;   /* 让内部 bubble 内部滚，不撑容器 */
+    display: flex;      /* 让 card-body 继承 */
+    flex-direction: column;
+}
+
+.sim-card-reply .sim-card-body {
+    padding: 0;
+    overflow: hidden;
+    min-height: 0;
+    flex: 1 1 auto;     /* body 也撑满 */
+    display: flex;
+    flex-direction: column;
+}
+
+.sim-card-reply .sim-chat-bubble {
+    flex: 1 1 auto;     /* 气泡撑满 body */
+    max-height: none;   /* 不再用固定 max-height，改由 flex 容器控制 */
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.sim-chat-bubble {
+    padding: 0.875rem;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+    word-break: break-word;
+    background: var(--bg-subtle);
+}
+
+.sim-chat-bubble.md-content {
+    background: var(--bg-soft);
+}
+
+.sim-chat-empty {
+    text-align: center;
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 240px;
+}
+
+.sim-chat-empty-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* Markdown 渲染样式 */
+.md-content .md-p {
+    margin: 0 0 0.625rem;
+}
+
+.md-content .md-p:last-child {
+    margin-bottom: 0;
+}
+
+.md-content .md-h {
+    margin: 0.75rem 0 0.375rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.md-content .md-h:first-child {
+    margin-top: 0;
+}
+
+.md-content h1.md-h { font-size: 1.125rem; }
+.md-content h2.md-h { font-size: 1rem; }
+.md-content h3.md-h { font-size: 0.9375rem; }
+.md-content h4.md-h { font-size: 0.875rem; }
+.md-content h5.md-h { font-size: 0.8125rem; }
+.md-content h6.md-h { font-size: 0.75rem; color: var(--text-tertiary); }
+
+.md-content .md-ul,
+.md-content .md-ol {
+    margin: 0.375rem 0 0.625rem 1.25rem;
+    padding: 0;
+}
+
+.md-content .md-li {
+    margin: 0.1875rem 0;
+}
+
+.md-content .md-blockquote {
+    margin: 0.5rem 0;
+    padding: 0.375rem 0.75rem;
+    border-left: 3px solid var(--brand-primary);
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--text-secondary);
+}
+
+.md-content .md-code-block {
+    margin: 0.5rem 0;
+    padding: 0.625rem 0.75rem;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.md-content .md-code-block code {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    color: var(--text-primary);
+    background: transparent;
+    padding: 0;
+    white-space: pre;
+}
+
+.md-content .md-inline-code {
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    background: var(--bg-body);
+    padding: 0.0625rem 0.3125rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--brand-primary);
+}
+
+.md-content strong {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.md-content em {
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.md-content del {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+}
+
+/* ============ 固定卡（路由/工具/证据）：横向仪表盘贴底 ============ */
+/* 仪表盘内卡片等高对齐；路由 2x2 网格在窄列内改为单列，避免挤压 */
+.sim-card-dashboard .sim-route-grid {
+    grid-template-columns: 1fr;
+}
+
+/* 窄屏（右栏变窄）自动堆叠为 1 列，保证可读 */
+@media (max-width: 1000px) {
+    .sim-card-dashboard {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 卡片内空状态：路由详情/工具/证据无数据时显示（静态文案，不随状态切换） */
+.sim-card-empty,
+.sim-card-static-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    min-height: 80px;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.sim-card-empty i,
+.sim-card-static-hint i {
+    margin-right: 0.375rem;
+    opacity: 0.6;
+}
+.sim-route-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+}
+
+.sim-route-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+    transition: all 0.15s ease;
+}
+
+.sim-route-item:hover {
+    border-color: var(--border-color);
+    background: var(--bg-surface);
+}
+
+.sim-route-icon-wrap {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-sm);
+    background: rgba(59, 130, 246, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: var(--brand-primary);
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.sim-route-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sim-route-label {
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.125rem;
+}
+
+.sim-route-value {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.sim-route-value.muted {
+    color: var(--text-tertiary);
+}
+
+/* 置信度 */
+.sim-confidence-wrap {
+    margin-top: 0.375rem;
+}
+
+.sim-confidence-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.sim-confidence-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sim-confidence-fill.high {
+    background: linear-gradient(90deg, var(--brand-success), #4ade80);
+}
+
+.sim-confidence-fill.mid {
+    background: linear-gradient(90deg, var(--brand-warning), #fb923c);
+}
+
+.sim-confidence-fill.low {
+    background: linear-gradient(90deg, var(--brand-danger), #f87171);
+}
+
+/* ============ 工具调用卡片 ============ */
+.sim-tools-flow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.sim-tool-node {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+    transition: all 0.15s ease;
+}
+
+.sim-tool-node:hover {
+    border-color: var(--brand-warning);
+    background: rgba(245, 158, 11, 0.05);
+    transform: translateY(-2px);
+}
+
+.sim-tool-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-sm);
+    background: rgba(245, 158, 11, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+    color: var(--brand-warning);
+    flex-shrink: 0;
+}
+
+.sim-tool-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.sim-tool-arrow {
+    font-size: 0.625rem;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+/* ============ 证据来源卡片 ============ */
+.sim-evidence-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.375rem 0.625rem;
+    background: rgba(99, 102, 241, 0.06);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    color: #6366f1;
+    font-weight: 500;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+/* ============ 空状态与加载 ============ */
+.sim-result-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    color: var(--text-tertiary);
+    text-align: center;
+    height: 100%;
+}
+
+.sim-result-empty-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+    color: var(--text-disabled);
+}
+
+.sim-result-empty-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.375rem;
+}
+
+.sim-result-empty-text {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.sim-result-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    gap: 0.875rem;
+}
+
+.sim-result-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--border-light);
+    border-top-color: var(--brand-primary);
+    border-radius: 50%;
+    animation: sim-spin 0.7s linear infinite;
+}
+
+@keyframes sim-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---- 响应式 ---- */
+@media (max-width: 1200px) {
+    #page-simulate.active .sim-main-layout {
+        grid-template-columns: 340px 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    #page-simulate.active .sim-main-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sim-route-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "baseBranches": ["main"],
+  // 每周一清晨统一评估，避免工作日频繁打断；安全/补丁仍可按需随时提 PR。
+  "schedule": ["before 6am on monday"],
+  "dependencyDashboard": true,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Python 直接依赖（requirements.txt + pyproject）归并为一个 PR，确保四源一致",
+      "matchManagers": ["pip_requirements", "pep621"],
+      "groupName": "python-dependencies"
+    },
+    {
+      "description": "非破坏性（patch/minor）Python 升级进一步归并，降低 PR 噪声",
+      "matchManagers": ["pip_requirements", "pep621"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "python-minor-patch"
+    }
+  ],
+  "prBodyNotes": [
+    "若 CI 依赖一致性门禁（`python scripts/check_deps.py`）报版本漂移，请在本分支执行 `bash scripts/lock_deps.sh` 重新生成 requirements.lock / uv.lock 后再合并——本项目要求 requirements.txt / pyproject.toml / requirements.lock / uv.lock 四源同版本。"
+  ]
+}

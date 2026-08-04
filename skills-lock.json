@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "web-search": {
+      "source": "aaaaqwq/claude-code-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-search/SKILL.md",
+      "computedHash": "970073520089295bbd71c5e681a1b107844c623cb69803ed473eda8d42171662"
+    }
+  }
+}

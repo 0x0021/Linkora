@@ -1,0 +1,197 @@
+[project]
+name = "linkora"
+version = "0.1.0"
+description = "灵桥 (Linkora) — 多平台 AI 自动回复助手（钉钉/飞书/企业微信 + RAG + 规则引擎 + Web 管理台）"
+readme = "README.md"
+# 真实下限由已钉版依赖决定，不能随手放宽：numpy==2.5.1 要求 >=3.12（无 cp39/cp310/cp311 wheel），
+# fastapi/uvicorn/pillow/requests 等一批要求 >=3.10。此前这里写 ">=3.9" 与实际依赖矛盾，
+# 会让 3.9/3.11 环境在 install 阶段才炸。改动依赖版本后请重跑 `python scripts/check_deps.py`。
+requires-python = ">=3.12"
+authors = [{ name = "Linkora Team" }]
+license = { text = "Proprietary" }
+keywords = ["ai", "chatbot", "dingtalk", "feishu", "wecom", "rag", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+
+# 运行时依赖唯一真源。与 requirements.txt 逐条一一对应（同名同版本），
+# 由 `scripts/check_deps.py` 在 CI 强制校验，防止两边再次漂移。
+# 注意：pytest / pytest-cov / pytest-timeout 属于测试期依赖，只出现在下面的 dev extra。
+dependencies = [
+    # ---- 配置 / 环境 ----
+    "PyYAML==6.0.3",
+    "pydantic==2.13.4",
+    "python-dotenv==1.2.2",
+    "platformdirs==4.11.0",
+    # ---- LLM / 嵌入模型 ----
+    "openai==2.48.0",
+    "numpy==2.5.1",
+    "sentence-transformers==5.6.1",
+    "huggingface_hub==1.23.0",
+    "tokenizers==0.22.2",
+    # ---- Web 服务 ----
+    "fastapi==0.140.0",
+    "uvicorn==0.51.0",
+    "jinja2==3.1.6",
+    "python-multipart==0.0.32",
+    # ---- 向量检索 / OCR ----
+    "faiss-cpu==1.14.3",
+    "requests==2.34.2",
+    "jieba==0.42.1",
+    "regex==2026.7.19",
+    "rapidocr-onnxruntime==1.2.3",
+    # ---- 文档解析 ----
+    "pdfplumber==0.11.10",
+    "pymupdf==1.28.0",
+    "python-pptx==1.0.2",
+    "python-docx==1.2.0",
+    "pytesseract==0.3.13",
+    "Pillow==12.3.0",
+    "openpyxl==3.1.5",
+    # ---- 系统 / 工具 ----
+    "rich==15.0.0",
+    "psutil==7.2.2",
+]
+
+[project.optional-dependencies]
+# 开发/CI 期依赖，同样钉版：ruff 版本会直接影响 lint 结果，pytest 版本影响用例行为，
+# 不钉版会导致「本地绿、CI 红」。pytest* 三项必须与 requirements.txt 的测试段保持同版本。
+dev = [
+    "ruff==0.16.0",
+    "pyright==1.1.411",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-timeout==2.4.0",
+    "pip-audit==2.10.1",
+]
+
+[tool.uv]
+# 传递依赖的已知良好版本钉子（known-good pins）。
+# 背景：uv 默认解析会把这些传递依赖拉到比「当前通过全量测试的 .venv」更新的版本
+# （如 onnxruntime 1.27→1.28 会影响 OCR 链路）。为保证 uv.lock 与 requirements.lock
+# 解析出同一套版本、且与已验证环境一致，这里显式约束。
+# 升级方式：单独放开某一条 → 跑全量测试 → 通过后再更新此处版本号。
+constraint-dependencies = [
+    "annotated-doc==0.0.4",
+    "filelock==3.32.0",
+    "fsspec==2026.6.0",
+    "onnxruntime==1.27.0",
+    "tqdm==4.69.0",
+]
+
+[tool.ruff]
+# 轻量 lint 配置：默认规则 + 中文注释友好。
+# 与 CI lint stage 的 `ruff check` 等价；本地可直接 `ruff check .`
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# 仅启用低风险规则集；PGH004 捕获 f-string 插值语法错误（此前导致服务挂掉的元凶）。
+# C901（圈复杂度）为渐进收紧门禁：新代码必须遵守，已知待拆上帝类 runtime.py
+# 临时豁免（F1 拆分计划落地后移除该豁免）。
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "PGH",  # pygrep-hooks（含 PGH004 f-string 语法）
+    "B",    # flake8-bugbear（常见 bug 模式）
+    "C901", # 圈复杂度门禁（McCabe）
+]
+ignore = [
+    "E501", # 行长度交给 formatter，不强制断行
+    "B008", # FastAPI 依赖注入常用 `Depends(call)`，非真实问题
+]
+
+[tool.ruff.lint.mccabe]
+# 渐进阈值：当前设为 60，仅拦截真正失控的巨型函数；随 F1 拆分推进逐步下调。
+max-complexity = 60
+
+[tool.ruff.lint.per-file-ignores]
+# 已知待拆 / 高复杂度模块（渐进收紧，拆分或重构降复杂度后移除豁免）。
+"src/platform/runtime.py" = ["C901"]       # F1 计划中：组合根（薄 re-export）
+"src/platform/runtime_*.py" = ["C901", "F405"]  # F1 拆分产物：与 runtime.py 同构的 star-import 与高复杂度方法
+"src/poller_strategy.py" = ["C901"]        # poll_once 复杂度 93，待拆
+"web/routers/config.py" = ["C901"]          # update_config 复杂度 145，待拆
+
+[tool.pyright]
+# 渐进类型门禁配置（F9）。当前 src+web 基线约 758 条类型告警，主要来自未标注的
+# Optional 访问与动态组合的上帝类 MRO（pyright 无法静态解析 mixin 属性）。
+# 因此 pyright 目前在 CI 中为 report-only，不阻断构建；后续通过补充类型注解逐步收敛，
+# 待基线接近 0 时切换为硬门禁。pyright 直接读取此段，无需额外 pyrightconfig.json。
+include = ["src", "web"]
+exclude = [
+    "**/__pycache__",
+    "**/.venv",
+    "**/node_modules",
+    "**/data",
+    "**/build",
+    "**/dist",
+]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+# 第三方包缺类型 stub 时（如部分 ML 库）不报「unknown import」，让基线聚焦在自有代码。
+reportMissingImports = false
+
+[tool.pytest.ini_options]
+# pytest 配置
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# 输出格式
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+    # 防呆：Unix-only 项目（macOS/Linux/CI）。signal 方法能在 C 层（如 SSL 握手）挂死时
+    # 通过 SIGALRM 中断测试，thread 方法做不到。任何未 mock 的网络/IO 卡死至多 60s 即失败，
+    # 而非无限拖垮整条流水线。
+    "--timeout=60",
+    "--timeout-method=signal",
+]
+
+# 自定义标记（--strict-markers 下必须注册，否则报错）
+markers = [
+    # 弱模型泄漏回归护城河：固化 2026-07-27 / 2026-07-29 真实生产泄漏事件，
+    # 可由 `pytest -m weak_model_regression` 单独跑，作为部署前质量闸门。
+    "weak_model_regression: 弱模型(sanitize/owner 闸门)泄漏回归，CI 部署前护城河",
+]
+
+# 日志捕获
+log_cli = false
+log_cli_level = "INFO"
+
+# 屏蔽第三方库噪声（非本项目代码问题），保持输出干净、避免掩盖自家告警
+# - Swig C 扩展在 import 时抛的 "builtin type X has no __module__ attribute"（PDF/OCR 引擎）
+# - Starlette TestClient 的 httpx 弃用提示（fastapi 内部）
+filterwarnings = [
+    "ignore:builtin type .* has no __module__ attribute",
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated",
+]
+
+# 覆盖率配置（运行时加 --cov 启用）
+# pytest --cov=src --cov-report=term-missing tests/
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+# 质量门：实测基线 70%（2173 passed / 2 skipped @ py314）。设 65 留 5 点缓冲给多版本偏差。
+fail_under = 65
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+]

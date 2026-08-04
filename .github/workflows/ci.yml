@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (full history — gitleaks 需扫描提交历史)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Dependency consistency gate
+        # 断言 requirements.txt / pyproject.toml / requirements.lock / uv.lock
+        # 四处依赖声明版本一致。纯标准库、不联网、毫秒级，放在装依赖之前快速失败。
+        # 历史事故：requirements.txt 钉 fastapi==0.140.0 而 lock 停在 0.139.0，
+        # uv.lock 里根本没有 fastapi/openai 条目 —— CI 测的和实际发布的不是同一套版本。
+        run: python scripts/check_deps.py
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          # 钉版：ruff 版本直接影响 lint 结论，浮动会导致「昨天绿、今天红」。
+          # 需与 pyproject.toml 的 dev extra 保持一致。
+          pip install ruff==0.16.0
+
+      - name: Run ruff linter
+        run: ruff check src tests web scripts --output-format=github
+        continue-on-error: true
+
+      - name: Static check gate (C901 complexity + PGH004 f-string safety)
+        # 硬门禁：只针对「新代码零容忍」的两条规则，避免被 1127 条存量风格告警淹没。
+        #  - C901：圈复杂度（阈值 60，runtime/poller_strategy/config 三个上帝类临时豁免，
+        #    随 F1/F7 拆分推进逐步移除豁免收紧）。基线 0 违规。
+        #  - PGH004：此前导致 uvicorn 启动失败的 f-string 嵌套引号语法错误。基线 0 违规。
+        # 任一文件新增违规即阻断合并；其余风格类 ruff 规则仍保持 report-only。
+        run: ruff check src tests web scripts --select C901,PGH004 --output-format=github
+
+      - name: Syntax gate (P0)
+        # 杜绝 f-string 嵌套引号等导致 uvicorn 启动失败的 SyntaxError。
+        # AST 解析零依赖、毫秒级；与 .gitlab-ci.yml lint stage 等价。
+        run: |
+          python - <<'PY'
+          import ast, glob, sys
+          bad = []
+          for pat in ('src/**/*.py', 'web/**/*.py', 'main.py', 'scripts/**/*.py'):
+              for f in glob.glob(pat, recursive=True) or []:
+                  try:
+                      ast.parse(open(f, encoding='utf-8').read())
+                  except SyntaxError as e:
+                      bad.append(f"{f}:{e.lineno}: {e.msg}")
+          if bad:
+              print("SyntaxError in:")
+              print("\n".join(bad))
+              sys.exit(1)
+          print("OK: all Python modules parse")
+          PY
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 下限由已钉版依赖决定：numpy==2.5.1 要求 >=3.12（无 cp39/cp310/cp311 wheel）。
+        # 此前矩阵里的 3.9 在 `pip install -r requirements.lock` 阶段必然失败。
+        # 与 pyproject.toml 的 requires-python 由 scripts/check_deps.py 联动校验。
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+
+      - name: Provide test config
+        # config.yaml is gitignored (contains secrets). Tests that call
+        # load_config need a config file to exist; the committed example is a
+        # complete, valid template with placeholder keys. dws/LLM are mocked in
+        # tests, so no real credentials are required.
+        run: cp config.yaml.example config.yaml
+
+      - name: Run tests with coverage
+        run: pytest --cov=src --cov-report=term-missing --cov-report=xml
+
+      - name: Type check (pyright, report-only baseline)
+        # 渐进类型门禁第一步（F9）：建立基线并随类型注解补充逐步收敛。
+        # 当前 src+web 约 758 条类型告警（未标注 Optional / 动态组合上帝类 MRO），
+        # 直接设为硬门禁会阻断全部既有 CI，故先 report-only 暴露问题。
+        # 配置见 pyproject.toml [tool.pyright]；依赖已由上一步 requirements.lock 安装，pyright 可解析 stub。
+        continue-on-error: true
+        run: |
+          python -m pip install pyright==1.1.411
+          pyright src web
+
+      - name: Dependency vulnerability scan (pip-audit)
+        # 供应链安全：扫描 requirements.lock 中已知漏洞（基于锁定版本，复现一致）。
+        # 报告型，不阻断 CI（避免上游传递依赖的误报挂死构建），但会暴露问题供后续处理。
+        continue-on-error: true
+        run: |
+          python -m pip install pip-audit
+          pip-audit -r requirements.lock || true
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.python-version }}
+          path: coverage.xml

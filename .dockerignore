@@ -1,0 +1,12 @@
+# 容器构建时排除，避免把本地污染/大目录带进镜像
+.venv
+node_modules
+data
+.git
+.workbuddy
+__pycache__
+*.pyc
+dist
+build
+*.pid
+.DS_Store

@@ -1,0 +1,271 @@
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.67rem;
+    margin-bottom: 0.67rem;
+    align-items: stretch;
+}
+
+.dashboard-grid.full-width {
+    grid-template-columns: 1fr;
+}
+
+.dashboard-section {
+    margin-bottom: 1rem;
+}
+
+.dashboard-section:last-child {
+    margin-bottom: 0;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.625rem;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+/* 新增 section 容器间距 */
+.metrics-section {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tools-stats-section {
+    margin-bottom: 1rem;
+}
+
+/* 消息分析折叠按钮 */
+.msg-stats-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: background 0.2s, border-color 0.2s;
+    user-select: none;
+}
+.msg-stats-toggle:hover {
+    background: var(--bg-hover, rgba(0,0,0,0.03));
+    border-color: var(--brand-primary);
+}
+.msg-stats-toggle:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+}
+.msg-stats-toggle .toggle-icon {
+    margin-left: auto;
+    transition: transform 0.3s ease;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+.msg-stats-toggle.expanded .toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* 消息分析可折叠内容 */
+#msg-stats-content {
+    display: none;
+    margin-top: 0.75rem;
+}
+#msg-stats-content.open {
+    display: block;
+}
+
+/* panel-title（用于 panel-header 内非 h3 的标题） */
+.panel-title {
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit;
+}
+
+.section-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.system-overview {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 0.67rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 0.67rem;
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card {
+    background: var(--bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 0.55rem 0.625rem;
+    text-align: center;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.35rem;
+    color: #fff;
+    font-size: 1rem;
+}
+
+.stat-value {
+    font-size: 1.375rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    color: var(--text-tertiary);
+    margin-top: 0.15rem;
+}
+
+.status-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.4rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-light);
+}
+
+.status-tile {
+    text-align: center;
+    padding: 0.45rem 0.35rem;
+    background: var(--bg-subtle);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-light);
+    transition: background-color 0.15s ease, transform 0.2s ease;
+}
+.status-tile:hover {
+    background: var(--bg-surface);
+    transform: translateY(-1px);
+}
+
+.status-tile-icon {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.status-tile-label {
+    font-size: 0.625rem;
+    color: var(--text-tertiary);
+    margin-bottom: 0.15rem;
+}
+
+.status-tile-value {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.status-tile-value.ok { color: var(--brand-success); }
+.status-tile-value.warn { color: var(--brand-warning); }
+.status-tile-value.error { color: var(--brand-danger); }
+
+/* grid 内的 panel 使用 gap 控制间距，自身 margin-bottom 会破坏对齐 */
+.metrics-charts-grid > .panel {
+    margin-bottom: 0;
+}
+
+/* ═══════════════════ 调度可靠性面板 — 平台分解式表格 ═══════════════════ */
+
+/* body 紧凑自然高度 */
+#metrics-reliability-panel .panel-body.rel-body {
+    padding: 0.5rem 0.75rem 0.625rem;
+}
+/* 面板不拉伸，自然高度 */
+.metrics-charts-grid > #metrics-reliability-panel {
+    align-self: start;
+}
+
+/* 三段之间留小间距 */
+#metrics-reliability-panel .metrics-table + .metrics-table,
+#metrics-reliability-panel div + div {
+    margin-top: 0.5rem;
+}
+
+/* 分组表样式微调 */
+.metrics-table.rel-tbl {
+    font-size: 0.75rem;
+}
+.metrics-table.rel-tbl th,
+.metrics-table.rel-tbl td {
+    padding: 0.35rem 0.4rem;
+}
+.metrics-table.rel-tbl thead tr.rel-section-row th {
+    padding: 0.4rem 0.4rem 0.25rem;
+    background: transparent;
+    border-bottom: none;
+    text-align: left;
+}
+.metrics-table.rel-tbl thead tr.rel-section-row th {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+/* 段标题彩点 */
+.rel-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 0.35rem;
+    vertical-align: 1px;
+}
+.rel-dot--bp { background: #6366f1; }
+.rel-dot--db { background: #8b5cf6; }
+.rel-dot--ps { background: #06b6d4; }
+
+/* 值样式 */
+.rel-v {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.rel-v--warn { color: var(--brand-warning, #f59e0b); }
+.rel-v--ok   { color: var(--brand-success, #10b981); }
+.rel-v--bad  { color: var(--brand-danger,  #ef4444); }
+
+/* JS 会覆写 className 的两个元素，ID 保底着色 */
+#metrics-ps-last-error { font-weight: 700; color: var(--text-primary); }
+#metrics-ps-last-error.warn { color: var(--brand-warning, #f59e0b); }
+#metrics-ps-last-error.ok   { color: var(--brand-success, #10b981); }
+#metrics-ps-running        { font-weight: 700; color: var(--text-primary); }
+#metrics-ps-running.ok     { color: var(--brand-success, #10b981); }

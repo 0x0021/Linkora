@@ -1,0 +1,42 @@
+/* components/badge.css — 状态徽标（stateBadge.js） */
+.state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.state-badge--ok {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.10);
+  border-color: rgba(22, 163, 74, 0.25);
+}
+
+.state-badge--warn {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.30);
+}
+
+.state-badge--bad {
+  color: var(--brand-danger);
+  background: rgba(220, 38, 38, 0.10);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.state-badge--info {
+  color: var(--brand-primary);
+  background: var(--brand-primary-light);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.state-badge--neutral {
+  color: var(--text-tertiary);
+  background: var(--bg-subtle);
+  border-color: var(--border-color);
+}

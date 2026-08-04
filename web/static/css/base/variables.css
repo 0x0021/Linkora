@@ -1,0 +1,97 @@
+:root {
+    --brand-primary: #2563eb;
+    --brand-primary-hover: #1d4ed8;
+    --brand-primary-light: rgba(37, 99, 235, 0.08);
+    --brand-primary-glow: rgba(37, 99, 235, 0.25);
+    --brand-secondary: #4f46e5;
+    --brand-success: #16a34a;
+    --brand-warning: #f59e0b;
+    --brand-danger: #dc2626;
+    --brand-danger-hover: #b91c1c;
+    --brand-purple: #8b5cf6;
+    --brand-pink: #ec4899;
+
+    --gray-50:  #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
+
+    --text-primary: var(--gray-900);
+    --text-secondary: var(--gray-700);
+    --text-tertiary: var(--gray-500);
+    --text-muted: var(--gray-500);
+    --text-disabled: var(--gray-400);
+
+    --bg-body: #f0f4f9;
+    --bg-surface: #ffffff;
+    --bg-subtle: var(--gray-50);
+    --bg-soft: var(--gray-50);
+    --bg-card: var(--bg-surface);
+    --bg-panel: var(--bg-surface);
+
+    --border-color: var(--gray-200);
+    --border-light: var(--gray-100);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+    --shadow-xs: 0 1px 3px rgba(15, 23, 42, 0.04);
+    --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 16px 48px rgba(15, 23, 42, 0.12);
+
+    /* 间距体系：统一容器/卡片/网格节奏，消除散乱的 0.4/0.55/0.625/0.67rem */
+    --space-xs: 0.25rem;   /* 4px  细分隔 */
+    --space-sm: 0.5rem;    /* 8px  小间距 */
+    --space-md: 0.75rem;   /* 12px 标准网格 gap */
+    --space-lg: 1rem;      /* 16px 区块间距 */
+    --space-xl: 1.5rem;    /* 24px 页面级间距 */
+    --card-pad: 1rem;      /* 卡片标准内边距 */
+    --card-pad-compact: 0.625rem; /* 紧凑卡片内边距（stat/指标卡） */
+
+    --dash-card-h: 120px;
+
+    --z-sidebar: 100;
+    --z-topbar: 200;
+    --z-dropdown: 300;
+    --z-modal: 1000;
+    --z-toast: 1100;
+    --z-login: 10000;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+                 "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+    --font-mono: "SF Mono", Monaco, Consolas, monospace;
+}
+
+[data-theme="dark"] {
+    --bg-body: #0b1120;
+    --bg-surface: #151e2e;
+    --bg-subtle: #0f172a;
+    --text-primary: #e8eef6;
+    --text-secondary: #aab6c6;
+    --text-tertiary: #6b7a90;
+    --border-color: #243044;
+    --border-light: #1a2436;
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.25);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+    --brand-primary: #3b82f6;
+    --brand-primary-hover: #60a5fa;
+    --brand-primary-light: rgba(59, 130, 246, 0.12);
+    --brand-primary-glow: rgba(59, 130, 246, 0.30);
+    --brand-secondary: #818cf8;
+    --brand-success: #22c55e;
+    --brand-warning: #fbbf24;
+    --brand-danger: #ef4444;
+    --brand-danger-hover: #f87171;
+    --brand-purple: #a78bfa;
+    --brand-pink: #f472b6;
+}

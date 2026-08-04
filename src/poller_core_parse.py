@@ -633,12 +633,12 @@ class ParseMixin:
         return merged
 
     def _is_polite_message(self, content: str) -> bool:
-        """判断消息是否是「纯」礼貌/感谢/确认/结束语消息。
+        """判断消息是否是「纯」礼貌/感谢/确认/结束语消息或纯表情。
 
-        仅当整条消息除礼貌词外不含其它实质内容时才视为纯礼貌消息，
+        仅当整条消息除礼貌词/表情外不含其它实质内容时才视为纯礼貌消息，
         从而在消息合并阶段将其过滤。若消息混合了业务内容
         （如「收到，帮我导出报表」「谢谢，已处理」），应保留业务部分，
-        不能因含礼貌词就整条丢弃。
+        不能因含礼貌词或表情就整条丢弃。
         """
         if not content:
             return False
@@ -646,6 +646,16 @@ class ParseMixin:
         text = content.strip()
         if not text:
             return False
+
+        remaining = text
+
+        # 1) 移除 Unicode emoji（如 👍、🙏、😄 等）
+        remaining = re.sub(
+            r"[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U00002600-\U000026FF]",
+            "", remaining
+        )
+        # 2) 移除 IM 方括号表情（如 [赞] [强] [OK] [握手] [玫瑰] [抱拳] [咖啡]）
+        remaining = re.sub(r"\[[^\[\]]+\]", "", remaining)
 
         # 礼貌/确认/感谢/结束语词（含大小写变体）
         polite_words = [
@@ -661,12 +671,11 @@ class ParseMixin:
             "老师", "同学", "朋友",
         ]
 
-        remaining = text
         for kw in polite_words + fillers:
             # 大小写不敏感移除（覆盖 OK/ok/Ok），中文无影响
             remaining = re.sub(re.escape(kw), "", remaining, flags=re.IGNORECASE)
 
-        # 移除所有空白与常见标点后若为空，说明整条消息仅由礼貌词/填充词构成
+        # 移除所有空白与常见标点后若为空，说明整条消息仅由礼貌词/表情/填充词构成
         stripped = re.sub(r"[\s，。！？、,.!?~～\-—()（）“”\"'」』:：；;]", "", remaining)
         return stripped == ""
 

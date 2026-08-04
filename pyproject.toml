@@ -8,7 +8,7 @@ readme = "README.md"
 # 会让 3.9/3.11 环境在 install 阶段才炸。改动依赖版本后请重跑 `python scripts/check_deps.py`。
 requires-python = ">=3.12"
 authors = [{ name = "Linkora Team" }]
-license = { text = "Proprietary" }
+license = "GPL-3.0-or-later"
 keywords = ["ai", "chatbot", "dingtalk", "feishu", "wecom", "rag", "llm"]
 classifiers = [
     "Programming Language :: Python :: 3.12",

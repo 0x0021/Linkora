@@ -39,6 +39,9 @@ paths = [
   '''(?i)config\.yaml\.example$''',
   '''(?i)\.example$''',
   '''(?i)\.example\.[a-z]+$''',
+  # tests/ 为测试夹具（mock key / 假 token），非真实凭据；global-ignores 的 glob 形式
+  # 在 git 扫描模式未稳定生效，这里用正则兜底，确保整个 tests 目录被忽略。
+  '''(?i)tests/''',
 ]
 regexes = [
   # gitleaks 自检占位串

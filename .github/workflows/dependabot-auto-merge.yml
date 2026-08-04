@@ -1,8 +1,9 @@
 name: Dependabot Auto-merge
 
-# 对 Dependabot 的 minor / patch 升级 PR 自动审批并开启自动合并；
-# major 升级保留人工评审，避免破坏性变更被无脑合入。
-# 依赖 .github/branch 保护规则允许 allow_auto_merge，且需 test status check 通过才真正合并。
+# 对 Dependabot 的 minor / patch 升级 PR 自动审批，并等待 CI 的必填检查
+# （test）通过后再合并；major 升级保留人工评审，避免破坏性变更被无脑合入。
+# 说明：分支保护规则的 allow_auto_merge 在当前 token 下无法通过 API 启用，
+# 故此处改为在 workflow 内显式「审批 + 等待 test 通过 + 合并」，效果等价且更严格。
 on: pull_request_target
 
 permissions:
@@ -12,7 +13,7 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 50
     if: github.actor == 'dependabot[bot]'
     steps:
       - name: Fetch Dependabot metadata
@@ -21,7 +22,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Approve and enable auto-merge (minor/patch only)
+      - name: Approve and merge (minor/patch only)
         if: >-
           steps.meta.outputs.update-type == 'version-update:semver-patch' ||
           steps.meta.outputs.update-type == 'version-update:semver-minor'
@@ -30,4 +31,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+          # 轮询等待 ci.yml 的 test 检查全部成功（分支保护要求的必填 status check）
+          for i in $(seq 1 50); do
+            states=$(gh pr checks "$PR_URL" --json name,state --jq '[.[] | select(.name=="test") | .state] | unique | join(",")')
+            echo "attempt $i: test states = $states"
+            if [ "$states" = "SUCCESS" ]; then
+              echo ">> all test checks passed, merging"
+              gh pr merge --squash "$PR_URL"
+              exit 0
+            fi
+            if echo "$states" | grep -q "FAILURE"; then
+              echo ">> test failed, abort auto-merge"
+              exit 1
+            fi
+            sleep 30
+          done
+          echo ">> timed out waiting for tests"
+          exit 1

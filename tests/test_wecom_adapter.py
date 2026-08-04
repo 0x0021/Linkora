@@ -57,7 +57,7 @@ def _env(inner, *, is_error: bool = False) -> str:
 
 
 USERLIST = {"errcode": 0, "errmsg": "ok", "userlist": [
-    {"userid": "user", "name": "主人", "alias": "0x0021"},
+    {"userid": "owner", "name": "OWNER", "alias": "助手"},
     {"userid": "lila", "name": "李拉", "alias": ""},
 ]}
 
@@ -170,9 +170,9 @@ class TestContact(unittest.TestCase):
         cap = _RunCapture(_fake(_env(USERLIST)))
         a = WecomCliAdapter()
         with patch("src.im_adapter.wecom.subprocess.run", cap):
-            res = a.contact_user_search("徐")
+            res = a.contact_user_search("OWNER")
         self.assertEqual(len(res), 1)
-        self.assertEqual(res[0]["userid"], "user")
+        self.assertEqual(res[0]["userid"], "owner")
 
     def test_search_empty_keyword(self):
         a = WecomCliAdapter()
@@ -191,13 +191,13 @@ class TestMessages(unittest.TestCase):
         cap = _RunCapture(_fake(_env({"errcode": 0, "errmsg": "ok"})))
         a = WecomCliAdapter()
         with patch("src.im_adapter.wecom.subprocess.run", cap):
-            a.chat_message_send(user="user", text="你好世界")
+            a.chat_message_send(user="owner", text="你好世界")
         cmd = cap.last_cmd
         self.assertEqual(cmd[0], "/opt/homebrew/bin/wecom-cli")
         self.assertEqual(cmd[1:3], ["msg", "send_message"])
         payload = json.loads(cmd[3 + 1])  # --json <payload>
         self.assertEqual(payload["chat_type"], 1)
-        self.assertEqual(payload["chatid"], "user")
+        self.assertEqual(payload["chatid"], "owner")
         self.assertEqual(payload["msgtype"], "text")
         self.assertEqual(payload["text"]["content"], "你好世界")
 

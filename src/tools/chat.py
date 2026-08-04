@@ -269,7 +269,7 @@ class SendMessageTool(BaseTool):
                         )
                         user_hint = (
                             f"本会话已永久黑名单（{reason}），分身不会代发消息。"
-                            "请考虑：1) 让对方在飞书里加你“主人 CLI”机器人为好友后继续 p2p；"
+                            "请考虑：1) 让对方在飞书里加你“OWNER CLI”机器人为好友后继续 p2p；"
                             "2) 拉对方进一个包含机器人的群聊。"
                         )
                     else:

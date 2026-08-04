@@ -259,13 +259,13 @@ class TestSystemPromptTitle:
         config.system_prompt = ""
         return LLMAgent(
             config=config, client=MagicMock(), tool_router=None,
-            user_name="主人", user_dept="总裁办", org_name="公司",
+            user_name="OWNER", user_dept="总裁办", org_name="公司",
             user_title=user_title, store=None,
         )
 
     def test_title_injected_when_present(self):
         prompt = self._agent("IT")._build_system_prompt_core()
-        assert "身份:主人的数字分身。" in prompt
+        assert "身份:OWNER的数字分身。" in prompt
         assert "部门:总裁办。" in prompt
         assert "职位:IT。" in prompt
         assert "组织:公司。" in prompt
@@ -274,7 +274,7 @@ class TestSystemPromptTitle:
         prompt = self._agent("")._build_system_prompt_core()
         # 静态指令串「姓名/部门/职位/组织」含「职位」二字，故只能校验注入格式「职位:」缺失
         assert "职位:" not in prompt
-        assert "身份:主人的数字分身。" in prompt
+        assert "身份:OWNER的数字分身。" in prompt
 
 
 # ============ summarize_conversation ============

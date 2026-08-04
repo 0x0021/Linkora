@@ -26,7 +26,7 @@ class _Msg:
 
 
 class _Agent:
-    user_name = "主人"
+    user_name = "OWNER"
     # 故意设极小，强制触发历史截断 + 砍主 system 两条路径
     _max_input_tokens = 30
     _rag_auto_inject = False

@@ -183,7 +183,7 @@ class TestRagInjectNormalInject:
         """意图命中 + KB 有命中 → 注入并标记 injected=True。"""
         kb_text = "【相关知识】\n1. VPN手册（82%）\n  - 配置步骤…"
         agent = FakeAgent(intent_returns=True, kb_returns=(kb_text, 0.82))
-        sys_base = "[主人风格画像] 用主人的口吻"
+        sys_base = "[主人风格画像] 用OWNER的口吻"
         new_sys, result = _run("VPN 怎么配置步骤", sys=sys_base, agent=agent)
         assert result.injected is True
         assert result.intent_ok is True
@@ -194,7 +194,7 @@ class TestRagInjectNormalInject:
         # system_content 必须包含使用规则（防 AI 复述）—— v5 新措辞
         assert "★RAG 知识库答案" in new_sys
         # 原 system 必须保留
-        assert "主人" in new_sys
+        assert "OWNER" in new_sys
 
     def test_high_confidence_short_circuit(self):
         """意图未命中但 best_score ≥ 置信阈值 → 仍注入（双保险）。"""

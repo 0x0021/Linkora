@@ -105,7 +105,7 @@ def test_extract_content_feishu_flight_club_real_message():
         '<clickable url="https://applink.feishu.cn/client/web_url/open?url=foo">\n'
         '🖼️ 前往飞书直播大讲堂课程 ✨(img_key:img_v3_02124_6550603a-f9a7-4802-9bcc-30f5f3454b0g)\n'
         '</clickable>\n'
-        'Hi @主人(ou_0d149f48d41399f787062b50f6eada38)，欢迎来到飞书官方社区「飞行社」👋\n'
+        'Hi @OWNER(ou_0d149f48d41399f787062b50f6eada38)，欢迎来到飞书官方社区「飞行社」👋\n'
         '---\n'
         '**限时免费福利 - 飞书直播大讲堂课程**\n'
         '[立即报名](https://applink.feishu.cn/...)\n'

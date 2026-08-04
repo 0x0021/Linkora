@@ -397,7 +397,7 @@ def test_load_current_user_extracts_title():
         "orgEmployeeModel": {
             "depts": [{"deptName": "总裁办"}],
             "title": "IT",
-            "orgUserName": "主人",
+            "orgUserName": "OWNER",
             "orgName": "公司",
         }
     }

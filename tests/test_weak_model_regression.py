@@ -128,7 +128,7 @@ class TestFrontLookaheadFalsePositive:
 # ─────────────────────────────────────────────────────────────────────────────
 # 事件 3：owner 名字整句闸门 + 编造流程路径（B 末端闸门）
 # ─────────────────────────────────────────────────────────────────────────────
-OWNER_NAME = "主人"
+OWNER_NAME = "OWNER"
 OWNER_TITLE = "IT工程师"
 
 
@@ -136,16 +136,16 @@ class TestOwnerNameGateIncident:
     """★ 2026-07-27 owner 身份匹配变量化 + 整句闸门。"""
 
     def test_owner_name_in_evaluate_voice_gated(self):
-        bad = "由主人(IT工程师)评估后走正规采购流程即可。"
+        bad = "由OWNER(IT工程师)评估后走正规采购流程即可。"
         out, triggered = gate_reply(bad, OWNER_NAME, OWNER_TITLE)
         assert triggered is True
-        assert "主人" not in out  # 坏原句自引用不残留
+        assert "OWNER" not in out  # 坏原句自引用不残留
 
     def test_owner_name_assist_voice_gated(self):
-        bad = "主人会帮您协助处理这个审批单。"
+        bad = "OWNER会帮您协助处理这个审批单。"
         out, triggered = gate_reply(bad, OWNER_NAME, OWNER_TITLE)
         assert triggered is True
-        assert "主人" not in out
+        assert "OWNER" not in out
 
     def test_fabricated_path_with_arrow_gated(self):
         bad = "通过钉钉→工作台→申请 即可完成。"
@@ -173,7 +173,7 @@ class TestSystemPromptEchoIncident:
     """★ 2026-07-27 截图：注入段整行回声。"""
 
     def test_identity_line_echo(self):
-        leak = "身份:主人的数字分身。部门:IT部。\n打印机的IP是192.168.1.10"
+        leak = "身份:OWNER的数字分身。部门:IT部。\n打印机的IP是192.168.1.10"
         result = sanitize_reply(leak)
         assert "数字分身" not in result
         assert "192.168.1.10" in result
@@ -223,12 +223,12 @@ class TestKnownWeakModelGaps:
         assert "请去设置页操作" in result
 
     def test_named_digital_avatar_leak(self):
-        """G2: 具名+数字分身身份泄漏『作为主人的数字分身』须剥离（2026-08-03 修复）。
+        """G2: 具名+数字分身身份泄漏『作为OWNER的数字分身』须剥离（2026-08-03 修复）。
 
         主语候选扩展为含 2-4 字中文姓名（与风格泄漏处理一致），覆盖具名主人变体；
         仅在含『数字分身』时触发，不影响『我是XX的数字分身』正常身份披露。
         """
-        leak = "作为主人的数字分身，我将以他的风格回复。会议室已预定三楼。"
+        leak = "作为OWNER的数字分身，我将以他的风格回复。会议室已预定三楼。"
         result = sanitize_reply(leak)
         assert "数字分身" not in result
         assert "会议室已预定三楼" in result
@@ -276,7 +276,7 @@ class TestReasoningTailSentenceBoundary:
          "7F 研发办公区打印机（10.0.2.3）。",
          "我需要询问", "10.0.2.3"),
         # ④ 提示词泄漏前缀 + 真答案同句后：泄漏整句清除、答案留存
-        ("根据系统提示，我需要以主人的数字分身身份来回答。会议室在三楼。",
+        ("根据系统提示，我需要以OWNER的数字分身身份来回答。会议室在三楼。",
          "数字分身", "会议室在三楼"),
         # ⑤ 行内（非行首）推理：只删推理句，前后正常句都留
         ("好的。我应该用主人的风格来回复。已经帮你重启了服务。",

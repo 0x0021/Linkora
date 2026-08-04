@@ -143,7 +143,7 @@ def agent():
         config=_build_config(),
         client=SimpleNamespace(),     # 不触发任何 LLM 调用
         tool_router=tool_router,
-        user_name="主人",
+        user_name="OWNER",
         user_dept="研发中心",
         org_name="某科技公司",
         store=store,

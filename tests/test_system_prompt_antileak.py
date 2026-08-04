@@ -26,7 +26,7 @@ class _FakeConfig:
 
 
 class _FakeAgent:
-    def __init__(self, user_name="主人", title="", platform="dingtalk"):
+    def __init__(self, user_name="OWNER", title="", platform="dingtalk"):
         self.user_name = user_name
         self.user_dept = "技术部"
         self.user_title = title
@@ -157,7 +157,7 @@ class TestAntiEchoDirective(unittest.TestCase):
     def test_identity_and_constraint_labels_preserved(self):
         """身份段与【角色定位】标签仍保留（治理转向后标签改名，语义延续）。"""
         prompt = build_system_prompt_core(_FakeAgent(title="IT运维"))
-        self.assertIn("身份:主人的数字分身。", prompt)
+        self.assertIn("身份:OWNER的数字分身。", prompt)
         self.assertIn("【角色定位】", prompt)
 
 

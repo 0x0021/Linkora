@@ -100,7 +100,7 @@ def _seed_messages(store: SQLiteStore, rows):
 
 
 class TestFewShotDiversity(unittest.TestCase):
-    OWNER = "主人"
+    OWNER = "OWNER"
 
     def _build_store(self):
         db = tempfile.mktemp(suffix=".db")

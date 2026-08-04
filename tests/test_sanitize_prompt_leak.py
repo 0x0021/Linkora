@@ -29,7 +29,7 @@ class TestSanitizePromptEchoLines:
 
     def test_identity_line_echo(self):
         """「身份:XXX的数字分身。部门:...」注入行回声 → 整行删除。"""
-        leak = "身份:主人的数字分身。部门:IT部。组织:某公司。\n打印机的IP是192.168.1.10"
+        leak = "身份:OWNER的数字分身。部门:IT部。组织:某公司。\n打印机的IP是192.168.1.10"
         result = sanitize_reply(leak)
         assert "数字分身" not in result
         assert "192.168.1.10" in result
@@ -96,16 +96,16 @@ class TestSanitizePromptEchoLines:
 
     def test_second_person_identity_echo(self):
         """「你正在以XXX的数字分身身份」第二人称身份句回声 → 行内清除。"""
-        leak = "你正在以主人的数字分身身份回复消息。打印机IP是192.168.1.10，直接添加即可。"
+        leak = "你正在以OWNER的数字分身身份回复消息。打印机IP是192.168.1.10，直接添加即可。"
         result = sanitize_reply(leak)
         assert "数字分身身份" not in result
         assert "192.168.1.10" in result
 
     def test_first_person_identity_disclosure_kept(self):
         """「我是XXX的数字分身」正常身份披露（用户问你是谁）→ 保留。"""
-        normal = "我是主人的数字分身，他现在不在线，有什么可以帮你？"
+        normal = "我是OWNER的数字分身，他现在不在线，有什么可以帮你？"
         result = sanitize_reply(normal)
-        assert "我是主人的数字分身" in result
+        assert "我是OWNER的数字分身" in result
 
     def test_second_person_normal_discussion_kept(self):
         """「你作为管理员，可以在后台配置数字分身的风格」正常讨论 → 保留。
@@ -206,10 +206,10 @@ class TestSanitizeSystemPromptLeakage:
     """截图证实的新泄漏模式（2026-07-27）。"""
 
     def test_leak_system_prompt_with_identity(self):
-        """「根据系统提示，我需要以主人的数字分身身份...」整段清除。"""
+        """「根据系统提示，我需要以OWNER的数字分身身份...」整段清除。"""
         leak = (
             "用户询问公司 VPN 的申请和使用方法。"
-            "根据系统提示，我需要以主人的数字分身身份，"
+            "根据系统提示，我需要以OWNER的数字分身身份，"
             "用主人真实的沟通风格来回答这个问题。\n\n"
             "申请流程：钉钉工作台 OA 审批..."
         )
@@ -238,8 +238,8 @@ class TestSanitizeSystemPromptLeakage:
         assert "VPN申请步骤" in result
 
     def test_leak_digital_avatar_identity_with_name(self):
-        """「我需要以主人的数字分身身份」——中间夹人名。"""
-        leak = "我需要以主人的数字分身身份来处理这个问题。\n答案是：xxx"
+        """「我需要以OWNER的数字分身身份」——中间夹人名。"""
+        leak = "我需要以OWNER的数字分身身份来处理这个问题。\n答案是：xxx"
         result = sanitize_reply(leak)
         assert "我需要以" not in result
         assert "数字分身身份" not in result
@@ -306,7 +306,7 @@ class TestSanitizeEdgeCases:
 
     def test_all_leakage_no_normal_content(self):
         """整条都是推理痕迹 → 返回空串。"""
-        leak = "用户询问VPN申请。\n根据系统提示，我需要以主人的数字分身身份来回答。"
+        leak = "用户询问VPN申请。\n根据系统提示，我需要以OWNER的数字分身身份来回答。"
         result = sanitize_reply(leak)
         assert result == ""
 
@@ -315,7 +315,7 @@ class TestSanitizeEdgeCases:
         # 模拟截图完整泄漏文本
         leak = (
             "用户询问公司 VPN 的申请和使用方法。"
-            "根据系统提示，我需要以主人的数字分身身份，"
+            "根据系统提示，我需要以OWNER的数字分身身份，"
             "用主人真实的沟通风格来回答这个问题。\n\n"
             "• 申请流程：钉钉工作台 OA 审批账号权限申请\n"
             "• 服务器地址：office.i.acme.com:5444\n"
@@ -754,7 +754,7 @@ class TestSanitizePrinterThinkingLeakage:
         '由于这是一个技术问题，而且用户提到了需要"额外端口信息"，这通常意味着需要知道'
         '打印机的IP地址或主机名来创建正确的端口。我应该询问用户更多关于打印机的具体信息，'
         '比如打印机的型号、是否支持网络打印等，以便给出更准确的指导。'
-        '不过，根据我的角色定位，我应该以主人（IT工程师）的身份直接提供解决方案，'
+        '不过，根据我的角色定位，我应该以OWNER（IT工程师）的身份直接提供解决方案，'
         '而不是让用户去找别人。让我先询问一些关键信息，然后给出针对性的建议。\n'
         '您好！遇到添加打印机的问题了。为了帮您解决，我需要了解几个关键信息：\n'
         '1. 您想添加的是网络打印机还是本地打印机？\n'
@@ -769,7 +769,7 @@ class TestSanitizePrinterThinkingLeakage:
         assert "根据我的知识库" not in result
         assert "让我回想一下" not in result
         assert "根据我的角色定位" not in result
-        assert "我应该以主人" not in result
+        assert "我应该以OWNER" not in result
         assert "让我先询问一些关键信息" not in result
         assert "我应该询问用户更多" not in result
         # 真答案完整保留
@@ -788,10 +788,10 @@ class TestSanitizePrinterThinkingLeakage:
 
     def test_pattern_5_role_positioning_with_name(self):
         """⑤：根据我的角色定位，我应该以[具体名字]的身份 → 剥。"""
-        leak = "根据我的角色定位，我应该以主人（IT工程师）的身份直接提供解决方案。您好，我来帮您。"
+        leak = "根据我的角色定位，我应该以OWNER（IT工程师）的身份直接提供解决方案。您好，我来帮您。"
         result = sanitize_reply(leak)
         assert "根据我的角色定位" not in result
-        assert "我应该以主人" not in result
+        assert "我应该以OWNER" not in result
         assert "您好，我来帮您" in result
 
     def test_lets_hui_xiang_colon_form(self):
@@ -957,7 +957,7 @@ class TestSanitizeAISelfDisclosureAndSystemPromptLeak:
        "根据系统提示，我需要以数字分身身份回答。" / "【最终约束】…"
 
     前瞻 (?!...) 设计用于避免误杀正常语料：
-       "我是主人的数字分身" / "我是AI产品经理" / "作为主人的数字分身"
+       "我是OWNER的数字分身" / "我是AI产品经理" / "作为OWNER的数字分身"
        / "根据提示输入验证码即可登录。" 必须原样保留。
     """
 
@@ -988,8 +988,8 @@ class TestSanitizeAISelfDisclosureAndSystemPromptLeak:
 
     # ---- 正常语料必须保留（零改动）----
     def test_normal_avatar_disclosure_kept(self):
-        """「我是主人的数字分身…」正常身份披露 → 原样保留。"""
-        normal = "我是主人的数字分身，他现在不在线，有什么可以帮你？"
+        """「我是OWNER的数字分身…」正常身份披露 → 原样保留。"""
+        normal = "我是OWNER的数字分身，他现在不在线，有什么可以帮你？"
         result = sanitize_reply(normal)
         assert result == normal
 
@@ -1000,8 +1000,8 @@ class TestSanitizeAISelfDisclosureAndSystemPromptLeak:
         assert result == normal
 
     def test_normal_avatar_as_kept(self):
-        """「作为主人的数字分身…」正常身份披露 → 原样保留。"""
-        normal = "作为主人的数字分身，我帮您处理工作消息。"
+        """「作为OWNER的数字分身…」正常身份披露 → 原样保留。"""
+        normal = "作为OWNER的数字分身，我帮您处理工作消息。"
         result = sanitize_reply(normal)
         assert result == normal
 
@@ -1161,12 +1161,12 @@ class TestSystemPromptAvatarStyle:
         return sp.build_system_prompt_core(agent, sender_name="王五")
 
     def test_role_and_rewrite_segments_present(self):
-        p = self._build_prompt("IT工程师", "信息技术部", "主人")
+        p = self._build_prompt("IT工程师", "信息技术部", "OWNER")
         assert "【角色定位】" in p
         assert "【资料使用】" in p
         assert "【开场白】" in p
         # 改写示例（建设式，给具体句式）
-        assert "建议联系主人（IT工程师）评估" in p
+        assert "建议联系OWNER（IT工程师）评估" in p
         assert "需要评估" in p
         # 禁止机械开头：『根据知识库』字样只应作为被禁模式出现在禁止语中
         assert "禁止以" in p and "根据知识库" in p
@@ -1175,7 +1175,7 @@ class TestSystemPromptAvatarStyle:
 
     def test_no_hardcoded_department(self):
         """不同主人 prompt 动态变化，不写死 IT。"""
-        p_it = self._build_prompt("IT工程师", "信息技术部", "主人")
+        p_it = self._build_prompt("IT工程师", "信息技术部", "OWNER")
         p_fin = self._build_prompt("财务经理", "财务部", "李四")
         assert "财务经理" in p_fin
         assert "IT工程师" not in p_fin
@@ -1186,24 +1186,24 @@ class TestSystemPromptAvatarStyle:
 
     def test_sanitize_no_longer_strips_owner_name(self):
         """治理转向后清洗层不再删『联系XX』——改写责任移交 prompt，避免残缺句。"""
-        reply = "建议联系主人（IT工程师）协助评估和走正规采购渠道。"
+        reply = "建议联系OWNER（IT工程师）协助评估和走正规采购渠道。"
         result = sanitize_reply(reply)
         # 清洗层保留原文；『建议协助评估』这类残句不再由清洗层产生
-        assert "主人" in result
+        assert "OWNER" in result
 
     def test_software_tool_reply_template_and_name_ban(self):
         """2026-07-28 A 方案加固：弱模型对抽象约束 obey 率低，新增强制『二选一』
         回复模板 + 主人姓名出现禁止项，把软件/工具类输出钉死。"""
-        p = self._build_prompt("IT工程师", "信息技术部", "主人")
+        p = self._build_prompt("IT工程师", "信息技术部", "OWNER")
         # 强制模板块存在 + 二选一
         assert "【软件/工具回复模板】" in p
         assert "（1）" in p and "（2）" in p
         # 主人姓名作为被禁反例出现在模板禁止项里
-        assert "主人评估后走正规" in p
+        assert "OWNER评估后走正规" in p
         assert "通过钉钉→工作台→申请" in p
         # 角色定位层也明确禁止出现本人名字
-        assert "严禁出现你本人的名字" in p and "主人" in p
-        # 变量化：换财务/李四依旧动态生成（不写死主人）
+        assert "严禁出现你本人的名字" in p and "OWNER" in p
+        # 变量化：换财务/李四依旧动态生成（不写死OWNER）
         p_fin = self._build_prompt("财务经理", "财务部", "李四")
         assert "【软件/工具回复模板】" in p_fin
         assert "李四评估后走正规" in p_fin
@@ -1283,12 +1283,12 @@ class TestCitationHiding:
 class TestGateReply:
     """B 方案末端整句闸门：落库/发送前整句拦截自引用与编造流程。"""
 
-    NAME = "主人"
+    NAME = "OWNER"
     TITLE = "IT工程师"
 
     def test_owner_name_in_evaluate_voice_gated(self):
         """主人名字出现在评估口吻 → 整句替换为安全模板。"""
-        bad = "请通过钉钉 → 工作台 → 申请提交需求，由主人（IT工程师）评估后走正规。"
+        bad = "请通过钉钉 → 工作台 → 申请提交需求，由OWNER（IT工程师）评估后走正规。"
         out, triggered = gate_reply(bad, self.NAME, self.TITLE)
         assert triggered is True
         assert out == (
@@ -1297,21 +1297,21 @@ class TestGateReply:
             "再走公司正规采购或授权流程。"
         )
         # 整句替换，坏原句的自引用不残留（安全模板里的「走正规采购流程」是合法的）
-        assert "主人" not in out
+        assert "OWNER" not in out
         assert "评估后" not in out
 
     def test_owner_name_assist_voice_gated(self):
-        """『联系主人协助评估』类 → 触发。"""
+        """『联系OWNER协助评估』类 → 触发。"""
         out, triggered = gate_reply(
-            "建议联系主人（IT工程师）协助评估和走正规采购渠道。",
+            "建议联系OWNER（IT工程师）协助评估和走正规采购渠道。",
             self.NAME, self.TITLE)
-        assert triggered is True and "主人" not in out
+        assert triggered is True and "OWNER" not in out
 
     def test_owner_name_approve_voice_gated(self):
-        """『经主人审批』类 → 触发。"""
+        """『经OWNER审批』类 → 触发。"""
         out, triggered = gate_reply(
-            "经主人审批后发采购单。", self.NAME, self.TITLE)
-        assert triggered is True and "主人" not in out
+            "经OWNER审批后发采购单。", self.NAME, self.TITLE)
+        assert triggered is True and "OWNER" not in out
 
     def test_fabricated_path_with_arrow_gated(self):
         """带箭头的虚构路由『钉钉→工作台→申请』→ 触发。"""

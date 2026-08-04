@@ -82,7 +82,7 @@ class WecomCliAdapter(BaseIMAdapter):
     用法：:
 
         adapter = WecomCliAdapter()                 # 默认调 /opt/homebrew/bin/wecom-cli
-        adapter.chat_message_send(user="user", text="你好")
+        adapter.chat_message_send(user="owner", text="你好")
 
     注意：
     - 企微 CLI **没有** ``--dry-run`` 标志，故 ``_build_command`` 直接拼命令；

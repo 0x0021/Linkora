@@ -140,7 +140,7 @@ async def messages(chat_id: str = "", limit: int = 50):
                 chat_name = d.get('chat_name') or ''
                 # ★ P-1 修复：方向判断 (sender_name OR sender_id 都对得上 → out)
                 #   之前只判 sender_name，遇到 current_user_name 解析失败就全错位。
-                #   79 条「主人」手发消息 role='user'，前端 isMe 误判为"对方"就是这原因。
+                #   79 条「OWNER」手发消息 role='user'，前端 isMe 误判为"对方"就是这原因。
                 sender_name_key = (d.get('sender_name') or '').strip()
                 sender_id_key = (d.get('sender_id') or '').strip()
                 is_out = (

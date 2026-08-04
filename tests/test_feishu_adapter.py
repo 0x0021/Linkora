@@ -53,7 +53,7 @@ class _RunCapture:
 WHOAMI_READY = json.dumps({
     "profile": "cli_test", "appId": "cli_test", "brand": "feishu",
     "available": True, "tokenStatus": "ready",
-    "onBehalfOf": {"userName": "主人", "openId": "ou_xxx"},
+    "onBehalfOf": {"userName": "OWNER", "openId": "ou_xxx"},
 })
 
 

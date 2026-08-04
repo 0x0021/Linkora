@@ -305,7 +305,7 @@ class ApprovalListExecutedTool(BaseTool):
         "查询当前登录用户作为审批人已经处理过的审批单列表。这与「已发起审批」(发起人视角) 不同——"
         "本工具回答的是「我批过哪些 / 我处理过哪些」，而非「我发起过哪些」。"
         "接口本身不支持时间参数，因此按 processCreateTime/processEndTime 在客户端按时间窗过滤。"
-        "适合回答「上周主人处理了哪些审批」「最近我批了什么」等问题。"
+        "适合回答「上周OWNER处理了哪些审批」「最近我批了什么」等问题。"
     )
     intent_categories = ["domain.oa_approval"]
     platforms = ["dingtalk"]

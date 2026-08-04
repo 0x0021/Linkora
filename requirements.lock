@@ -261,7 +261,7 @@ pyyaml==6.0.3
     #   huggingface-hub
     #   rapidocr-onnxruntime
     #   transformers
-rapidocr-onnxruntime==1.4.4
+rapidocr-onnxruntime==1.2.3
     # via -r requirements.txt
 regex==2026.7.19
     # via
@@ -310,7 +310,6 @@ tqdm==4.69.0
     #   -c (workspace)
     #   huggingface-hub
     #   openai
-    #   rapidocr-onnxruntime
     #   sentence-transformers
     #   transformers
 transformers==5.14.1

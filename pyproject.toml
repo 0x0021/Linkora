@@ -43,7 +43,7 @@ dependencies = [
     "requests==2.34.2",
     "jieba==0.42.1",
     "regex==2026.7.19",
-    "rapidocr-onnxruntime==1.4.4",
+    "rapidocr-onnxruntime==1.2.3",
     # ---- 文档解析 ----
     "pdfplumber==0.11.10",
     "pymupdf==1.28.0",

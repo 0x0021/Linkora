@@ -24,9 +24,9 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from src.config import load_config
-from src.memory.sqlite_store import SQLiteStore
-from src.memory.embedding import EmbeddingClient
+from src.config import load_config  # noqa: E402
+from src.memory.sqlite_store import SQLiteStore  # noqa: E402
+from src.memory.embedding import EmbeddingClient  # noqa: E402
 
 
 def main():

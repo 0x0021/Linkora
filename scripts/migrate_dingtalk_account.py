@@ -32,7 +32,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from src.memory.account_identity import resolve_account_id  # noqa: E402
-from src.image_path import account_id_dir, is_new_image_path  # noqa: E402
+from src.image_path import account_id_dir  # noqa: E402
 from src.config import DEFAULT_TMP_IMAGES_DIR  # noqa: E402
 
 PLATFORM = "dingtalk"
@@ -135,7 +135,6 @@ def main() -> int:
 
     real_acct = resolve_account_id(PLATFORM)            # 例如 dingtalk:ding9888...
     real_dir = account_id_dir(real_acct)                # 例如 ding9888ef577f7811cb
-    old_dir = account_id_dir(OLD_ACCOUNT)               # corpId
     new_hash = _digest(real_acct)
     old_hash = _digest(OLD_ACCOUNT)
     conv_root = _conv_root()
@@ -187,13 +186,13 @@ def main() -> int:
                     src = old_db + suf
                     if os.path.exists(src):
                         shutil.move(src, new_db + suf)
-                print(f"  [ok] 已改名旧库 -> 新库")
+                print("  [ok] 已改名旧库 -> 新库")
             # 删除旧库残留（含可能的 -wal/-shm）
             for suf in ("", "-wal", "-shm"):
                 p = old_db + suf
                 if os.path.exists(p):
                     os.remove(p)
-            print(f"  [ok] 已删除旧库残留")
+            print("  [ok] 已删除旧库残留")
         changed += 1
     else:
         print(f"[1] 旧账号会话库不存在（{os.path.basename(old_db)}），跳过")
@@ -228,7 +227,7 @@ def main() -> int:
         else:
             print(f"[2] image_path 账号段已正确（{len(rows)} 条检查，无需改写）")
     else:
-        print(f"[2] 目标会话库不存在，跳过 image_path 改写")
+        print("[2] 目标会话库不存在，跳过 image_path 改写")
 
     # ---- 3) 磁盘图片目录：除真实账号目录外的子目录合并进真实账号目录 ----
     # 图片物理结构为 account_dir/chat_id/filename（多层嵌套），需用 copytree 整树合并。

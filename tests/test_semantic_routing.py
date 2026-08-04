@@ -120,9 +120,11 @@ def test_skill_router_semantic_only_activation(fake_client, monkeypatch):
         assert name == "planner"
 
 
-def test_skill_router_fallback_when_embedding_disabled(fake_client):
+def test_skill_router_fallback_when_embedding_disabled(fake_client, monkeypatch):
     """embedding 禁用时，语义层退场，评分回退为纯关键词（与 Phase 1 行为一致）。"""
     with tempfile.TemporaryDirectory() as td:
+        # 锁定技能发现目录到临时目录，隔离真实仓库 data/skills（否则 CI 上发现为空）
+        _patch_skill_dirs(monkeypatch, td)
         fm = (
             "name: weather\n"
             "intent_categories:\n- domain.weather\n"

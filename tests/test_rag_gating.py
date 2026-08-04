@@ -380,19 +380,23 @@ class TestHistoryWindowConfig:
         )
 
     def test_feishu_wecom_history_window_le_6(self):
-        """H2-B + H2-A：feishu/wecom/dingtalk 的 history_window 均应 <= 6。
+        """H2-B + H2-A：所有『已配置』平台的 history_window 均应 <= 6。
+
         dingtalk 由 5 放宽到 6 以激活 H2-A 后台异步摘要（= max_recent + 2）。
-        仅在本机 config.yaml 已改后此断言成立——config.yaml 为 gitignored，
-        改动落磁盘、重启 bot 后生效，不进版本库。"""
+        config.yaml 为 gitignored，各平台配置随部署不同（CI 默认仅 dingtalk，
+        feishu/wecom 被注释）；故仅校验『已配置』的平台，未配置平台跳过，避免误报。
+        本地完整配置（feishu/wecom 均启用）时，对应平台也会被一并校验。"""
         from src.config import load_config
         cfg = load_config("config.yaml")
 
-        def _hw(pid: str) -> int:
-            for p in cfg.platforms:
-                if p.id == pid:
-                    return p.poller.history_window
-            raise AssertionError(f"platform {pid} 未配置")
+        checked = []
+        for p in cfg.platforms:
+            hw = p.poller.history_window
+            assert hw <= 6, (
+                f"{p.id} history_window={hw} 太大，会把跨多轮旧问题塞进 LLM context；"
+                "本次 bug 根因之一。修复后应 <= 6。"
+            )
+            checked.append(p.id)
 
-        assert _hw("feishu") <= 6, f"feishu history_window={_hw('feishu')} 应 <= 6"
-        assert _hw("wecom") <= 6, f"wecom history_window={_hw('wecom')} 应 <= 6"
-        assert _hw("dingtalk") <= 6, f"dingtalk history_window={_hw('dingtalk')} 应 <= 6"
+        # 默认平台 dingtalk 必然配置，作为最小断言锚点
+        assert "dingtalk" in checked, "默认平台 dingtalk 未配置，历史窗口校验失去锚点"

@@ -45,7 +45,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from src.image_path import safe_path_component, account_id_dir, image_rel_path, is_new_image_path  # noqa: E402
+from src.image_path import is_new_image_path, image_rel_path  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("migrate_image_paths")

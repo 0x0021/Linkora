@@ -63,7 +63,8 @@ USERLIST = {"errcode": 0, "errmsg": "ok", "userlist": [
 
 
 class TestBuildCommand(unittest.TestCase):
-    def test_default_cli_path(self):
+    @patch("src.im_adapter.wecom.WecomCliAdapter._resolve_cli_path", return_value="/opt/homebrew/bin/wecom-cli")
+    def test_default_cli_path(self, _mock):
         a = WecomCliAdapter()
         self.assertEqual(a.cli_path, "/opt/homebrew/bin/wecom-cli")
 
@@ -71,7 +72,8 @@ class TestBuildCommand(unittest.TestCase):
         self.assertTrue(issubclass(WecomCliAdapter, BaseIMAdapterCore))
         self.assertTrue(issubclass(WecomCliAdapter, BaseIMAdapter))
 
-    def test_build_no_dry_run_flag(self):
+    @patch("src.im_adapter.wecom.WecomCliAdapter._resolve_cli_path", return_value="/opt/homebrew/bin/wecom-cli")
+    def test_build_no_dry_run_flag(self, _mock):
         a = WecomCliAdapter(dry_run=True)
         cmd = a._build_command(["msg", "send_message", "--json", "{}"])
         self.assertEqual(cmd[0], "/opt/homebrew/bin/wecom-cli")
@@ -187,7 +189,8 @@ class TestContact(unittest.TestCase):
 
 
 class TestMessages(unittest.TestCase):
-    def test_send_payload_construction(self):
+    @patch("src.im_adapter.wecom.WecomCliAdapter._resolve_cli_path", return_value="/opt/homebrew/bin/wecom-cli")
+    def test_send_payload_construction(self, _mock):
         cap = _RunCapture(_fake(_env({"errcode": 0, "errmsg": "ok"})))
         a = WecomCliAdapter()
         with patch("src.im_adapter.wecom.subprocess.run", cap):

@@ -14,6 +14,19 @@ def _write_skill(root: Path, name: str, frontmatter: str, body: str = "# Body\n"
     return d
 
 
+def _patch_skill_dirs(monkeypatch, root: str, extras: list[str] | None = None):
+    """临时覆盖模块级 _SKILL_DIRS 仅指向测试目录，避免读到真实 data/skills/。
+
+    默认只 patch 主目录（data/skills）；extras 可追加如 ".agents/skills"。
+    """
+    import src.skills.loader as loader_mod
+    dirs = [root + "/data/skills"]
+    if extras:
+        for extra in extras:
+            dirs.append(root + "/" + extra.lstrip("/"))
+    monkeypatch.setattr(loader_mod, "_SKILL_DIRS", dirs)
+
+
 def test_skill_parses_intent_categories():
     """SKILL.md 声明的 intent_categories 被解析。"""
     with tempfile.TemporaryDirectory() as td:
@@ -48,11 +61,13 @@ def test_skill_effective_falls_back_to_keywords():
         assert skill.effective_intent_keywords == ["查一下", "帮我搜"]
 
 
-def test_skill_router_uses_effective_keywords():
+def test_skill_router_uses_effective_keywords(monkeypatch):
     """SkillRouter 经 effective_intent_keywords 匹配（category-based 路由）。"""
     from src.skills.manager import SkillManager
     from src.skills.router import SkillRouter
     with tempfile.TemporaryDirectory() as td:
+        # 锁定技能发现目录到临时目录，隔离真实仓库 data/skills（否则 CI 上发现为空）
+        _patch_skill_dirs(monkeypatch, td)
         fm = "name: weather\nintent_categories:\n- domain.weather\nweight: 1.0\ndescription: 天气查询\n"
         _write_skill(Path(td), "weather", fm)
         mgr = SkillManager(td)

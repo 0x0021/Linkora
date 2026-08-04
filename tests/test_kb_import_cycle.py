@@ -15,7 +15,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VENV_PY = ROOT / ".venv" / "bin" / "python"
+# CI 没有 .venv，直接复用当前 pytest 解释器
+VENV_PY = Path(sys.executable)
 
 
 def _run(code: str) -> subprocess.CompletedProcess:

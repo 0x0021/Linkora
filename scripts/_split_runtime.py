@@ -8,6 +8,7 @@ Run from repo root. Not committed (scratch tool)."""
 import ast
 import os
 import textwrap
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src", "platform", "runtime.py")
@@ -80,7 +81,6 @@ for node in cls.body:
 # sanity: all 66 accounted for
 total = len(methods)
 print(f"extracted {total} methods across groups")
-from collections import Counter
 print(dict(Counter(g for g, _ in methods)))
 
 CLASS_NAMES = {

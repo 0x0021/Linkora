@@ -281,6 +281,7 @@ class TestLoad:
     def test_has_intent_categories_skips_derive(self, monkeypatch):
         """声明 intent_categories 后不再自动推导 intent_keywords。"""
         with tempfile.TemporaryDirectory() as td:
+            _patch_skill_dirs(monkeypatch, td)
             fm = "name: w\nintent_categories:\n- domain.weather\n"
             _write_skill(Path(td), "w", fm)
             loader = SkillLoader(td)

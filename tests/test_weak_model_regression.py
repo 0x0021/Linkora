@@ -223,12 +223,12 @@ class TestKnownWeakModelGaps:
         assert "请去设置页操作" in result
 
     def test_named_digital_avatar_leak(self):
-        """G2: 具名+数字分身身份泄漏『作为OWNER的数字分身』须剥离（2026-08-03 修复）。
+        """G2: 具名+数字分身身份泄漏『作为原拥有者的数字分身』须剥离（2026-08-03 修复）。
 
         主语候选扩展为含 2-4 字中文姓名（与风格泄漏处理一致），覆盖具名主人变体；
         仅在含『数字分身』时触发，不影响『我是XX的数字分身』正常身份披露。
         """
-        leak = "作为OWNER的数字分身，我将以他的风格回复。会议室已预定三楼。"
+        leak = "作为原拥有者的数字分身，我将以他的风格回复。会议室已预定三楼。"
         result = sanitize_reply(leak)
         assert "数字分身" not in result
         assert "会议室已预定三楼" in result

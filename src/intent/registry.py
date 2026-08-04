@@ -66,6 +66,9 @@ TOOL_ACTION_MAP: dict[str, list[str]] = {
     "approval_list_tasks": ["action.query"],
     "approval_list_initiated": ["action.query"],
     "approval_list_executed": ["action.query"],
+    # 钉钉 OA 审批：我的审批 / 审批详情（与 approval_* 同类只读查询）
+    "get_my_approvals": ["action.query"],
+    "get_approval_detail": ["action.query"],
 }
 
 

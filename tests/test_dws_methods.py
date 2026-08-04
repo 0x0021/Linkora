@@ -168,20 +168,22 @@ class TestChatMessageList:
         assert calls["n"] == 50
 
     def test_list_all_cap_warning_throttled(self, adapter, caplog):
-        """同一窗口 5 分钟内封顶告警只应出现一次，避免每轮轮询刷屏。"""
+        """同一窗口 5 分钟内封顶提示只应出现一次，避免每轮轮询刷屏。"""
         import logging
+        # 类级冷却字典可能残留其它测试的时间戳，先清空以保证第一次调用能触发。
+        adapter.__class__._list_all_cap_warn_at.clear()
         calls = {"n": 0}
 
         def fake_run(cmd, **kw):
             calls["n"] += 1
             return {"result": {"conversationMessagesList": [], "hasMore": True, "nextCursor": "x"}}
 
-        with caplog.at_level(logging.WARNING, logger="src.dws_adapter"):
+        with caplog.at_level(logging.INFO, logger="src.dws_adapter"):
             with patch.object(adapter, "run", side_effect=fake_run):
                 adapter.chat_message_list_all("s", "e", max_pages=1)
                 adapter.chat_message_list_all("s", "e", max_pages=1)
         warns = [r for r in caplog.records if "分页达到上限" in r.getMessage()]
-        assert len(warns) == 1, f"期望 5 分钟内仅告警一次，实际 {len(warns)} 次"
+        assert len(warns) == 1, f"期望 5 分钟内仅提示一次，实际 {len(warns)} 次"
 
     def test_list_all_windows_large_span(self, adapter):
         """大时间窗（>window_days）应自动分窗：每子窗独立翻页、合并去重，避免单窗触顶漏消息。"""

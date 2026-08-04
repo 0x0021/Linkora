@@ -1,0 +1,26 @@
+name: Dependency Review
+
+# PR 依赖增量审计：比对 base 与 head 的依赖清单，拦截引入已知漏洞的包。
+# 对 public 仓库免费。仅高危及以上阻断合并，中低危只报告，避免误伤。
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: true
+          # 允许 Dependabot 常规升级；真正的恶意新增仍会被 high 规则拦下
+          allow-ghsas: ""

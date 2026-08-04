@@ -1,0 +1,35 @@
+name: CodeQL
+
+# 代码安全扫描（SAST）。对 public 仓库免费，结果进入仓库 Security 标签页。
+# 触发：推送到 main、对 main 开 PR、以及每周一定时扫描（捕获存量问题）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "27 3 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # 仅授予 CodeQL 写安全事件所需的最小权限
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # Python 为解释型语言，无需编译；build-mode 默认为 none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"

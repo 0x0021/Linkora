@@ -1,0 +1,7 @@
+# GitHub Pages 站点配置（部署源：仓库 main 分支 /docs 目录）
+# 使用 GitHub Pages 白名单内的 cayman 主题，轻量且可读性好。
+theme: jekyll-theme-cayman
+
+# 关闭相对链接插件可能造成的构建噪音
+exclude:
+  - "*.mermaid"

@@ -8,6 +8,7 @@ import functools
 import logging
 import threading
 import time
+from datetime import timedelta
 from src.paths import get_skills_root
 from src.im_adapter.errors import IMAdapterRateLimitError  # F14：回复发送限频退避
 
@@ -85,6 +86,38 @@ class InboundMixin:
         if not sender_ids:
             return False
         return self.store._conversation_repo.has_user_message_from(message.chat_id, ts, sender_ids)
+    def _is_owner_present(self, message: Message) -> bool:
+        """真人在场检测（human-in-the-loop）：本会话最近一段时间内是否有真人手动消息。
+
+        与 _has_user_taken_over（被动：仅检查「对方这条消息之后真人是否回过」）不同，
+        本方法基于时间窗主动判断「真人当前是否正参与该会话」。
+
+        场景：真人和对方正在来回互动时，机器人轮询到对方消息会抢先生成回复并发送，
+        真人往往慢于机器人，导致 _has_user_taken_over 竞速必输、AI 穿插插嘴。
+        本方法只要窗口内出现过真人消息即抑制 AI 回复，真人离场超过窗口后 AI 才接管。
+
+        判定：conversation_repo.has_user_message_from 已用 is_bot=0 过滤，
+        故 AI 分身自己代发的回复不会刷新「在场」计时（避免机器人回一句后永久静默）。
+        """
+        cooldown = getattr(self.config.poller, "owner_present_cooldown_seconds", 0)
+        # 防御：配置缺失/被 mock/非数值时视为未启用，放行回复（不静默）
+        if not isinstance(cooldown, (int, float)) or cooldown <= 0:
+            return False
+        sender_ids = []
+        if getattr(self, "current_open_dingtalk_id", ""):
+            sender_ids.append(self.current_open_dingtalk_id)
+        if getattr(self, "current_user_id", ""):
+            sender_ids.append(self.current_user_id)
+        if not sender_ids:
+            return False
+        since = (datetime.now() - timedelta(seconds=cooldown)).isoformat()
+        try:
+            return self.store._conversation_repo.has_user_message_from(
+                message.chat_id, since, sender_ids
+            )
+        except Exception as e:  # 查询异常时保守放行（不静默），避免 DB 抖动误杀正常回复
+            logger.warning("[真人在场] 查询失败，保守放行回复: %s", e)
+            return False
     def _is_message_from_self(self, message: Message) -> bool:
         """安全网：判断消息是否是自己发出的，防止漏过 poller 的自我过滤导致 AI 回复自己。
 
@@ -329,6 +362,13 @@ class InboundMixin:
             if self._has_user_taken_over(message):
                 logger.info("[用户接管] %s 已手动回复 %s，跳过 AI 回复",
                             self.current_user_name, message.sender_name)
+                return
+
+            # === 检查：真人是否正参与该会话（human-in-the-loop 防穿插） ===
+            # 区别于上面的被动接管：只要窗口内有真人消息即抑制 AI，真人离场超时后 AI 接管。
+            if self._is_owner_present(message):
+                logger.info("[真人在场] %s 最近在会话 %s 活跃，AI 暂不出声",
+                            self.current_user_name, message.chat_name or message.chat_id[:20])
                 return
 
             logger.info(

@@ -136,6 +136,13 @@ class PollerConfig(BaseModel):
     # 与「系统账号名单」互补：名单是按名模糊匹配，本字段是按 senderId 精确匹配。
     skip_notification_sender_ids: list[str] = Field(default_factory=list)
     reply_cooldown_seconds: int = 60  # 同一会话回复冷却时间（秒），防止短时间内反复回复
+    # === 真人在场冷却（human-in-the-loop，防 AI 穿插真人对话）===
+    # 本会话最近 N 秒内若出现「真人手动发出的消息」（sender_id 命中当前用户且 is_bot=0，
+    # 即排除 AI 分身代发的回复），则抑制 AI 自动回复，让真人主导对话。
+    # 真人离开超过 N 秒、对方又发来新消息时，AI 自动接管。
+    # 0 或负数 = 不启用（沿用旧行为：仅 _has_user_taken_over 的被动接管检测）。
+    # 默认 600 秒（10 分钟）：贴合「真人和对方正在互动」的场景，避免机器人反复插嘴。
+    owner_present_cooldown_seconds: int = 600
     # 注：旧的 reply_single_only_when_unread（"已读不回复"闸门）已移除，
     # bot 现在对每条新消息都正常回复（见 poller 主流程）。
     # 发送消息时是否携带 AI 标记（dws --ai-tag，在铉铉中显示“由AI发送”标签）。

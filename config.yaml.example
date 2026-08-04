@@ -50,6 +50,7 @@ platforms:
       max_processed_msg_ids: 500                     # 跨轮次去重内存缓存上限（LRU）
       first_run_ignore_older_than_minutes: 5         # 首次运行/重启后忽略超过 N 分钟的老消息（0=不忽略）
       reply_cooldown_seconds: 10                     # 同一会话回复冷却时间（秒），防止短时间反复回复
+      owner_present_cooldown_seconds: 600            # 真人在场冷却（秒）：窗口内真人活跃则 AI 不插嘴，离场超时后接管
       mark_read_after_process: true                  # 处理完后将该会话消息标记为已读
       # —— 背压 / 并发 ——
       max_dispatch_per_cycle: 30                     # 单轮最多派发给 handler 的消息数（0=不限制）

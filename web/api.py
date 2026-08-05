@@ -498,8 +498,9 @@ async def platform_health():
                 _ = store.conn  # 触发连接创建 + schema 初始化
                 status["db_connected"] = True
             except Exception as e:
+                logger.warning("DB 连接失败: %s", e)
                 status["db_connected"] = False
-                status["errors"].append(f"DB 连接失败: {e}")
+                status["errors"].append("DB 连接失败")
 
         # 汇总 health 结果
         if status["errors"]:

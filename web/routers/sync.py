@@ -31,6 +31,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from web.dependencies import get_app_instance, get_current_platform, logger
+from web.errors import SAFE_OPERATION_FAILED
 from src.paths import data_path, get_config_path, get_log_dir
 
 router = APIRouter()
@@ -265,7 +266,7 @@ async def sync_history_log(lines: int = 80):
         return await run_in_threadpool(_read_log_tail)
     except Exception as e:  # noqa: BLE001
         logger.warning("[同步] 读取 worker 日志失败: %s", e)
-        return {"lines": [], "exists": False, "error": str(e)}
+        return {"lines": [], "exists": False, "error": SAFE_OPERATION_FAILED}
 
 
 @router.post("/api/messages/sync-history/cancel")

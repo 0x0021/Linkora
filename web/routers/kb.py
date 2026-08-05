@@ -37,6 +37,7 @@ class _LazyApiModule:
 _api = _LazyApiModule()
 from web.schemas import RagQuery, RagChatQuery, KbDocumentCreate
 from web.dependencies import logger, run_sync
+from web.errors import SAFE_OPERATION_FAILED
 from web.security import is_ssrf_safe, ssrf_safe_get, build_playwright_launch_args
 from src.kb.feishu_importer import (
     FeishuImportError,
@@ -680,7 +681,7 @@ async def parse_document(request: Request, file: UploadFile = File(...)):
 
     except Exception as e:
         logger.error("文档解析失败: %s", e, exc_info=True)
-        return {"success": False, "error": f"文档解析失败: {e}"}
+        return {"success": False, "error": SAFE_OPERATION_FAILED}
 
 
 @router.post("/api/kb/import-from-feishu")

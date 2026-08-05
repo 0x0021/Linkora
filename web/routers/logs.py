@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from src.utils.logger import get_log_buffer
+from web.errors import SAFE_OPERATION_FAILED
 
 router = APIRouter()
 
@@ -42,5 +43,7 @@ async def get_logs(level: str = "info", since: int = 0, limit: int = 200,
         buf_total = buf.count(level_no=lvl, platform=platform)
         max_id = buf.max_id()
     except Exception as e:
-        return JSONResponse({"logs": [], "total": 0, "buffer_total": 0, "max_id": 0, "error": str(e)})
+        logger = logging.getLogger(__name__)
+        logger.error("读取日志缓冲区失败: %s", e)
+        return JSONResponse({"logs": [], "total": 0, "buffer_total": 0, "max_id": 0, "error": SAFE_OPERATION_FAILED})
     return JSONResponse({"logs": logs, "total": len(logs), "buffer_total": buf_total, "max_id": max_id})

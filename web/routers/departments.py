@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from web.dependencies import _get_project_root, logger
+from web.errors import SAFE_OPERATION_FAILED
 
 router = APIRouter()
 
@@ -106,7 +107,7 @@ async def get_department_tree():
                 "code": "permission_denied",
             }
         logger.error(f"获取部门架构失败: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": SAFE_OPERATION_FAILED}
 
 
 @router.get("/api/departments/{dept_id}/children")
@@ -142,7 +143,7 @@ async def get_department_children(dept_id: int):
         if _is_token_verified_error(e):
             return {"success": False, "error": "无权限访问", "code": "permission_denied"}
         logger.error(f"获取部门 {dept_id} 子部门失败: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": SAFE_OPERATION_FAILED}
 
 
 @router.get("/api/departments/{dept_id}/members")
@@ -178,7 +179,7 @@ async def get_department_members(dept_id: int):
         if _is_token_verified_error(e):
             return {"success": False, "error": "无权限访问", "code": "permission_denied"}
         logger.error(f"获取部门 {dept_id} 成员失败: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": SAFE_OPERATION_FAILED}
 
 
 @router.post("/api/departments/cache/clear")

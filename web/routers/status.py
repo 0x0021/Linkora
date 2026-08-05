@@ -15,6 +15,7 @@ from fastapi.concurrency import run_in_threadpool
 
 import web.api as _api
 from web.dependencies import logger, get_current_platform, get_app_instance
+from web.errors import SAFE_OPERATION_FAILED
 
 
 def _get_git_info() -> dict:
@@ -160,7 +161,7 @@ async def status():
         }
     except Exception as e:
         logger.error("状态错误: %s", e)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": SAFE_OPERATION_FAILED}
 
 @router.get("/api/health")
 async def health():
@@ -178,7 +179,7 @@ async def health():
         }
     except Exception as e:
         logger.error("健康检查错误: %s", e)
-        return {"status": "unhealthy", "error": str(e)}
+        return {"status": "unhealthy", "error": SAFE_OPERATION_FAILED}
 
 
 @router.get("/api/config-drift")

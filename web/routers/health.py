@@ -8,13 +8,17 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
 
 from web.dependencies import get_store, get_current_platform
+from web.errors import SAFE_OPERATION_FAILED
 import web.api as _api
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -36,7 +40,8 @@ async def health():
         await run_in_threadpool(_db_check)
         result["components"]["database"] = {"status": "healthy"}
     except Exception as e:
-        result["components"]["database"] = {"status": "unhealthy", "error": str(e)}
+        logger.error("数据库健康检查失败: %s", e)
+        result["components"]["database"] = {"status": "unhealthy", "error": SAFE_OPERATION_FAILED}
         result["status"] = "degraded"
 
     # 2. 配置文件可读性检查
@@ -44,7 +49,8 @@ async def health():
         _api._get_cfg()
         result["components"]["config"] = {"status": "readable"}
     except Exception as e:
-        result["components"]["config"] = {"status": "unreadable", "error": str(e)}
+        logger.error("配置可读性检查失败: %s", e)
+        result["components"]["config"] = {"status": "unreadable", "error": SAFE_OPERATION_FAILED}
         result["status"] = "degraded"
 
     # 4. 最近消息处理时间（从 dedup_messages 表取最新记录）

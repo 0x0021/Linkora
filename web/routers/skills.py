@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 import web.api as _api
 from web.dependencies import logger
+from web.errors import SAFE_OPERATION_FAILED
 from src.shared_state import get_config as _get_shared_config
 from src.paths import data_path
 
@@ -140,7 +141,7 @@ async def get_watcher_status():
         return info
     except Exception as e:
         logger.error("查询 watcher 状态异常: %s", e)
-        return {"enabled": False, "error": str(e)}
+        return {"enabled": False, "error": SAFE_OPERATION_FAILED}
 
 
 @router.get("/api/skills/{skill_name}")

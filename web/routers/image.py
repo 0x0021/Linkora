@@ -18,7 +18,7 @@ import os
 import time
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse, Response
 
 import web.api as _api
 from src.paths import data_path, get_skill_icons_dir
+from web.security import resolve_safe_ip  # SSRF 防护：白名单 host 仍可能 DNS 重绑定到内网，需钉公网 IP
 
 router = APIRouter()
 
@@ -144,12 +145,23 @@ async def proxy_image(url: str = ""):
     if not allowed:
         raise HTTPException(status_code=403, detail=f"host 不在白名单: {host}")
 
+    # SSRF 纵深：白名单 host 仍可能经 DNS 重绑定解析到内网 IP，故再解析并钉死
+    # 公网 IP，用钉 IP 的 URL 发起请求（Host/SNI 仍为原域名，TLS 校验不降）。
+    dest_ip = resolve_safe_ip(host)
+    if not dest_ip:
+        raise HTTPException(status_code=502, detail="上游地址解析失败或被 SSRF 防护拦截")
+    _port = f":{parsed.port}" if parsed.port else ""
+    pinned_url = urlunparse(parsed._replace(netloc=f"{dest_ip}{_port}"))
+
     try:
         # 不跟随重定向（防 SSRF 重定向到非白名单 host）；CDN 直链通常不重定向
         async with httpx.AsyncClient(timeout=_IMAGE_PROXY_TIMEOUT, follow_redirects=False) as client:
-            r = await client.get(url, headers={"User-Agent": "Linkora-ImageProxy/1.0"})
+            r = await client.get(
+                pinned_url,
+                headers={"User-Agent": "Linkora-ImageProxy/1.0", "Host": host},
+            )
     except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"上游请求失败: {type(e).__name__}")
+        raise HTTPException(status_code=502, detail="上游请求失败")
 
     if r.status_code != 200 or r.status_code >= 300:
         raise HTTPException(status_code=502, detail=f"上游返回 {r.status_code}")
@@ -178,9 +190,15 @@ async def proxy_image(url: str = ""):
 # slug 首字母 + 哈希色的 SVG 兜底图标，不依赖任何外部资源。
 
 def _slug_to_safe_name(slug: str) -> str:
-    """将 skill slug 转为安全文件名：去 @、/→-、保留字母数字-_."""
+    """将 skill slug 转为安全文件名：去 @、/→-、保留字母数字-_.
+
+    末尾 ``os.path.basename`` 为路径穿越防护兜底：即便上游 slug 含路径分隔符，
+    也只保留最后一段，确保拼到 ``get_skill_icons_dir()`` 后不会越界写文件。
+    （CodeQL py/path-injection 的显式 sanitizer 触发点。）
+    """
     s = slug.lstrip("@").replace("/", "-")
-    return "".join(c for c in s if c.isalnum() or c in "_-") or "default"
+    s = "".join(c for c in s if c.isalnum() or c in "_-") or "default"
+    return os.path.basename(s)
 
 def _slug_color(slug: str) -> str:
     """基于 slug 生成稳定的 HSL 色相（同一 slug 始终同色）。"""

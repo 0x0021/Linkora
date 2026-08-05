@@ -186,9 +186,11 @@ class PrimaryMixin(EngineMixinBase):
             user_info.get("openDingTalkId") or self._resolve_own_open_dingtalk_id() or ""
         )
         _oid = self.current_open_dingtalk_id
+        # 脱敏：openDingTalkId 属敏感标识，日志仅保留首尾各 2 位，避免明文落盘（CWE-532）。
+        _oid_display = f"{_oid[:2]}***{_oid[-2:]}" if len(_oid) > 4 else "***"
         logger.info("当前用户: %s (userId: %s, openDingTalkId: %s, 部门: %s)",
                     self.current_user_name, self.current_user_id,
-                    _oid[:20] + "..." if len(_oid) > 20 else _oid,
+                    _oid_display,
                     self.current_user_dept)
 
     def _merge_platform_title(self, candidate: str) -> None:

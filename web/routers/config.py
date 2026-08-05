@@ -519,11 +519,19 @@ _FORBIDDEN_PATH_PREFIXES = (
 
 
 def _safe_writable_path(value: str, field: str) -> str:
-    """校验路径类配置：必须是可写位置，且不能落在系统禁止区。"""
+    """校验路径类配置：必须是可写位置，且不能落在系统禁止区。
+
+    防护层级：① 拒绝空值/非字符串；② 显式拒绝路径穿越（``..`` 段）；
+    ③ expanduser + realpath（含符号链接解析）后确认不在系统禁止区；
+    ④ 父目录必须可创建且可写。
+    """
     if not value or not isinstance(value, str):
         raise HTTPException(status_code=400, detail=f"{field} 不能为空")
+    # 路径穿越防护：显式拒绝包含 ``..`` 段的输入（CodeQL py/path-injection 屏障）
+    if ".." in value.replace("\\", "/").split("/"):
+        raise HTTPException(status_code=400, detail=f"{field} 含非法路径段: {value}")
     try:
-        resolved = Path(value).expanduser().resolve()
+        resolved = Path(os.path.realpath(os.path.expanduser(value)))
     except Exception:
         raise HTTPException(status_code=400, detail=f"{field} 路径无法解析: {value}")
     rstr = str(resolved)

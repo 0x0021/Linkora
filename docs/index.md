@@ -26,8 +26,8 @@ title: Linkora · 灵桥 文档中心
 ## 演进与审计
 
 - [变更日志](CHANGELOG)
-- [项目审计 2026-07-14](project_audit_2026-07-14)
-- [多平台审计](multi-platform-audit-report)
+- [项目审计 2026-07-14](audit/project_audit_2026-07-14)
+- [多平台审计](audit/multi-platform-audit-report)
 - [设计文档](design)
 - [阶段加固设计](phase0_hardening_design)
 

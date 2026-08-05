@@ -2,7 +2,7 @@
 
 > 文档性质：**只读代码实读 + 增量设计**，不改任何源码。
 > 项目根：`/Users/user/Documents/Linkora`｜Python 3.14｜虚拟环境 `.venv/`
-> 基准审计报告：`docs/project_audit_2026-07-14.md`（以下简称「审计报告」）
+> 基准审计报告：`docs/audit/project_audit_2026-07-14.md`（以下简称「审计报告」）
 
 ---
 

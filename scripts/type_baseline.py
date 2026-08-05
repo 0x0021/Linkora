@@ -23,22 +23,28 @@ from pathlib import Path
 
 # 锁定基线：在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
-# 当前 205 = 1057 基线 - 852，全部通过「为每个 mixin 家族建共享基类」结构性消除：
-#   - poller 家族 PollerMixinBase / LinkoraComponentBase，消 ~320 条；
-#   - platform/engine 家族 EngineMixinBase（AST 提取 97 方法 + 49 状态 stub），消 ~308 条；
-#   - dws_adapter 家族 DwsAdapterBase(60 方法/4 状态) 82 → 0；
-#   - memory 家族 SQLiteStoreBase(19 方法/30 状态) 71 → 0；
-#   - im_adapter 家族 IMAdapterBase(14 方法) 25 → 0。
-# 共享基类两条硬约束（踩过坑，已由 test_shared_type_bases_define_no_init 固化）：
-#   1. 绝不定义任何 dunder（尤其 __init__），否则在 MRO 中截胡真实父类初始化链；
-#   2. 所有 stub 必须显式 `-> Any`，否则被推断返回 None，调用点 isinstance 收窄成 Never。
-# 顺带修掉被 unknown 掩盖的真实隐患：concurrent 未导入、upsert_conversation 缺
-# last_message_time、DocumentParser 收 PollerConfig、SQLiteStore._MIGRATE_PLATFORM_PREFIXES
-# 误缩进导致多账号迁移静默失败、wecom auth_login 捕获不存在的 IMAdapterTimeoutError
-# 抛 NameError 使 3 次重试完全失效。
-# 剩余 205 已无 MRO 噪声，是真实类型问题：web/routers(59)/src/llm(35)/src/memory(31)/
-# src/platform(20)/src/poller_utils.py(13)。
-TYPE_ERROR_BASELINE = 205
+# 历次基线：1057（2026-08-05 初始）→ 205（mixin 共享基类重构）→ 96（本轮）。
+#
+# 当前 96 = 205 基线 - 109，通过「上帝类 MRO 契约 + threading.local 子类化 +
+# 真实类型注解」收敛（pyright==1.1.411，与 CI 版本一致）：
+#   - component_base：dws 契约从具体 DwsAdapter 改为 BaseIMAdapter，消飞书/企微
+#     适配器传参的 62 处 reportArgumentType（reportAttributeAccessIssue 主体之一）；
+#   - agent/_AgentThreadState、skills/_RouterThreadState：threading.local 子类化，
+#     消除 reportInvalidTypeForm 与并发读 AttributeError 隐患；
+#   - llm/client.chat()：@overload 分流返回类型（LLMResponse vs Iterator），
+#     消除下游 resp.content 在 Iterator 上的 reportAttributeAccessIssue；
+#   - sqlite_store*/kb_repo：_vector_index 从 object/Any 改回 VectorIndex，恢复成员检查；
+#   - poller_utils / web/api：用 Callable/Message/EmbeddingClient/AppConfig 替换
+#     callable/any/object，消除一批下游 unknown；
+#   - 顺带修掉被 unknown 掩盖的真实缺陷：Phase 4 路由埋点 candidates_count/
+#     convergence_applied 因属性名拼错（_last_routing_detail）恒为 0；流式
+#     tool_calls[].function 为 None 时 AttributeError 打断响应；_require_cfg() 把
+#     配置未就绪的 500 收敛为 503；kb_search_enabled 字段漏声明致关闭 RAG 开关恒失效。
+# （205→96 之前的 1057→205 来自「为每个 mixin 家族建共享基类」：poller 家族
+#  PollerMixinBase/LinkoraComponentBase 消 ~320、platform/engine 家族 EngineMixinBase
+#  消 ~308、dws_adapter 家族 DwsAdapterBase 82→0、memory 家族 SQLiteStoreBase 71→0、
+#  im_adapter 家族 IMAdapterBase 25→0；共享基类绝不定义 dunder、stub 显式 ->Any。）
+TYPE_ERROR_BASELINE = 96
 
 
 def count_errors(report: dict) -> int:

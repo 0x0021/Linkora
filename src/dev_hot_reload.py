@@ -16,7 +16,6 @@ from __future__ import annotations
 import importlib
 import logging
 import threading
-import time
 from pathlib import Path
 from typing import Callable
 
@@ -135,7 +134,6 @@ class ModuleHotReloader:
             return
 
         changed_modules: list[str] = []
-        now = time.time()
 
         for py_file in sorted(src_dir.rglob("*.py")):
             # 跳过 __pycache__ / dist / node_modules 等
@@ -182,8 +180,8 @@ class ModuleHotReloader:
             old_module = sys.modules[module_name]
             logger.info("[ModuleHotReloader] 正在 reload: %s", module_name)
 
-            # 执行 reload
-            new_module = importlib.reload(old_module)
+            # 执行 reload（副作用：更新 sys.modules；返回值无用）
+            importlib.reload(old_module)
 
             self._stats["total_reloads"] += 1
             logger.info(

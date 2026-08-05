@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import threading
 import typing
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -190,7 +189,7 @@ class RulesConfig(BaseModel):
         "client", "link", "oauth", "callback", "redirect",
         "android", "ios", "robot", "webbot", "miniapp",
     ])
-    
+
     # 意图过滤配置：识别并跳过无业务价值的消息
     intent_filter: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": True,

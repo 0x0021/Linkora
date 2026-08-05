@@ -115,6 +115,7 @@ max-complexity = 60
 "src/poller_strategy.py" = ["C901"]        # poll_once 复杂度 93，待拆
 "web/routers/config.py" = ["C901"]          # update_config 复杂度 145，待拆
 "src/config.py" = ["F401"]                   # config_models 重导出层（保 `from src.config import AppConfig` 旧路径兼容）
+"src/dws_adapter/__init__.py" = ["F401"]      # dws_adapter 组合根（保 `from src.dws_adapter import DwsError, is_permission_error, ...` 旧路径兼容）
 
 [tool.pyright]
 # 渐进类型门禁配置（F9）。当前 src+web 基线 205 条类型告警（已锁定在

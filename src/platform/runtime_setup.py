@@ -33,9 +33,7 @@ class SetupMixin(EngineMixinBase):
     def _rebuild_kb_search_tool(self) -> None:
         """热重载后重建 KBSearchTool，使其持有最新 embedding 配置（P2 修复）。"""
         try:
-            kb_enabled = True
-            if hasattr(self.config.tools, "kb_search_enabled"):
-                kb_enabled = self.config.tools.kb_search_enabled
+            kb_enabled = self.config.tools.kb_search_enabled
             # 先移除旧实例（若禁用则不再注册）
             self.tool_router.unregister("kb_search")
             if not kb_enabled:
@@ -97,10 +95,8 @@ class SetupMixin(EngineMixinBase):
         self_ids = [x for x in [self.current_open_dingtalk_id, self.current_user_id] if x]
         services = self._build_tool_services(self_ids)
 
-        # RAG 知识库搜索工具默认启用，除非配置明确禁用
-        kb_search_enabled = True
-        if hasattr(self.config.tools, 'kb_search_enabled'):
-            kb_search_enabled = self.config.tools.kb_search_enabled
+        # RAG 知识库搜索工具默认启用，除非配置明确禁用（ToolsConfig.kb_search_enabled）
+        kb_search_enabled = self.config.tools.kb_search_enabled
 
         # P2-12：内置工具自动发现注册（声明在 src/tools/registry.py 的
         # BUILTIN_TOOL_MANIFEST，依赖按签名自动注入），替代原 35+ 处手工 register。
@@ -138,9 +134,7 @@ class SetupMixin(EngineMixinBase):
         try:
             self_ids = [x for x in [self.current_open_dingtalk_id, self.current_user_id] if x]
             services = self._build_tool_services(self_ids)
-            kb_search_enabled = True
-            if hasattr(self.config.tools, "kb_search_enabled"):
-                kb_search_enabled = self.config.tools.kb_search_enabled
+            kb_search_enabled = self.config.tools.kb_search_enabled
 
             from src.tools.registry import register_builtin_tools
             # 清空后重建（register_builtin_tools 内部会先 clear 再 register）

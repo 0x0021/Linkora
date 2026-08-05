@@ -229,6 +229,9 @@ async def export_keywords(category: str = ""):
 
 @router.post("/api/keywords/test-match")
 async def test_keyword_match(body: KeywordMatchTest):
+    # 配置缺失时抛 503（放在 try 外：HTTPException 是 Exception 子类，
+    # 落进下方 except 会被压平成语义错误的 500）。
+    _config = _api._require_cfg()
     try:
         def _work():
             store = _api.get_store()
@@ -236,7 +239,6 @@ async def test_keyword_match(body: KeywordMatchTest):
         rules = await run_in_threadpool(_work)
         import re
         # 从配置加载停用词（与 rule_engine.py 保持一致）
-        _config = _api._get_cfg()
         _stop_words_cfg = set()
         for line in _config.rules.stop_words:
             line = line.strip()

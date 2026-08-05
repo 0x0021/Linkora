@@ -11,11 +11,14 @@ import logging
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from src.models import Message
 from src.memory.platform_context import get_current_platform
 from src.memory.image_cleanup import purge_orphan_images
+
+if TYPE_CHECKING:
+    from src.memory.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 

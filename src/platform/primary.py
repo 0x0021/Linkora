@@ -4,6 +4,12 @@ from .engine_mixins_base import EngineMixinBase
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # `from .base import *` 并不导出 BaseIMAdapter，_build_adapter 的返回注解需显式
+    # 声明来源（惰性注解，运行时不求值，无循环导入风险）。
+    from src.im_adapter.base_adapter import BaseIMAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -106,13 +112,17 @@ class PrimaryMixin(EngineMixinBase):
         # ── Step 3: SQLiteStore 初始化（含超时保护） ──
         logger.debug("[启动] Step 3/6: 初始化 SQLiteStore (%s)", self.config.storage.path)
         from src.memory.store_factory import get_store
-        primary.store = get_store(self.config.storage.path)
+        # 先绑局部变量再挂到 ctx 上：闭包捕获局部的 store 而非 primary.store，
+        # 既避免"ctx.store 在别处被置 None 后闭包里空指针"的竞态，
+        # 也让 SQLiteStore | None 的可选性在此处收敛掉。
+        store = get_store(self.config.storage.path)
+        primary.store = store
 
         _DB_INIT_TIMEOUT = 30  # SQLite connect + integrity_check + schema 迁移超时秒数
 
         def _db_init():
-            primary.store.init_db()
-            primary.store.set_decisions_retention_days(
+            store.init_db()
+            store.set_decisions_retention_days(
                 self.config.storage.decisions_retention_days,
             )
             return True
@@ -168,10 +178,17 @@ class PrimaryMixin(EngineMixinBase):
         self.current_user_dept = user_info.get("dept", "")
         self.current_user_org = user_info.get("orgName", "")
         self.current_user_title = user_info.get("title", "")
-        self.current_open_dingtalk_id = user_info.get("openDingTalkId") or self._resolve_own_open_dingtalk_id()
+        # 末尾 `or ""` 做归一化：_resolve_own_open_dingtalk_id() 可能返回 None，
+        # 而所有下游消费点（runtime_dispatch / runtime_inbound / memory 等）
+        # 一律按 truthy 判断，None 与 "" 语义等价——统一成 str 后即可去掉
+        # 沿途各处的 `or ""` 防御，也让类型收敛为非 Optional。
+        self.current_open_dingtalk_id = (
+            user_info.get("openDingTalkId") or self._resolve_own_open_dingtalk_id() or ""
+        )
+        _oid = self.current_open_dingtalk_id
         logger.info("当前用户: %s (userId: %s, openDingTalkId: %s, 部门: %s)",
                     self.current_user_name, self.current_user_id,
-                    self.current_open_dingtalk_id[:20] + "..." if len(self.current_open_dingtalk_id or "") > 20 else self.current_open_dingtalk_id,
+                    _oid[:20] + "..." if len(_oid) > 20 else _oid,
                     self.current_user_dept)
 
     def _merge_platform_title(self, candidate: str) -> None:

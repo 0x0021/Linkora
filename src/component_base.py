@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.dws_adapter import DwsAdapter
+    from src.im_adapter.base_adapter import BaseIMAdapter
     from src.memory.sqlite_store import SQLiteStore
 
 
@@ -24,8 +24,16 @@ class LinkoraComponentBase:
     # 注：config 不在共享基类声明——poller 家族为 PollerConfig、engine 家族为 AppConfig，
     # 由各家族基类（PollerMixinBase / EngineMixinBase）分别声明，避免类型冲突。
     store: SQLiteStore
-    dws: DwsAdapter
-    current_user_id: str | None
-    current_user_name: str | None
-    current_user_user_id: str | None
+    # dws 声明为 BaseIMAdapter 而非具体的 DwsAdapter：钉钉/飞书/企微三种适配器
+    # 都只实现 BaseIMAdapter 这一层契约，poller / engine 也只用这层 API。
+    # 之前钉死成 DwsAdapter，导致 primary._build_platform_ctx 里把飞书/企微
+    # 适配器传进 MessagePoller / PlatformContext 时全线报类型不兼容（62 处）。
+    dws: BaseIMAdapter
+    # 三个 current_user_* 在所有赋值点都保证为 str（未知时为空串 ""，
+    # 见 primary._init_user / poller.__init__ / sync_history）。
+    # 早先声明成 `str | None` 纯属保守，反而让每个下游消费点（MessagePoller
+    # 等要求 str 的构造参数）都报 reportArgumentType。
+    current_user_id: str
+    current_user_name: str
+    current_user_user_id: str
     platform_id: str

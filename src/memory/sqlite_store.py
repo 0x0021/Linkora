@@ -20,7 +20,7 @@ from src.memory.few_shot_diversity import (
     trigram_similarity,
 )
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
@@ -28,6 +28,11 @@ from src.config import DEFAULT_STORAGE_PATH
 from src.memory.schema import init_schema, init_conv_schema
 from src.memory import account_identity
 from src.models import Message
+
+if TYPE_CHECKING:
+    # 仅供 _vector_index 注解使用；运行时仍由 sqlite_store_index 在方法体内
+    # 延迟导入（faiss 加载开销大，且防循环导入）。
+    from src.memory.vector_index import VectorIndex
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +311,10 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
         self._conns_lock = threading.Lock()  # 仅保护 _conns 字典本身
         self._closed = False  # 防止 close() 后再创建新连接
         self._max_conns = 64  # 每线程连接回收上限（P2-9：防止动态线程增长导致 FD 泄漏）
-        self._vector_index: Optional[object] = None
+        # 注：标成 Optional[object] 会丢掉全部 VectorIndex 成员检查（kb_repo 里
+        # vi.remove/.save/.count/.search 因此一路 unknown）。用惰性注解 +
+        # TYPE_CHECKING 导入，运行时仍保持 VectorIndex 的按需延迟加载。
+        self._vector_index: Optional[VectorIndex] = None
         self._index_dim: int = 0
         # 当前已加载 FAISS 对应的 KB 版本号；每次 KB 写入/重索引自增。
         # 用于替代「仅比 chunk 数量」的同步判据，覆盖「同计数、向量被重索引」场景。

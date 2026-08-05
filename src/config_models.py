@@ -578,6 +578,13 @@ class ToolsConfig(BaseModel):
     semantic_routing: bool = True
     # 工具语义命中阈值（余弦相似度，0~1），高于此值视为语义相关。
     semantic_tool_threshold: float = 0.42
+    # 是否注册 RAG 知识库检索工具 kb_search。设为 False 时 register_builtin_tools
+    # 直接跳过注册（连带热重载重建也不再注册），用于完全关闭 RAG 能力。
+    # 注意：这是关闭 kb_search 的【唯一】入口——register_builtin_tools 不读
+    # tools.available（available 只在向 LLM 暴露 schema 时做白名单过滤，工具仍已注册）。
+    # 此字段此前只被 runtime_setup 以 hasattr 探测、却从未在模型中声明，导致用户在
+    # config.yaml 写 tools.kb_search_enabled: false 被 pydantic 静默丢弃、开关恒失效。
+    kb_search_enabled: bool = True
     available: list[str] = Field(default_factory=lambda: [
         "kb_search", "send_message", "search_doc", "get_doc_content", "search_contact",
         "get_calendar_events", "create_todo", "recall_memory", "save_memory",

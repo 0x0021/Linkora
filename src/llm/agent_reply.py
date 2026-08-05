@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterator
 
 from src.llm.style import Citation
 
@@ -17,7 +16,10 @@ class AgentReply:
     - text: 需要由 poller(main.py) 调用 _send_reply 发送的回复文本。为空表示无需发送。
     - already_sent: 是否已通过 send_message 工具直接发送给当前会话。
       为 True 时必须跳过 poller 的二次发送，否则会向同一会话发两条消息（双重回复）。
-    - stream_chunks: 流式输出的内容块迭代器（仅在启用流式时有效）。
+
+    注：流式内容不经本契约传递——agent 内部在流式模式下直接经 IM 适配器逐段下发，
+    process_message 仍只返回终态 AgentReply。（曾有 stream_chunks 字段，全仓无任何
+    读写点，已移除；勿再新增"返回迭代器"的旁路契约。）
     """
     text: str = ""
     already_sent: bool = False
@@ -29,4 +31,3 @@ class AgentReply:
     evidence_source: str | None = None
     citations: list[Citation] = field(default_factory=list)
     best_chunk: str | None = None
-    stream_chunks: Iterator[str] | None = None

@@ -141,7 +141,7 @@ async def create_kb_document(doc: KbDocumentCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/api/kb/documents/{doc_id}")
-async def update_kb_document(doc_id: int, body: dict = None):
+async def update_kb_document(doc_id: int, body: dict | None = None):
     """更新知识库文档（标题、内容等，用于清理干扰字符）。"""
     try:
         def _work():
@@ -202,7 +202,7 @@ async def delete_kb_document(doc_id: int):
 
 
 @router.post("/api/kb/import-url")
-def import_kb_from_url(body: dict = None):
+def import_kb_from_url(body: dict | None = None):
     """从 URL 导入网页内容到知识库。
     
     请求体：
@@ -684,7 +684,7 @@ async def parse_document(request: Request, file: UploadFile = File(...)):
 
 
 @router.post("/api/kb/import-from-feishu")
-async def import_from_feishu(body: dict = None):
+async def import_from_feishu(body: dict | None = None):
     """从飞书文档导入内容到当前平台知识库。
 
     请求体：

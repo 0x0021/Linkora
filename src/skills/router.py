@@ -34,6 +34,21 @@ class SkillMatch:
     order: int = 0           # 声明/注册顺序，用于平局裁决确定性（Phase 3）
 
 
+class _RouterThreadState(threading.local):
+    """SkillRouter 的每线程隔离状态容器。
+
+    原写法 ``self._tl.last_match: SkillMatch | None = None`` 是对成员表达式
+    做带注解赋值——运行时注解被丢弃，静态检查器亦不接受，等于没写。
+    改为 threading.local 子类做类级声明，类型才对外可见。
+    刻意不实现 __init__，保持「仅构造线程有初值、其余线程靠读取侧 getattr
+    兜底」的既有语义不变。
+    """
+
+    last_match: "SkillMatch | None"
+    last_matches: list["SkillMatch"]
+    last_routing_detail: dict
+
+
 class SkillRouter:
     """将用户意图映射到已加载的技能。
 
@@ -62,11 +77,11 @@ class SkillRouter:
         # 普通实例属性上，并发请求会互相覆盖（请求 B 的 route_combo 覆盖 A 的
         # last_match，导致 A 注入 B 的技能 / 记录错技能名）。改用 threading.local
         # 确保每线程独立（与 agent._tl 同思路）。
-        self._tl = threading.local()
-        self._tl.last_match: SkillMatch | None = None
-        self._tl.last_matches: list[SkillMatch] = []
+        self._tl = _RouterThreadState()
+        self._tl.last_match = None
+        self._tl.last_matches = []
         # Phase 4 路由质量数据（给 agent 记录用）
-        self._tl.last_routing_detail: dict = {}
+        self._tl.last_routing_detail = {}
 
     def _is_skill_for_platform(self, skill: Skill) -> bool:
         """检查技能是否适用于当前平台。
@@ -156,15 +171,31 @@ class SkillRouter:
         matches = sum(1 for v in msg_verbs if v in skill_text)
         return round(matches / len(msg_verbs), 3)
 
+    # 注意：以下三个读取器一律走 getattr(..., default)。
+    # _tl 只在构造 SkillRouter 的那个线程被赋初值，而 process_message 允许并发
+    # （reply_semaphore），其它工作线程首次读取时 _tl 上根本没有这些属性——
+    # 原先 `return self._tl.last_match` 会直接抛 AttributeError。
     @property
     def last_match(self) -> SkillMatch | None:
         """最近一次路由的主匹配结果（组合激活时为 score 最高的那个）。"""
-        return self._tl.last_match
+        return getattr(self._tl, "last_match", None)
 
     @property
     def last_matches(self) -> list[SkillMatch]:
         """最近一次路由激活的全部技能（组合激活时为多个，单激活时为 1 个）。"""
-        return self._tl.last_matches
+        return getattr(self._tl, "last_matches", [])
+
+    @property
+    def last_routing_detail(self) -> dict:
+        """最近一次 Phase 4 收敛的路由质量明细（candidates_count 等）。
+
+        此前只写 ``self._tl.last_routing_detail`` 而没有对外读取器，
+        消费方 agent_steps/routing_trace.py 用
+        ``getattr(skill_router, "_last_routing_detail", {})`` 取值——
+        这个属性名从来不存在，于是路由质量埋点里的 candidates_count /
+        convergence_applied 恒为 0，Phase 4 收敛的可观测性完全失效。
+        """
+        return getattr(self._tl, "last_routing_detail", {})
 
     # ── 显式激活检测 ──────────────────────────────────────────
 

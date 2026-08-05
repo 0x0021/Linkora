@@ -51,6 +51,9 @@ router = APIRouter()
 
 @router.get("/api/status")
 async def status():
+    # 配置缺失时抛 503（放在 try 外：HTTPException 是 Exception 子类，
+    # 落进下方 except 会被压平成语义错误的 500）。
+    config = _api._require_cfg()
     try:
         def _db_counts():
             store = _api.get_store()
@@ -69,7 +72,6 @@ async def status():
         (msg_count, conv_count, mem_count, kw_count, kb_count, dd_count,
          dl_count) = await run_in_threadpool(_db_counts)
 
-        config = _api._get_cfg()
         user_name = "N/A"
         try:
             platform = get_current_platform()

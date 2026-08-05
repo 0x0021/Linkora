@@ -11,6 +11,7 @@ import logging
 import re as _re
 import sqlite3
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.memory.few_shot_diversity import (
     greedy_select,
@@ -21,6 +22,9 @@ from src.memory.few_shot_diversity import (
 )
 from src.memory.platform_context import get_current_platform
 from src.memory.sqlite_store import _redact_pii, _is_inappropriate
+
+if TYPE_CHECKING:
+    from src.memory.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +216,16 @@ class _SceneFewShotSelector:
 
     def __init__(self, store: "SQLiteStore") -> None:
         self.store = store
+
+    def _cc(self, platform: str = "") -> sqlite3.Connection:
+        """按当前平台/账号隔离的会话连接（messages 属会话数据；kv 走主库）。
+
+        与 ``BaselineRepo._cc`` 同义。此前本类漏了该方法，``retrieve`` 首行
+        ``self._cc(platform)`` 必抛 AttributeError，又被 system_prompt.py 的
+        ``except Exception`` 吞成 warning —— 结果 dynamic_few_shot 开了也永远
+        静默降级为静态样例。
+        """
+        return self.store.conv_conn(platform or get_current_platform())
 
     def retrieve(self, owner_name: str, query: str, limit: int = 4,
                  query_embedding: list[float] | None = None,

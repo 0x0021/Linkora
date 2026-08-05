@@ -176,6 +176,10 @@ async def import_dingtalk_doc_to_kb(body: DingTalkDocImportKb):
                     last_modified=last_modified,
                 )
                 doc = store._docs_repo.get_dingtalk_doc(body.doc_id)
+                # upsert 后重读理论上必有行；但并发删除/写盘失败时会拿到 None，
+                # 此前直接 doc["title"] 会抛 TypeError 变成裸 500，这里显式兜底。
+                if not doc:
+                    raise HTTPException(status_code=500, detail="文档内容写入后读取失败，请重试")
 
             title = doc["title"]
             content = doc.get("content", "")
@@ -189,7 +193,8 @@ async def import_dingtalk_doc_to_kb(body: DingTalkDocImportKb):
                 source_id=body.doc_id,
                 url=doc.get("url", ""),
             )
-            if dup["duplicate"]:
+            # check_duplicate_document 声明可返回 None（无命中分支）——按“未重复”处理。
+            if dup and dup.get("duplicate"):
                 return {
                     "success": False,
                     "duplicate": True,
@@ -206,10 +211,16 @@ async def import_dingtalk_doc_to_kb(body: DingTalkDocImportKb):
                 url=doc.get("url", ""),
                 content=content,
             )
-            chunks = split_text(content, max_len=_api._get_cfg().rag.chunk_size, overlap=_api._get_cfg().rag.chunk_overlap)
+            # _get_cfg() 在配置文件缺失/解析失败时返回 None：
+            # 原代码连调三次且直接 .rag/.embedding 解引用，配置异常时会抛
+            # AttributeError 变成裸 500。改为取一次 + 显式兜底。
+            config = _api._get_cfg()
+            if config is None:
+                raise HTTPException(status_code=503, detail="配置未就绪，无法导入知识库")
+
+            chunks = split_text(content, max_len=config.rag.chunk_size, overlap=config.rag.chunk_overlap)
             store._kb_repo.add_kb_chunks(kb_doc_id, chunks)
 
-            config = _api._get_cfg()
             if config.embedding.enabled:
                 embed_client = _api._get_embedding_client(config.embedding)
                 all_chunks = store._kb_repo.list_kb_chunks(kb_doc_id)
@@ -232,7 +243,7 @@ async def import_dingtalk_doc_to_kb(body: DingTalkDocImportKb):
 
 
 @router.put("/api/dingtalk-docs/{doc_id}")
-async def update_dingtalk_doc(doc_id: str, body: dict = None):
+async def update_dingtalk_doc(doc_id: str, body: dict | None = None):
     """更新钉钉文档（标题、内容等，用于清理干扰字符）。"""
     try:
         def _work():

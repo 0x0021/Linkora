@@ -26,6 +26,9 @@ from src.config import load_config, DEFAULT_STORAGE_PATH
 from src.db_backup import DatabaseBackup, DatabaseBackupCoordinator
 from src.llm.summary_scheduler import SummaryScheduler
 from src.doc_sync_scheduler import DocSyncScheduler
+# 注意：本模块被 runtime_*.py 以 `from .base import *` 星号转导入，DwsAdapter 由
+# runtime_lifecycle._build_dws() 在运行时实际构造使用（本文件内不再直接引用，但
+# 不是死导入，删除会导致 LifecycleMixin NameError）。
 from src.dws_adapter import DwsAdapter
 from src.im_adapter.feishu import FeishuCliAdapter
 from src.im_adapter.wecom import WecomCliAdapter
@@ -37,6 +40,7 @@ from src.llm.exceptions import LLMProcessingError, LLMRateLimitExhaustedError
 SEND_RETRY_BACKOFF_SECONDS = 30
 from src.memory.embedding import EmbeddingClient
 from src.memory.sqlite_store import SQLiteStore
+from src.im_adapter.base_adapter import BaseIMAdapter
 from src.skills.manager import SkillManager
 from src.models import Message
 from src.poller import MessagePoller
@@ -75,7 +79,7 @@ class PlatformContext:
     enabled: bool
     adapter_type: str
     store: "SQLiteStore | None" = None
-    dws: "DwsAdapter | None" = None
+    dws: "BaseIMAdapter | None" = None
     poller: "MessagePoller | None" = None
     llm_agent: "LLMAgent | None" = None
     config: object | None = None  # PlatformConfig 快照

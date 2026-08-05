@@ -422,6 +422,9 @@ tools:
   tool_routing_mode: smart                         # 工具按需暴露策略：smart(推荐) / all / keyword
   semantic_routing: true                           # 语义路由：substring 未命中时用 embedding 兜底补充相关工具
   semantic_tool_threshold: 0.42                    # 工具语义命中阈值（余弦相似度，0~1）
+  kb_search_enabled: true                          # 是否注册 RAG 检索工具 kb_search（false = 彻底关闭 RAG 检索能力）
+                                                   #   注意：从下方 available 里删掉 kb_search 只是不向 LLM 暴露 schema，
+                                                   #   工具本身仍会被注册；要完全不注册必须用本开关。
   available:                                       # 启用的工具列表
     - kb_search                                    # 知识库语义检索（RAG）
     - send_message                                 # 发送消息

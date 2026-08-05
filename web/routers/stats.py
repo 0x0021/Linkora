@@ -237,7 +237,8 @@ async def message_stats(days: int = 7):
             try:
                 _kw_cfg = _api._get_cfg()
                 _keyword_denylist = set(
-                    w.strip().lower() for w in (_kw_cfg.rules.keyword_denylist or [])
+                    w.strip().lower()
+                    for w in ((_kw_cfg.rules.keyword_denylist if _kw_cfg else None) or [])
                 )
             except Exception:
                 _keyword_denylist = set()
@@ -283,9 +284,11 @@ async def tool_call_stats(days: int = 7, top_n: int = 12):
         days: 统计周期（天）
         top_n: 返回的 TOP N 工具（按 total_calls 降序）。
     """
+    # 配置缺失时抛 503（放在 try 外：HTTPException 是 Exception 子类，
+    # 落进下方 except 会被压平成语义错误的 500）。
+    config = _api._require_cfg()
     try:
         def _work():
-            config = _api._get_cfg()
             available_tools = config.tools.available
 
             # 从 ToolRouter 拿所有工具的中文别名 / 描述 (供前端展示)

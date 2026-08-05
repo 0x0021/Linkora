@@ -14,7 +14,7 @@ import time
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 # 抑制 jieba 内部 pkg_resources 弃用警告（在 import jieba 之前设置）
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
@@ -47,6 +47,12 @@ from web.dependencies import (
     set_platform_context,
     _platform_ctx,
 )
+
+if TYPE_CHECKING:
+    # 仅供类型标注：EmbeddingClient 运行时按需惰性 import（内部会拉起
+    # sentence-transformers/torch，顶层导入会拖慢 Web 启动数十秒）。
+    from src.memory.embedding import EmbeddingClient
+    from src.config_models import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +98,22 @@ def _get_cfg():
     if shared is not None:
         return shared
     return _load_cfg_from_disk()
+
+
+def _require_cfg() -> "AppConfig":
+    """获取全局配置，缺失时抛 503 而非让调用方裸解引用 None。
+
+    _get_cfg() 在「配置文件缺失/解析失败且主进程未发布单例」时返回 None。此前各
+    路由普遍写 `config = _api._get_cfg()` 后直接 `config.rules.xxx`，None 时抛
+    AttributeError('NoneType' object has no attribute 'rules')，被路由的
+    `except Exception` 兜成 HTTP 500 + 一句看不懂的报错，运维无从判断是配置没加载。
+    本函数把它收敛成语义明确的 503（服务尚未就绪），同时让类型检查器把返回值
+    收窄为非 Optional，消除下游一整片 reportOptionalMemberAccess。
+    """
+    config = _get_cfg()
+    if config is None:
+        raise HTTPException(status_code=503, detail="配置尚未就绪（配置文件缺失或解析失败）")
+    return config
 
 
 # 提高 uvicorn.access 日志级别（避免 API 请求刷屏）
@@ -619,12 +641,16 @@ from web.schemas import (
 # EmbeddingClient 单例缓存：避免每个 KB 请求都重新加载 1.2GB 向量模型
 # （旧实现每请求 new EmbeddingClient → 同步 SentenceTransformer 加载，数十秒级阻塞）。
 # 按 (model, provider, offline) 维度缓存复用。
-_embedding_clients: dict[tuple, object] = {}
+_embedding_clients: dict[tuple, "EmbeddingClient"] = {}
 _embedding_clients_lock = threading.Lock()
 
 
-def _get_embedding_client(embedding_config) -> object:
-    """返回（或惰性创建并缓存）EmbeddingClient 单例。"""
+def _get_embedding_client(embedding_config) -> "EmbeddingClient":
+    """返回（或惰性创建并缓存）EmbeddingClient 单例。
+
+    返回类型此前写作 `object`，导致所有调用点的 `.embed_with_retry` /
+    `.embed_batch` 等成员访问全部退化为 unknown，类型检查形同虚设。
+    """
     from src.memory.embedding import EmbeddingClient
     key = (
         embedding_config.model,
@@ -666,7 +692,7 @@ def _put_cached_stats(days: int, result: dict, platform: str | None = None) -> N
 
 
 def get_dws() -> DwsAdapter:
-    config = _get_cfg()
+    config = _require_cfg()
     return DwsAdapter(
         cli_path=config.dws.cli_path,
         dry_run=config.dws.dry_run,

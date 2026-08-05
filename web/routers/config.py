@@ -6,8 +6,11 @@
 - 为避免与 `web/api.py` 的循环导入（web.api 在模块末尾挂载子路由
   `from web.routers.config import router`，若此处顶层 import web.api 即成环），
   此处改用惰性代理 `_api`，首次属性访问时才真正导入 web.api（此时 web.api 已完整加载）；
-- ConfigUpdate / SystemPromptUpdate 仅作类型注解（`from __future__ import annotations`
-  已使其懒求值），无需运行时导入。
+- ConfigUpdate / SystemPromptUpdate **必须运行时导入**：虽然
+  `from __future__ import annotations` 让注解变成字符串，但 FastAPI 会用
+  `typing.get_type_hints()` 对路由函数签名求值来推导请求体模型，模块 namespace
+  里没有这两个名字就是 NameError（实测 update_config / update_system_prompt 的
+  注解求值直接失败）。schemas 只依赖 pydantic，顶层导入无循环风险。
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from src.config import AppConfig
 from web.dependencies import logger
+from web.schemas import ConfigUpdate, SystemPromptUpdate
 
 
 class _LazyApi:

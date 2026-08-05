@@ -4,8 +4,9 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal, overload
 
 from openai import (
     OpenAI,
@@ -312,7 +313,9 @@ class LLMClient:
                     self.config.model, len(self._pool_alternates), self._pool_alternates)
 
     @staticmethod
-    def _normalize_base_url(url: str) -> str:
+    def _normalize_base_url(url: str | None) -> str | None:
+        # 入参允许为 None/空串（fallback_base_url 未配置时即为 None），
+        # 原样透传给 OpenAI(base_url=...) 表示"用默认端点"。
         if not url:
             return url
         url = url.rstrip("/")
@@ -334,6 +337,26 @@ class LLMClient:
 
 
 
+    # ---- chat() 返回类型按 stream 参数分流 ----------------------------------
+    # 运行时只有下方一个实现；这三条 @overload 仅供类型检查器区分返回类型：
+    #   stream=False（含默认值、不传）  -> LLMResponse
+    #   stream=True                     -> Iterator[LLMStreamChunk]
+    #   stream=<bool 变量>              -> 联合类型（调用方需自行 isinstance/hasattr 收窄）
+    # 缺了这组重载，所有调用点拿到的都是联合类型，`resp.content` 会因
+    # Iterator 上没有该属性而报 reportAttributeAccessIssue（历史上被 Unknown 掩盖）。
+    @overload
+    def chat(self, messages: list[dict], tools: list[dict] | None = ...,
+             temperature: float | None = ..., stream: Literal[False] = ...) -> LLMResponse: ...
+
+    @overload
+    def chat(self, messages: list[dict], tools: list[dict] | None = ...,
+             temperature: float | None = ..., *, stream: Literal[True]) -> Iterator[LLMStreamChunk]: ...
+
+    @overload
+    def chat(self, messages: list[dict], tools: list[dict] | None = ...,
+             temperature: float | None = ..., *,
+             stream: bool) -> LLMResponse | Iterator[LLMStreamChunk]: ...
+
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
                  temperature: float | None = None, stream: bool = False) -> LLMResponse | Iterator[LLMStreamChunk]:
         """调用 LLM：主模型优先，瞬时故障指数退避重试；
@@ -345,8 +368,6 @@ class LLMClient:
         Args:
             stream: 是否启用流式输出。流式仅在主模型上尝试，失败则降级为非流式。
         """
-        from typing import Iterator
-
         kwargs: dict[str, Any] = {
             "model": self.config.model,
             "messages": messages,
@@ -577,10 +598,17 @@ class LLMClient:
 
                     if tc_delta.id:
                         tool_calls[index]["id"] = tc_delta.id
-                    if tc_delta.function.name:
-                        tool_calls[index]["name"] = tc_delta.function.name
-                    if tc_delta.function.arguments:
-                        tool_calls[index]["arguments"] += tc_delta.function.arguments
+                    # OpenAI 协议里 delta.tool_calls[].function 是可选的：
+                    # 只带 id/index 的「占位增量」合法且实际会出现（多数供应商
+                    # 首帧就是这种）。原代码直接 tc_delta.function.name 会在这类
+                    # 帧上抛 AttributeError，把整段流式响应打断。
+                    fn = tc_delta.function
+                    if fn is None:
+                        continue
+                    if fn.name:
+                        tool_calls[index]["name"] = fn.name
+                    if fn.arguments:
+                        tool_calls[index]["arguments"] += fn.arguments
 
             if choice.finish_reason:
                 finish_reason = choice.finish_reason

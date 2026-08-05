@@ -136,3 +136,41 @@ def test_secret_fields_real_value_writes(monkeypatch):
     assert fake_config.embedding.api_key == "ek-new"
     assert fake_config.web.auth_password == "pw-new"
     mock_write.assert_called_once()
+
+
+def test_all_router_annotations_are_runtime_resolvable():
+    """所有路由层函数的注解必须能在运行时求值（FastAPI 请求体推导前置条件）。
+
+    背景（真实缺陷回归）：`web/routers/config.py` 曾以「`from __future__ import
+    annotations` 已让注解懒求值，无需运行时导入」为由，不导入 ConfigUpdate /
+    SystemPromptUpdate。但 FastAPI 在构建 dependant 时会 `get_type_hints()` 对
+    签名求值，模块 namespace 里没有这两个名字即 NameError，请求体模型推导不出来。
+
+    本文件其余测试直接把 update_config 当普通协程调用（自己构造 payload），
+    完全绕开了 FastAPI 的注解求值路径，因此掩盖了该缺陷——故此处补一条覆盖
+    全部 router 的通用护栏，未来任何 router 漏导入类型都会在这里立刻暴露。
+    """
+    import inspect
+    import sys
+    import typing
+
+    import web.api  # noqa: F401  先完整加载入口，子 router 随之就绪（规避循环导入）
+
+    bad = []
+    checked = 0
+    for modname, mod in list(sys.modules.items()):
+        if not modname.startswith("web.routers.") or mod is None:
+            continue
+        for name, fn in vars(mod).items():
+            if not (inspect.isfunction(fn) and getattr(fn, "__module__", "") == modname):
+                continue
+            if not fn.__annotations__:
+                continue
+            checked += 1
+            try:
+                typing.get_type_hints(fn)
+            except Exception as e:  # noqa: BLE001 — 收集全部失败点便于一次修完
+                bad.append(f"{modname}.{name} -> {type(e).__name__}: {e}")
+
+    assert checked > 100, f"扫描到的路由函数过少（{checked}），护栏可能已失效"
+    assert not bad, "以下路由函数注解无法在运行时求值（FastAPI 会推导不出请求体）：\n  " + "\n  ".join(bad)

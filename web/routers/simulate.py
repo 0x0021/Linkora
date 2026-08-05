@@ -77,58 +77,22 @@ def simulate_message(
             enable_stream=enable_stream,
         )
 
-        if hasattr(result, "__iter__") and not isinstance(result, str):
-            accumulated_text = ""
-            final_reply = None
-            try:
-                while True:
-                    chunk = next(result)
-                    if isinstance(chunk, str):
-                        accumulated_text += chunk
-                    else:
-                        final_reply = chunk
-            except StopIteration as e:
-                if e.value is not None:
-                    final_reply = e.value
-
-            if final_reply and hasattr(final_reply, "text"):
-                response = {
-                    "success": True,
-                    "text": final_reply.text or accumulated_text,
-                    "routing_mode": final_reply.routing_mode or ("streaming" if enable_stream else ""),
-                    "routed_tools": final_reply.routed_tools,
-                    "skill_name": final_reply.skill_name,
-                    "skill_source": final_reply.skill_source,
-                    "confidence": final_reply.confidence,
-                    "evidence_source": final_reply.evidence_source,
-                    "already_sent": final_reply.already_sent,
-                }
-            else:
-                response = {
-                    "success": True,
-                    "text": accumulated_text or str(final_reply) if final_reply else "",
-                    "routing_mode": "streaming" if enable_stream else "",
-                    "routed_tools": [],
-                    "skill_name": "",
-                    "skill_source": "",
-                    "confidence": 0.0,
-                    "evidence_source": "",
-                    "already_sent": False,
-                }
-        else:
-            response = {
-                "success": True,
-                "text": result.text,
-                "routing_mode": result.routing_mode,
-                "routed_tools": result.routed_tools,
-                "skill_name": result.skill_name,
-                "skill_source": result.skill_source,
-                "confidence": result.confidence,
-                "evidence_source": result.evidence_source,
-                "already_sent": result.already_sent,
-            }
-
-        return response
+        # process_message 契约固定返回 AgentReply（dataclass，无 __iter__、非 str），
+        # 流式内容由 agent 内部经 IM 适配器直接下发，不从这里迭代。
+        # 此处原有一条 `if hasattr(result, "__iter__") and not isinstance(result, str)`
+        # 的「迭代累积 chunk」分支，条件恒为 False（AgentReply 不可迭代），属不可达
+        # 死代码，且让类型检查器把 else 分支的 result 错误收窄成 str，故整段移除。
+        return {
+            "success": True,
+            "text": result.text,
+            "routing_mode": result.routing_mode,
+            "routed_tools": result.routed_tools,
+            "skill_name": result.skill_name,
+            "skill_source": result.skill_source,
+            "confidence": result.confidence,
+            "evidence_source": result.evidence_source,
+            "already_sent": result.already_sent,
+        }
 
     except Exception as e:
         logger.error("模拟消息处理失败: %s", e, exc_info=True)

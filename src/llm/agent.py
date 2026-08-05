@@ -7,7 +7,7 @@ import time
 import functools
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
 from src.config import LlmConfig, SkillsConfig
 from src.intent import default_registry
@@ -48,6 +48,9 @@ from src.llm.agent_steps import (
     summarize_conversation as _summarize_conversation_fn,
 )
 
+if TYPE_CHECKING:
+    from src.llm.summary_scheduler import SummaryScheduler
+
 logger = logging.getLogger(__name__)
 
 # 工具收敛护栏中应撤下的“继续检索”工具（保留 send_message/save_memory 等动作类工具）。
@@ -56,6 +59,32 @@ _RETRIEVAL_TOOLS = {"web_search", "kb_search", "search_doc"}
 
 # AgentReply 已移到 src.llm.agent_reply 以避免循环依赖，此处重导出保持向后兼容
 from src.llm.agent_reply import AgentReply  # noqa: F401
+
+
+class _AgentThreadState(threading.local):
+    """LLMAgent 的每线程隔离状态容器（一次会话内的"最近一次"标记位）。
+
+    为什么需要这个类：原写法是 ``self._tl.last_kb_hit: bool = False``——
+    对成员表达式做带注解赋值虽然语法合法，但注解在运行时会被直接丢弃，
+    静态检查器同样不接受（reportInvalidTypeForm），等于白写。
+    这里把字段类型上移到 threading.local 子类做类级声明，类型才真正可见。
+
+    刻意**不实现 __init__**：保持既有语义——只有构造 Agent 的那个线程会被
+    赋初值，其余线程一律由读取侧的 ``getattr(self._tl, name, default)``
+    兜底。若在此预置默认值，会改变 ``hasattr(agent._tl, "rq_id")``
+    这类判定的结果（见 agent_steps/routing_trace.py）。
+    """
+
+    last_action_intents: list[str]
+    last_blocked_by_disabled_skill: list[str]
+    last_kb_best_score: float | None
+    last_kb_hit: bool
+    last_kb_query_intent: bool
+    last_kb_citations: list[Citation]
+    last_kb_relevant_knowledge: str
+    last_rag_empty: bool
+    rag_empty_fallback_level: int
+    rq_id: int | None
 
 
 class LLMAgent:
@@ -98,17 +127,17 @@ class LLMAgent:
         self._prompt_builder = PromptBuilder(self)
         # 工具编排已拆到 src/llm/tool_orchestrator.py
         self._tool_orchestrator = ToolOrchestrator(self)
-        self._tl = threading.local()
-        self._tl.last_action_intents: list[str] = []
-        self._tl.last_blocked_by_disabled_skill: list[str] = []
-        self._tl.last_kb_best_score: float | None = None
-        self._tl.last_kb_hit: bool = False
-        self._tl.last_kb_query_intent: bool = False
-        self._tl.last_kb_citations: list[Citation] = []
-        self._tl.last_kb_relevant_knowledge: str = ""
-        self._tl.last_rag_empty: bool = False
-        self._tl.rag_empty_fallback_level: int = 0  # 三级递进：0=初始, 1=等待引导追问, 2=强制兜底
-        self._tl.rq_id: int | None = None
+        self._tl = _AgentThreadState()
+        self._tl.last_action_intents = []
+        self._tl.last_blocked_by_disabled_skill = []
+        self._tl.last_kb_best_score = None
+        self._tl.last_kb_hit = False
+        self._tl.last_kb_query_intent = False
+        self._tl.last_kb_citations = []
+        self._tl.last_kb_relevant_knowledge = ""
+        self._tl.last_rag_empty = False
+        self._tl.rag_empty_fallback_level = 0  # 三级递进：0=初始, 1=等待引导追问, 2=强制兜底
+        self._tl.rq_id = None
         self._style_prompt_cache: str | None = None
         self._anchor_cache: dict = {"knowledge": None, "casual": None}
         self._cache_advanced_config()

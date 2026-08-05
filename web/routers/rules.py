@@ -16,8 +16,10 @@ router = APIRouter()
 
 @router.get("/api/rules")
 async def rules():
+    # 配置缺失时抛 503（放在 try 外：HTTPException 是 Exception 子类，
+    # 落进下方 except 会被压平成语义错误的 500）。
+    config = _api._require_cfg()
     try:
-        config = _api._get_cfg()
         return {
             "blacklist": config.rules.blacklist,
             "whitelist": config.rules.whitelist,

@@ -12,8 +12,12 @@ import re as _re
 import sqlite3
 from collections import Counter
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.memory.platform_context import get_current_platform
+
+if TYPE_CHECKING:
+    from src.memory.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 

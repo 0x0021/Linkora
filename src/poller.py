@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from typing import Callable
 
 from src.config import PollerConfig
-from src.dws_adapter import DwsAdapter, DwsPermissionError
+from src.dws_adapter import DwsPermissionError
+# dws 形参按 BaseIMAdapter 声明：poller 只依赖这层通用 IM 契约，
+# 实参可能是钉钉 DwsAdapter，也可能是飞书 / 企微适配器。
+from src.im_adapter.base_adapter import BaseIMAdapter
 from src.memory.sqlite_store import SQLiteStore
 from src.models import Message
 from src.poller_core_ocr import OcrMixin
@@ -26,7 +29,7 @@ logger = logging.getLogger(__name__)
 # 各平台底层 CLI 工具名（仅用于日志措辞，避免非钉钉平台也显示"DWS"）。
 
 class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixin, DedupMixin, DispatchMixin, HistorySyncMixin, DiscoveryMixin):
-    def __init__(self, config: PollerConfig, dws: DwsAdapter,
+    def __init__(self, config: PollerConfig, dws: BaseIMAdapter,
                  store: SQLiteStore, current_user_id: str,
                  current_user_name: str,
                  current_user_user_id: str = "",

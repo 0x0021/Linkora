@@ -52,8 +52,10 @@ async def intent_taxonomy(platform: str = ""):
     用于观测当前生效的意图模型：处置层（business / social 子型）与行动层
     （query/execute/analyze/communicate/media）。证据词会应用 config 中的覆盖。
     """
+    # 配置缺失时抛 503（放在 try 外：HTTPException 是 Exception 子类，
+    # 落进下方 except 会被压平成语义错误的 500）。
+    config = _api._require_cfg()
     try:
-        config = _api._get_cfg()
         registry = IntentRegistry()
         registry.apply_intent_filter(getattr(config.rules, "intent_filter", {}) or {})
         allowed_tools = _build_allowed_tools_for_platform(platform)

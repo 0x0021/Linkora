@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import logging
 
 if TYPE_CHECKING:
-    pass
+    from src.models import Message
 
 logger = logging.getLogger(__name__)
 
@@ -169,11 +170,11 @@ def wrap_image_block(content: str) -> str:
 
 
 def combine_message_group(
-    group: list,
+    group: list["Message"],
     *,
-    is_polite: callable = is_polite_message,
-    wrap_img: callable = wrap_image_block,
-) -> any:
+    is_polite: Callable[[str], bool] = is_polite_message,
+    wrap_img: Callable[[str], str] = wrap_image_block,
+) -> "Message":
     """将一组消息合并为一条消息。
 
     参数：
@@ -228,13 +229,13 @@ def combine_message_group(
 
 
 def merge_consecutive_messages(
-    messages: list,
+    messages: list["Message"],
     window_seconds: int = 60,
     *,
-    is_polite: callable = is_polite_message,
-    wrap_img: callable = wrap_image_block,
+    is_polite: Callable[[str], bool] = is_polite_message,
+    wrap_img: Callable[[str], str] = wrap_image_block,
     semantic_threshold: float = 0.75,
-) -> list:
+) -> list["Message"]:
     """合并同一人在短时间窗口内的连续消息。
 
     先按 (chat_id, sender) 分组，避免跨会话排序导致同一会话消息被拆散。
@@ -251,34 +252,37 @@ def merge_consecutive_messages(
         key = (getattr(msg, "chat_id", ""), getattr(msg, "sender_id", "") or getattr(msg, "sender_name", ""))
         groups[key].append(msg)
 
-    embedding_available = False
-    embed_func = None
-    cosine_func = None
+    # 语义合并所需的两个函数：任一不可用即整体禁用。
+    # 此前用独立的 embedding_available 布尔位当开关，两者可能不同步——
+    # 且类型检查器无法据此收窄 Optional，后续任何漏判都会直接在 None 上调用。
+    # 现改为「函数句柄本身即开关」，判定与使用一处对齐。
+    embed_func: Callable[[str], Any] | None = None
+    cosine_func: Callable[[Any, Any], float] | None = None
     if semantic_threshold and semantic_threshold > 0:
         try:
             from src import semantic as semantic_index
-            embed_func = semantic_index._embed
-            cosine_func = semantic_index.cosine
-            embedding_available = semantic_index.get_embedding_client() is not None
+            if semantic_index.get_embedding_client() is not None:
+                embed_func = semantic_index._embed
+                cosine_func = semantic_index.cosine
         except Exception:
             logger.debug("语义嵌入模块不可用，跳过去重合并")
 
-    merged = []
+    merged: list["Message"] = []
     for key, group in groups.items():
-        group.sort(key=lambda m: getattr(m, "timestamp", None))
-        current_group = []
+        group.sort(key=lambda m: m.timestamp)
+        current_group: list["Message"] = []
         last_embedding = None
 
         for msg in group:
             if not current_group:
                 current_group.append(msg)
-                if embedding_available:
+                if embed_func is not None:
                     content = getattr(msg, "content", "") or ""
                     last_embedding = embed_func(content) if content else None
                 continue
 
             last = current_group[-1]
-            time_diff = (getattr(msg, "timestamp", None) - getattr(last, "timestamp", None)).total_seconds()
+            time_diff = (msg.timestamp - last.timestamp).total_seconds()
             same_sender = (getattr(msg, "sender_id", "") == getattr(last, "sender_id", "")
                            or getattr(msg, "sender_name", "") == getattr(last, "sender_name", ""))
             same_chat = getattr(msg, "chat_id", "") == getattr(last, "chat_id", "")
@@ -287,7 +291,8 @@ def merge_consecutive_messages(
             if same_chat and same_sender:
                 if time_diff <= window_seconds:
                     should_merge = True
-                elif embedding_available and semantic_threshold and last_embedding:
+                elif (embed_func is not None and cosine_func is not None
+                      and semantic_threshold and last_embedding):
                     content = getattr(msg, "content", "") or ""
                     if content:
                         msg_embedding = embed_func(content)
@@ -298,14 +303,14 @@ def merge_consecutive_messages(
 
             if should_merge:
                 current_group.append(msg)
-                if embedding_available:
+                if embed_func is not None:
                     content = getattr(msg, "content", "") or ""
                     if content:
                         last_embedding = embed_func(content)
             else:
                 merged.append(combine_message_group(current_group, is_polite=is_polite, wrap_img=wrap_img))
                 current_group = [msg]
-                if embedding_available:
+                if embed_func is not None:
                     content = getattr(msg, "content", "") or ""
                     last_embedding = embed_func(content) if content else None
 

@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import sqlite3
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from src.component_base import LinkoraComponentBase
+
+if TYPE_CHECKING:
+    from src.memory.vector_index import VectorIndex
 
 
 class SQLiteStoreBase(LinkoraComponentBase):
@@ -28,12 +31,13 @@ class SQLiteStoreBase(LinkoraComponentBase):
     _MIGRATE_PLATFORM_PREFIXES: dict[str, list[str] | None]
     _checked_db_paths: ClassVar[set[str]]
     _cleaned_orphan_paths: ClassVar[set[str]]
+    # 标成 Any/object 会丢掉 kb_repo 里 vi.remove/.save/.count/.search 的成员检查
+    _vector_index: VectorIndex | None
 
     # === 内部状态（组合类 / 各 mixin __init__ 赋值；精确类型见赋值点） ===
     _conns_lock: Any
     _conv_conns_lock: Any
     _lock: Any
-    _vector_index: Any
 
     # === 跨 mixin 方法（真实签名原样；实现在各自 mixin） ===
     def _check_integrity_initial(self, cursor) -> Any: ...

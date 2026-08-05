@@ -36,7 +36,11 @@ def record_routing_trace_pre(
         try:
             rd = {}
             if agent.skill_router:
-                rd = getattr(agent.skill_router, "_last_routing_detail", {})
+                # 读取器名为 last_routing_detail（无下划线前缀）。此前误写成
+                # 带下划线前缀的私有名——SkillRouter 上从来没有那个属性，
+                # rd 恒为 {}，埋点里的 candidates_count / convergence_applied
+                # 恒为 0，Phase 4 收敛的可观测性一直是哑的。
+                rd = getattr(agent.skill_router, "last_routing_detail", {}) or {}
             primary = activated[0] if activated else None
             sub_skills = [m.name for m in activated[1:]] if activated and len(activated) > 1 else []
             t_routing = time.perf_counter()

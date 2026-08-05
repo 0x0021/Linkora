@@ -11,6 +11,8 @@
 """
 from __future__ import annotations
 
+# ruff: noqa: F401  # 整文件是 config_models 重导出层（保 `from src.config import AppConfig` 等旧路径兼容）
+
 import hashlib
 import logging
 import os
@@ -19,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.config_models import (
     DwsConfig, AdapterOverrideConfig, PollerConfig, KeywordRule, RulesConfig,

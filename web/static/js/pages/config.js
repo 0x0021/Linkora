@@ -289,17 +289,12 @@ async function saveConfig() {
     const btn = document.getElementById('btn-save-config');
     const status = document.getElementById('save-status');
     const data = {
-        // 轮询配置
+        // 轮询配置（仅收集前端实际存在的控件；HTML 中已移除的字段不再读取，
+        // 避免 getElementById 返回 null 导致 .value 抛 TypeError 使保存整页崩溃）
         poller_interval: parseInt(document.getElementById('cfg-poll-interval').value) || 5,
-        poller_merge_window: parseInt(document.getElementById('cfg-poll-merge').value) || 60,
-        poller_history_window: parseInt(document.getElementById('cfg-poll-history-window').value) || undefined,
         poller_unread_conversation_count: parseInt(document.getElementById('cfg-poll-unread-count').value) || undefined,
-        poller_max_processed_msg_ids: parseInt(document.getElementById('cfg-poll-max-msg-ids').value) || undefined,
-        poller_list_all_time_window_minutes: parseInt(document.getElementById('cfg-poll-list-all-window').value) || undefined,
-        poller_list_all_first_run_minutes: parseInt(document.getElementById('cfg-poll-list-all-first-run').value) || undefined,
         poller_messages_per_conversation: parseInt(document.getElementById('cfg-poll-msgs-per-conv').value) || undefined,
         poller_reply_cooldown_seconds: parseInt(document.getElementById('cfg-poll-reply-cooldown').value) || undefined,
-        poller_empty_poll_protection_minutes: parseInt(document.getElementById('cfg-poll-empty-protection').value) || undefined,
         poller_skip_msg_types: document.getElementById('cfg-poll-skip-types').value.split('\n').map(w => w.trim()).filter(w => w) || undefined,
         poller_skip_notification_patterns: document.getElementById('cfg-poll-skip-patterns').value.split('\n').map(w => w.trim()).filter(w => w) || undefined,
         poller_image_ocr_enabled: document.getElementById('cfg-image-ocr-enabled').checked,
@@ -311,7 +306,6 @@ async function saveConfig() {
         llm_max_tool_rounds: parseInt(document.getElementById('cfg-llm-max-rounds').value) || undefined,
         llm_converge_after_tool_rounds: parseInt(document.getElementById('cfg-llm-converge-rounds').value) || undefined,
         llm_model_pool: document.getElementById('cfg-llm-model-pool').value.split('\n').map(w => w.trim()).filter(w => w) || undefined,
-        llm_fallback_model_pool: document.getElementById('cfg-llm-fallback-model-pool').value.split('\n').map(w => w.trim()).filter(w => w) || undefined,
         // 模型价格配置（收集为 {name: {input, output}} 字典）
         model_pricing: (() => {
             const mp = {};

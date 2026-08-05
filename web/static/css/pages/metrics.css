@@ -151,6 +151,44 @@
     gap: var(--space-sm);
 }
 
+/* 「每日成本趋势」与「引文页脚命中记录」两卡等高：
+   图表卡高度由 .metrics-chart-wrap(220px) + 标题/内边距 决定；
+   右侧引文卡锁定相同高度，20 行超出部分在 #cq-citations-table 内部滚动，
+   不再把整张卡/整行撑高。--cq-chart-h 与 .metrics-chart-wrap 高度保持一致。 */
+.metrics-charts-grid.cq-equal {
+    --cq-chart-h: 220px;
+    align-items: stretch;
+}
+.metrics-charts-grid.cq-equal > .metrics-chart-card,
+.metrics-charts-grid.cq-equal > .metrics-table-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: calc(var(--cq-chart-h) + 60px); /* 60 ≈ 上下内边距 + 标题，与图表卡自然高度一致 */
+}
+.metrics-charts-grid.cq-equal > .metrics-chart-card .metrics-chart-wrap {
+    height: var(--cq-chart-h);
+    flex: 0 0 auto;
+}
+.metrics-charts-grid.cq-equal > .metrics-table-card #cq-citations-table {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* 细滚动条，premium 质感 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+.metrics-charts-grid.cq-equal > .metrics-table-card #cq-citations-table::-webkit-scrollbar {
+    width: 6px;
+}
+.metrics-charts-grid.cq-equal > .metrics-table-card #cq-citations-table::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+.metrics-charts-grid.cq-equal > .metrics-table-card #cq-citations-table::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 .metrics-table {
     width: 100%;
     border-collapse: collapse;

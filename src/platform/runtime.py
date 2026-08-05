@@ -4,7 +4,11 @@ from .base import *  # noqa: F403
 from .reply_helpers import ReplyHelpersMixin  # 既有回复增强 mixin + 兼容 re-export
 from .runtime_lifecycle import LifecycleMixin
 from .runtime_setup import SetupMixin
-from .runtime_reply_guard import ReplyGuardMixin
+from .runtime_reply_guard import (
+    ReplyGuardMixin,
+    REPLY_SEND_MIN_INTERVAL_DEFAULT,  # noqa: F401  # 兼容旧测试/调用方从 src.platform.runtime 导入
+    REPLY_SEND_RATE_LIMIT_BACKOFF_DEFAULT,  # noqa: F401
+)
 from .runtime_dispatch import ReplyDispatchMixin
 from .runtime_inbound import InboundMixin
 from .runtime_llm_reply import LLMReplyMixin

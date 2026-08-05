@@ -23,28 +23,14 @@ from pathlib import Path
 
 # 锁定基线：在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
-# 历次基线：1057（2026-08-05 初始）→ 205（mixin 共享基类重构）→ 96（本轮）。
+# 历次基线：1057（2026-08-05 初始）→ 205（mixin 共享基类重构）→ 96（误标，
+# 实际 6e24aa0 仍 334）→ 95（本轮 lint 清理后真实值）。
 #
-# 当前 96 = 205 基线 - 109，通过「上帝类 MRO 契约 + threading.local 子类化 +
-# 真实类型注解」收敛（pyright==1.1.411，与 CI 版本一致）：
-#   - component_base：dws 契约从具体 DwsAdapter 改为 BaseIMAdapter，消飞书/企微
-#     适配器传参的 62 处 reportArgumentType（reportAttributeAccessIssue 主体之一）；
-#   - agent/_AgentThreadState、skills/_RouterThreadState：threading.local 子类化，
-#     消除 reportInvalidTypeForm 与并发读 AttributeError 隐患；
-#   - llm/client.chat()：@overload 分流返回类型（LLMResponse vs Iterator），
-#     消除下游 resp.content 在 Iterator 上的 reportAttributeAccessIssue；
-#   - sqlite_store*/kb_repo：_vector_index 从 object/Any 改回 VectorIndex，恢复成员检查；
-#   - poller_utils / web/api：用 Callable/Message/EmbeddingClient/AppConfig 替换
-#     callable/any/object，消除一批下游 unknown；
-#   - 顺带修掉被 unknown 掩盖的真实缺陷：Phase 4 路由埋点 candidates_count/
-#     convergence_applied 因属性名拼错（_last_routing_detail）恒为 0；流式
-#     tool_calls[].function 为 None 时 AttributeError 打断响应；_require_cfg() 把
-#     配置未就绪的 500 收敛为 503；kb_search_enabled 字段漏声明致关闭 RAG 开关恒失效。
-# （205→96 之前的 1057→205 来自「为每个 mixin 家族建共享基类」：poller 家族
-#  PollerMixinBase/LinkoraComponentBase 消 ~320、platform/engine 家族 EngineMixinBase
-#  消 ~308、dws_adapter 家族 DwsAdapterBase 82→0、memory 家族 SQLiteStoreBase 71→0、
-#  im_adapter 家族 IMAdapterBase 25→0；共享基类绝不定义 dunder、stub 显式 ->Any。）
-TYPE_ERROR_BASELINE = 96
+# 当前 95：lint 清理修复 web/api 被误删的 re-export（get_store/get_rag_config）与
+# request_id 动态属性 setattr 写法后，pyright==1.1.411 在 src+web 实测值。
+# 此前 96 为 lint 自动化过程中被误降至 96，未真实反映代码状态；现按实测下调。
+# 后续 95 = 基线，继续「只减不增」。
+TYPE_ERROR_BASELINE = 95
 
 
 def count_errors(report: dict) -> int:

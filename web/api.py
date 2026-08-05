@@ -32,7 +32,9 @@ from src.paths import (
 )
 # 共享资源访问器（get_store 等）下沉到 web.dependencies，避免与各子路由循环导入。
 from web.dependencies import (
-    get_platforms,
+    get_store,  # noqa: F401  # 通过 web.api 命名空间 re-export，供 routers 以 _api.get_store 访问（兼容 monkeypatch）
+    get_platforms,  # noqa: F401
+    get_rag_config,  # noqa: F401
     set_platform_context,
     _platform_ctx,
 )

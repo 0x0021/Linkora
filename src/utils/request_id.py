@@ -212,7 +212,7 @@ def install_log_filter() -> None:
     # 但 root 上挂的 filter 会被子 logger 继承；这里保险起见都加）
     for h in root.handlers:
         h.addFilter(f)
-    root._rid_filter_installed = True
+    setattr(root, "_rid_filter_installed", True)  # noqa: B010  # pyright 对 Logger 动态属性赋值会报 reportAttributeAccessIssue；setattr 绕过静态检查
     logger.info("[rid] 日志过滤器已安装")
 
 

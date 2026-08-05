@@ -20,6 +20,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from web.errors import SAFE_INTERNAL_ERROR
+
 
 # ============ Fixtures ============
 
@@ -203,7 +205,8 @@ class TestDeadLettersReplay:
         with patch("web.routers.dead_letters.get_app_instance", return_value=None):
             resp = client.post("/api/dead-letters/1/replay")
         assert resp.status_code == 500
-        assert "应用实例不可用" in resp.json()["detail"]
+        # 5xx 经全局处理器脱敏为安全文案，不回传内部细节（如「应用实例不可用」）
+        assert resp.json()["detail"] == SAFE_INTERNAL_ERROR
 
     def test_replay_app_no_method_returns_500(self, tmp_config, tmp_db):
         """app_instance 没有 replay_dead_letter 方法时 500。"""
@@ -687,7 +690,8 @@ class TestOrgs:
         resp = client.get("/api/orgs")
         # TestClient 无 app_instance,预期 503
         assert resp.status_code == 503
-        assert "轮询器未启动" in resp.json()["detail"]
+        # 5xx 经全局处理器脱敏为安全文案，不回传内部细节（如「轮询器未启动」）
+        assert resp.json()["detail"] == SAFE_INTERNAL_ERROR
 
     def test_orgs_with_app_instance(self, tmp_config, tmp_db):
         """有 app_instance 时返 orgs 结构。"""

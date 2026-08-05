@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
@@ -7,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class PrimaryMixin:
+class PrimaryMixin(EngineMixinBase):
     _metrics_lock = threading.Lock()
 
     _INCOMPLETE_STRUCT_RE = re.compile(r"SX-\d+|工号|员工号|部门|手机号|1[3-9]\d{9}")

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
@@ -40,7 +41,7 @@ _REPLY_LOCK_RETRY_DELAY = 8.0
 
 
 
-class InboundMixin:
+class InboundMixin(EngineMixinBase):
     """运行时：inbound 相关方法（从 runtime.py 抽离，零行为变更）。"""
     def _has_replied_after(self, message: Message) -> bool:
         """判断是否需要跳过 AI 回复（防止对同一消息重复回复）。

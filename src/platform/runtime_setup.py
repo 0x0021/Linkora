@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
@@ -27,7 +28,7 @@ _RATE_LIMIT_HINTS = ("rate limit", "ratelimit", "429", "rate_limit",
 
 
 
-class SetupMixin:
+class SetupMixin(EngineMixinBase):
     """运行时：setup 相关方法（从 runtime.py 抽离，零行为变更）。"""
     def _rebuild_kb_search_tool(self) -> None:
         """热重载后重建 KBSearchTool，使其持有最新 embedding 配置（P2 修复）。"""

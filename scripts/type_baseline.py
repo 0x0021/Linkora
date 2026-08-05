@@ -23,13 +23,15 @@ from pathlib import Path
 
 # 锁定基线：在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
-# 当前 665 = 1057 基线 - 392：
-#   - poller 家族建共享基类 PollerMixinBase/LinkoraComponentBase，消 ~320 条动态
-#     MRO 跨 mixin 属性访问错误（reportAttributeAccessIssue）；
-#   - 顺带修掉被 unknown 掩盖的真实隐患：concurrent 未导入（poller.py 构造期
-#     NameError）、upsert_conversation 缺 last_message_time 参数（运行时 TypeError）、
-#     DocumentParser 收到 PollerConfig 而非 AppConfig、_detect_msg_type 返回值可能 None。
-TYPE_ERROR_BASELINE = 665
+# 当前 334 = 1057 基线 - 723：
+#   - poller 家族建 PollerMixinBase/LinkoraComponentBase，消 ~320 条动态 MRO 错误；
+#   - platform/engine 家族建 EngineMixinBase（AST 提取 97 方法 + 49 状态 stub），
+#     消 ~308 条动态 MRO 错误（355 → 13，剩余 13 为 Optional 空值访问与 config 属性缺口，
+#     非 mixin 跨访问）；
+#   - 顺带修掉被 unknown 掩盖的真实隐患（concurrent 未导入、upsert_conversation 缺
+#     last_message_time、DocumentParser 收 PollerConfig 等）。
+# 剩余大头：dws_adapter(82)/memory(71)/im_adapter(25) 三个小家族，待建共享基类收尾。
+TYPE_ERROR_BASELINE = 334
 
 
 def count_errors(report: dict) -> int:

@@ -116,10 +116,11 @@ max-complexity = 60
 "web/routers/config.py" = ["C901"]          # update_config 复杂度 145，待拆
 
 [tool.pyright]
-# 渐进类型门禁配置（F9）。当前 src+web 基线 665 条类型告警（已锁定在
+# 渐进类型门禁配置（F9）。当前 src+web 基线 334 条类型告警（已锁定在
 # scripts/type_baseline.py::TYPE_ERROR_BASELINE），主要来自未标注的 Optional 访问
-# 与动态组合的上帝类 MRO（pyright 无法静态解析 mixin 属性）。poller 家族已通过共享
-# 基类消掉 ~320 条 MRO 错误；剩余大头在 platform(355)/dws(82)/memory(71)/im(25)。
+# 与动态组合的上帝类 MRO（pyright 无法静态解析 mixin 属性）。poller 与 platform/engine
+# 两大家族已通过共享基类（PollerMixinBase / EngineMixinBase）消掉 ~628 条 MRO 错误；
+# 剩余大头在 dws_adapter(82)/memory(71)/im_adapter(25) 三个小家族，待建共享基类收尾。
 # pyright 在 CI 的 type-check 作业中作为「只减不增」非回归门禁运行：error 数超过
 # 基线即失败；后续每收敛一批，把 TYPE_ERROR_BASELINE 随之下调，门禁逐步收紧，
 # 直至接近 0 切换为硬门禁。pyright 直接读取此段，无需额外 pyrightconfig.json。

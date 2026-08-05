@@ -71,6 +71,8 @@
 .metrics-kpi-card.accent-orange { border-left: 3px solid var(--brand-warning); }
 .metrics-kpi-card.accent-pink { border-left: 3px solid var(--brand-pink); }
 .metrics-kpi-card.accent-cyan { border-left: 3px solid #06b6d4; }
+.metrics-kpi-card.accent-teal { border-left: 3px solid #14b8a6; }
+.metrics-kpi-card.accent-violet { border-left: 3px solid #7c3aed; }
 
 /* 图表区 */
 .metrics-charts-grid {

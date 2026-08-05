@@ -20,12 +20,14 @@ function cqFmtCostCny(cny) {
 
 // KPI 卡片定义（统一 KpiCard；容器 id 即卡片 id，由 index.html 提供空壳）
 const _CQ_KPIS = [
-    { id: "cq-kpi-cost",     label: "总成本（近 24h）", icon: '<i class="fa-solid fa-yen-sign"></i>',       sub: "折合人民币（USD×汇率）" },
-    { id: "cq-kpi-tokens",   label: "总 Token 消耗",   icon: '<i class="fa-solid fa-coins"></i>',          sub: "累计 LLM Token" },
-    { id: "cq-kpi-handoff",  label: "低置信转人工率",  icon: '<i class="fa-solid fa-hand"></i>',           sub: "触发草稿推主人占比" },
-    { id: "cq-kpi-rag",      label: "RAG 命中率",      icon: '<i class="fa-solid fa-book-open"></i>',      sub: "知识库命中占比" },
-    { id: "cq-kpi-cited",    label: "引文页脚命中率",  icon: '<i class="fa-solid fa-quote-right"></i>',    sub: "实际追加溯源占比" },
-    { id: "cq-kpi-feedback", label: "反馈有用率",      icon: '<i class="fa-solid fa-thumbs-up"></i>',      sub: "用户正向反馈占比" },
+    { id: "cq-kpi-cost",          label: "总成本（近 24h）", icon: '<i class="fa-solid fa-yen-sign"></i>',   sub: "折合人民币（USD×汇率）" },
+    { id: "cq-kpi-tokens",        label: "总 Token 消耗",   icon: '<i class="fa-solid fa-coins"></i>',      sub: "累计 LLM Token" },
+    { id: "cq-kpi-input-tokens",  label: "输入 Token",      icon: '<i class="fa-solid fa-arrow-down"></i>', sub: "累计输入 Token" },
+    { id: "cq-kpi-output-tokens", label: "输出 Token",      icon: '<i class="fa-solid fa-arrow-up"></i>',   sub: "累计输出 Token" },
+    { id: "cq-kpi-handoff",       label: "低置信转人工率",  icon: '<i class="fa-solid fa-hand"></i>',       sub: "触发草稿推主人占比" },
+    { id: "cq-kpi-rag",           label: "RAG 命中率",      icon: '<i class="fa-solid fa-book-open"></i>',  sub: "知识库命中占比" },
+    { id: "cq-kpi-cited",         label: "引文页脚命中率",  icon: '<i class="fa-solid fa-quote-right"></i>', sub: "实际追加溯源占比" },
+    { id: "cq-kpi-feedback",      label: "反馈有用率",      icon: '<i class="fa-solid fa-thumbs-up"></i>',  sub: "用户正向反馈占比" },
 ];
 
 function cqRenderEmptyKpis() {
@@ -35,12 +37,14 @@ function cqRenderEmptyKpis() {
 function cqRenderKpis(summary) {
     const t = (summary && summary.totals) || {};
     const map = {
-        "cq-kpi-cost":     cqFmtCostCny(t.total_cost_cny || 0),
-        "cq-kpi-tokens":   metricsFmtTokens(t.total_tokens || 0),
-        "cq-kpi-handoff":  cqFmtPct(t.handoff_rate),
-        "cq-kpi-rag":      cqFmtPct(t.rag_grounded_rate),
-        "cq-kpi-cited":    cqFmtPct(t.cited_rate),
-        "cq-kpi-feedback": cqFmtPct(t.feedback_useful_rate),
+        "cq-kpi-cost":          cqFmtCostCny(t.total_cost_cny || 0),
+        "cq-kpi-tokens":        metricsFmtTokens(t.total_tokens || 0),
+        "cq-kpi-input-tokens":  metricsFmtTokens(t.total_input_tokens || 0),
+        "cq-kpi-output-tokens": metricsFmtTokens(t.total_output_tokens || 0),
+        "cq-kpi-handoff":       cqFmtPct(t.handoff_rate),
+        "cq-kpi-rag":           cqFmtPct(t.rag_grounded_rate),
+        "cq-kpi-cited":         cqFmtPct(t.cited_rate),
+        "cq-kpi-feedback":      cqFmtPct(t.feedback_useful_rate),
     };
     _CQ_KPIS.forEach(k => renderKpiCard(k.id, {
         label: k.label, icon: k.icon, sub: k.sub, value: (k.id in map ? map[k.id] : "—"),

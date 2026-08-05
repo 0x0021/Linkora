@@ -37,13 +37,10 @@ function metricsFmtCost(usd) {
     return "$" + usd.toFixed(2);
 }
 
-// 加载指标数据（metrics KPI 经 KpiCard；成本卡另取 cost-quality/summary 统一 ¥/$ 同源）
+// 加载指标数据（路由/延迟/技能质量指标；Token 与成本归属「成本 / 质量」页，避免跨页重复）
 async function loadMetricsPage() {
     try {
-        const [data, summary] = await Promise.all([
-            api.fetch("/api/llm-metrics"),
-            api.fetch("/api/cost-quality/summary?hours=24").catch(() => null),
-        ]);
+        const data = await api.fetch("/api/llm-metrics");
         if (!data || data.available === false) {
             metricsRenderEmptyKpis();
             ["chart-metrics-skill","chart-metrics-source","chart-metrics-tokens"].forEach(id => {
@@ -54,7 +51,7 @@ async function loadMetricsPage() {
             if (tableEl) tableEl.innerHTML = '<div class="metrics-empty">暂无数据</div>';
             return;
         }
-        renderMetricsKPI(data, summary);
+        renderMetricsKPI(data);
         renderLatencyChart(data);
         renderSkillChart(data);
         renderSourceChart(data);
@@ -77,23 +74,13 @@ const _METRICS_KPIS = [
     { id: "metrics-kpi-convergence",    label: "收敛触发",     icon: '<i class="fa-solid fa-compress"></i>',            sub: "工具轮次收敛" },
     { id: "metrics-kpi-avg-score",      label: "平均匹配分",   icon: '<i class="fa-solid fa-bullseye"></i>',            sub: "技能路由置信度" },
     { id: "metrics-kpi-avg-candidates", label: "平均候选数",   icon: '<i class="fa-solid fa-list-check"></i>',         sub: "技能匹配候选" },
-    { id: "metrics-kpi-total-tokens",   label: "总 Token 消耗", icon: '<i class="fa-solid fa-coins"></i>',              sub: "累计 LLM Token" },
-    { id: "metrics-kpi-input-tokens",   label: "输入 Token",   icon: '<i class="fa-solid fa-arrow-down"></i>',         sub: "平均单次输入" },
-    { id: "metrics-kpi-output-tokens",  label: "输出 Token",   icon: '<i class="fa-solid fa-arrow-up"></i>',           sub: "平均单次输出" },
-    { id: "metrics-kpi-cost",           label: "总成本（近24h）", icon: '<i class="fa-solid fa-yen-sign"></i>',        sub: "折合人民币" },
 ];
 
 function metricsRenderEmptyKpis() {
     _METRICS_KPIS.forEach(k => renderKpiCard(k.id, { label: k.label, icon: k.icon, sub: k.sub, value: "—" }));
 }
 
-function metricsFmtCostCny(cny) {
-    if (cny == null || cny === 0) return "¥0.00";
-    if (cny < 0.01) return "¥" + cny.toFixed(4);
-    return "¥" + cny.toFixed(2);
-}
-
-function renderMetricsKPI(data, summary) {
+function renderMetricsKPI(data) {
     const pct = (data.avg_total_ms > 0) ? ((data.avg_llm_ms / data.avg_total_ms) * 100).toFixed(0) + "%" : "—";
     const vals = {
         "metrics-kpi-total":           metricsFmtNum(data.total || 0),
@@ -104,26 +91,13 @@ function renderMetricsKPI(data, summary) {
         "metrics-kpi-convergence":     metricsFmtNum(data.total_convergence || 0),
         "metrics-kpi-avg-score":       (data.avg_score || 0).toFixed(3),
         "metrics-kpi-avg-candidates":  (data.avg_candidates || 0).toFixed(1),
-        "metrics-kpi-total-tokens":    metricsFmtTokens(data.total_tokens || 0),
-        "metrics-kpi-input-tokens":    metricsFmtTokens(data.total_input_tokens || 0),
-        "metrics-kpi-output-tokens":   metricsFmtTokens(data.total_output_tokens || 0),
     };
     const subs = {
-        "metrics-kpi-llm":           "占总延迟 " + pct,
-        "metrics-kpi-input-tokens":  "平均 " + metricsFmtNum(data.avg_input_tokens || 0) + " / 次",
-        "metrics-kpi-output-tokens": "平均 " + metricsFmtNum(data.avg_output_tokens || 0) + " / 次",
+        "metrics-kpi-llm": "占总延迟 " + pct,
     };
-    // 成本卡统一读 cost-quality/summary（¥ 主 + $ 次），与成本质量页同源，消除 A 组双源不一致
-    let costVal = "—", costSub = "折合人民币";
-    if (summary && summary.totals) {
-        const t = summary.totals;
-        costVal = metricsFmtCostCny(t.total_cost_cny || 0);
-        if (t.total_cost_usd != null) costSub = "≈ $" + Number(t.total_cost_usd).toFixed(2);
-    }
     _METRICS_KPIS.forEach(k => {
         let value = (k.id in vals) ? vals[k.id] : "—";
         let sub = subs[k.id] || k.sub;
-        if (k.id === "metrics-kpi-cost") { value = costVal; sub = costSub; }
         renderKpiCard(k.id, { label: k.label, icon: k.icon, sub, value });
     });
 }

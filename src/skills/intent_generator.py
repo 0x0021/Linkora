@@ -41,7 +41,7 @@ _SYSTEM_PROMPT = """你是一个意图分析助手。你会收到一个"技能(S
 
 # extract_json 已提升为全项目共享工具（src/utils/llm_json），此处保留同名再导出，
 # 兼容既有 `from src.skills.intent_generator import extract_json` 的调用与测试。
-__all__ = ["extract_json", "generate_intent_for_skill"]
+__all__ = ["extract_json"]
 
 
 def _normalize_keywords(kws) -> list[str]:

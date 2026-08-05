@@ -103,16 +103,6 @@ jobs:
       - name: Run tests with coverage
         run: pytest --cov=src --cov-report=term-missing --cov-report=xml
 
-      - name: Type check (pyright, report-only baseline)
-        # 渐进类型门禁第一步（F9）：建立基线并随类型注解补充逐步收敛。
-        # 当前 src+web 约 758 条类型告警（未标注 Optional / 动态组合上帝类 MRO），
-        # 直接设为硬门禁会阻断全部既有 CI，故先 report-only 暴露问题。
-        # 配置见 pyproject.toml [tool.pyright]；依赖已由上一步 requirements.lock 安装，pyright 可解析 stub。
-        continue-on-error: true
-        run: |
-          python -m pip install pyright==1.1.411
-          pyright src web
-
       - name: Dependency vulnerability scan (pip-audit)
         # 供应链安全：扫描 requirements.lock 中已知漏洞（基于锁定版本，复现一致）。
         # 报告型，不阻断 CI（避免上游传递依赖的误报挂死构建），但会暴露问题供后续处理。
@@ -127,3 +117,41 @@ jobs:
         with:
           name: coverage-report-${{ matrix.python-version }}
           path: coverage.xml
+
+  type-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14.6"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+
+      - name: Install pyright
+        run: python -m pip install pyright==1.1.411
+
+      - name: Type check (non-regression gate, F9)
+        # 渐进类型门禁（F9）第一步：锁定基线，只允许减少、不允许增加。
+        # 基线由 scripts/type_baseline.py 的 TYPE_ERROR_BASELINE 控制（当前 1057 条，
+        # 2026-08-05 在 main / Python 3.14.6 实测 src+web 的 pyright error 数）。
+        # 每收敛一批类型错误后，重跑 `pyright --outputjson` 并将该常量随之下调，门禁随之收紧。
+        # 配置见 pyproject.toml [tool.pyright]（include=src,web / typeCheckingMode=basic）。
+        run: |
+          pyright --outputjson > pyright-report.json
+          python scripts/type_baseline.py pyright-report.json
+
+      - name: Upload pyright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pyright-report
+          path: pyright-report.json

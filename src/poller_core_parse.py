@@ -168,7 +168,7 @@ class ParseMixin:
                         _c = _json.loads(content)
                         if isinstance(_c, dict) and _post_contains_image(_c):
                             return "image"
-                    except (json.JSONDecodeError, ValueError, TypeError) as _exc:
+                    except (_json.JSONDecodeError, ValueError, TypeError) as _exc:
                         logger.debug(f"_detect_msg_type: swallowed exception: {_exc}")
                         pass
                 return "text"

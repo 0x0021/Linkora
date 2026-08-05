@@ -41,7 +41,7 @@ def _make_bot(fallback_text: str = "请发文字"):
         oa_approval=OaApprovalConfig(),
     )
     bot._replying_lock = threading.Lock()
-    bot._replying_chats = set()
+    bot._replying_chats = {}  # dict[chat_id -> 持锁令牌]（见 runtime_lifecycle 初始化）
     bot.tracker = MagicMock()
     bot.rule_engine = MagicMock()
     bot.store = MagicMock()

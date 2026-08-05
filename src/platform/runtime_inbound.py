@@ -9,6 +9,7 @@ import functools
 import logging
 import threading
 import time
+import uuid
 from datetime import timedelta
 from src.paths import get_skills_root
 from src.im_adapter.errors import IMAdapterRateLimitError  # F14：回复发送限频退避
@@ -286,18 +287,23 @@ class InboundMixin(EngineMixinBase):
         if not hasattr(self, "_reply_lock_retries"):
             self._reply_lock_retries: dict[str, int] = {}
 
+        # 本线程持锁令牌：acquire 时登记，finally 释放时校验，防止误删他人锁
+        my_token = uuid.uuid4().hex
         _now = time.time()
         with self._replying_lock:
             if message.chat_id in self._replying_chats:
                 _held = self._replying_since.get(message.chat_id, 0.0)
-                # 防死锁看门狗：锁已持有过久（疑似上一轮回复卡死），强制释放，
+                # 防死锁看门狗：锁已持有过久（疑似上一轮回复卡死），强制释放陈旧锁，
                 # 避免会话被「假正在回复中」永久阻塞。
                 if _held and (_now - _held) > _REPLY_LOCK_MAX_SECONDS:
                     logger.warning(
-                        "[回复锁] 会话 %s 锁持有超 %ds（疑似卡死），强制释放后继续处理",
+                        "[回复锁] 会话 %s 锁持有超 %ds（疑似卡死），强制释放陈旧锁后继续处理",
                         message.chat_name or message.chat_id[:20], _REPLY_LOCK_MAX_SECONDS,
                     )
-                    self._replying_chats.discard(message.chat_id)
+                    # 仅移除陈旧锁条目；其持有线程仍在跑，finally 持旧令牌，
+                    # 下方用新令牌重登记 → 旧线程 finally 令牌不匹配不会误删新锁
+                    self._replying_chats.pop(message.chat_id, None)
+                    self._replying_since.pop(message.chat_id, None)
                 else:
                     # 同一会话确有回复在途：不静默丢弃，而是有限次延迟重试，
                     # 等上一条回复完成、锁释放后再处理，避免用户消息永久丢失
@@ -328,7 +334,8 @@ class InboundMixin(EngineMixinBase):
                         _REPLY_LOCK_MAX_RETRIES, message.msg_id[:20],
                     )
                     return
-            self._replying_chats.add(message.chat_id)
+            # 成功持锁：用本线程令牌登记（令牌用于 finally 精确释放，避免误删他人锁）
+            self._replying_chats[message.chat_id] = my_token
             self._replying_since[message.chat_id] = time.time()
         # 成功持锁：清零该会话的重试计数（无论之前是否重试过）
         self._reply_lock_retries[message.chat_id] = 0
@@ -393,10 +400,12 @@ class InboundMixin(EngineMixinBase):
             # 释放平台级回复并发槽位（背压）
             if reply_slot_acquired and sem is not None:
                 sem.release()
-            # 释放会话级回复锁
+            # 释放会话级回复锁：仅当仍是本线程令牌时才释放，
+            # 杜绝「陈旧锁看门狗释放 + 旧线程 finally 误删新锁」导致的同会话并发重复回复
             with self._replying_lock:
-                self._replying_chats.discard(message.chat_id)
-                self._replying_since.pop(message.chat_id, None)
+                if self._replying_chats.get(message.chat_id) == my_token:
+                    self._replying_chats.pop(message.chat_id, None)
+                    self._replying_since.pop(message.chat_id, None)
             # 周期性清理过期的发送退避键（每处理 50 条消息清一次）
             with self._metrics_lock:
                 self._backoff_cleanup_counter += 1

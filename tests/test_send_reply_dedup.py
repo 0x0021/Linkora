@@ -35,7 +35,7 @@ def _make_app():
     app.config.dws.cli_path = "dws"
     app._send_backoff_until = {}
     app._replying_lock = threading.Lock()
-    app._replying_chats = set()
+    app._replying_chats = {}  # dict[chat_id -> 持锁令牌]（见 runtime_lifecycle 初始化）
     app._reply_rate_limited_until = 0.0  # __init__ 设置，但本 fixture 用 __new__ 绕过，需手动补齐
     return app
 

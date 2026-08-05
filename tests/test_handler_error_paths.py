@@ -41,7 +41,7 @@ def _make_handler_app(dlq_enabled: bool):
     app._backoff_cleanup_counter = 0  # 对应 main.py __init__ 中的初始化（测试用 __new__ 绕过）
     app._bg_throttle = MagicMock()
     app._replying_lock = threading.Lock()
-    app._replying_chats = set()
+    app._replying_chats = {}  # dict[chat_id -> 持锁令牌]（见 runtime_lifecycle 初始化）
     # 前置检查全部放行，直达 LLM 步骤
     app._has_replied_after = lambda msg: False
     app._has_user_taken_over = lambda msg: False

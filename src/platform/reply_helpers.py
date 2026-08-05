@@ -71,13 +71,16 @@ class ReplyHelpersMixin(EngineMixinBase):
                 logger.info("[风格] 画像仍新鲜（%s天前更新），跳过启动重算", days)
                 return
             # 缺失或过期 → 后台线程重算（非阻塞）
+            # 主线程此刻 _active_platform_ctx 有正确平台上下文，捕获后传入 worker，
+            # 避免子线程 ContextVar 取不到 + 原 self.platform_id 属性不存在导致画像永不清算
+            platform_id = _active_platform_ctx.get()
             import threading
-            t = threading.Thread(target=self._refresh_style_profile_worker, daemon=True)
+            t = threading.Thread(target=self._refresh_style_profile_worker, args=(platform_id,), daemon=True)
             t.start()
         except Exception as e:
             logger.warning("[风格] 调度画像重算失败（不影响主流程）: %s", e)
 
-    def _refresh_style_profile_worker(self) -> None:
+    def _refresh_style_profile_worker(self, platform_id: str) -> None:
         """后台线程：独立 store 实例跑 compute + save（避免与主线程共用连接）。"""
         try:
             from src.memory.store_factory import get_store
@@ -88,7 +91,7 @@ class ReplyHelpersMixin(EngineMixinBase):
             path = getattr(self.config.storage, "path", None) or DEFAULT_STORAGE_PATH
             store = get_store(path)
             store.init_db()
-            prof = store._memory_ops_repo.compute_style_profile(owner, platform=self.platform_id)
+            prof = store._memory_ops_repo.compute_style_profile(owner, platform=platform_id)
             if prof:
                 max_v = getattr(self.config.llm, "persona_history_max_versions", 10) or 10
                 store._memory_ops_repo.save_style_profile(prof, trigger="auto", max_versions=max_v)

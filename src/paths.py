@@ -23,7 +23,9 @@
 所有 getter 均**不**主动建目录（避免在 import / 单元测试中意外在用户主目录落文件）；
 真正启动进程时由 ``main()`` 调一次 ``ensure_runtime_dirs()`` 建好可写目录。
 
-状态管理：使用 threading.local 隔离线程级覆盖，避免 global 关键字。
+状态管理：覆盖为进程级一次性设置（启动 argv 传入），所有线程（主线程 / 轮询
+daemon / Web uvicorn）必须看到同一份，故用模块级属性 + Lock 共享，而非
+threading.local()（否则 daemon/Web 线程读不到 → 数据被劈到不同目录）。
 """
 from __future__ import annotations
 
@@ -40,37 +42,42 @@ APP_AUTHOR = "Linkora"
 
 
 class _PathOverrideState:
-    """线程级路径覆盖状态（替代 global 变量）。"""
+    """进程级路径覆盖状态（替代 global 变量）。
+
+    覆盖来自启动 argv（--data-dir / --config），属进程级一次性设置。若用
+    threading.local() 隔离，只有调用 set_* 的线程能看到，轮询 daemon / Web
+    uvicorn 线程会读不到 → 各自回退到 cwd/data 或 user_data_dir/data，
+    数据被劈成两份。故这里用普通实例属性 + Lock，保证所有线程读到同一份。
+    """
 
     def __init__(self) -> None:
-        self._local = threading.local()
+        self._lock = threading.Lock()
+        self._data_dir_override: str | None = None
+        self._config_override: str | None = None
 
     def set_data_dir(self, path: str | None) -> None:
         """设置数据目录覆盖（--data-dir）。None 表示清除覆盖。"""
-        if path is not None:
-            self._local.data_dir_override = str(path)
-        else:
-            self._local.data_dir_override = None
+        with self._lock:
+            self._data_dir_override = str(path) if path is not None else None
 
     def get_data_dir(self) -> str | None:
-        """获取当前线程的数据目录覆盖。"""
-        return getattr(self._local, "data_dir_override", None)
+        """获取进程级数据目录覆盖。"""
+        return self._data_dir_override
 
     def set_config_path(self, path: str | None) -> None:
         """设置配置文件覆盖（--config）。None 表示清除覆盖。"""
-        if path is not None:
-            self._local.config_override = str(path)
-        else:
-            self._local.config_override = None
+        with self._lock:
+            self._config_override = str(path) if path is not None else None
 
     def get_config_path(self) -> str | None:
-        """获取当前线程的配置文件覆盖。"""
-        return getattr(self._local, "config_override", None)
+        """获取进程级配置文件覆盖。"""
+        return self._config_override
 
     def clear(self) -> None:
         """清除所有覆盖（测试用）。"""
-        self._local.data_dir_override = None
-        self._local.config_override = None
+        with self._lock:
+            self._data_dir_override = None
+            self._config_override = None
 
 
 # 全局单例状态（每个线程独立）

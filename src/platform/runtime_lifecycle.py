@@ -49,7 +49,10 @@ class LifecycleMixin(EngineMixinBase):
         self._incomplete_fired_without_request = 0
 
         # 回复冷却 & 并发控制
-        self._replying_chats: set[str] = set()
+        # _replying_chats: chat_id -> 持锁令牌（每次 acquire 生成 uuid）。
+        # 用令牌而非简单 set 登记，使释放时仅当令牌匹配才删，杜绝
+        # 「看门狗强制释放陈旧锁 + 旧持有线程 finally 误删新锁」导致的同会话并发重复回复。
+        self._replying_chats: dict[str, str] = {}
         self._replying_lock = threading.Lock()
         # 回复锁防死锁看门狗：chat_id -> 上锁时刻。单条回复处理若卡死超过阈值，
         # 下次锁竞争时强制释放，避免会话被「假正在回复中」永久阻塞。

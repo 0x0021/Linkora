@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from .base import *  # noqa: F403
-from .reply_helpers import ReplyHelpersMixin  # 既有回复增强 mixin + 兼容 re-export
+from .reply_helpers import (
+    ReplyHelpersMixin,  # 既有回复增强 mixin + 兼容 re-export
+    _citation_relevant_to_reply,  # noqa: F401  # 兼容 test_p2_citation 直接导入
+)
 from .runtime_lifecycle import LifecycleMixin
 from .runtime_setup import SetupMixin
 from .runtime_reply_guard import (

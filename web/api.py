@@ -638,6 +638,20 @@ def _write_config(config_dict: dict, changed_keys: set[str] | None = None) -> di
 
 # ============ Request Models ============
 # Pydantic 模型已提取到 web/schemas.py；以下仅为向后兼容的 re-export。
+from web.schemas import (  # noqa: F401  # 供测试/子路由通过 web.api.ConfigUpdate 等方式访问
+    AutoSyncUpdate,
+    ConfigUpdate,
+    DingTalkDocImportKb,
+    DingTalkDocSync,
+    KbDocumentCreate,
+    KeywordBatchOp,
+    KeywordMatchTest,
+    KeywordUpdate,
+    RagChatQuery,
+    RagQuery,
+    RuleKeyword,
+    SystemPromptUpdate,
+)
 
 
 # ============ Utility ============

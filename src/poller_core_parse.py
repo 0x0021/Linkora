@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -91,7 +92,10 @@ def _extract_post_text_and_img(post: dict) -> tuple[str, bool]:
     return " ".join(texts).strip(), has_img
 
 
-class ParseMixin:
+from src.poller_mixins_base import PollerMixinBase
+
+
+class ParseMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。"""
 
     def _parse_timestamp(self, ts_str: str) -> datetime:
@@ -191,7 +195,7 @@ class ParseMixin:
                 "edit": "edit",
                 "recall": "recall",
             }
-            resolved = type_map.get(mt, mt)
+            resolved = type_map.get(mt, mt or "unknown")
             # 通话/编辑/撤回等系统通知：dws 可能把 msgType 标为 text（典型如钉钉
             # "[语音通话] 通话时长 XX秒"），但内容含明确系统通知关键词。这类消息
             # 不应触发 bot 回复，故对 text/markdown 等纯文本类型优先按关键词重分类，

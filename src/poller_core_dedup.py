@@ -9,7 +9,10 @@ from src.memory.platform_context import get_current_platform
 logger = logging.getLogger(__name__)
 
 
-class DedupMixin:
+from src.poller_mixins_base import PollerMixinBase
+
+
+class DedupMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。"""
 
     def _is_msg_processed(self, msg_id: str) -> bool:

@@ -121,7 +121,8 @@ class ConversationRepo:
                             chat_type: str,
                             peer_user_id: str = "",
                             peer_open_dingtalk_id: str = "",
-                            platform: str = "") -> None:
+                            platform: str = "",
+                            last_message_time: Optional[str] = None) -> None:
         # 跨平台防护：ou_xxx 是飞书用户级 open_id，不能作为会话级 chat_id。
         if not chat_id or str(chat_id).startswith("ou_"):
             logger.warning(
@@ -131,6 +132,9 @@ class ConversationRepo:
             return
         cur = self._cc(platform).cursor()
         now = datetime.now().isoformat()
+        # last_message_time 优先用调用方传入的真实最后消息时间（如轮询器从消息时间戳推算），
+        # 缺省回落到当前时间，保持历史行为一致。
+        lmt = last_message_time or now
         cur.execute(
             """INSERT INTO conversations (chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id, last_message_time, message_count, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
@@ -141,7 +145,7 @@ class ConversationRepo:
                    peer_open_dingtalk_id = CASE WHEN excluded.peer_open_dingtalk_id != '' THEN excluded.peer_open_dingtalk_id ELSE conversations.peer_open_dingtalk_id END,
                    last_message_time = excluded.last_message_time,
                    updated_at = excluded.updated_at""",
-            (chat_id, chat_name or "", chat_type, peer_user_id, peer_open_dingtalk_id, now, now, now),
+            (chat_id, chat_name or "", chat_type, peer_user_id, peer_open_dingtalk_id, lmt, now, now),
         )
         self._cc(platform).commit()
 

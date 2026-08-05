@@ -45,7 +45,10 @@ class _SyncCancelled(Exception):
     pass
 
 
-class HistorySyncMixin:
+from src.poller_mixins_base import PollerMixinBase
+
+
+class HistorySyncMixin(PollerMixinBase):
     # 分窗参数：窗长取 7 天，避免活跃组织单窗消息量超过 list-all 50 页上限
     # （50 页 × 100 条/页 = 5000 条/窗）导致截断漏消息（2026-08-03 事故：
     # range 模式 days=24 单窗触顶，窗口内消息未拉全）。

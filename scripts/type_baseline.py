@@ -21,11 +21,15 @@ import json
 import sys
 from pathlib import Path
 
-# 锁定基线：2026-08-05 在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
+# 锁定基线：在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
-# 当前 1057 = 初始基线 1059 - 2（修复 poller_core_parse 中未定义 json 的潜在
-# NameError + intent_generator __all__ 中不存在的导出）。
-TYPE_ERROR_BASELINE = 1057
+# 当前 665 = 1057 基线 - 392：
+#   - poller 家族建共享基类 PollerMixinBase/LinkoraComponentBase，消 ~320 条动态
+#     MRO 跨 mixin 属性访问错误（reportAttributeAccessIssue）；
+#   - 顺带修掉被 unknown 掩盖的真实隐患：concurrent 未导入（poller.py 构造期
+#     NameError）、upsert_conversation 缺 last_message_time 参数（运行时 TypeError）、
+#     DocumentParser 收到 PollerConfig 而非 AppConfig、_detect_msg_type 返回值可能 None。
+TYPE_ERROR_BASELINE = 665
 
 
 def count_errors(report: dict) -> int:

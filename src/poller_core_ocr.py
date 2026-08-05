@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from src.image_path import account_id_dir, image_rel_path
+
+if TYPE_CHECKING:
+    from src.config import AppConfig
 
 
 logger = logging.getLogger(__name__)
@@ -32,7 +37,10 @@ def _search_image_key(obj):
     return None
 
 
-class OcrMixin:
+from src.poller_mixins_base import PollerMixinBase
+
+
+class OcrMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。"""
 
     # ------------------------------------------------------------------
@@ -569,7 +577,9 @@ class OcrMixin:
             with self._ocr_cache_lock:
                 if self._doc_parser is None:
                     try:
-                        self._doc_parser = DocumentParser(self.config)
+                        # poller 只有 PollerConfig，但 DocumentParser 仅存储 config
+                        # （内部不读取具体字段），运行时兼容；此处 cast 以满足静态类型。
+                        self._doc_parser = DocumentParser(cast("AppConfig", self.config))
                         logger.info("[轮询器] OCR 引擎实例已初始化并缓存复用")
                     except Exception as e:
                         logger.warning("[轮询器] OCR 解析器初始化失败: %s", e)

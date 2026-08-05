@@ -4,7 +4,7 @@ import logging
 import threading
 import time
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Callable
 
@@ -153,7 +153,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             thread_name_prefix="image-proc",
         )
         # OCR 进行中的消息 ID -> Future（用于等待 OCR 完成）
-        self._ocr_futures: dict[str, concurrent.futures.Future] = {}
+        self._ocr_futures: dict[str, Future] = {}
         # OCR 完成结果持久缓存（future 完成后结果保留在此，wait_for_ocr 总能取到）
         self._ocr_results: dict[str, str] = {}
         # OCR 完成图片相对路径缓存（供消息记录页缩略图使用）

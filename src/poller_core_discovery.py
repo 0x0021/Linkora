@@ -42,7 +42,10 @@ from src.poller_core_dispatch import DispatchMixin
 
 
 
-class DiscoveryMixin:
+from src.poller_mixins_base import PollerMixinBase
+
+
+class DiscoveryMixin(PollerMixinBase):
     def _get_recent_conversations_from_db(self) -> list[dict]:
         """从数据库获取最近有消息的会话列表（不依赖未读标记）。"""
         try:

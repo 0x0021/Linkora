@@ -10,7 +10,9 @@ import time
 from datetime import datetime, timedelta
 
 from src.dws_adapter import DwsPermissionError
+from src.models import Message
 from src.poller_utils import match_notification_signature
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,10 @@ _PLATFORM_CLI_LABEL: dict[str, str] = {
 
 
 
-class PollerStrategyMixin:
+from src.poller_mixins_base import PollerMixinBase
+
+
+class PollerStrategyMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。
     
     包含 poll_once 主循环、未读会话发现、list-all 取信、会话聚合、

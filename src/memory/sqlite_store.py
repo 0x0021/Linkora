@@ -284,6 +284,18 @@ from src.memory.sqlite_store_index import SQLiteStoreIndexMixin
 
 
 class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
+    # 主库→会话库引导迁移时，按 chat_id 前缀归类各平台可见会话。
+    # None = 该平台不做前缀过滤（全量拷贝）。未登记的平台跳过迁移。
+    # 【类级常量】此前误缩进在 __init__ 内成为局部变量，导致
+    # sqlite_store_conn._migrate_main_to_conv 访问 self._MIGRATE_PLATFORM_PREFIXES
+    # 必然 AttributeError，且被调用方 except Exception 吞成 warning——
+    # 多账号首次引导迁移长期静默失败。切勿再挪回 __init__。
+    _MIGRATE_PLATFORM_PREFIXES: dict[str, Optional[list[str]]] = {
+        "feishu": ["oc_"],
+        "dingtalk": ["cid", "DD"],  # DD 开头为钉钉单聊以 open_id 直作 chat_id 的形态
+        "wecom": None,
+    }
+
     def __init__(self, db_path: str = DEFAULT_STORAGE_PATH):
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -326,16 +338,6 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
         self.__feedback_repo = None
         self.__keyword_rule_repo = None
         self.__tool_execution_repo = None
-
-        _MIGRATE_PLATFORM_PREFIXES = {
-            "feishu": ["oc_"],
-            "dingtalk": ["cid", "DD"],  # DD 开头为钉钉单聊以 open_id 直作 chat_id 的形态
-            "wecom": None,
-        }
-
-        DEFAULT_COOLDOWN_HOURS = 1  # 默认冷却时长（不传 cooldown_until 时启用）
-
-        PERMANENT_BLOCK_THRESHOLD = 3  # 连续失败 ≥ 该阈值才升级永久黑名单
 
     def _remove_chunks_from_index(self, chunk_ids: list[int]) -> None:
         return self._kb_repo._remove_chunks_from_index(chunk_ids)

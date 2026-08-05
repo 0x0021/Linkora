@@ -1,5 +1,6 @@
 """DwsAdapter 引擎钩子 mixin（CLI 拼命令 / 错误分类 / 本地 profile 缓存）。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 import json
@@ -21,7 +22,7 @@ from src.dws_adapter.core import (
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterBaseMixin:
+class DwsAdapterBaseMixin(DwsAdapterBase):
     def __init__(self, cli_path: str = "dws", timeout: int = 30,
                  retries: int = 2, dry_run: bool = True, profile: str = "",
                  ai_tag_default: bool = True):

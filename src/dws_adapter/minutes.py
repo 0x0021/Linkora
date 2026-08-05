@@ -1,12 +1,13 @@
 """DwsAdapter AI 听记 mixin。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterMinutesMixin:
+class DwsAdapterMinutesMixin(DwsAdapterBase):
     def minutes_list(self, scope: str = "mine", query: str | None = None,
                      start: str | None = None, end: str | None = None,
                      limit: int = 10, cursor: str = "") -> list:

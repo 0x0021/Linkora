@@ -1,5 +1,6 @@
 """DwsAdapter 认证/组织 mixin（auth status/login、profile、org 切换）。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 from datetime import datetime
@@ -9,7 +10,7 @@ from src.dws_adapter.core import DwsError, is_org_config_problem
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterAuthOrgMixin:
+class DwsAdapterAuthOrgMixin(DwsAdapterBase):
     def auth_status(self) -> dict:
         """检查认证状态。返回 {"authenticated": bool, ...}"""
         try:

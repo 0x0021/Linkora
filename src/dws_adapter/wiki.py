@@ -1,12 +1,13 @@
 """DwsAdapter 知识库 mixin。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterWikiMixin:
+class DwsAdapterWikiMixin(DwsAdapterBase):
     def wiki_space_list(self, space_type: str = "orgWikiSpace",
                         limit: int = 20, cursor: str = "") -> list:
         """列出知识库空间。type: orgWikiSpace(组织,默认) / myWikiSpace / orgSpace / mySpace。"""

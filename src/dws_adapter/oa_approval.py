@@ -1,5 +1,6 @@
 """DwsAdapter OA 审批只读查询 mixin。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 import time
@@ -7,7 +8,7 @@ import time
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterOaApprovalMixin:
+class DwsAdapterOaApprovalMixin(DwsAdapterBase):
     def oa_approval_list_forms(self, cursor: str = "0", limit: int = 100) -> list:
         """列出当前用户可见的审批表单模板。
 

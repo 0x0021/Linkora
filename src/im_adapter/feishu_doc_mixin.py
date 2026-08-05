@@ -6,6 +6,7 @@
 等核心依赖。
 """
 from __future__ import annotations
+from .im_mixins_base import IMAdapterBase
 
 import json
 import logging
@@ -27,7 +28,7 @@ from .errors import (
 logger = logging.getLogger(__name__)
 
 
-class FeishuDocMixin:
+class FeishuDocMixin(IMAdapterBase):
     """飞书文档能力混入 —— 提供文档搜索 / 读取 / 列表 / 全量消息拉取等能力。
 
     不直接继承任何基类；所有依赖（``self.run()`` / ``self._build_command()`` /

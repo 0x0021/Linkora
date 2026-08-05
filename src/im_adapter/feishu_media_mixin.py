@@ -4,6 +4,7 @@
 ``_run_download()`` 等核心依赖。
 """
 from __future__ import annotations
+from .im_mixins_base import IMAdapterBase
 
 import logging
 import os
@@ -12,7 +13,7 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 
-class FeishuMediaMixin:
+class FeishuMediaMixin(IMAdapterBase):
     """飞书媒体能力混入 —— 提供媒体上传 / 下载 / 类型推断等能力。
 
     不直接继承任何基类；所有依赖（``self._run_download()`` 等）均由最终类

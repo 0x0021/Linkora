@@ -1,5 +1,6 @@
 """DwsAdapter 文档/联系人/日历/待办 mixin。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 
@@ -8,7 +9,7 @@ from src.dws_adapter.core import DwsError
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterDocMixin:
+class DwsAdapterDocMixin(DwsAdapterBase):
     def doc_search(self, query: str, page_size: int = 10) -> list[dict]:
         data = self.run([
             "doc", "search",

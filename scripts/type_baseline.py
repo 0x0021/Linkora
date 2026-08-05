@@ -23,15 +23,22 @@ from pathlib import Path
 
 # 锁定基线：在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
-# 当前 334 = 1057 基线 - 723：
-#   - poller 家族建 PollerMixinBase/LinkoraComponentBase，消 ~320 条动态 MRO 错误；
-#   - platform/engine 家族建 EngineMixinBase（AST 提取 97 方法 + 49 状态 stub），
-#     消 ~308 条动态 MRO 错误（355 → 13，剩余 13 为 Optional 空值访问与 config 属性缺口，
-#     非 mixin 跨访问）；
-#   - 顺带修掉被 unknown 掩盖的真实隐患（concurrent 未导入、upsert_conversation 缺
-#     last_message_time、DocumentParser 收 PollerConfig 等）。
-# 剩余大头：dws_adapter(82)/memory(71)/im_adapter(25) 三个小家族，待建共享基类收尾。
-TYPE_ERROR_BASELINE = 334
+# 当前 205 = 1057 基线 - 852，全部通过「为每个 mixin 家族建共享基类」结构性消除：
+#   - poller 家族 PollerMixinBase / LinkoraComponentBase，消 ~320 条；
+#   - platform/engine 家族 EngineMixinBase（AST 提取 97 方法 + 49 状态 stub），消 ~308 条；
+#   - dws_adapter 家族 DwsAdapterBase(60 方法/4 状态) 82 → 0；
+#   - memory 家族 SQLiteStoreBase(19 方法/30 状态) 71 → 0；
+#   - im_adapter 家族 IMAdapterBase(14 方法) 25 → 0。
+# 共享基类两条硬约束（踩过坑，已由 test_shared_type_bases_define_no_init 固化）：
+#   1. 绝不定义任何 dunder（尤其 __init__），否则在 MRO 中截胡真实父类初始化链；
+#   2. 所有 stub 必须显式 `-> Any`，否则被推断返回 None，调用点 isinstance 收窄成 Never。
+# 顺带修掉被 unknown 掩盖的真实隐患：concurrent 未导入、upsert_conversation 缺
+# last_message_time、DocumentParser 收 PollerConfig、SQLiteStore._MIGRATE_PLATFORM_PREFIXES
+# 误缩进导致多账号迁移静默失败、wecom auth_login 捕获不存在的 IMAdapterTimeoutError
+# 抛 NameError 使 3 次重试完全失效。
+# 剩余 205 已无 MRO 噪声，是真实类型问题：web/routers(59)/src/llm(35)/src/memory(31)/
+# src/platform(20)/src/poller_utils.py(13)。
+TYPE_ERROR_BASELINE = 205
 
 
 def count_errors(report: dict) -> int:

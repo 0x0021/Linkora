@@ -95,3 +95,41 @@ def test_empty_platform_does_not_migrate(store):
         ).fetchone()[0]
         == 1
     )
+
+
+def test_migrate_prefixes_is_class_level():
+    """_MIGRATE_PLATFORM_PREFIXES 必须是类属性，不能退化成 __init__ 局部变量。
+
+    回归守护：该常量曾被误缩进在 SQLiteStore.__init__ 内成为局部变量，导致
+    sqlite_store_conn._migrate_main_to_conv 访问 self._MIGRATE_PLATFORM_PREFIXES
+    必然 AttributeError；而调用方 except Exception 会把它吞成一条 warning，
+    使「主库→会话库首次引导迁移」长期静默失效。
+    """
+    assert isinstance(SQLiteStore._MIGRATE_PLATFORM_PREFIXES, dict)
+    assert set(SQLiteStore._MIGRATE_PLATFORM_PREFIXES) == {"feishu", "dingtalk", "wecom"}
+
+
+def test_known_platform_migrates_main_db_data(store):
+    """已知平台首次建会话库时，应把主库中该平台的既有会话迁移过去。
+
+    与 test_empty_platform_does_not_migrate 互为正反面：后者只能证明「不该迁的没迁」，
+    无法发现「该迁的也没迁」——_MIGRATE_PLATFORM_PREFIXES 缺失时它依然全绿。
+    """
+    store.conn.execute(
+        "INSERT INTO conversations (chat_id, chat_type, created_at, updated_at) VALUES (?,?,?,?)",
+        ("oc_seed", "single", "2026-01-01T00:00:00", "2026-01-01T00:00:00"),
+    )
+    # dingtalk 前缀会话，用于验证按平台前缀过滤而非全量盲拷
+    store.conn.execute(
+        "INSERT INTO conversations (chat_id, chat_type, created_at, updated_at) VALUES (?,?,?,?)",
+        ("cid_other", "group", "2026-01-01T00:00:00", "2026-01-01T00:00:00"),
+    )
+    store.conn.commit()
+
+    conn = store.conv_conn("feishu")
+    rows = {
+        r[0]
+        for r in conn.execute("SELECT chat_id FROM conversations").fetchall()
+    }
+    assert "oc_seed" in rows, "飞书前缀会话应被迁入账号会话库"
+    assert "cid_other" not in rows, "非本平台前缀会话不应被迁入"

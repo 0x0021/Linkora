@@ -3,6 +3,7 @@
 拆分自 sqlite_store.py；VectorIndex/get_config 保持函数内延迟导入（防循环）。
 """
 from __future__ import annotations
+from .sqlite_store_mixins_base import SQLiteStoreBase
 
 import json
 import logging
@@ -16,8 +17,7 @@ logger = logging.getLogger(__name__)
 _with_index_lock = with_index_lock  # 兼容别名
 
 
-class SQLiteStoreIndexMixin:
-
+class SQLiteStoreIndexMixin(SQLiteStoreBase):
     def _vi_kwargs(self) -> dict:
         """F18: 从全局配置读取向量索引参数，缺省回落安全默认。
 

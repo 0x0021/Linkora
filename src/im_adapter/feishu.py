@@ -116,7 +116,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
             raise self._classify_error(msg or json.dumps(data, ensure_ascii=False))
         return data
 
-    def _classify_error(self, error_msg: str) -> type:
+    def _classify_error(self, error_msg: str) -> type[IMAdapterError]:
         """把 lark-cli 错误文本映射为 ``IMAdapter*`` 异常类。
 
         lark-cli 的错误文本通常是 JSON 字符串：

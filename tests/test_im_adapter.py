@@ -108,10 +108,48 @@ class _FakeNonRetryableAdapter(BaseIMAdapter):
 def test_dws_adapter_subclasses_base():
     assert issubclass(DwsAdapter, BaseIMAdapter)
     # 拆分后：钉钉能力由 9 个 mixin 提供，BaseIMAdapter 兜底在 mixin 链尾部
-    # （抽象接口/统一引擎），MRO 中所有 mixin 排在 BaseIMAdapter 之前
+    # （抽象接口/统一引擎），MRO 中所有钉钉能力层排在 BaseIMAdapter 之前。
+    # 能力层 = 各 *Mixin + 类型共享基类 DwsAdapterBase（仅声明，无实现）。
     mro = DwsAdapter.__mro__
     base_idx = next(i for i, c in enumerate(mro) if c is BaseIMAdapter)
-    assert all("Mixin" in c.__name__ for c in mro[1:base_idx])
+    assert all(
+        "Mixin" in c.__name__ or c.__name__ == "DwsAdapterBase"
+        for c in mro[1:base_idx]
+    )
+    # 共享基类必须排在所有 mixin 之后（真实实现优先于 stub 声明）
+    names = [c.__name__ for c in mro[1:base_idx]]
+    assert names[-1] == "DwsAdapterBase", f"共享基类须位于能力层末尾: {names}"
+
+
+def test_shared_type_bases_define_no_init():
+    """所有类型共享基类绝不能声明 __init__。
+
+    回归防护（已两次实际踩坑）：
+    - DwsAdapterBase 带 __init__ → super().__init__(cli_path=...) 抛 TypeError
+    - EngineMixinBase 带 __init__ → InboundMixin() 无参实例化抛 TypeError
+
+    共享基类只做类型声明，任何 dunder 实现都会在 MRO 中截胡真实调用链。
+    """
+    from src.dws_adapter.dws_mixins_base import DwsAdapterBase
+    from src.im_adapter.im_mixins_base import IMAdapterBase
+    from src.memory.sqlite_store_mixins_base import SQLiteStoreBase
+    from src.platform.engine_mixins_base import EngineMixinBase
+    from src.poller_mixins_base import PollerMixinBase
+
+    for base in (DwsAdapterBase, IMAdapterBase, SQLiteStoreBase,
+                 EngineMixinBase, PollerMixinBase):
+        dunders = [
+            n for n in vars(base)
+            if n.startswith("__") and n.endswith("__")
+            # 排除解释器/ABC 机制自动生成的类属性，只关心显式定义的 dunder 方法
+            and n not in {"__module__", "__qualname__", "__doc__",
+                          "__annotations__", "__dict__", "__weakref__",
+                          "__firstlineno__", "__static_attributes__",
+                          "__abstractmethods__", "__parameters__",
+                          "__orig_bases__", "__slots__"}
+            and callable(getattr(base, n, None))
+        ]
+        assert not dunders, f"{base.__name__} 不得定义 dunder: {dunders}"
 
 
 def test_dws_error_aliases_equal_generic():
@@ -258,6 +296,31 @@ def test_wecom_adapter_implements_core():
     # 联系人 / 下载方法存在且非桩
     assert callable(inst.contact_user_get_self)
     assert callable(inst.download_media)
+
+
+def test_wecom_auth_login_retries_on_timeout(monkeypatch):
+    """企微登录超时应重试 3 次，而不是被 NameError 击穿。
+
+    回归守护：except 子句曾误写为不存在的 IMAdapterTimeoutError —— 求值该子句
+    即抛 NameError 并穿透整个 try（同 try 内的 except Exception 也接不住），
+    使 3 次重试完全失效。
+    """
+    import src.im_adapter.wecom as wm
+
+    inst = WecomCliAdapter()
+    attempts = []
+
+    def _boom(*a, **kw):
+        attempts.append(1)
+        raise inst._retryable_error_class()("timeout after 300s")
+
+    monkeypatch.setattr(WecomCliAdapter, "run", _boom)
+    monkeypatch.setattr(wm.time, "sleep", lambda _s: None)
+
+    with pytest.raises(Exception) as ei:
+        inst.auth_login()
+    assert not isinstance(ei.value, NameError), "重试逻辑不得被 NameError 击穿"
+    assert len(attempts) == 3, f"应重试 3 次，实际 {len(attempts)} 次"
 
 
 def test_feishu_adapter_implements_core():

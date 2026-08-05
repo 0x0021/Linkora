@@ -5,9 +5,12 @@ import logging
 import math
 import os
 import threading
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+
+if TYPE_CHECKING:  # 仅供类型检查；faiss 保持方法体内延迟导入（避免启动开销）
+    import faiss
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,9 @@ class VectorIndex:
         self._reverse_map: dict[int, int] = {}    # chunk_id -> faiss_idx
         # 归一化后的 embedding 缓存：chunk_id -> np.ndarray（F18 自动重建用）
         self._emb_cache: Optional[dict[int, np.ndarray]] = {} if self.cache_embeddings else None
-        self._index: Optional[object] = None
+        # 惰性注解（from __future__ import annotations）：运行时不求值，
+        # 不会因 faiss 未导入而报错；此前写成 object 使全部 faiss 成员访问失去检查
+        self._index: Optional[faiss.Index] = None
         self._lock = threading.RLock()
         self._init_index()
 

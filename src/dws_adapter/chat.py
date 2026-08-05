@@ -1,5 +1,6 @@
 """DwsAdapter 聊天能力 mixin（会话/消息读写/发送/引用回复）。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 import time
@@ -12,7 +13,7 @@ from src.im_adapter.message_format import classify_message_format
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterChatMixin:
+class DwsAdapterChatMixin(DwsAdapterBase):
     # 类级冷却表：key = "start|end" 时间窗，value = 上次打印上限提示的 unix timestamp。
     # 用类级而非实例级，避免多实例/多线程场景下 5 分钟冷却失效导致刷屏。
     _list_all_cap_warn_at: dict[str, float] = {}

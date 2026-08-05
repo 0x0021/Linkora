@@ -43,6 +43,7 @@ from typing import Any
 MAX_BACKOFF_SECONDS = 30
 
 from .base_adapter import BaseIMAdapter
+from .errors import IMAdapterError
 from .markdown_fix import normalize_markdown_for_platform
 
 logger = logging.getLogger(__name__)
@@ -234,7 +235,7 @@ class WecomCliAdapter(BaseIMAdapter):
             raise err_cls(detail)
         return inner
 
-    def _classify_error(self, error_msg: str) -> type:
+    def _classify_error(self, error_msg: str) -> type[IMAdapterError]:
         """把企微错误文本映射为 ``IMAdapter*`` 异常类。
 
         错误文本可能是：
@@ -300,7 +301,11 @@ class WecomCliAdapter(BaseIMAdapter):
         for attempt in range(3):
             try:
                 return self.run(args, timeout=300, force_no_dry_run=True)
-            except IMAdapterTimeoutError as e:
+            # 基类 run() 超时抛的是 _retryable_error_class()（与本文件其余捕获点一致）。
+            # 此前误写为 IMAdapterTimeoutError —— 该类根本不存在，求值 except 子句即抛
+            # NameError 并穿透整个 try（连下面的 except Exception 也接不住），
+            # 导致企微登录一超时就崩、3 次重试完全失效。
+            except self._retryable_error_class() as e:
                 logger.warning("wecom auth_login 超时 (attempt %d/3): %s", attempt + 1, e)
                 last_error = e
                 if attempt < 2:

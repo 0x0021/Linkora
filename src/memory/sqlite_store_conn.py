@@ -3,6 +3,7 @@
 拆分自 sqlite_store.py。
 """
 from __future__ import annotations
+from .sqlite_store_mixins_base import SQLiteStoreBase
 
 import hashlib
 import logging
@@ -18,8 +19,7 @@ from src.memory.schema import init_conv_schema, init_schema
 logger = logging.getLogger(__name__)
 
 
-class SQLiteStoreConnMixin:
-
+class SQLiteStoreConnMixin(SQLiteStoreBase):
     @property
     def conn(self) -> sqlite3.Connection:
         """返回【当前线程】独立的 SQLite 连接（懒创建 + 缓存）。
@@ -214,7 +214,9 @@ class SQLiteStoreConnMixin:
         # 用 type(self) 而非类名 SQLiteStore：mixin 拆分后类名不再位于本模块命名空间
         _cls = type(self)
         if not hasattr(_cls, "_checked_db_paths"):
-            _cls._checked_db_paths: set[str] = set()
+            # 注：属性表达式上的类型注解会被 Python 静默忽略（不进 __annotations__），
+            # 类型声明统一放 SQLiteStoreBase（ClassVar），此处只做赋值
+            _cls._checked_db_paths = set()
         if self.db_path in _cls._checked_db_paths:
             return
         _cls._checked_db_paths.add(self.db_path)
@@ -242,7 +244,8 @@ class SQLiteStoreConnMixin:
         """
         _cls = type(self)
         if not hasattr(_cls, "_cleaned_orphan_paths"):
-            _cls._cleaned_orphan_paths: set[str] = set()
+            # 同上：类型声明在 SQLiteStoreBase（ClassVar）
+            _cls._cleaned_orphan_paths = set()
         if self.db_path in _cls._cleaned_orphan_paths:
             return
         _cls._cleaned_orphan_paths.add(self.db_path)

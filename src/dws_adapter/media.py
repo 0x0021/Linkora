@@ -1,5 +1,6 @@
 """DwsAdapter 媒体能力 mixin（上传/下载/会话信息/已读回执）。拆分自 dws_adapter.py。"""
 from __future__ import annotations
+from .dws_mixins_base import DwsAdapterBase
 
 import logging
 import os
@@ -8,7 +9,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-class DwsAdapterMediaMixin:
+class DwsAdapterMediaMixin(DwsAdapterBase):
     def media_upload(self, file_path: str, media_type: str = "image") -> str:
         """上传本地媒体文件到钉钉，返回 media_id（供 image 消息发送使用）。
 

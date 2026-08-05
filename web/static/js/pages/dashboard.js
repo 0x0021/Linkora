@@ -316,7 +316,7 @@ function injectDashboardSkeletons() {
     set('decisions-top-list', skKwRows(10));
     set('top-senders-list', skKwRows(5));
     // 系统状态网格
-    set('status-list', skStatusTiles(7));
+    set('status-list', skStatusTiles(6));
     // 最近消息
     set('recent-messages-stream', skLogRows(6));
     // 工具调用统计：排行列表（3列网格）+ 4 个汇总值
@@ -325,8 +325,10 @@ function injectDashboardSkeletons() {
     const relSk = '<span class="rel-skeleton skeleton"></span>';
     ['bp-max-dispatch','bp-max-concurrent','bp-last-dispatched','bp-last-deferred',
      'db-pending','db-delay-count','db-extra-sec','db-fired-with',
-     'ps-last-poll','ps-poll-count','ps-queue-depth','ps-last-error','ps-running',
-     'drift-status'].forEach(id => set(id, relSk));
+     'ps-last-poll','ps-poll-count','ps-queue-depth','ps-last-error','ps-running'].forEach(id => set(id, relSk));
+    // 「工具」chip 的 value 骨架（自检回包前会闪一下）
+    const toolsChipVal = document.querySelector('#tools-tile .ov-chip-value');
+    if (toolsChipVal) toolsChipVal.innerHTML = '<span class="rel-skeleton skeleton" style="width:38px;height:11px;display:inline-block;vertical-align:middle;"></span>';
     // 高频关键词 / 图表：重新显出骨架，渲染后由各自 render 隐藏
     const wcSk = document.getElementById('word-cloud-skeleton');
     if (wcSk) wcSk.style.display = 'block';
@@ -417,26 +419,41 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
             const trippedCount = circuit.tripped_count || 0;
             const llmModel = cfg.llm_model || '-';
             const embValue = cfg.embedding_enabled ? (cfg.embedding_model || '已启用') : '未启用';
-            // 数据驱动的胶囊流：长文本由 CSS ellipsis 截断，title 保留全文
+            const toolsCount = cfg.tools_count ?? null;
+            // 数据驱动的胶囊流：每个胶囊带 hint 用大白话解释含义，
+            // mouseover 看 tooltip 即可，不需要点进去。重复含义项合并去重。
+            const dryRunHint = cfg.dry_run
+                ? 'Dry Run：收消息但不调用 LLM、不会回复/写操作，用于观察链路'
+                : '正常模式：消息会正常进入处理链路';
+            const embHint = cfg.embedding_enabled
+                ? `语义检索已启用，模型 ${cfg.embedding_model || '已加载'}`
+                : '语义检索未启用，只能做关键词检索';
+            const tripHint = trippedCount > 0
+                ? `熔断器跳闸：${trippedCount} 个工具被临时禁用（失败次数过多），冷却后自动恢复`
+                : '熔断器无跳闸，全部工具可用';
+            const pollHint = cfg.poll_interval != null
+                ? `${cfg.poll_interval} 秒轮询一次新消息，越短越实时但越耗资源`
+                : '轮询间隔未配置';
+            const llmHint = `当前对话生成模型：${llmModel}`;
+            const toolsHint = (toolsCount != null)
+                ? `内置 ${toolsCount} 个技能/工具，对话时可被模型调用（读文档、发审批、查日程…）`
+                : '工具数未上报';
             const chips = [
-                { ic: 'fa-circle-play', label: '运行模式', value: cfg.dry_run ? 'Dry Run' : '正常', tone: cfg.dry_run ? 'warn' : 'ok' },
-                { ic: 'fa-microchip', label: 'LLM', value: llmModel, title: llmModel },
-                { ic: 'fa-cubes', label: 'Embedding', value: embValue, title: embValue, tone: cfg.embedding_enabled ? '' : 'warn' },
-                { ic: 'fa-arrows-rotate', label: '轮询', value: cfg.poll_interval != null ? cfg.poll_interval + 's' : '-' },
-                { ic: 'fa-toolbox', label: '工具', value: (cfg.tools_count ?? '-') + ' 个' },
-                { ic: 'fa-shield-halved', label: '熔断', value: trippedCount > 0 ? trippedCount + ' 个' : '正常', tone: trippedCount > 0 ? 'warn' : 'ok' },
+                { ic: 'fa-circle-play', label: '运行模式', value: cfg.dry_run ? 'Dry Run' : '正常', tone: cfg.dry_run ? 'warn' : 'ok', hint: dryRunHint },
+                { ic: 'fa-microchip', label: 'LLM', value: llmModel, title: llmModel, hint: llmHint },
+                { ic: 'fa-cubes', label: 'Embedding', value: embValue, title: embValue, tone: cfg.embedding_enabled ? '' : 'warn', hint: embHint },
+                { ic: 'fa-arrows-rotate', label: '轮询', value: cfg.poll_interval != null ? cfg.poll_interval + 's' : '-', hint: pollHint },
+                { ic: 'fa-shield-halved', label: '熔断', value: trippedCount > 0 ? trippedCount + ' 个' : '正常', tone: trippedCount > 0 ? 'warn' : 'ok', hint: tripHint },
+                // 「工具」与「配置自检」合并：注册数与白名单一致性是同一件事的两面，
+                // 分开显示让用户看到一个 38 出现两次的混乱。统一一个胶囊表达，drift 状态用 tone 区分。
+                { ic: 'fa-toolbox', label: '工具', value: (toolsCount != null) ? toolsCount + ' 个' : '-', hint: toolsHint, dataId: 'tools-tile' },
             ];
             statusList.innerHTML = chips.map(c => `
-                <div class="ov-chip${c.tone ? ' is-' + c.tone : ''}">
+                <div class="ov-chip${c.tone ? ' is-' + c.tone : ''}"${c.dataId ? ` id="${c.dataId}"` : ''}${c.hint ? ` title="${escapeHtml(c.hint)}"` : ''}>
                     <span class="ov-chip-ico"><i class="fa-solid ${c.ic}"></i></span>
                     <span class="ov-chip-label">${c.label}</span>
                     <span class="ov-chip-value${c.tone ? ' ' + c.tone : ''}"${c.title ? ` title="${escapeHtml(String(c.title))}"` : ''}>${escapeHtml(String(c.value))}</span>
-                </div>`).join('') + `
-                <div class="ov-chip" id="drift-tile">
-                    <span class="ov-chip-ico"><i class="fa-solid fa-clipboard-check"></i></span>
-                    <span class="ov-chip-label">配置自检</span>
-                    <span class="ov-chip-value" id="drift-status"><span class="rel-skeleton skeleton" style="width:52px;height:10px;display:inline-block;"></span></span>
-                </div>`;
+                </div>`).join('');
         }
 
         // Update user name
@@ -508,25 +525,30 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
             try {
                 const driftData = await api.fetch('/api/config-drift');
                 if (currentPage !== 'dashboard') return;
-                const el = document.getElementById('drift-status');
-                if (!el) return;
-                const chip = document.getElementById('drift-tile');
-                // tone 同时作用于 value 文字色与 chip 图标底色
+                // 「工具」chip 既是数量展示也是自检状态：根据 /api/config-drift
+                // 结果调整 tone，并更新 title 把漂移细节写进 tooltip。
+                const el = document.getElementById('drift-status');  // 兼容旧引用
+                const valueEl = document.querySelector('#tools-tile .ov-chip-value');
+                const chip = document.getElementById('tools-tile');
                 const setTone = (tone) => {
-                    el.className = 'ov-chip-value' + (tone ? ' ' + tone : '');
+                    if (valueEl) valueEl.className = 'ov-chip-value' + (tone ? ' ' + tone : '');
                     if (chip) chip.className = 'ov-chip' + (tone ? ' is-' + tone : '');
+                    if (el) el.className = 'ov-chip-value' + (tone ? ' ' + tone : '');
                 };
-                if (!driftData || driftData.available === false) {
-                    el.textContent = '—';
-                    setTone('');
+                if (!driftData || driftData.available === false
+                    || !Array.isArray(driftData.missing_in_whitelist)
+                    || !Array.isArray(driftData.stale_in_whitelist)) {
+                    // 自检不可用，不动 tone（保留 default）
+                    if (valueEl) valueEl.title = '配置自检暂不可用';
                 } else if (driftData.missing_in_whitelist.length || driftData.stale_in_whitelist.length) {
-                    el.textContent = '有漂移';
                     setTone('warn');
-                    el.title = '缺少: ' + driftData.missing_in_whitelist.join(',')
-                        + (driftData.stale_in_whitelist.length ? ' | 多余: ' + driftData.stale_in_whitelist.join(',') : '');
+                    const detail = '缺少 ' + driftData.missing_in_whitelist.length + ' / 多余 ' + driftData.stale_in_whitelist.length
+                        + '\n缺：' + driftData.missing_in_whitelist.join(', ')
+                        + (driftData.stale_in_whitelist.length ? '\n多余：' + driftData.stale_in_whitelist.join(', ') : '');
+                    if (valueEl) valueEl.title = detail;
                 } else {
-                    el.textContent = '一致 (' + driftData.registered_count + ')';
                     setTone('ok');
+                    if (valueEl) valueEl.title = `${driftData.registered_count} 个工具全部就位，没有漂移`;
                 }
             } catch (e) {
                 console.error('Drift check failed:', e);

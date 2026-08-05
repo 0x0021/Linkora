@@ -297,9 +297,11 @@ function skStatusTiles(n = 6) {
     let h = '';
     for (let i = 0; i < n; i++) {
         h += `<div class="status-tile skeleton-tile">
-            <div class="skeleton skeleton-line" style="height:22px;width:22px;border-radius:6px"></div>
-            <div class="skeleton skeleton-line" style="height:10px;width:50%"></div>
-            <div class="skeleton skeleton-line" style="height:14px;width:70%"></div>
+            <div class="skeleton" style="width:30px;height:30px;border-radius:50%;flex-shrink:0"></div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                <div class="skeleton skeleton-line" style="height:9px;width:55%"></div>
+                <div class="skeleton skeleton-line" style="height:12px;width:75%"></div>
+            </div>
         </div>`;
     }
     return h;
@@ -415,43 +417,57 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
         if (statusList) {
             const trippedCount = circuit.tripped_count || 0;
             const circuitBadge = trippedCount > 0
-                ? `<span class="status-tile-value warn">${trippedCount} 个 🔥</span>`
-                : `<span class="status-tile-value ok">正常 ✅</span>`;
+                ? `<div class="status-tile-value warn">${trippedCount} 个</div>`
+                : `<div class="status-tile-value ok">正常</div>`;
             statusList.innerHTML = `
                 <div class="status-tile">
-                    <div class="status-tile-icon">⚙️</div>
-                    <div class="status-tile-label">运行模式</div>
-                    <div class="status-tile-value">${cfg.dry_run ? 'Dry Run' : '正常'}</div>
+                    <div class="status-tile-icon"><i class="fa-solid fa-circle-play"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">运行模式</div>
+                        <div class="status-tile-value">${cfg.dry_run ? 'Dry Run' : '正常'}</div>
+                    </div>
                 </div>
                 <div class="status-tile">
-                    <div class="status-tile-icon">🧠</div>
-                    <div class="status-tile-label">LLM 模型</div>
-                    <div class="status-tile-value" title="${escapeHtml((cfg.llm_model || '-').slice(0, 100))}">${escapeHtml((cfg.llm_model || '-').length > 20 ? (cfg.llm_model || '-').slice(0,18)+'…' : (cfg.llm_model || '-'))}</div>
+                    <div class="status-tile-icon"><i class="fa-solid fa-microchip"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">LLM 模型</div>
+                        <div class="status-tile-value" title="${escapeHtml((cfg.llm_model || '-').slice(0, 100))}">${escapeHtml((cfg.llm_model || '-').length > 20 ? (cfg.llm_model || '-').slice(0,18)+'…' : (cfg.llm_model || '-'))}</div>
+                    </div>
                 </div>
                 <div class="status-tile">
-                    <div class="status-tile-icon">🔗</div>
-                    <div class="status-tile-label">Embedding</div>
-                    <div class="status-tile-value">${cfg.embedding_enabled ? (cfg.embedding_model || '已启用') : '未启用'}</div>
+                    <div class="status-tile-icon"><i class="fa-solid fa-cubes"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">Embedding</div>
+                        <div class="status-tile-value">${cfg.embedding_enabled ? (cfg.embedding_model || '已启用') : '未启用'}</div>
+                    </div>
                 </div>
                 <div class="status-tile">
-                    <div class="status-tile-icon">🔄</div>
-                    <div class="status-tile-label">轮询间隔</div>
-                    <div class="status-tile-value">${cfg.poll_interval != null ? cfg.poll_interval + 's' : '-'}</div>
+                    <div class="status-tile-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">轮询间隔</div>
+                        <div class="status-tile-value">${cfg.poll_interval != null ? cfg.poll_interval + 's' : '-'}</div>
+                    </div>
                 </div>
                 <div class="status-tile">
-                    <div class="status-tile-icon">🛠️</div>
-                    <div class="status-tile-label">可用工具</div>
-                    <div class="status-tile-value">${cfg.tools_count ?? '-'} 个</div>
+                    <div class="status-tile-icon"><i class="fa-solid fa-toolbox"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">可用工具</div>
+                        <div class="status-tile-value">${cfg.tools_count ?? '-'} 个</div>
+                    </div>
                 </div>
                 <div class="status-tile">
-                    <div class="status-tile-icon">⛔</div>
-                    <div class="status-tile-label">熔断保护</div>
-                    ${circuitBadge}
+                    <div class="status-tile-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">熔断保护</div>
+                        ${circuitBadge}
+                    </div>
                 </div>
                 <div class="status-tile" id="drift-tile">
-                    <div class="status-tile-icon">📋</div>
-                    <div class="status-tile-label">配置自检</div>
-                    <div class="status-tile-value" id="drift-status"><span class="rel-skeleton skeleton" style="width:60px;display:inline-block;"></span></div>
+                    <div class="status-tile-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                    <div class="status-tile-text">
+                        <div class="status-tile-label">配置自检</div>
+                        <div class="status-tile-value" id="drift-status"><span class="rel-skeleton skeleton" style="width:60px;display:inline-block;"></span></div>
+                    </div>
                 </div>
             `;
         }
@@ -531,12 +547,12 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                     el.textContent = '—';
                     el.className = 'status-tile-value';
                 } else if (driftData.missing_in_whitelist.length || driftData.stale_in_whitelist.length) {
-                    el.innerHTML = `<span class="warn">⚠️ 有漂移</span>`;
+                    el.textContent = '有漂移';
                     el.className = 'status-tile-value warn';
                     el.title = '缺少: ' + driftData.missing_in_whitelist.join(',')
                         + (driftData.stale_in_whitelist.length ? ' | 多余: ' + driftData.stale_in_whitelist.join(',') : '');
                 } else {
-                    el.textContent = '✅ 一致 (' + driftData.registered_count + ')';
+                    el.textContent = '一致 (' + driftData.registered_count + ')';
                     el.className = 'status-tile-value ok';
                 }
             } catch (e) {

@@ -221,10 +221,15 @@
                     <div class="dashboard-grid single-col">
                         <div class="panel" id="panel-overview">
                             <div class="panel-header">
-                                <h3>系统概览</h3>
+                                <h3><i class="fa-solid fa-gauge-high ov-header-icon"></i>系统概览</h3>
+                                <div class="panel-actions">
+                                    <span class="ov-live" title="数据每 10s 自动刷新"><span class="ov-live-dot"></span>实时</span>
+                                </div>
                             </div>
                             <div class="panel-body">
-                                <div class="stats-grid" id="stats-grid">
+                                <div class="ov-section">
+                                    <div class="ov-section-head">核心指标</div>
+                                    <div class="stats-grid" id="stats-grid">
                                     <div class="stat-card" id="stat-card-messages">
                                         <div class="stat-icon"><i class="fa-solid fa-message"></i></div>
                                         <div class="stat-info">
@@ -261,8 +266,11 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="status-divider"></div>
-                                <div class="status-grid" id="status-list"></div>
+                                </div>
+                                <div class="ov-section">
+                                    <div class="ov-section-head">运行状态</div>
+                                    <div class="status-grid" id="status-list"></div>
+                                </div>
                             </div>
                         </div>
                     </div>

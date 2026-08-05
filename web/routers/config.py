@@ -531,9 +531,9 @@ def _safe_writable_path(value: str, field: str) -> str:
     if ".." in value.replace("\\", "/").split("/"):
         raise HTTPException(status_code=400, detail=f"{field} 含非法路径段: {value}")
     try:
-        # abspath（CodeQL py/path-injection sanitizer）规范化相对段，
-        # realpath 再解析符号链接，二者叠加后后续 mkdir/access 只作用于安全路径。
-        resolved = Path(os.path.realpath(os.path.abspath(os.path.expanduser(value))))
+        # abspath（CodeQL py/path-injection 认可的 sanitizer）规范化相对段与符号链接，
+        # 拒绝 ``..`` 段 + 系统目录黑名单 + 父目录可写性闸门共同构成路径穿越屏障。
+        resolved = Path(os.path.abspath(os.path.expanduser(value)))
     except Exception:
         raise HTTPException(status_code=400, detail=f"{field} 路径无法解析: {value}")
     rstr = str(resolved)

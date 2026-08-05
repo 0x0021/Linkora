@@ -293,15 +293,14 @@ function skLogRows(n = 6) {
     return h + '</div>';
 }
 
-function skStatusTiles(n = 6) {
+function skStatusTiles(n = 7) {
+    // 胶囊骨架：宽度错落，避免机械感
+    const widths = [78, 110, 124, 70, 86, 96, 104];
     let h = '';
     for (let i = 0; i < n; i++) {
-        h += `<div class="status-tile skeleton-tile">
-            <div class="skeleton" style="width:30px;height:30px;border-radius:50%;flex-shrink:0"></div>
-            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
-                <div class="skeleton skeleton-line" style="height:9px;width:55%"></div>
-                <div class="skeleton skeleton-line" style="height:12px;width:75%"></div>
-            </div>
+        h += `<div class="ov-chip is-sk">
+            <div class="skeleton" style="width:21px;height:21px;border-radius:50%;flex-shrink:0"></div>
+            <div class="skeleton skeleton-line" style="height:10px;width:${widths[i % widths.length]}px"></div>
         </div>`;
     }
     return h;
@@ -317,7 +316,7 @@ function injectDashboardSkeletons() {
     set('decisions-top-list', skKwRows(10));
     set('top-senders-list', skKwRows(5));
     // 系统状态网格
-    set('status-list', skStatusTiles(6));
+    set('status-list', skStatusTiles(7));
     // 最近消息
     set('recent-messages-stream', skLogRows(6));
     // 工具调用统计：排行列表（3列网格）+ 4 个汇总值
@@ -416,60 +415,28 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
         const statusList = document.getElementById('status-list');
         if (statusList) {
             const trippedCount = circuit.tripped_count || 0;
-            const circuitBadge = trippedCount > 0
-                ? `<div class="status-tile-value warn">${trippedCount} 个</div>`
-                : `<div class="status-tile-value ok">正常</div>`;
-            statusList.innerHTML = `
-                <div class="status-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-circle-play"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">运行模式</div>
-                        <div class="status-tile-value">${cfg.dry_run ? 'Dry Run' : '正常'}</div>
-                    </div>
-                </div>
-                <div class="status-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-microchip"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">LLM 模型</div>
-                        <div class="status-tile-value" title="${escapeHtml((cfg.llm_model || '-').slice(0, 100))}">${escapeHtml((cfg.llm_model || '-').length > 20 ? (cfg.llm_model || '-').slice(0,18)+'…' : (cfg.llm_model || '-'))}</div>
-                    </div>
-                </div>
-                <div class="status-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-cubes"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">Embedding</div>
-                        <div class="status-tile-value">${cfg.embedding_enabled ? (cfg.embedding_model || '已启用') : '未启用'}</div>
-                    </div>
-                </div>
-                <div class="status-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">轮询间隔</div>
-                        <div class="status-tile-value">${cfg.poll_interval != null ? cfg.poll_interval + 's' : '-'}</div>
-                    </div>
-                </div>
-                <div class="status-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-toolbox"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">可用工具</div>
-                        <div class="status-tile-value">${cfg.tools_count ?? '-'} 个</div>
-                    </div>
-                </div>
-                <div class="status-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-shield-halved"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">熔断保护</div>
-                        ${circuitBadge}
-                    </div>
-                </div>
-                <div class="status-tile" id="drift-tile">
-                    <div class="status-tile-icon"><i class="fa-solid fa-clipboard-check"></i></div>
-                    <div class="status-tile-text">
-                        <div class="status-tile-label">配置自检</div>
-                        <div class="status-tile-value" id="drift-status"><span class="rel-skeleton skeleton" style="width:60px;display:inline-block;"></span></div>
-                    </div>
-                </div>
-            `;
+            const llmModel = cfg.llm_model || '-';
+            const embValue = cfg.embedding_enabled ? (cfg.embedding_model || '已启用') : '未启用';
+            // 数据驱动的胶囊流：长文本由 CSS ellipsis 截断，title 保留全文
+            const chips = [
+                { ic: 'fa-circle-play', label: '运行模式', value: cfg.dry_run ? 'Dry Run' : '正常', tone: cfg.dry_run ? 'warn' : 'ok' },
+                { ic: 'fa-microchip', label: 'LLM', value: llmModel, title: llmModel },
+                { ic: 'fa-cubes', label: 'Embedding', value: embValue, title: embValue, tone: cfg.embedding_enabled ? '' : 'warn' },
+                { ic: 'fa-arrows-rotate', label: '轮询', value: cfg.poll_interval != null ? cfg.poll_interval + 's' : '-' },
+                { ic: 'fa-toolbox', label: '工具', value: (cfg.tools_count ?? '-') + ' 个' },
+                { ic: 'fa-shield-halved', label: '熔断', value: trippedCount > 0 ? trippedCount + ' 个' : '正常', tone: trippedCount > 0 ? 'warn' : 'ok' },
+            ];
+            statusList.innerHTML = chips.map(c => `
+                <div class="ov-chip${c.tone ? ' is-' + c.tone : ''}">
+                    <span class="ov-chip-ico"><i class="fa-solid ${c.ic}"></i></span>
+                    <span class="ov-chip-label">${c.label}</span>
+                    <span class="ov-chip-value${c.tone ? ' ' + c.tone : ''}"${c.title ? ` title="${escapeHtml(String(c.title))}"` : ''}>${escapeHtml(String(c.value))}</span>
+                </div>`).join('') + `
+                <div class="ov-chip" id="drift-tile">
+                    <span class="ov-chip-ico"><i class="fa-solid fa-clipboard-check"></i></span>
+                    <span class="ov-chip-label">配置自检</span>
+                    <span class="ov-chip-value" id="drift-status"><span class="rel-skeleton skeleton" style="width:52px;height:10px;display:inline-block;"></span></span>
+                </div>`;
         }
 
         // Update user name
@@ -543,17 +510,23 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                 if (currentPage !== 'dashboard') return;
                 const el = document.getElementById('drift-status');
                 if (!el) return;
+                const chip = document.getElementById('drift-tile');
+                // tone 同时作用于 value 文字色与 chip 图标底色
+                const setTone = (tone) => {
+                    el.className = 'ov-chip-value' + (tone ? ' ' + tone : '');
+                    if (chip) chip.className = 'ov-chip' + (tone ? ' is-' + tone : '');
+                };
                 if (!driftData || driftData.available === false) {
                     el.textContent = '—';
-                    el.className = 'status-tile-value';
+                    setTone('');
                 } else if (driftData.missing_in_whitelist.length || driftData.stale_in_whitelist.length) {
                     el.textContent = '有漂移';
-                    el.className = 'status-tile-value warn';
+                    setTone('warn');
                     el.title = '缺少: ' + driftData.missing_in_whitelist.join(',')
                         + (driftData.stale_in_whitelist.length ? ' | 多余: ' + driftData.stale_in_whitelist.join(',') : '');
                 } else {
                     el.textContent = '一致 (' + driftData.registered_count + ')';
-                    el.className = 'status-tile-value ok';
+                    setTone('ok');
                 }
             } catch (e) {
                 console.error('Drift check failed:', e);

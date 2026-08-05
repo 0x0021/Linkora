@@ -219,24 +219,36 @@
 
                     <!-- Row 1+2: Stats + Status combined -->
                     <div class="dashboard-grid single-col">
-                        <div class="panel" id="panel-overview">
-                            <div class="panel-header">
-                                <h3><i class="fa-solid fa-gauge-high ov-header-icon"></i>系统概览</h3>
+                        <div class="panel ov-panel" id="panel-overview">
+                            <div class="ov-aurora" aria-hidden="true"></div>
+                            <div class="panel-header ov-head">
+                                <div class="ov-head-main">
+                                    <span class="ov-head-badge"><i class="fa-solid fa-gauge-high"></i></span>
+                                    <div class="ov-head-txt">
+                                        <h3>系统概览</h3>
+                                        <p class="ov-head-sub">实时运行指标与服务状态</p>
+                                    </div>
+                                </div>
                                 <div class="panel-actions">
-                                    <span class="ov-live" title="数据每 10s 自动刷新"><span class="ov-live-dot"></span>实时</span>
+                                    <span class="ov-live" title="数据每 10s 自动刷新"><span class="ov-live-dot"></span>LIVE</span>
                                 </div>
                             </div>
-                            <div class="panel-body">
-                                <div class="ov-section">
-                                    <div class="ov-section-head">核心指标</div>
-                                    <div class="stats-grid" id="stats-grid">
-                                    <div class="stat-card" id="stat-card-messages">
-                                        <div class="stat-icon"><i class="fa-solid fa-message"></i></div>
-                                        <div class="stat-info">
-                                            <div class="stat-value" id="stat-messages"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                            <div class="stat-label">总消息数</div>
-                                        </div>
+                            <div class="panel-body ov-body">
+                                <!-- Hero：主指标 -->
+                                <div class="ov-hero" id="stat-card-messages">
+                                    <div class="ov-hero-glyph" aria-hidden="true"><i class="fa-solid fa-comments"></i></div>
+                                    <div class="ov-hero-main">
+                                        <div class="ov-hero-label"><i class="fa-solid fa-message"></i>总消息数</div>
+                                        <div class="ov-hero-value" id="stat-messages"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                        <div class="ov-hero-hint">累计已处理的会话消息</div>
                                     </div>
+                                    <div class="ov-hero-side">
+                                        <span class="ov-hero-pill"><span class="ov-live-dot"></span>持续采集中</span>
+                                    </div>
+                                </div>
+
+                                <!-- 次级指标：自适应列数（JS 会动态追加「路由质量」卡） -->
+                                <div class="stats-grid ov-subs" id="stats-grid">
                                     <div class="stat-card" id="stat-card-keywords">
                                         <div class="stat-icon"><i class="fa-solid fa-key"></i></div>
                                         <div class="stat-info">
@@ -266,10 +278,11 @@
                                         </div>
                                     </div>
                                 </div>
-                                </div>
-                                <div class="ov-section">
-                                    <div class="ov-section-head">运行状态</div>
-                                    <div class="status-grid" id="status-list"></div>
+
+                                <!-- 运行状态：胶囊流 -->
+                                <div class="ov-rail-wrap">
+                                    <div class="ov-rail-title"><span></span>运行状态</div>
+                                    <div class="ov-rail" id="status-list"></div>
                                 </div>
                             </div>
                         </div>

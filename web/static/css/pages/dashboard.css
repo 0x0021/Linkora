@@ -360,210 +360,479 @@
 
 
 /* ==========================================
-   系统概览面板（#panel-overview）— 重做
-   整洁漂亮版：核心指标用统一 brand 软色，
-   运行状态改为 3 列定义列表 + 状态点
+   系统概览面板（#panel-overview）— Premium 重做 v2
+   三层信息架构：Hero 主指标 → 自适应次级卡 → 运行状态胶囊流
+   设计语言：极光光晕 + 渐变数字 + 磁性 hover + 脉冲 LIVE
    ========================================== */
 
-/* 面板内边距更舒展 */
-#panel-overview .panel-body {
-    padding: 0.875rem 1rem 1rem;
+/* --- 面板容器：发丝渐变线 + 极光光斑 --- */
+.ov-panel {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+/* 顶部品牌渐变发丝线 */
+.ov-panel::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, var(--brand-primary) 30%, #8b5cf6 65%, transparent 100%);
+    opacity: 0.6;
+    z-index: 3;
+    pointer-events: none;
+}
+/* 极光光斑（静态渐变，零动画开销） */
+.ov-aurora {
+    position: absolute;
+    top: -55%;
+    right: -8%;
+    width: 560px;
+    height: 560px;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 62% 42%, rgba(37, 99, 235, 0.10), transparent 62%),
+        radial-gradient(circle at 28% 72%, rgba(139, 92, 246, 0.075), transparent 60%);
+}
+[data-theme="dark"] .ov-aurora {
+    background:
+        radial-gradient(circle at 62% 42%, rgba(59, 130, 246, 0.16), transparent 62%),
+        radial-gradient(circle at 28% 72%, rgba(139, 92, 246, 0.13), transparent 60%);
+}
+.ov-panel > .panel-header,
+.ov-panel > .panel-body {
+    position: relative;
+    z-index: 1;
 }
 
-/* 面板头：图标 + 实时徽章 */
-#panel-overview .panel-header h3 .ov-header-icon {
-    color: var(--brand-primary);
-    font-size: 0.78rem;
-    margin-right: 0.2rem;
+/* --- 面板头 --- */
+.ov-head {
+    align-items: center;
+    padding-top: 0.95rem;
+    padding-bottom: 0.8rem;
 }
+.ov-head-main {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+}
+.ov-head-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: #fff;
+    font-size: 0.95rem;
+    background: linear-gradient(135deg, var(--brand-primary) 0%, #6366f1 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+[data-theme="dark"] .ov-head-badge {
+    background: linear-gradient(135deg, var(--brand-primary) 0%, #818cf8 100%);
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ov-head-txt {
+    min-width: 0;
+}
+.ov-head-txt h3 {
+    margin: 0;
+    line-height: 1.2;
+}
+.ov-head-sub {
+    margin: 2px 0 0;
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    line-height: 1.2;
+}
+
+/* LIVE 徽章 */
 .ov-live {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.42rem;
+    padding: 0.28rem 0.62rem;
     font-size: 0.65rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.1em;
     color: var(--brand-success);
-    padding: 0.15rem 0.5rem 0.15rem 0.4rem;
-    background: rgba(22, 163, 74, 0.08);
+    background: rgba(22, 163, 74, 0.10);
+    border: 1px solid rgba(22, 163, 74, 0.24);
     border-radius: 999px;
-    letter-spacing: 0.02em;
+    white-space: nowrap;
 }
 .ov-live-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--brand-success);
-    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
-    animation: ov-live-pulse 1.8s ease-out infinite;
-}
-@keyframes ov-live-pulse {
-    0%   { box-shadow: 0 0 0 0   rgba(22, 163, 74, 0.5); }
-    70%  { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
-    100% { box-shadow: 0 0 0 0   rgba(22, 163, 74, 0); }
-}
-
-/* 小节容器与标题 */
-.ov-section + .ov-section { margin-top: 0.85rem; }
-.ov-section-head {
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--text-tertiary);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 0.5rem;
-    padding-left: 0.1rem;
-}
-
-/* === 核心指标 KPI：5 等分固定轨 ===
-   不用 auto-fit：1160px 容器 / 5 列 ≈ 232px，但 auto-fit 会按 120px min 算
-   出 8 个空轨，3 个折叠成 0px 既浪费又让 grid track 调试困惑。直接 5 等分。 */
-#panel-overview .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.6rem;
-    margin-bottom: 0;
-}
-#panel-overview .stat-card {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 0.8rem 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    min-height: 0;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-#panel-overview .stat-card:hover {
-    border-color: rgba(37, 99, 235, 0.28);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-    transform: translateY(-1px);
-}
-/* 统一 brand-primary 软色图标（覆盖原 6 色） */
-#panel-overview .stat-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: var(--brand-primary-light);
-    color: var(--brand-primary);
-    font-size: 1.05rem;
+    background: currentColor;
     flex-shrink: 0;
-    transition: background 0.18s ease;
+    animation: ov-pulse 2.2s ease-in-out infinite;
 }
-#panel-overview .stat-card:hover .stat-icon {
-    background: rgba(37, 99, 235, 0.14);
-}
-/* 统一顶部 accent 条：theme.css 给 5 个 stat-card 各染了彩虹色，与统一图标色冲突。
-   全部换成 brand-primary 软渐变；hover 时加深 30%。 */
-#panel-overview .stat-card::before {
-    background: linear-gradient(90deg, rgba(37, 99, 235, 0.55), rgba(37, 99, 235, 0.15)) !important;
-    opacity: 1;
-    transition: opacity 0.18s ease;
-}
-#panel-overview .stat-card:hover::before {
-    opacity: 1;
-    background: linear-gradient(90deg, var(--brand-primary), rgba(37, 99, 235, 0.45)) !important;
-}
-#panel-overview .stat-info { flex: 1; min-width: 0; }
-#panel-overview .stat-value {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1.15;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
-}
-#panel-overview .stat-label {
-    font-size: 0.7rem;
-    color: var(--text-tertiary);
-    margin-top: 0.18rem;
-    font-weight: 500;
+@keyframes ov-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.32; transform: scale(0.78); }
 }
 
-/* === 运行状态：3 列定义列表 ===
-   注意：theme.css 里有 #panel-overview #status-list{display:flex}，specificity=200，
-   比 #panel-overview .status-grid(110) 高，会压死 grid。所以必须用 .status-grid#status-list
-   拿到 3 ID+class=210 才能让 grid 胜出。 */
-#panel-overview .status-grid#status-list {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.5rem;
-}
-@media (max-width: 760px) {
-    #panel-overview .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-#panel-overview .status-tile {
-    background: var(--bg-subtle);
-    border: 1px solid var(--border-light);
-    border-radius: var(--radius-md);
-    padding: 0.55rem 0.7rem;
-    display: flex;
-    flex-direction: row;     /* 显式覆盖 theme.css 的 column；省略时浏览器会回退到旧规则 */
-    align-items: center;
-    gap: 0.6rem;
-    min-width: 0;
-    box-sizing: border-box;
-    transition: border-color 0.18s ease, background 0.18s ease;
-}
-#panel-overview .status-tile:hover {
-    border-color: var(--border-color);
-    background: var(--bg-surface);
-}
-#panel-overview .status-tile-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--brand-primary-light);
-    color: var(--brand-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.82rem;
-    flex-shrink: 0;
-}
-#panel-overview .status-tile-text {
-    flex: 1;
-    min-width: 0;
+/* --- 面板体：三层纵向节奏 --- */
+.ov-body {
+    padding: 0.2rem 1.1rem 1.1rem;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 0.1rem;
+    gap: 0.8rem;
 }
-#panel-overview .status-tile-label {
-    font-size: 0.66rem;
-    color: var(--text-tertiary);
-    font-weight: 500;
-    line-height: 1.2;
-}
-#panel-overview .status-tile-value {
-    font-size: 0.82rem;
-    color: var(--text-primary);
-    font-weight: 600;
-    line-height: 1.3;
-    padding-left: 0.7rem;
+
+/* --- 第一层：Hero 主指标 --- */
+.ov-hero {
     position: relative;
-    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.1rem 1.3rem;
+    border-radius: 18px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
+    border: 1px solid var(--border-light);
+    background:
+        linear-gradient(120deg, rgba(37, 99, 235, 0.085) 0%, rgba(99, 102, 241, 0.045) 42%, rgba(139, 92, 246, 0.02) 70%, transparent 100%),
+        var(--bg-subtle);
+    transition: border-color 0.28s ease, box-shadow 0.28s ease;
 }
-#panel-overview .status-tile-value::before {
+[data-theme="dark"] .ov-hero {
+    background:
+        linear-gradient(120deg, rgba(59, 130, 246, 0.14) 0%, rgba(99, 102, 241, 0.08) 42%, rgba(139, 92, 246, 0.04) 70%, transparent 100%),
+        rgba(255, 255, 255, 0.02);
+}
+.ov-hero:hover {
+    border-color: rgba(37, 99, 235, 0.3);
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.09);
+}
+/* 左侧强调条 */
+.ov-hero::before {
     content: '';
     position: absolute;
     left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
+}
+/* 背景水印大图标 */
+.ov-hero-glyph {
+    position: absolute;
+    right: 1.4rem;
     top: 50%;
     transform: translateY(-50%);
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--gray-400);
+    font-size: 5rem;
+    line-height: 1;
+    color: var(--brand-primary);
+    opacity: 0.065;
+    pointer-events: none;
+    z-index: 0;
 }
-#panel-overview .status-tile-value.ok { color: var(--brand-success); }
-#panel-overview .status-tile-value.ok::before { background: var(--brand-success); }
-#panel-overview .status-tile-value.warn { color: var(--brand-warning); }
-#panel-overview .status-tile-value.warn::before { background: var(--brand-warning); }
+[data-theme="dark"] .ov-hero-glyph { opacity: 0.09; }
 
-/* 旧 .status-divider 由 .ov-section 间距替代，保留以防外部引用 */
-.status-divider { display: none; }
+.ov-hero-main {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+}
+.ov-hero-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+.ov-hero-label i {
+    font-size: 0.66rem;
+    color: var(--brand-primary);
+}
+.ov-hero-value {
+    margin: 0.28rem 0 0.22rem;
+    min-height: 2.7rem;
+    font-size: 2.55rem;
+    font-weight: 800;
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(120deg, var(--brand-primary) 0%, #6366f1 52%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--brand-primary);
+}
+.ov-hero-value .skeleton {
+    -webkit-text-fill-color: initial;
+    display: inline-block;
+    width: 150px;
+    height: 2rem;
+    vertical-align: middle;
+}
+.ov-hero-hint {
+    font-size: 0.74rem;
+    color: var(--text-tertiary);
+}
+.ov-hero-side {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+}
+.ov-hero-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.34rem 0.7rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--brand-primary);
+    background: var(--brand-primary-light);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+/* --- 第二层：次级指标卡（auto-fit，兼容 JS 动态追加的第 5 张） --- */
+#panel-overview .stats-grid.ov-subs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.6rem;
+    margin: 0;
+}
+#panel-overview .stat-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.8rem 0.85rem;
+    min-width: 0;
+    box-sizing: border-box;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: 14px;
+    box-shadow: none;
+    overflow: hidden;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.24s ease,
+                box-shadow 0.24s ease;
+}
+[data-theme="dark"] #panel-overview .stat-card {
+    background: rgba(255, 255, 255, 0.025);
+}
+/* 覆盖 theme.css 的 6 色顶条：改为 hover 才亮的左侧渐变条 */
+#panel-overview .stat-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 2px;
+    height: auto;
+    background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
+    opacity: 0;
+    transition: opacity 0.24s ease;
+}
+#panel-overview .stat-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(37, 99, 235, 0.28);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.09);
+}
+[data-theme="dark"] #panel-overview .stat-card:hover {
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+}
+#panel-overview .stat-card:hover::before { opacity: 1; }
+
+#panel-overview .stat-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    background: var(--brand-primary-light);
+    color: var(--brand-primary);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background 0.24s ease;
+}
+#panel-overview .stat-card:hover .stat-icon {
+    transform: scale(1.08) rotate(-5deg);
+    background: rgba(37, 99, 235, 0.15);
+}
+#panel-overview .stat-info {
+    flex: 1;
+    min-width: 0;
+}
+#panel-overview .stat-value {
+    font-size: 1.3rem;
+    font-weight: 750;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#panel-overview .stat-label {
+    margin-top: 1px;
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- 第三层：运行状态胶囊流 --- */
+.ov-rail-wrap {
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--border-light);
+}
+.ov-rail-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+.ov-rail-title span {
+    width: 3px;
+    height: 11px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
+}
+/* ⚠️ 特异性陷阱：theme.css 有
+     #panel-overview #status-list { display:flex; flex-wrap:nowrap }  → (2,0,0)
+   ID 数量优先于 class 数量，所以 .ov-rail#status-list (1,1,0) 会输。
+   必须写成 #panel-overview #status-list.ov-rail (2,1,0) 才能翻盘，
+   否则长模型名时胶囊不换行、横向溢出。
+   末行单 chip 用 justify-content:flex-start 即可，
+   不要 stretch 撑满——chip 高度由内容决定，宽度有 max-width。 */
+.ov-rail,
+#panel-overview #status-list.ov-rail {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: center;
+    gap: 0.45rem;
+}
+.ov-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.38rem 0.72rem 0.38rem 0.42rem;
+    max-width: 100%;
+    min-width: 0;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-light);
+    border-radius: 999px;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease,
+                background 0.2s ease;
+}
+[data-theme="dark"] .ov-chip {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(148, 163, 184, 0.18);
+}
+[data-theme="dark"] .ov-chip:hover {
+    background: rgba(99, 102, 241, 0.14);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+/* 暗色小标签对比度补丁：theme.css 的 --text-tertiary=#6b7a90 在我面板的
+   半透明背景上偏暗，需要局部加亮保证可读性 */
+[data-theme="dark"] #panel-overview .stat-label,
+[data-theme="dark"] #panel-overview .ov-chip-label,
+[data-theme="dark"] #panel-overview .ov-hero-label,
+[data-theme="dark"] #panel-overview .ov-hero-hint,
+[data-theme="dark"] #panel-overview .ov-rail-title {
+    color: #cbd5e1;
+}
+.ov-chip:hover {
+    transform: translateY(-2px);
+    border-color: rgba(37, 99, 235, 0.3);
+}
+.ov-chip-ico {
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    font-size: 0.6rem;
+    background: var(--brand-primary-light);
+    color: var(--brand-primary);
+}
+.ov-chip-label {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+.ov-chip-value {
+    font-size: 0.76rem;
+    font-weight: 650;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 190px;
+}
+.ov-chip-value.ok { color: var(--brand-success); }
+.ov-chip-value.warn { color: var(--brand-warning); }
+.ov-chip.is-ok .ov-chip-ico {
+    background: rgba(22, 163, 74, 0.12);
+    color: var(--brand-success);
+}
+.ov-chip.is-warn .ov-chip-ico {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--brand-warning);
+}
+/* chip skeleton */
+.ov-chip.is-sk {
+    pointer-events: none;
+}
+
+/* --- 响应式 --- */
+@media (max-width: 760px) {
+    .ov-hero {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.85rem 1rem;
+    }
+    .ov-hero-glyph { display: none; }
+    .ov-hero-value { font-size: 1.85rem; min-height: 2rem; }
+    .ov-hero-side { display: none; }
+    .ov-head-sub { display: none; }
+    #panel-overview .stats-grid.ov-subs {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .ov-chip-value { max-width: 120px; }
+}
+
+/* --- 无障碍：尊重系统减少动效偏好 --- */
+@media (prefers-reduced-motion: reduce) {
+    .ov-live-dot { animation: none; }
+    .ov-hero,
+    #panel-overview .stat-card,
+    #panel-overview .stat-icon,
+    .ov-chip {
+        transition: none;
+    }
+    #panel-overview .stat-card:hover,
+    .ov-chip:hover {
+        transform: none;
+    }
+}

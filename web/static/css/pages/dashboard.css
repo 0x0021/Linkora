@@ -471,13 +471,14 @@
     gap: 0.8rem;
 }
 
-/* --- 第一层：Hero 主指标 --- */
+/* --- 第一层：Hero 主指标（左 / 中 sparkline / 右 三段式） --- */
 .ov-hero {
     position: relative;
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 1.6fr) auto;
     align-items: center;
-    gap: 1rem;
-    padding: 1.1rem 1.3rem;
+    gap: 1.1rem;
+    padding: 0.95rem 1.2rem;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-light);
@@ -505,10 +506,8 @@
     width: 3px;
     background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
 }
-/* 背景水印大图标 — 已移除（暗色下透明白剪影看着像额外元素） */
 
 .ov-hero-main {
-    flex: 1;
     min-width: 0;
     position: relative;
     z-index: 1;
@@ -528,9 +527,9 @@
     color: var(--brand-primary);
 }
 .ov-hero-value {
-    margin: 0.28rem 0 0.22rem;
-    min-height: 2.7rem;
-    font-size: 2.55rem;
+    margin: 0.22rem 0 0.18rem;
+    min-height: 2rem;
+    font-size: 2.05rem;
     font-weight: 800;
     line-height: 1.06;
     letter-spacing: -0.025em;
@@ -544,18 +543,82 @@
 .ov-hero-value .skeleton {
     -webkit-text-fill-color: initial;
     display: inline-block;
-    width: 150px;
-    height: 2rem;
+    width: 130px;
+    height: 1.6rem;
     vertical-align: middle;
 }
+/* 数字下方的微变化行：今日 +N + hint */
+.ov-hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.15rem;
+}
+.ov-hero-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.12rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    border-radius: 999px;
+    color: var(--brand-primary);
+    background: var(--brand-primary-light);
+    font-variant-numeric: tabular-nums;
+}
+.ov-hero-delta i { font-size: 0.62rem; }
+.ov-hero-delta.is-up { color: var(--brand-success); background: rgba(16, 185, 129, 0.1); }
+.ov-hero-delta.is-down { color: var(--brand-warning); background: rgba(245, 158, 11, 0.12); }
+.ov-hero-delta.is-flat { color: var(--text-tertiary); background: rgba(148, 163, 184, 0.12); }
 .ov-hero-hint {
-    font-size: 0.74rem;
+    font-size: 0.72rem;
     color: var(--text-tertiary);
 }
+
+/* 中段：7 日 sparkline */
+.ov-hero-chart {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    height: 64px;
+    color: var(--brand-primary);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+.ov-hero-chart svg {
+    width: 100%;
+    height: 48px;
+    display: block;
+    overflow: visible;
+}
+.ov-spark-line { transition: stroke-width 0.2s ease; }
+.ov-hero-chart:hover .ov-spark-line { stroke-width: 2.1; }
+.ov-spark-dots circle {
+    fill: var(--bg-subtle);
+    stroke: currentColor;
+    stroke-width: 1.6;
+}
+.ov-hero-chart.is-loading svg { opacity: 0.25; }
+.ov-spark-axis {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.62rem;
+    color: var(--text-tertiary);
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+}
+.ov-spark-axis span:first-child { font-weight: 600; color: var(--text-tertiary); }
+.ov-spark-axis span:last-child { color: var(--text-tertiary); }
+
 .ov-hero-side {
     position: relative;
     z-index: 1;
     flex-shrink: 0;
+    align-self: center;
 }
 /* 数据采集胶囊：从"虚边浅底"改为"实心填充+字白+绿点"
    让右上角在 hero 的浅渐变上视觉锚点清晰，避免被冲淡 */
@@ -585,19 +648,23 @@
     box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
 }
 
-/* --- 第二层：次级指标卡（auto-fit，兼容 JS 动态追加的第 5 张） --- */
+/* --- 第二层：次级指标卡（auto-fit，兼容 JS 动态追加的第 5 张） ---
+   结构：icon 顶居中 → value 中部居中放大 → label 底部居中
+   解决原左右结构因数字位数不同造成的"内部不对齐"视觉错位 */
 #panel-overview .stats-grid.ov-subs {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 0.6rem;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.65rem;
     margin: 0;
 }
 #panel-overview .stat-card {
     position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.7rem;
-    padding: 0.8rem 0.85rem;
+    text-align: center;
+    gap: 0.35rem;
+    padding: 0.85rem 0.7rem 0.7rem;
     min-width: 0;
     box-sizing: border-box;
     background: var(--bg-surface);
@@ -637,43 +704,49 @@
 #panel-overview .stat-card:hover::before { opacity: 1; }
 
 #panel-overview .stat-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     background: var(--brand-primary-light);
     color: var(--brand-primary);
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background 0.24s ease;
+    margin-bottom: 0.1rem;
 }
 #panel-overview .stat-card:hover .stat-icon {
-    transform: scale(1.08) rotate(-5deg);
+    transform: scale(1.1) rotate(-5deg);
     background: rgba(37, 99, 235, 0.15);
 }
 #panel-overview .stat-info {
+    /* 兼容层：原左右结构里的 .stat-info 容器，如果卡片未升级到此结构时使用 */
     flex: 1;
     min-width: 0;
 }
 #panel-overview .stat-value {
-    font-size: 1.3rem;
-    font-weight: 750;
-    line-height: 1.15;
-    letter-spacing: -0.01em;
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 0.05rem;
 }
 #panel-overview .stat-label {
-    margin-top: 1px;
+    margin-top: 0;
     font-size: 0.7rem;
     color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    letter-spacing: 0.01em;
 }
 
 /* --- 第三层：运行状态胶囊流 --- */
@@ -791,13 +864,14 @@
 /* --- 响应式 --- */
 @media (max-width: 760px) {
     .ov-hero {
-        flex-direction: row;
-        align-items: center;
-        gap: 0.8rem;
+        grid-template-columns: 1fr;
+        gap: 0.7rem;
         padding: 0.85rem 1rem;
     }
-    .ov-hero-value { font-size: 1.85rem; min-height: 2rem; }
-    .ov-hero-side { display: none; }
+    .ov-hero-value { font-size: 1.7rem; min-height: 1.6rem; }
+    .ov-hero-chart { height: 50px; }
+    .ov-hero-chart svg { height: 38px; }
+    .ov-hero-side { display: flex; justify-content: flex-start; }
     .ov-head-sub { display: none; }
     #panel-overview .stats-grid.ov-subs {
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

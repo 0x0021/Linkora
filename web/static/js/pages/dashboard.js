@@ -3,6 +3,83 @@
 
 // ============ Dashboard ============
 
+// 渲染 hero 区 7 日 sparkline + 今日变化。
+// 复用 message-stats API 的 trend 数组（已在下方 loadDashboardData 中请求），
+// 不再额外发请求。trend: [{day:'YYYY-MM-DD', cnt:number}...]
+function renderHeroSparkline(trend) {
+    const wrap = document.getElementById('stat-messages-spark');
+    const lineEl = wrap?.querySelector('.ov-spark-line');
+    const areaEl = wrap?.querySelector('.ov-spark-area');
+    const dotsEl = wrap?.querySelector('.ov-spark-dots');
+    const axisEl = document.getElementById('stat-messages-spark-axis');
+    const deltaEl = document.getElementById('stat-messages-today');
+    if (!wrap || !lineEl || !areaEl) return;
+
+    // 兼容 day / date 两种字段名
+    const data = (trend || []).map(d => ({
+        day: d.day || d.date || '',
+        cnt: d.cnt || d.count || 0,
+    }));
+    if (data.length === 0) {
+        if (axisEl) axisEl.textContent = '近 7 日 · 暂无数据';
+        return;
+    }
+    // 只画最近 7 个点
+    const pts = data.slice(-7);
+    const max = Math.max(...pts.map(p => p.cnt), 1);
+    const min = Math.min(...pts.map(p => p.cnt), 0);
+    const range = Math.max(max - min, 1);
+    const W = 200, H = 48, PAD = 4;
+    const stepX = (W - PAD * 2) / Math.max(pts.length - 1, 1);
+    const coords = pts.map((p, i) => {
+        const x = PAD + i * stepX;
+        const y = H - PAD - ((p.cnt - min) / range) * (H - PAD * 2);
+        return { x, y, cnt: p.cnt, day: p.day };
+    });
+
+    // 折线 path
+    const lineD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(' ');
+    // 折线下方面积（path 闭合到 H）
+    const first = coords[0], last = coords[coords.length - 1];
+    const areaD = `${lineD} L ${last.x.toFixed(1)} ${H} L ${first.x.toFixed(1)} ${H} Z`;
+    lineEl.setAttribute('d', lineD);
+    areaEl.setAttribute('d', areaD);
+
+    // 末端高亮 + 起点小点
+    if (dotsEl) {
+        const lastPt = coords[coords.length - 1];
+        const firstPt = coords[0];
+        dotsEl.innerHTML = `
+            <circle cx="${firstPt.x.toFixed(1)}" cy="${firstPt.y.toFixed(1)}" r="1.8" fill="currentColor" opacity="0.45"/>
+            <circle cx="${lastPt.x.toFixed(1)}" cy="${lastPt.y.toFixed(1)}" r="2.6" fill="currentColor" opacity="0.95"/>
+            <circle cx="${lastPt.x.toFixed(1)}" cy="${lastPt.y.toFixed(1)}" r="5" fill="currentColor" opacity="0.18"/>
+        `;
+    }
+
+    // 轴：起点日 - 终点日 + 峰值
+    if (axisEl) {
+        const peak = pts.reduce((m, p) => p.cnt > m.cnt ? p : m, pts[0]);
+        axisEl.textContent = `${pts[0].day.slice(5)} → ${pts[pts.length - 1].day.slice(5)} · 峰 ${peak.cnt.toLocaleString()}`;
+    }
+
+    // 今日 delta：最后一日 vs 倒数第二日
+    if (deltaEl && pts.length >= 2) {
+        const today = pts[pts.length - 1].cnt;
+        const prev = pts[pts.length - 2].cnt;
+        const diff = today - prev;
+        let cls = 'is-flat', icon = 'fa-minus', text = `今日 ${today.toLocaleString()}`;
+        if (diff > 0) { cls = 'is-up'; icon = 'fa-arrow-up'; text = `今日 +${diff.toLocaleString()}（${today.toLocaleString()}）`; }
+        else if (diff < 0) { cls = 'is-down'; icon = 'fa-arrow-down'; text = `今日 ${diff.toLocaleString()}（${today.toLocaleString()}）`; }
+        else { text = `今日 ${today.toLocaleString()}（与昨日持平）`; }
+        deltaEl.className = `ov-hero-delta ${cls}`;
+        deltaEl.innerHTML = `<i class="fa-solid ${icon}"></i>${text}`;
+    } else if (deltaEl && pts.length === 1) {
+        deltaEl.className = 'ov-hero-delta is-flat';
+        deltaEl.innerHTML = `<i class="fa-solid fa-minus"></i>今日 ${pts[0].cnt.toLocaleString()}`;
+    }
+    wrap.classList.remove('is-loading');
+}
+
 function renderMessageTrendChart(trend) {
     const ctx = document.getElementById('chart-message-trend');
     if (!ctx) return;
@@ -479,6 +556,7 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                 const statsData = await api.getMessageStats(7);
                 if (currentPage !== 'dashboard') return;
                 renderMessageTrendChart(statsData.trend || []);
+                renderHeroSparkline(statsData.trend || []);
                 renderMsgTypeChart(statsData.msg_types || []);
                 renderTopSenders(statsData.top_senders || []);
                 renderWordCloud(statsData.top_words || []);

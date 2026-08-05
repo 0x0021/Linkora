@@ -233,47 +233,58 @@
                                 </div>
                             </div>
                             <div class="panel-body ov-body">
-                                <!-- Hero：主指标 -->
+                                <!-- Hero：主指标（左：数字+今日变化 / 中：7日 sparkline / 右：采集胶囊） -->
                                 <div class="ov-hero" id="stat-card-messages">
                                     <div class="ov-hero-main">
                                         <div class="ov-hero-label"><i class="fa-solid fa-message"></i>总消息数</div>
                                         <div class="ov-hero-value" id="stat-messages"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                        <div class="ov-hero-hint">累计已处理的会话消息</div>
+                                        <div class="ov-hero-meta">
+                                            <span class="ov-hero-delta" id="stat-messages-today" title="今日新增消息数">—</span>
+                                            <span class="ov-hero-hint">累计已处理的会话消息</span>
+                                        </div>
+                                    </div>
+                                    <div class="ov-hero-chart" id="stat-messages-spark" aria-label="7 日消息趋势" title="7 日消息趋势">
+                                        <svg viewBox="0 0 200 56" preserveAspectRatio="none">
+                                            <defs>
+                                                <linearGradient id="ov-spark-fill" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.28"/>
+                                                    <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+                                                </linearGradient>
+                                            </defs>
+                                            <path class="ov-spark-area" d="" fill="url(#ov-spark-fill)"/>
+                                            <path class="ov-spark-line" d="" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <g class="ov-spark-dots"></g>
+                                        </svg>
+                                        <div class="ov-spark-axis">
+                                            <span id="stat-messages-spark-axis">近 7 日</span>
+                                        </div>
                                     </div>
                                     <div class="ov-hero-side">
                                         <span class="ov-hero-pill"><span class="ov-live-dot"></span>持续采集中</span>
                                     </div>
                                 </div>
 
-                                <!-- 次级指标：自适应列数（JS 会动态追加「路由质量」卡） -->
+                                <!-- 次级指标：上下结构（icon 顶 / value 中 / label 底），解决左右结构数字位数差异造成的视觉不齐 -->
                                 <div class="stats-grid ov-subs" id="stats-grid">
-                                    <div class="stat-card" id="stat-card-keywords">
+                                    <div class="stat-card stat-card-v" id="stat-card-keywords">
                                         <div class="stat-icon"><i class="fa-solid fa-key"></i></div>
-                                        <div class="stat-info">
-                                            <div class="stat-value" id="stat-keywords"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                            <div class="stat-label">关键词规则</div>
-                                        </div>
+                                        <div class="stat-value" id="stat-keywords"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                        <div class="stat-label">关键词规则</div>
                                     </div>
-                                    <div class="stat-card" id="stat-card-kb-docs">
+                                    <div class="stat-card stat-card-v" id="stat-card-kb-docs">
                                         <div class="stat-icon"><i class="fa-solid fa-book"></i></div>
-                                        <div class="stat-info">
-                                            <div class="stat-value" id="stat-kb-docs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                            <div class="stat-label">知识库文档</div>
-                                        </div>
+                                        <div class="stat-value" id="stat-kb-docs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                        <div class="stat-label">知识库文档</div>
                                     </div>
-                                    <div class="stat-card" id="stat-card-ddocs" onclick="showDingtalkImportModal()" style="cursor:pointer">
+                                    <div class="stat-card stat-card-v" id="stat-card-ddocs" onclick="showDingtalkImportModal()" style="cursor:pointer">
                                         <div class="stat-icon"><i class="fa-solid fa-file-lines"></i></div>
-                                        <div class="stat-info">
-                                            <div class="stat-value" id="stat-ddocs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                            <div class="stat-label">钉钉文档</div>
-                                        </div>
+                                        <div class="stat-value" id="stat-ddocs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                        <div class="stat-label">钉钉文档</div>
                                     </div>
-                                    <div class="stat-card" id="stat-card-memories">
+                                    <div class="stat-card stat-card-v" id="stat-card-memories">
                                         <div class="stat-icon"><i class="fa-solid fa-brain"></i></div>
-                                        <div class="stat-info">
-                                            <div class="stat-value" id="stat-memories"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                            <div class="stat-label">长期记忆</div>
-                                        </div>
+                                        <div class="stat-value" id="stat-memories"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                        <div class="stat-label">长期记忆</div>
                                     </div>
                                 </div>
 

@@ -587,18 +587,32 @@
     z-index: 1;
     flex-shrink: 0;
 }
+/* 数据采集胶囊：从"虚边浅底"改为"实心填充+字白+绿点"
+   让右上角在 hero 的浅渐变上视觉锚点清晰，避免被冲淡 */
 .ov-hero-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.34rem 0.7rem;
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--brand-primary);
-    background: var(--brand-primary-light);
-    border: 1px solid rgba(37, 99, 235, 0.2);
+    gap: 0.45rem;
+    padding: 0.42rem 0.78rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #ffffff;
+    background: linear-gradient(120deg, var(--brand-primary) 0%, #6366f1 100%);
+    border: 1px solid transparent;
     border-radius: 999px;
     white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28),
+                inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+[data-theme="dark"] .ov-hero-pill {
+    background: linear-gradient(120deg, var(--brand-primary) 0%, #818cf8 100%);
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.34),
+                inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.ov-hero-pill .ov-live-dot {
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
 }
 
 /* --- 第二层：次级指标卡（auto-fit，兼容 JS 动态追加的第 5 张） --- */

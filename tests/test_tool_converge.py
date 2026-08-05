@@ -111,7 +111,6 @@ def test_converge_removes_retrieval_tools_and_answers():
     # 收敛后某轮 tools 不再含 web_search
     assert any("web_search" not in tools for tools in client.tools_seen)
     # 收敛后注入了“强制综合”系统提示
-    all_msgs = client.tools_seen  # 仅校验 tools 维度；system 提示在下文单独验
     assert len(client.tools_seen) >= 3
 
 

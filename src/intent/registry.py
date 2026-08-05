@@ -374,7 +374,7 @@ def validate_tool_action_coverage(available_tools: list[str]) -> None:
         raise ValueError(
             "config.tools.available 含无意图映射的工具（smart 路由将成盲区）: "
             + ", ".join(sorted(only_configured))
-        )
+        ) from None
     only_mapped = mapped - configured
     if only_mapped:
         logger.info(

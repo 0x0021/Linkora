@@ -773,7 +773,7 @@ class WebConfig(BaseModel):
             raise ValueError(
                 "auth_enabled=True 但 auth_password 为空，拒绝启动（安全默认）："
                 "请在 config.yaml 的 web.auth_password 设置非空密码"
-            )
+            ) from None
         return self
 
 

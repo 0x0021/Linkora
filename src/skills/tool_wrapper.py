@@ -214,7 +214,6 @@ class SkillTool(BaseTool):
         # 纵深防御：任何 bash/sh -c 模板都拒绝执行（query 会被 -c 当作 shell 命令）
         if re.match(r"^(bash|sh)\s+-c\b", self._cli_template):
             raise ValueError("拒绝执行 bash/sh -c 模板：存在命令注入风险")
-
         # 用 query 替换模板中第一个引号参数
         template = self._cli_template
         replaced = re.sub(

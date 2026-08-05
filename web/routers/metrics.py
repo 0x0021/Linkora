@@ -52,7 +52,7 @@ async def debounce_metrics():
         return {"available": True, **app_instance.get_debounce_metrics()}
     except Exception as e:
         logger.error("防抖指标API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/backpressure-metrics")
@@ -69,7 +69,7 @@ async def backpressure_metrics():
         return {"available": True, **app_instance.get_backpressure_metrics()}
     except Exception as e:
         logger.error("背压指标API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/embedding-status")
@@ -96,7 +96,7 @@ async def embedding_status():
         return status
     except Exception as e:
         logger.error("嵌入状态API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/poller-status")
@@ -109,7 +109,7 @@ async def poller_status():
         return {"available": True, **app_instance.get_poller_status()}
     except Exception as e:
         logger.error("轮询状态API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _llm_metrics_sync():
@@ -206,7 +206,7 @@ def _llm_metrics_sync():
         return aggregated
     except Exception as e:
         logger.error("LLM指标API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/llm-metrics")
@@ -241,7 +241,7 @@ async def metrics_realtime(window: int = 300):
         }
     except Exception as e:
         logger.error("实时指标API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/metrics/by-rid/{request_id:path}")
@@ -273,7 +273,7 @@ async def metrics_by_rid(request_id: str):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("按 rid 查询 API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/metrics/tool-staleness")
@@ -346,7 +346,7 @@ async def tool_staleness():
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("工具过期统计 API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── Phase 3: 可观测性指标端点 ──────────────────────────────────────────
@@ -419,7 +419,7 @@ async def metrics_snapshot(
         }
     except Exception as e:
         logger.error("metrics snapshot API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 1. 工具调用统计 ────────────────────────────────────────────────────
@@ -446,7 +446,7 @@ async def metrics_tools(
         return {"available": bool(result), "time_range_hours": time_range_hours, "platforms": result}
     except Exception as e:
         logger.error("metrics tools API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/metrics/tools/failures")
@@ -467,7 +467,7 @@ async def metrics_tool_failures(
         return {"available": bool(result), "platforms": result}
     except Exception as e:
         logger.error("metrics tool failures API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 2. 路由准确率看板 ──────────────────────────────────────────────────
@@ -496,7 +496,7 @@ async def metrics_routing(
         return {"available": bool(result), "platforms": result}
     except Exception as e:
         logger.error("metrics routing API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 3. 黑名单趋势 ──────────────────────────────────────────────────────
@@ -523,7 +523,7 @@ async def metrics_blacklist(
         return {"available": bool(result), "platforms": result}
     except Exception as e:
         logger.error("metrics blacklist API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 4. Token 消费追踪 ──────────────────────────────────────────────────
@@ -551,7 +551,7 @@ async def metrics_tokens(
         return {"available": bool(result), "time_range_hours": time_range_hours, "platforms": result}
     except Exception as e:
         logger.error("metrics tokens API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 导出路由质量数据为 CSV ─────────────────────────────────────────────
@@ -578,7 +578,6 @@ def export_metrics(time_range_hours: int = Query(default=0, ge=0), limit: int = 
         app = get_app_instance()
         if not app:
             raise HTTPException(status_code=503, detail="应用未就绪")
-
         limit = max(1, min(limit, 20000))
         all_rows = []
 
@@ -625,4 +624,4 @@ def export_metrics(time_range_hours: int = Query(default=0, ge=0), limit: int = 
         raise
     except Exception as e:
         logger.error("指标导出API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

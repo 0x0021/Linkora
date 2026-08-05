@@ -8,35 +8,23 @@ logger = logging.getLogger(__name__)
 
 from src.poller_utils import match_notification_signature
 
-import threading
 
-import time
 
-from collections import OrderedDict
 
-from concurrent.futures import ThreadPoolExecutor
 
 from datetime import datetime, timedelta
 
-from typing import Callable
 
 
 
-from src.config import PollerConfig
 
-from src.dws_adapter import DwsAdapter, DwsPermissionError
 
 from src.models import Message
 
-from src.poller_core_ocr import OcrMixin
 
-from src.poller_core_parse import ParseMixin
 
-from src.poller_core_dedup import DedupMixin
 
-from src.poller_core_access import AccessControlMixin
 
-from src.poller_core_dispatch import DispatchMixin
 
 
 
@@ -51,7 +39,7 @@ class DiscoveryMixin(PollerMixinBase):
         try:
             recent = self.store._conversation_repo.get_recent_conversations(limit=20)
             logger.debug("[轮询器] 已从数据库取到 %d 条最近会话", len(recent))
-            
+
             # 转换为统一格式
             result = []
             for conv in recent:
@@ -70,7 +58,7 @@ class DiscoveryMixin(PollerMixinBase):
                     "singleChat": conv.get("chat_type") == "single",
                     "title": conv.get("title", ""),
                 })
-            
+
             return result
         except Exception as e:
             logger.warning("获取最近会话失败：%s", e)

@@ -585,7 +585,6 @@ class TestMessageCountSync:
         压缩两件事: (1) 旧消息标记 is_archived=1 不删行; (2) 新增 1 条 system 摘要消息。
         两者都留在 messages 表, 故 message_count 应等于压缩后的真实总行数 (=原10条 + 1条摘要)。
         """
-        import sqlite3 as _sql
         store = _make_store(tmp_db_path)
         for i in range(10):
             store._message_repo.save_message(Message(
@@ -626,7 +625,6 @@ class TestProcessedMsgTTL:
 
     def test_cleanup_removes_old_records(self, tmp_db_path):
         """直接 UPDATE 制造老记录，cleanup_processed_msgs 应清掉。"""
-        import sqlite3
         from datetime import datetime, timedelta
         store = _make_store(tmp_db_path)
         store._message_repo.mark_message_processed("m_old", "c1")

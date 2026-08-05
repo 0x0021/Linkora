@@ -29,7 +29,6 @@ def _bad_stream(chunk_cls):
     yield chunk_cls(content="半截内容", tool_calls=[], finish_reason=None, is_done=False)
     raise RuntimeError("LLM 断流")
 
-
 def test_stream_failure_recalls_then_downgrades_to_notice():
     agent, Chunk = _make_agent(recall_return=False)
     msg = SimpleNamespace(chat_id="c1", sender_id="u1")

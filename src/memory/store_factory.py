@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import threading
-from pathlib import Path
 from typing import Optional
 
 from src.memory.sqlite_store import SQLiteStore

@@ -1,60 +1,25 @@
 from __future__ import annotations
 
-import functools
-import hashlib
-import json
 import logging
 import os
+import pathlib
 import re
 import sqlite3
 import threading
-import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-
-from src.memory.few_shot_diversity import (
-    greedy_select,
-    len_bucket,
-    normalize,
-    topic_key,
-    trigram_similarity,
-)
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
 from src.config import DEFAULT_STORAGE_PATH
-from src.memory.schema import init_schema, init_conv_schema
-from src.memory import account_identity
-from src.models import Message
+from src.memory.index_lock import with_index_lock
+from src.memory.sqlite_store_conn import SQLiteStoreConnMixin
+from src.memory.sqlite_store_index import SQLiteStoreIndexMixin
 
 if TYPE_CHECKING:
     # 仅供 _vector_index 注解使用；运行时仍由 sqlite_store_index 在方法体内
     # 延迟导入（faiss 加载开销大，且防循环导入）。
     from src.memory.vector_index import VectorIndex
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ConversationSummaryRow:
-    """H2-A 会话摘要缓存行（conversation_summaries 表的读模型）。
-
-    仅承载 agent._read_cached_summary 判定新鲜度/覆盖率所需的字段；
-    写回由 SQLiteStore.upsert_conversation_summary 负责（CAS 代际）。
-    """
-
-    chat_id: str
-    summary_text: str
-    older_boundary_msg_id: str
-    covered_count: int
-    generation: int
-    created_at: str
-    updated_at: str
-
-# Shared faiss index lock — imported from src.memory.index_lock
-from src.memory.index_lock import _INDEX_LOCK, with_index_lock
 
 logger = logging.getLogger(__name__)
 
@@ -284,10 +249,6 @@ def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
         return 0.0
 
 
-from src.memory.sqlite_store_conn import SQLiteStoreConnMixin
-from src.memory.sqlite_store_index import SQLiteStoreIndexMixin
-
-
 class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
     # 主库→会话库引导迁移时，按 chat_id 前缀归类各平台可见会话。
     # None = 该平台不做前缀过滤（全量拷贝）。未登记的平台跳过迁移。
@@ -303,7 +264,7 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
 
     def __init__(self, db_path: str = DEFAULT_STORAGE_PATH):
         self.db_path = db_path
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         # 【架构重构】per-thread 连接缓存：key=thread ident，value=该线程独立 Connection。
         # 各线程通过 self.conn 拿到自己线程的连接，绝不跨线程共享，
         # 满足 docs/architecture.md 核心约束 "SQLite 连接禁止跨线程共享"。

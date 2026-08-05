@@ -89,7 +89,7 @@ def test_json_formatter_handles_exception():
 
     fmt = JsonLogFormatter()
     try:
-        1 / 0
+        _ = 1 / 0
     except Exception:
         import sys
         exc_info = sys.exc_info()

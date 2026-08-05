@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Body
 from fastapi.concurrency import run_in_threadpool
@@ -37,18 +36,15 @@ def simulate_message(
     """
     if not content.strip():
         raise HTTPException(status_code=400, detail="消息内容不能为空")
-
-    platform_id = get_current_platform()
+    get_current_platform()
 
     try:
         app = _api.get_app_instance()
         if not app or not hasattr(app, "llm_agent"):
             raise HTTPException(status_code=500, detail="Agent 未初始化")
-
         agent = app.llm_agent
         if not agent:
             raise HTTPException(status_code=500, detail="LLM Agent 未初始化")
-
         msg = Message(
             msg_id=f"sim-{hash(content)}-{hash(str(__import__('time').time()))}",
             content=content,
@@ -96,8 +92,7 @@ def simulate_message(
 
     except Exception as e:
         logger.error("模拟消息处理失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}") from e
 
 @router.get("/api/simulate/sample-messages")
 async def get_sample_messages():

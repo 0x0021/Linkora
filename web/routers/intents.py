@@ -84,4 +84,4 @@ async def intent_taxonomy(platform: str = ""):
         return data
     except Exception as e:
         logger.error("意图体系API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

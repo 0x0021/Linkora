@@ -76,7 +76,6 @@ class TestBaseTool:
             parameters = {}
             def execute(self, args):
                 raise RuntimeError("底层炸了")
-
         t = _BoomTool()
         out = t.safe_execute({})
         assert isinstance(out, dict) and out.get("error")
@@ -259,7 +258,6 @@ class TestToolRouter:
             parameters = {}
             def execute(self, args):
                 raise RuntimeError("模拟崩溃")
-
         cfg = _make_config(available=["failer"])
         router = ToolRouter(cfg)
         router.register(_FailingTool())

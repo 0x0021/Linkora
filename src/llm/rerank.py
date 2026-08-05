@@ -177,7 +177,7 @@ def rerank(
 
         # 关联重排分并降序排序（保留原始 score 字段不变）
         indexed = sorted(
-            zip(candidate, [float(s) for s in scores]),
+            zip(candidate, [float(s) for s in scores], strict=True),
             key=lambda x: x[1],
             reverse=True,
         )

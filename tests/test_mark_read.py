@@ -96,7 +96,6 @@ def test_poller_no_mark_read_on_failure(tmp_db_path):
     def handler(m):
         poller._running = False
         raise RuntimeError("处理失败")
-
     poller.run_loop(handler)
 
     dws.assert_not_called()

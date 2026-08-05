@@ -15,7 +15,6 @@ import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import main as main_mod
 from main import LinkoraEngine, PlatformContext, _active_platform_ctx
 # 拆分后 SQLiteStore / LLMAgent / MessagePoller / load_config / set_config 等符号
 # 被各 mixin 通过 `from .base import *` 复制到自身命名空间（star-import 副本）。

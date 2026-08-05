@@ -6,12 +6,11 @@ self.store.conn for per-thread connection access. Zero behavior change.
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from src.models import Message
 from src.memory.platform_context import get_current_platform

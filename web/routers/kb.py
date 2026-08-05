@@ -16,7 +16,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import JSONResponse
-from src.memory.sqlite_store import SQLiteStore
 from src.tools.utils import split_text
 
 class _LazyApiModule:
@@ -63,7 +62,7 @@ async def list_kb_documents(status: str = "", doc_type: str = "",
             return {"documents": docs, "stats": stats, "total": total}
         return await run_sync(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/kb/documents/{doc_id}")
 async def get_kb_document(doc_id: int):
@@ -81,7 +80,7 @@ async def get_kb_document(doc_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/kb/documents")
 async def create_kb_document(doc: KbDocumentCreate):
@@ -139,7 +138,7 @@ async def create_kb_document(doc: KbDocumentCreate):
                                + (f"，因向量化失败比例 {failed_ratio:.0%} 超过 20%，标记为失败" if not is_success else "")}
         return await run_sync(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.put("/api/kb/documents/{doc_id}")
 async def update_kb_document(doc_id: int, body: dict | None = None):
@@ -188,7 +187,7 @@ async def update_kb_document(doc_id: int, body: dict | None = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.delete("/api/kb/documents/{doc_id}")
 async def delete_kb_document(doc_id: int):
@@ -199,18 +198,18 @@ async def delete_kb_document(doc_id: int):
         await run_sync(_work)
         return {"success": True, "message": "文档删除成功"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/kb/import-url")
 def import_kb_from_url(body: dict | None = None):
     """从 URL 导入网页内容到知识库。
-    
+
     请求体：
     - url: 网页 URL
     - title: 可选，自定义标题（默认用网页 title）
     - doc_type: 可选，文档类型（默认 'web'）
-    
+
     流程：
     1. 用 requests 获取网页 HTML
     2. 用 BeautifulSoup 提取标题和正文
@@ -218,7 +217,7 @@ def import_kb_from_url(body: dict | None = None):
     """
     if not body or 'url' not in body:
         raise HTTPException(status_code=400, detail="缺少 url 字段")
-    
+
     url = body['url'].strip()
     if not url:
         raise HTTPException(status_code=400, detail="url 不能为空")
@@ -228,7 +227,6 @@ def import_kb_from_url(body: dict | None = None):
         raise HTTPException(status_code=400, detail="URL 非法或指向内网/保留地址，已拒绝")
 
     try:
-        import requests
         from bs4 import BeautifulSoup
         from urllib.parse import urljoin
 
@@ -320,15 +318,15 @@ def import_kb_from_url(body: dict | None = None):
                     browser.close()
             except Exception as pw_e:
                 if html_content is None:
-                    raise HTTPException(status_code=500, detail=f"获取网页失败（JS渲染也失败）：{str(pw_e)}")
+                    raise HTTPException(status_code=500, detail=f"获取网页失败（JS渲染也失败）：{str(pw_e)}") from pw_e
                 # Playwright 失败但 requests 有内容，继续使用 requests 的内容
-        
+
         if not html_content:
             raise HTTPException(status_code=500, detail="无法获取网页内容")
-        
+
         # 2. 解析 HTML
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # 提取标题
         page_title = body.get('title') or ''
         if not page_title:
@@ -337,29 +335,28 @@ def import_kb_from_url(body: dict | None = None):
                 page_title = title_tag.get_text(strip=True)
         if not page_title:
             page_title = url.split('/')[-1] or url
-        
+
         # 提取正文（简单策略：去掉 script/style，取 body 文本）
         for tag in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
             tag.decompose()
-        
+
         body_tag = soup.find('body')
         if body_tag:
             content = body_tag.get_text(separator='\n', strip=True)
         else:
             content = soup.get_text(separator='\n', strip=True)
-        
+
         # 清理多余空行
         import re
         content = re.sub(r'\n{3,}', '\n\n', content).strip()
-        
+
         if not content:
             raise HTTPException(status_code=500, detail="无法提取网页正文")
-        
+
         # 3. 存入知识库（复用 create_kb_document 逻辑）
-        from src.config import load_config
         from src.memory.store_factory import get_store
         from src.tools.utils import split_text
-        
+
         store = get_store()
         # 查重
         dup = store._kb_repo.check_duplicate_document(title=page_title, content=content)
@@ -422,7 +419,7 @@ def import_kb_from_url(body: dict | None = None):
         raise
     except Exception as e:
         logger.error("[URL导入] 失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="内部服务器错误")
+        raise HTTPException(status_code=500, detail="内部服务器错误") from e
 
 
 @router.post("/api/kb/documents/{doc_id}/reindex")
@@ -454,7 +451,7 @@ async def reindex_kb_document(doc_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/kb/reindex")
@@ -497,7 +494,7 @@ async def reindex_all_kb():
         raise
     except Exception as e:
         logger.error("[批量重建索引] 失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/kb/query")
@@ -528,7 +525,7 @@ async def kb_query(query: RagQuery):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/kb/chat")
@@ -608,7 +605,7 @@ async def kb_chat(query: RagChatQuery):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/kb/stats")
@@ -619,7 +616,7 @@ async def kb_stats():
             return store._kb_repo.kb_stats()
         return await run_sync(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # ---- /api/kb/parse-document（原 1132–1174，随主 kb 块抽出） ----
 
@@ -752,10 +749,10 @@ async def import_from_feishu(body: dict | None = None):
         return await run_sync(_work)
 
     except FeishuImportError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     except Exception as e:
         logger.error("飞书文档导入失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/kb/feishu-docs")
@@ -780,7 +777,7 @@ async def search_feishu_docs(query: str = "", page_size: int = 10):
         docs = await run_sync(_feishu_doc_search, query, page_size=page_size)
         return {"documents": docs}
     except FeishuImportError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.message)
+        raise HTTPException(status_code=e.status_code, detail=e.message) from e
     except Exception as e:
         logger.error("飞书文档搜索失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

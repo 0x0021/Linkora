@@ -35,7 +35,7 @@ from src.poller_mixins_base import PollerMixinBase
 
 class PollerStrategyMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。
-    
+
     包含 poll_once 主循环、未读会话发现、list-all 取信、会话聚合、
     飞书特定逻辑（外部联系人同步、chat_type 纠错）。
     """
@@ -732,7 +732,7 @@ class PollerStrategyMixin(PollerMixinBase):
 
             # 合并同一人的连续消息
             logger.debug("[轮询器] 在 %s 中过滤得到 %d 条新消息", title, len(conv_messages))
-            
+
             # 用消息里的对方信息反写会话缓存（确保下次轮询时 peer 信息已有）
             if conv_messages and is_single:
                 peer_id = conv_messages[0].sender_id  # sender_id 即对方的 openDingTalkId
@@ -743,7 +743,7 @@ class PollerStrategyMixin(PollerMixinBase):
                         open_id, peer_name or title, "single",
                         peer_open_dingtalk_id=peer_id,
                     )
-            
+
             merged = self._merge_consecutive_messages(
                 conv_messages, window_seconds=self.config.merge_window_seconds
             )

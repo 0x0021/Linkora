@@ -264,7 +264,7 @@ class DocumentParser:
         """检查各解析器依赖是否可用。"""
         # PDF
         try:
-            import pdfplumber
+            import pdfplumber  # noqa: F401  (import 即可用性检查)
             self._pdf_available = True
             logger.info("[解析器] PDF 解析可用（pdfplumber）")
         except ImportError:
@@ -272,7 +272,7 @@ class DocumentParser:
 
         # PPT
         try:
-            import pptx
+            import pptx  # noqa: F401  (import 即可用性检查)
             self._ppt_available = True
             logger.info("[解析器] PPT 解析可用（python-pptx）")
         except ImportError:
@@ -280,7 +280,7 @@ class DocumentParser:
 
         # Word
         try:
-            import docx
+            import docx  # noqa: F401  (import 即可用性检查)
             self._docx_available = True
             logger.info("[解析器] Word 解析可用（python-docx）")
         except ImportError:
@@ -301,11 +301,11 @@ class DocumentParser:
 
     def parse(self, file_path: str, file_type: Optional[str] = None) -> str:
         """解析文档，返回纯文本。
-        
+
         Args:
             file_path: 文件路径
             file_type: 文件类型（可选，自动从扩展名推断）
-        
+
         Returns:
             提取的纯文本（失败返回空字符串）
         """
@@ -354,7 +354,7 @@ class DocumentParser:
 
     def _parse_pdf(self, file_path: str) -> str:
         """解析 PDF 文件。
-        
+
         策略：
         1. 使用 pdfplumber 提取文本
         2. 过滤页眉页脚（通过检测每页顶部/底部的重复文本）
@@ -363,28 +363,28 @@ class DocumentParser:
         if not self._pdf_available:
             logger.error("[解析器] PDF 解析依赖未安装")
             return ""
-        
+
         try:
             import pdfplumber
             text_parts = []
             page_texts = []
-            
+
             with pdfplumber.open(file_path) as pdf:
-                for i, page in enumerate(pdf.pages):
+                for _, page in enumerate(pdf.pages):
                     page_text = page.extract_text()
                     if page_text:
                         page_texts.append(page_text)
-            
+
             if not page_texts:
                 logger.warning("[解析器] PDF 无文本内容，可能是扫描版，尝试 OCR...")
                 return self._parse_pdf_ocr(file_path)
-            
+
             # 过滤页眉页脚：统计所有页面的前3行和后3行，找出重复出现的
             header_candidates = {}
             footer_candidates = {}
-            
+
             for page_text in page_texts:
-                lines = [l.strip() for l in page_text.split('\n') if l.strip()]
+                lines = [line.strip() for line in page_text.split('\n') if line.strip()]
                 if len(lines) >= 6:
                     # 前3行作为页眉候选
                     for j in range(min(3, len(lines))):
@@ -394,39 +394,39 @@ class DocumentParser:
                     for j in range(max(0, len(lines)-3), len(lines)):
                         line = lines[j]
                         footer_candidates[line] = footer_candidates.get(line, 0) + 1
-            
+
             # 出现在超过50%页面的行视为页眉页脚
             threshold = max(2, len(page_texts) * 0.5)
             headers_to_remove = {k for k, v in header_candidates.items() if v >= threshold}
             footers_to_remove = {k for k, v in footer_candidates.items() if v >= threshold}
-            
+
             # 提取每页正文，去除页眉页脚
             for page_text in page_texts:
-                lines = [l.strip() for l in page_text.split('\n') if l.strip()]
+                lines = [line.strip() for line in page_text.split('\n') if line.strip()]
                 # 过滤页眉页脚
                 filtered_lines = [
-                    line for line in lines 
+                    line for line in lines
                     if line not in headers_to_remove and line not in footers_to_remove
                 ]
                 if filtered_lines:
                     text_parts.append('\n'.join(filtered_lines))
-            
+
             result = '\n\n'.join(text_parts)
-            
+
             # 如果提取的文本太少，可能是纯图片PDF，尝试OCR
             if len(result.strip()) < 100 and self._ocr_available:
                 logger.info("[解析器] PDF 文本过少，尝试 OCR 识别...")
                 ocr_result = self._parse_pdf_ocr(file_path)
                 if ocr_result:
                     return ocr_result
-            
-            logger.info("[解析器] PDF 解析完成: %s（%d 页，提取 %d 字符）", 
+
+            logger.info("[解析器] PDF 解析完成: %s（%d 页，提取 %d 字符）",
                        file_path, len(page_texts), len(result))
             return result
         except Exception as e:
             logger.error("[解析器] PDF 解析失败: %s", e, exc_info=True)
             return ""
-    
+
     def _parse_pdf_ocr(self, file_path: str) -> str:
         """使用 OCR 解析 PDF（适用于扫描版 PDF）。"""
         if not self._ocr_available or self._ocr_engine is None:
@@ -435,8 +435,6 @@ class DocumentParser:
 
         try:
             import fitz  # PyMuPDF
-            from PIL import Image
-            import io
             import tempfile
 
             doc = fitz.open(file_path)
@@ -488,23 +486,23 @@ class DocumentParser:
         if not self._ppt_available:
             logger.error("[解析器] PPT 解析依赖未安装")
             return ""
-        
+
         try:
             from pptx import Presentation
             prs = Presentation(file_path)
-            
+
             text_parts = []
             for i, slide in enumerate(prs.slides):
                 slide_texts = []
                 for shape in slide.shapes:
                     if hasattr(shape, "text") and shape.text:
                         slide_texts.append(shape.text)
-                
+
                 if slide_texts:
                     text_parts.append(f"[第 {i+1} 页]\n" + "\n".join(slide_texts))
-            
+
             result = "\n\n".join(text_parts)
-            logger.info("[解析器] PPT 解析完成: %s（%d 页，提取 %d 字符）", 
+            logger.info("[解析器] PPT 解析完成: %s（%d 页，提取 %d 字符）",
                         file_path, len(prs.slides), len(result))
             return result
         except Exception as e:
@@ -516,23 +514,23 @@ class DocumentParser:
         if not self._docx_available:
             logger.error("[解析器] Word 解析依赖未安装")
             return ""
-        
+
         try:
             from docx import Document
             doc = Document(file_path)
-            
+
             text_parts = []
             for para in doc.paragraphs:
                 if para.text.strip():
                     text_parts.append(para.text)
-            
+
             # 也提取表格内容
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
                         if cell.text.strip():
                             text_parts.append(cell.text)
-            
+
             result = "\n".join(text_parts)
             logger.info("[解析器] Word 解析完成: %s（提取 %d 字符）", file_path, len(result))
             return result
@@ -542,7 +540,7 @@ class DocumentParser:
 
     def _parse_html(self, file_path: str) -> str:
         """解析 HTML 文件，提取可见正文内容。
-        
+
         策略：
         1. 首先检测页面类型（导航页/文章页/列表页等）
         2. 根据页面类型选择合适的提取策略
@@ -556,11 +554,11 @@ class DocumentParser:
                 html_content = f.read()
 
             soup = BeautifulSoup(html_content, "html.parser")
-            
+
             # 检测页面类型
             page_type = self._detect_page_type(soup)
             logger.info("[解析器] 检测到页面类型: %s", page_type)
-            
+
             if page_type == "navigation":
                 return self._extract_navigation_content(soup)
             elif page_type == "article":
@@ -570,66 +568,66 @@ class DocumentParser:
         except Exception as e:
             logger.error("[解析器] HTML 解析失败: %s", e, exc_info=True)
             return ""
-    
+
     def _detect_page_type(self, soup) -> str:
         """检测页面类型：navigation/article/list/general"""
-        
+
         # 获取标题和meta信息
         title = soup.find('title')
         title_text = title.get_text().lower() if title else ''
-        
+
         meta_desc = soup.find('meta', attrs={'name': 'description'})
-        desc_text = meta_desc.get('content', '').lower() if meta_desc else ''
-        
+        meta_desc.get('content', '').lower() if meta_desc else ''
+
         # 统计链接数量
         links = soup.find_all('a', href=True)
         link_count = len(links)
-        
+
         # 统计文本块数量
         text_blocks = [p.get_text(strip=True) for p in soup.find_all(['p', 'li', 'h1', 'h2', 'h3'])]
         text_block_count = len([t for t in text_blocks if len(t) > 10])
-        
+
         # 判断是否为导航页：链接较多且包含业务链接（非仅导航栏）
         # 条件：链接数>=5 或 标题包含"导航"关键词
         is_nav_title = any(kw in title_text for kw in ['导航', 'directory', 'index', 'portal'])
         has_business_links = any(
-            link.get('href', '').startswith(('http://', 'https://')) and 
+            link.get('href', '').startswith(('http://', 'https://')) and
             not self._is_navigation_link(link.get_text(strip=True), link.get('href', ''))
             for link in links[:20]  # 只检查前20个链接
         )
-        
+
         if (link_count >= 5 or is_nav_title) and has_business_links:
             return 'navigation'
-        
+
         # 判断是否为文章页：有article/main标签或大量段落
         if soup.find(['article', 'main']) or text_block_count > 10:
             return 'article'
-        
+
         # 判断是否为列表页
         if soup.find(['ul', 'ol']) and link_count > 5:
             return 'list'
-        
+
         return 'general'
-    
+
     def _extract_navigation_content(self, soup) -> str:
         """提取导航页内容：保留网站名称、描述和链接信息
-        
+
         导航页的特点是所有链接都是主要内容，不应过滤
         """
-        
+
         # 移除脚本和样式
         for tag in soup.find_all(['script', 'style', 'noscript']):
             tag.decompose()
-        
+
         content_parts = []
-        
+
         # 1. 提取页面标题
         title = soup.find('title')
         if title:
             title_text = title.get_text(strip=True)
             if title_text:
                 content_parts.append(f"# {title_text}")
-        
+
         # 2. 提取页面主标题（h1, h2）
         for heading in soup.find_all(['h1', 'h2']):
             text = heading.get_text(strip=True)
@@ -638,41 +636,41 @@ class DocumentParser:
                 if not self._is_ui_element_text(text):
                     prefix = "## " if heading.name == 'h2' else "# "
                     content_parts.append(f"{prefix}{text}")
-        
+
         # 3. 提取所有有意义的链接（导航页中所有链接都是主要内容）
         links_data = []
         processed_links = set()  # 避免重复
         link_descriptions = set()  # 记录已提取的描述，避免重复
-        
+
         for link in soup.find_all('a', href=True):
             href = link.get('href', '').strip()
             text = link.get_text(strip=True)
-            
+
             # 跳过空链接或javascript链接
             if not text or not href or href.startswith('javascript:') or href.startswith('#'):
                 continue
-            
+
             # 去重
             link_key = f"{text}|{href}"
             if link_key in processed_links:
                 continue
             processed_links.add(link_key)
-            
+
             # 获取链接的描述
             description = self._get_link_description(link)
-            
+
             # 格式化链接信息
             link_info = f"- **{text}**: [{href}]({href})"
             if description:
                 link_info += f" - {description}"
                 link_descriptions.add(description)  # 记录已使用的描述
-            
+
             links_data.append(link_info)
-        
+
         if links_data:
             content_parts.append("\n## 系统/页面列表")
             content_parts.extend(links_data)
-        
+
         # 4. 提取有意义的段落和描述（排除已在链接中出现的描述）
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
@@ -688,15 +686,15 @@ class DocumentParser:
                 if any(kw in text.lower() for kw in ['©', 'copyright', 'icp备', '版权所有']):
                     continue
                 content_parts.append(text)
-        
+
         result = '\n\n'.join(content_parts)
-        logger.info("[解析器] 导航页解析完成: 提取 %d 字符，%d 个链接", 
+        logger.info("[解析器] 导航页解析完成: 提取 %d 字符，%d 个链接",
                    len(result), len(links_data))
         return result
-    
+
     def _extract_article_content(self, soup) -> str:
         """提取文章内容：传统文章的解析逻辑"""
-        
+
         # 移除不需要的标签
         tags_to_remove = ['script', 'style', 'noscript', 'iframe', 'head',
                          'nav', 'header', 'footer', 'aside',
@@ -705,10 +703,10 @@ class DocumentParser:
         for tag_name in tags_to_remove:
             for tag in soup.find_all(tag_name):
                 tag.decompose()
-        
+
         # 提取主要内容区域
         main_content = None
-        
+
         # 优先级：main > article > content类 > body > soup
         for selector in [
             ('main', None),
@@ -724,72 +722,72 @@ class DocumentParser:
                     target = soup.find(tag_name, class_=attr_filter)
             else:
                 target = soup.find(tag_name)
-            
+
             if target:
                 main_content = target
                 break
-        
+
         if not main_content:
             main_content = soup
-        
+
         # 提取文本并清理
         text = main_content.get_text(separator='\n', strip=True)
         lines = []
         seen_lines = set()
-        
+
         for line in text.splitlines():
             line = line.strip()
             if not line or len(line) < 3 or line in seen_lines:
                 continue
-            
+
             # 过滤导航文本
             if self._is_navigation_text(line):
                 continue
-            
+
             seen_lines.add(line)
             lines.append(line)
-        
+
         result = '\n'.join(lines)
-        logger.info("[解析器] 文章页解析完成: 提取 %d 字符，%d 行", 
+        logger.info("[解析器] 文章页解析完成: 提取 %d 字符，%d 行",
                    len(result), len(lines))
         return result
-    
+
     def _extract_general_content(self, soup) -> str:
         """提取通用页面内容"""
-        
+
         # 移除脚本和样式
         for tag in soup.find_all(['script', 'style', 'noscript', 'iframe']):
             tag.decompose()
-        
+
         # 提取所有有意义的文本
         text_parts = []
-        
+
         # 标题
         for heading in soup.find_all(['h1', 'h2', 'h3', 'h4']):
             text = heading.get_text(strip=True)
             if text and len(text) > 2:
                 text_parts.append(text)
-        
+
         # 段落
         for p in soup.find_all('p'):
             text = p.get_text(strip=True)
             if text and len(text) > 20:
                 text_parts.append(text)
-        
+
         # 列表项
         for li in soup.find_all('li'):
             text = li.get_text(strip=True)
             if text and len(text) > 10:
                 text_parts.append(text)
-        
+
         result = '\n\n'.join(text_parts)
         logger.info("[解析器] 通用页解析完成: 提取 %d 字符", len(result))
         return result
-    
+
     def _is_navigation_text(self, text: str) -> bool:
         """判断文本是否为导航性文本"""
         import re
-        
+
         nav_patterns = [
             r'^首页$', r'^产品$', r'^服务$', r'^文档$', r'^登录$', r'^注册$',
             r'^退出$', r'^搜索$', r'^联系我们$', r'^关于我们$',
@@ -800,15 +798,15 @@ class DocumentParser:
             r'^帮助中心$', r'^常见问题$',
             r'未找到匹配的系统',  # 空状态提示
         ]
-        
+
         for pattern in nav_patterns:
             if re.search(pattern, text, re.IGNORECASE):
                 return True
         return False
-    
+
     def _is_ui_element_text(self, text: str) -> bool:
         """判断文本是否为UI元素文本（按钮、操作等）"""
-            
+
         # UI元素关键词列表（包含匹配）
         ui_keywords = [
             '关闭', '取消', '确定', '提交', '保存',
@@ -819,45 +817,45 @@ class DocumentParser:
             '未找到匹配', 'not found', 'no results',
             '×', '✕', '···', '...',  # 特殊符号
         ]
-            
+
         # 检查是否包含UI关键词
         for keyword in ui_keywords:
             if keyword and keyword.lower() in text.lower():
                 return True
-            
+
         # 检查纯符号或短文本（长度<=3且不含字母数字）
         if len(text.strip()) <= 3 and not any(c.isalnum() for c in text):
             return True
-            
+
         return False
-    
+
     def _is_navigation_link(self, text: str, href: str) -> bool:
         """判断链接是否为导航性链接"""
         import re
-        
+
         # 常见的导航链接模式
         nav_href_patterns = [
             r'^/$', r'^/#', r'^/login', r'^/register', r'^/search',
             r'^javascript:', r'^mailto:', r'tel:'
         ]
-        
+
         nav_text_patterns = [
             r'^首页$', r'^主页$', r'^登录$', r'^注册$', r'^退出$',
             r'^搜索$', r'^设置$', r'^个人中心$', r'^我的',
             r'^home$', r'^login$', r'^signup$', r'^signout$',
             r'^settings$', r'^profile$'
         ]
-        
+
         for pattern in nav_href_patterns:
             if re.search(pattern, href, re.IGNORECASE):
                 return True
-        
+
         for pattern in nav_text_patterns:
             if re.search(pattern, text, re.IGNORECASE):
                 return True
-        
+
         return False
-    
+
     def _get_link_description(self, link) -> str:
         """获取链接的描述文本"""
         # 尝试从父元素的下一个兄弟元素获取描述
@@ -868,17 +866,17 @@ class DocumentParser:
                 desc = next_sibling.get_text(strip=True)
                 if desc and len(desc) < 200:
                     return desc
-        
+
         # 尝试从link的title属性获取
         title = link.get('title', '')
         if title and len(title) < 200:
             return title
-        
+
         # 尝试从aria-label获取
         aria_label = link.get('aria-label', '')
         if aria_label and len(aria_label) < 200:
             return aria_label
-        
+
         return ''
 
     def _parse_image(self, file_path: str) -> str:
@@ -915,13 +913,13 @@ class DocumentParser:
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-            
+
             # 如果是 Markdown，可选择性保留结构（标题、列表等）
             # 这里直接返回原始文本，保留换行符
             result = content.strip()
-            
+
             if result:
-                logger.info("[解析器] Markdown/文本解析完成: %s（提取 %d 字符）", 
+                logger.info("[解析器] Markdown/文本解析完成: %s（提取 %d 字符）",
                            file_path, len(result))
                 return result
             else:

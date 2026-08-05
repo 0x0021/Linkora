@@ -81,7 +81,8 @@ class RoutingQualityRepo:
         total_tokens: int = 0,
         cost_usd: float = 0.0,
     ) -> int:
-        js = lambda v: json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
+        def js(v: object) -> str | object:
+            return json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
         cur = self.store.conn.cursor()
         cur.execute(
             """INSERT INTO routing_quality
@@ -129,7 +130,8 @@ class RoutingQualityRepo:
         total_tokens: int = 0,
         cost_usd: float = 0.0,
     ) -> None:
-        js = lambda v: json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
+        def js(v: object) -> str | object:
+            return json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
         cur = self.store.conn.cursor()
         cur.execute(
             """UPDATE routing_quality

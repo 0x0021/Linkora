@@ -119,7 +119,7 @@ class TestLLMClientRetryAndFallback:
             return fb_resp
 
         with patch.object(client, "_do_chat", side_effect=do_fn):
-            resp = client.chat([{"role": "user", "content": "hello"}])
+            client.chat([{"role": "user", "content": "hello"}])
 
         assert call_count[0] == 4  # 3 次重试 + 1 次 fallback
         assert mock_sleep.call_count == 2  # 3 次尝试之间有 2 次等待
@@ -139,7 +139,7 @@ class TestLLMClientRetryAndFallback:
             return fb_resp
 
         with patch.object(client, "_do_chat", side_effect=do_fn):
-            resp = client.chat([{"role": "user", "content": "hello"}])
+            client.chat([{"role": "user", "content": "hello"}])
         assert mock_sleep.call_count == 0
 
     def test_fallback_injects_hint_when_tool_results_present(self):
@@ -167,7 +167,7 @@ class TestLLMClientRetryAndFallback:
             return fb_resp
 
         with patch.object(client, "_do_chat", side_effect=do_fn):
-            resp = client.chat(messages)
+            client.chat(messages)
 
         # 至少有一次调用带有 hint（fallback 调用）
         hint_calls = [c for c in captured if c[0]]
@@ -187,7 +187,7 @@ class TestLLMClientRetryAndFallback:
             return fb_resp
 
         with patch.object(client, "_do_chat", side_effect=do_fn):
-            resp = client.chat(messages)
+            client.chat(messages)
 
         assert len(captured) == 1  # 主模型成功，无 fallback
         assert captured[0][0]["role"] == "user"  # 无 system hint 前缀

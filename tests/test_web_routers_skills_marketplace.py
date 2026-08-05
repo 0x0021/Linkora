@@ -4,7 +4,7 @@
 """
 
 import json
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient

@@ -9,17 +9,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-import sqlite3
-import time
-import uuid
-from datetime import datetime, timedelta
-from typing import Optional, TYPE_CHECKING
-
-import numpy as np
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.memory.index_lock import with_index_lock
 from src.memory.sqlite_store import cosine_similarity
-from src.models import Message
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -474,7 +468,6 @@ class KbRepo:
         if not query or not query.strip():
             return []
 
-        import re
         # 【H7修复】中文关键词需按字符拆分（而非整句作为一个 token），
         # 否则 "钉钉文档管理" 只能匹配完整子串，无法命中只含"钉钉"的文档。
         # 英文保留按单词分词（\w+），中文按每 2-4 字的 bigram/trigram 拆分。

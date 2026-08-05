@@ -80,7 +80,6 @@ def test_mark_rate_limited_fires_on_observed_429_even_if_retry_succeeds():
     「主模型429→同池免费备选成功返回」的情形：用户拿到回复，但后台
     摘要/记忆任务仍会撞同一免费额度。本用例验证该缺口已修复。
     """
-    import src.llm.client as _cl
     from types import SimpleNamespace
 
     from src.llm.client import LLMClient, LLMResponse

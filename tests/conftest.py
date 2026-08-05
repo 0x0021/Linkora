@@ -87,7 +87,7 @@ def mock_dws():
     dws.timeout = 30
     dws.retries = 2
     dws.profile = ""
-    
+
     # 默认返回空结果
     dws.run.return_value = {}
     dws.contact_user_get_self.return_value = {
@@ -102,7 +102,7 @@ def mock_dws():
     dws.chat_message_list_direct.return_value = []
     dws.chat_message_list.return_value = []
     dws.auth_status.return_value = {"authenticated": True}
-    
+
     return dws
 
 
@@ -144,9 +144,9 @@ def rule_engine_config():
 def rule_engine(rule_engine_config, tmp_db_path):
     """提供规则引擎实例（无数据库依赖）。"""
     from src.config import RulesConfig
-    
+
     config = RulesConfig(**rule_engine_config)
-    
+
     from src.rule_engine import RuleEngine
     engine = RuleEngine(config=config, db_store=None)
     return engine

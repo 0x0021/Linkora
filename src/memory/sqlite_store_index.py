@@ -9,9 +9,7 @@ import json
 import logging
 from pathlib import Path
 
-import numpy as np
-
-from src.memory.index_lock import _INDEX_LOCK, with_index_lock
+from src.memory.index_lock import with_index_lock
 
 logger = logging.getLogger(__name__)
 _with_index_lock = with_index_lock  # 兼容别名

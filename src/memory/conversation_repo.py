@@ -10,16 +10,14 @@ blocked_conversations / dedup_messages）物理上位于 per-account 会话库�
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
 from src.memory.sqlite_store import ConversationSummaryRow
 from src.memory.platform_context import get_current_platform
 from src.memory.image_cleanup import purge_orphan_images
-from src.models import Message
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore

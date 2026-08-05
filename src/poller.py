@@ -5,11 +5,10 @@ import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Callable
 
 from src.config import PollerConfig
-from src.dws_adapter import DwsPermissionError
 # dws 形参按 BaseIMAdapter 声明：poller 只依赖这层通用 IM 契约，
 # 实参可能是钉钉 DwsAdapter，也可能是飞书 / 企微适配器。
 from src.im_adapter.base_adapter import BaseIMAdapter
@@ -248,7 +247,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             # 标已读已移至 main._send_reply 中「即将发送回复」的时刻执行，
             # 不再在轮询器 handler 结束后立即标记，避免对方看到已读却迟迟收不到回复。
 
-                        
+
             except KeyboardInterrupt:
                 logger.debug("用户中断轮询")
                 break

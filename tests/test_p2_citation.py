@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import main as main_mod
 from src.llm.style import Citation
-from src.llm.rag_inject import inject_rag_knowledge, RagInjectResult
+from src.llm.rag_inject import inject_rag_knowledge
 
 
 # ----------------------------- Citation 基本 -----------------------------

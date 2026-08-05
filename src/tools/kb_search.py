@@ -31,7 +31,7 @@ _PDF_GARBAGE: set[str] = {
     "obj", "endobj", "stream", "endstream", "xref", "trailer", "startxref",
     "true", "false", "null", "flatedecode", "length", "width", "height",
     "type", "subtype", "filter", "decode", "predictor", "colors", "bitspercomponent",
-    "n", "f", "r", "g", "rg", "k", "cmyk", "bt", "et", "tj", "tj", "td", "tf",
+    "n", "f", "r", "g", "rg", "k", "cmyk", "bt", "et", "tj", "td", "tf",
     "im", "imag", "png", "jpg", "jpeg", "gif", "bmp", "ico", "emf", "wmf",
     "http", "https", "www", "com", "cn", "org", "net", "pdf", "doc", "docx",
     "abcdef", " ABC", "def", "ghi", "jkl", "mno", "pqr", "stu", "vwx", "yz",

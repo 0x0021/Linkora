@@ -6,7 +6,6 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
-import pytest
 
 from src.models import Message
 from src.poller_core_history import HistorySyncMixin

@@ -7,7 +7,6 @@
 - 原有模式（我需要按照主人/根据提供【相关知识】/作为数字分身）
 """
 
-import pytest
 
 from unittest.mock import MagicMock
 
@@ -360,7 +359,6 @@ class TestCitationFooterNewline:
         return app._append_citation_footer(text, reply, msg)
 
     def _reply(self, cites):
-        from src.llm.style import Citation
         return __import__("types").SimpleNamespace(citations=cites)
 
     def _msg(self, **kw):

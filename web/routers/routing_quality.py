@@ -43,7 +43,7 @@ async def routing_quality(
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("路由质量API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/routing-quality/stats")
 async def routing_quality_stats(platform: str = ""):
@@ -58,7 +58,7 @@ async def routing_quality_stats(platform: str = ""):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("路由质量统计API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/routing-quality/aggregate")
 async def routing_quality_aggregate(platform: str = ""):
@@ -73,7 +73,7 @@ async def routing_quality_aggregate(platform: str = ""):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("路由质量聚合API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/routing-quality/{rq_id}")
 async def routing_quality_detail(rq_id: int):
@@ -90,4 +90,4 @@ async def routing_quality_detail(rq_id: int):
         raise
     except Exception as e:
         logger.error("路由质量详情API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

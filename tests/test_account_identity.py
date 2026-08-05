@@ -1,9 +1,7 @@
 """账号身份解析器单测：三平台分支 + 兜底 + 缓存。"""
 
 import subprocess
-import textwrap
 
-import pytest
 
 import src.memory.account_identity as ai
 

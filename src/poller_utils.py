@@ -268,7 +268,7 @@ def merge_consecutive_messages(
             logger.debug("语义嵌入模块不可用，跳过去重合并")
 
     merged: list["Message"] = []
-    for key, group in groups.items():
+    for _, group in groups.items():
         group.sort(key=lambda m: m.timestamp)
         current_group: list["Message"] = []
         last_embedding = None

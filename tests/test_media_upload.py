@@ -48,7 +48,7 @@ def test_media_upload_missing_file():
     dws = _adapter()
     try:
         dws.media_upload("/nonexistent/x.png")
-        assert False, "应抛 ValueError"
+        raise AssertionError("应抛 ValueError")
     except ValueError as e:
         assert "文件不存在" in str(e)
 
@@ -60,7 +60,7 @@ def test_media_upload_error_shape(tmp_path):
     dws.run.return_value = {"error": {"category": "auth", "message": "缺少应用凭证"}}
     try:
         dws.media_upload(str(f))
-        assert False, "应抛 RuntimeError"
+        raise AssertionError("应抛 RuntimeError")
     except RuntimeError as e:
         assert "缺少应用凭证" in str(e)
 

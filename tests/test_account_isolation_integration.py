@@ -113,8 +113,10 @@ class AccountIsolationIntegrationTest(unittest.TestCase):
         _TLS.account = "feishu:acctB"
         t_b = threading.Thread(target=self._session_work,
                                args=("feishu:acctB", "oc_chatB", "账号B的私密消息", res_b))
-        t_a.start(); t_a.join()
-        t_b.start(); t_b.join()
+        t_a.start()
+        t_a.join()
+        t_b.start()
+        t_b.join()
 
         path_a = res_a["path"]
         path_b = res_b["path"]
@@ -138,7 +140,10 @@ class AccountIsolationIntegrationTest(unittest.TestCase):
         # 账号 B 上下文（_TLS.account=acctB）→ 查账号 A 的 chatA → 必须 None/0
         tb = threading.Thread(target=self._cross_check,
                               args=(res_b["store"], "feishu:acctB", "oc_chatA", "b_to_a", cross))
-        ta.start(); tb.start(); ta.join(); tb.join()
+        ta.start()
+        tb.start()
+        ta.join()
+        tb.join()
 
         a_found, a_msg = cross["a_to_b"]
         b_found, b_msg = cross["b_to_a"]

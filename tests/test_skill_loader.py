@@ -53,9 +53,9 @@ class TestSkill:
         )
         try:
             from src.intent import default_registry
-            kws = default_registry.keywords_for_categories(["domain.weather"])
+            default_registry.keywords_for_categories(["domain.weather"])
         except Exception:
-            kws = []
+            pass
 
         result = s.effective_intent_keywords
         assert isinstance(result, list)

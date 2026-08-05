@@ -25,7 +25,6 @@ from web.schemas import (
     KeywordMatchTest,
     KeywordBatchOp,
 )
-from web.dependencies import logger
 
 router = APIRouter()
 
@@ -58,7 +57,7 @@ async def list_keywords(category: str = "", enabled: int | None = None,
             }
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/keywords")
 async def add_keyword(rule: RuleKeyword):
@@ -75,7 +74,7 @@ async def add_keyword(rule: RuleKeyword):
         rule_id = await run_in_threadpool(_work)
         return {"success": True, "id": rule_id, "message": "规则添加成功"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/keywords/stats")
 async def keyword_stats():
@@ -84,7 +83,7 @@ async def keyword_stats():
             return _api.get_store().keyword_rules_stats()
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/keywords/{rule_id}")
 async def get_keyword(rule_id: int):
@@ -99,7 +98,7 @@ async def get_keyword(rule_id: int):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.put("/api/keywords/{rule_id}")
 async def update_keyword(rule_id: int, update: KeywordUpdate):
@@ -117,7 +116,7 @@ async def update_keyword(rule_id: int, update: KeywordUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.delete("/api/keywords/{rule_id}")
 async def delete_keyword(rule_id: int):
@@ -128,7 +127,7 @@ async def delete_keyword(rule_id: int):
             return {"success": True, "message": "规则删除成功"}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/keywords/import")
 async def import_keywords(file: UploadFile = File(...)):
@@ -196,7 +195,7 @@ async def import_keywords(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/keywords/export")
@@ -225,7 +224,7 @@ async def export_keywords(category: str = ""):
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/keywords/test-match")
 async def test_keyword_match(body: KeywordMatchTest):
@@ -314,7 +313,7 @@ async def test_keyword_match(body: KeywordMatchTest):
             "top_reply": matched[0]["reply_text"] if matched else "",
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/keywords/batch")
 async def batch_keyword_ops(body: KeywordBatchOp):
@@ -346,4 +345,4 @@ async def batch_keyword_ops(body: KeywordBatchOp):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

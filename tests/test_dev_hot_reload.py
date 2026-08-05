@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import sys
 import time
-import threading
 from pathlib import Path
 from unittest import mock
 
-import pytest
 
 from src.dev_hot_reload import ModuleHotReloader, _SAFE_MODULE_PREFIXES
 

@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import uuid
-from datetime import datetime, timedelta
-from typing import Optional, TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -92,7 +91,7 @@ class DraftRepo:
                    ORDER BY id DESC LIMIT ? OFFSET ?""",
                 (status, limit, offset),
             )
-        items = [dict(zip(cols, row)) for row in cur.fetchall()]
+        items = [dict(zip(cols, row, strict=False)) for row in cur.fetchall()]
         # 先取完数据行，再执行 COUNT（避免复用同一 cursor 导致结果被覆盖）
         if status == "all":
             cur.execute("SELECT COUNT(*) FROM dead_letter_messages")
@@ -131,7 +130,7 @@ class DraftRepo:
                 "ORDER BY created_at DESC LIMIT ?",
                 (limit,),
             )
-        return [dict(zip(self.DEAD_LETTER_EXPORT_COLUMNS, row)) for row in cur.fetchall()]
+        return [dict(zip(self.DEAD_LETTER_EXPORT_COLUMNS, row, strict=False)) for row in cur.fetchall()]
 
     def count_dead_letters(self, status: str = "") -> int:
         """死信条数；status 为空或 'all' 时统计全部，否则只统计该状态。"""
@@ -161,7 +160,7 @@ class DraftRepo:
         cols = ["id", "msg_id", "chat_id", "chat_name", "sender_id", "sender_name",
                 "content", "msg_type", "stage", "error", "status", "raw",
                 "created_at", "updated_at", "replayed_at", "replay_note"]
-        return dict(zip(cols, row))
+        return dict(zip(cols, row, strict=False))
 
     def resolve_dead_letter(self, dl_id: int, *, status: str, note: str = "") -> bool:
         """将死信标记为 replayed / discarded（重放或丢弃）。"""

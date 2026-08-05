@@ -179,15 +179,15 @@ class MessageStatsTool(BaseTool):
             trend = [dict(row) for row in cur.fetchall()]
 
             cur.execute("""
-                SELECT 
-                    CASE 
+                SELECT
+                    CASE
                         WHEN msg_type = 'system' THEN '系统消息'
                         WHEN chat_type = 'single' THEN '私信'
                         ELSE '群消息'
                     END as msg_type,
                     COUNT(*) as cnt
                 FROM messages
-                GROUP BY CASE 
+                GROUP BY CASE
                         WHEN msg_type = 'system' THEN '系统消息'
                         WHEN chat_type = 'single' THEN '私信'
                         ELSE '群消息'

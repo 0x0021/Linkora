@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
 import threading
-import time
 import functools
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING, Iterator
 
 from src.config import LlmConfig, SkillsConfig
-from src.intent import default_registry
 from src.llm import history as _history
 from src.llm import router as _router
 from src.llm import style as _style
@@ -19,14 +14,13 @@ from src.llm.style import Citation
 from src.llm.rag_inject import inject_rag_knowledge  # noqa: F401  # 保留以兼容测试 monkey-patch
 from src.llm.message_wrap import wrap_incoming_message  # noqa: F401  # 保留以兼容测试 monkey-patch
 from src.llm.client import LLMClient, LLMResponse
-from src.llm.exceptions import LLMProcessingError, LLMRateLimitExhaustedError
 from src.llm.prompt_builder import PromptBuilder
 from src.llm.tool_orchestrator import ToolOrchestrator
+from src.llm.agent_reply import AgentReply  # noqa: F401  # 重导出保持向后兼容（避免循环依赖）
 from src.models import Message
 from src.skills.manager import SkillManager
 from src.skills.router import SkillRouter
 from src.tools.base import ToolRouter
-from src.utils.llm_json import extract_json
 from src.utils.request_id import request_id_scope
 
 # 子步骤已拆到 src/llm/agent_steps/；此处保留薄包装以兼容测试 monkey-patch
@@ -55,10 +49,6 @@ logger = logging.getLogger(__name__)
 
 # 工具收敛护栏中应撤下的“继续检索”工具（保留 send_message/save_memory 等动作类工具）。
 _RETRIEVAL_TOOLS = {"web_search", "kb_search", "search_doc"}
-
-
-# AgentReply 已移到 src.llm.agent_reply 以避免循环依赖，此处重导出保持向后兼容
-from src.llm.agent_reply import AgentReply  # noqa: F401
 
 
 class _AgentThreadState(threading.local):
@@ -397,7 +387,7 @@ class LLMAgent:
         # 实际逻辑已拆到 src/llm/style.py；此处保留 thin wrapper。
         return _style.retrieve_relevant_knowledge(self, query, query_embedding)
 
-    @functools.lru_cache(maxsize=1024)
+    @functools.lru_cache(maxsize=1024)  # noqa: B019  # instance method + lru_cache 已知风险，但 self._prompt_builder 是 agent 唯一共享实例，等价于全局缓存；删除会改变缓存键语义
     def _estimate_tokens(self, text: str) -> int:
         # 实际逻辑已拆到 src/llm/prompt_builder.py；此处保留 thin wrapper 以兼容测试 monkey-patch。
         return self._prompt_builder.estimate_tokens(text)

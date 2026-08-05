@@ -6,7 +6,6 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
-import pytest
 
 from src.poller_core_dispatch import DispatchMixin
 

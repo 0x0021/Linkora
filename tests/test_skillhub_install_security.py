@@ -3,7 +3,6 @@
 选项 B：默认关闭 + 白名单 URL + SHA256 钉值校验 + 非 shell 执行 + fail-closed。
 """
 import hashlib
-from pathlib import Path
 from unittest import mock
 
 import pytest

@@ -199,4 +199,4 @@ async def config_drift():
         return {"available": True, **app_inst.get_tool_whitelist_drift()}
     except Exception as e:
         logger.error("配置漂移API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

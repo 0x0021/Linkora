@@ -145,7 +145,7 @@ class TestDecisions:
         client = TestClient(app)
         with patch("src.decision_tracker.tracker") as mock_tracker:
             mock_tracker.recent.return_value = []
-            resp = client.get("/api/decisions")
+            client.get("/api/decisions")
         mock_tracker.recent.assert_called_with(50, "")
 
 
@@ -350,7 +350,7 @@ class TestConfigDefault:
         from fastapi.testclient import TestClient
         from web.api import app
         client = TestClient(app)
-        with patch("web.api._write_config") as mock_write:
+        with patch("web.api._write_config"):
             resp = client.post("/api/config/default")
         assert resp.status_code == 200
         assert resp.json().get("success") is True or "config" in resp.json()
@@ -458,7 +458,7 @@ class TestKbStats:
 class TestMemories:
     def _create_memory(self, content="x", source="manual", chat_id=""):
         from src.memory.sqlite_store import SQLiteStore
-        store = SQLiteStore(tmp_db) if hasattr(self, '_tmp_db') else None
+        SQLiteStore(tmp_db) if hasattr(self, '_tmp_db') else None
         # use fixture tmp_db directly
         from src.memory.sqlite_store import SQLiteStore as Store
         s = Store(self._tmp_db())

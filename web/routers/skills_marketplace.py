@@ -36,7 +36,6 @@ async def search_marketplace(keyword: str = ""):
         ok, err = _ensure_skillhub_cli()
         if not ok:
             raise HTTPException(status_code=500, detail=f"skillhub CLI 不可用: {err}")
-
         env = os.environ.copy()
         local_bin = str(Path.home() / ".local" / "bin")
         env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
@@ -48,7 +47,7 @@ async def search_marketplace(keyword: str = ""):
             raise HTTPException(
                 status_code=500,
                 detail=f"SkillHub 搜索失败: {proc.stderr.strip()[:200]}"
-            )
+            ) from None
 
         stdout = proc.stdout.strip()
         if not stdout or "no skills found" in stdout.lower():
@@ -63,10 +62,9 @@ async def search_marketplace(keyword: str = ""):
                 try:
                     raw = _json.loads(match.group())
                 except _json.JSONDecodeError:
-                    raise HTTPException(status_code=500, detail="SkillHub 返回格式异常，无法解析")
+                    raise HTTPException(status_code=500, detail="SkillHub 返回格式异常，无法解析") from None
             else:
-                raise HTTPException(status_code=500, detail="SkillHub 返回格式异常，无法解析")
-
+                raise HTTPException(status_code=500, detail="SkillHub 返回格式异常，无法解析") from None
         # 标准化字段 — CLI 返回 {"query": ..., "results": [...]} 对象格式
         items = raw.get("results", []) if isinstance(raw, dict) else (raw if isinstance(raw, list) else [])
         skills = []
@@ -88,7 +86,7 @@ async def search_marketplace(keyword: str = ""):
         raise
     except Exception as e:
         logger.error("SkillHub 搜索错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/skills/marketplace/install")
@@ -98,12 +96,10 @@ async def install_from_marketplace(data: dict):
         slug = (data.get("slug") or data.get("name") or "").strip()
         if not slug:
             raise HTTPException(status_code=400, detail="技能标识不能为空")
-
         ok, err = _ensure_skillhub_cli()
         if not ok:
             raise HTTPException(status_code=500, detail=f"skillhub CLI 不可用: {err}")
-
-        project_root = _get_project_root()
+        _get_project_root()
         skills_dir = data_path("skills")
         skills_dir.mkdir(parents=True, exist_ok=True)
 
@@ -118,7 +114,7 @@ async def install_from_marketplace(data: dict):
             raise HTTPException(
                 status_code=500,
                 detail=f"SkillHub 安装失败: {proc.stderr.strip()[:200]}"
-            )
+            ) from None
 
         install_msg = proc.stdout.strip()[:300] or f"技能 {slug} 安装成功"
 
@@ -142,10 +138,10 @@ async def install_from_marketplace(data: dict):
     except HTTPException:
         raise
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="安装超时（120s）")
+        raise HTTPException(status_code=500, detail="安装超时（120s）") from None
     except Exception as e:
         logger.error("SkillHub 安装错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/skills/marketplace/popular")
@@ -167,7 +163,7 @@ async def market_rankings(force: bool = False):
         raise
     except Exception as e:
         logger.error("SkillHub 榜单错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/skills/migrate-icons")
@@ -183,8 +179,7 @@ async def migrate_skill_icons():
     try:
         rankings_data = await _fetch_market_rankings(force=True)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取榜单数据失败: {e}")
-
+        raise HTTPException(status_code=500, detail=f"获取榜单数据失败: {e}") from e
     # 2. 列出已安装技能
     skills_dir = data_path("skills")
     installed_slugs = set()

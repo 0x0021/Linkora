@@ -214,7 +214,6 @@ class TestMessageStatsTool:
         store.conn.close()
         store._conv_conns.clear()
         # 强制让 conv_conn 重新打开已关闭的连接 → 抛 OperationalError
-        import sqlite3
         # 通过关闭主库让所有缓存连接失效
         for key in list(store._conv_conns.keys()):
             try:

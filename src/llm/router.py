@@ -390,7 +390,6 @@ def select_tools(
     # 技能关联工具（智能引擎联动）
     skill_tools: set[str] = set()
     skill_activated = False
-    skill_domain_cats: list[str] = []
     if agent.skill_router and agent.skills_config.enabled:
         skill_name = agent.skill_router.get_activated_skill_name()
         if skill_name:
@@ -415,7 +414,6 @@ def select_tools(
                     all_cats.update(getattr(skill_obj, 'intent_categories', []) or [])
                 else:
                     all_cats.update(getattr(m, 'intent_categories', []) or [])
-            skill_domain_cats = list(all_cats)
 
     # 【RAG 优先于 web 搜索】RAG 已接地时，抑制 web 搜索类工具，优先用知识库回答
     web_tools: set[str] = set()

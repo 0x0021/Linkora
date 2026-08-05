@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from web.dependencies import get_app_instance, get_store, get_current_platform, logger, run_sync
+from web.dependencies import get_app_instance, get_store, logger, run_sync
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -31,7 +31,7 @@ async def list_drafts(status: str | None = None, limit: int = 50, offset: int = 
         return await run_sync(_work)
     except Exception as e:
         logger.error("获取草稿列表失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/drafts/count")
 async def count_pending_drafts():
@@ -43,7 +43,7 @@ async def count_pending_drafts():
         return await run_sync(_work)
     except Exception as e:
         logger.error("获取草稿计数失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/drafts/{draft_id}")
 async def get_draft(draft_id: str):
@@ -60,7 +60,7 @@ async def get_draft(draft_id: str):
         raise
     except Exception as e:
         logger.error("获取草稿详情失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 def _send_draft_reply(draft: dict, final_reply: str) -> dict:
     """通过对应平台适配器发送消息。
@@ -172,7 +172,7 @@ async def approve_draft(draft_id: str):
         raise
     except Exception as e:
         logger.error("审批草稿失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/drafts/{draft_id}/discard")
 async def discard_draft(draft_id: str):
@@ -196,7 +196,7 @@ async def discard_draft(draft_id: str):
         raise
     except Exception as e:
         logger.error("丢弃草稿失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/api/drafts/{draft_id}/edit")
 async def edit_draft(draft_id: str, body: EditDraftBody):
@@ -224,4 +224,4 @@ async def edit_draft(draft_id: str, body: EditDraftBody):
         raise
     except Exception as e:
         logger.error("编辑草稿失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

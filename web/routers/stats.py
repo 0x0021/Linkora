@@ -126,7 +126,7 @@ async def message_stats(days: int = 7):
                 "你好", "您好", "谢谢", "请问", "这个", "那个", "什么", "怎么", "可以", "没有", "知道", "现在", "今天", "明天",
                 "一下", "我们", "他们", "大家", "就是", "但是", "因为", "所以", "如果", "的话", "需要", "能够", "已经",
                 "非常", "比较", "还是", "或者", "以及", "进行", "使用", "通过", "对于", "关于", "是否", "能否", "麻烦",
-                "帮忙", "收到", "好的", "了解", "明白", "清楚", "请", "谢谢", "你好", "您好", "嗯", "啊", "哦",
+                "帮忙", "收到", "好的", "了解", "明白", "清楚", "请", "嗯", "啊", "哦",
                 # 代词/助词/虚词
                 "自己", "别人", "我", "你", "他", "她", "它", "的", "了", "在", "是", "有", "和", "与", "及", "等",
                 "也", "都", "就", "又", "还", "被", "把", "给", "让", "向", "从", "到", "去",
@@ -145,21 +145,20 @@ async def message_stats(days: int = 7):
                 "config", "setting", "option", "param", "args", "request", "response",
                 "api", "json", "html", "xml", "url", "path", "query", "cookie",
                 "token", "session", "user", "admin", "login", "logout", "auth",
-                "page", "view", "list", "detail", "create", "update", "delete", "add",
+                "page", "view", "list", "create", "update", "delete", "add",
                 "edit", "save", "cancel", "confirm", "submit", "reset", "clear",
                 "download", "upload", "import", "export", "sync", "refresh",
                 "enable", "disable", "active", "inactive", "online", "offline",
                 "function", "callback", "async", "await", "return", "throw", "catch",
                 "try", "finally", "class", "extends", "constructor", "new", "this",
                 "let", "const", "var", "if", "else", "for", "while", "switch", "case",
-                "break", "continue", "module", "export", "import", "require", "from", "as",
+                "break", "continue", "module", "require", "from", "as",
                 "static", "private", "public", "protected", "abstract", "virtual",
                 "override", "final", "native", "encode", "decode", "parse", "stringify",
                 "format", "trim", "split", "join", "slice", "splice", "push", "pop",
                 "shift", "unshift", "sort", "reverse", "filter", "find", "includes",
                 "indexof", "lastindexof", "concat", "reduce", "every", "some", "foreach",
-                "keys", "values", "entries", "assign", "freeze", "seal", "create",
-                "defineproperty", "getownpropertynames", "getprototypeof", "setprototypeof",
+                "keys", "values", "entries", "assign", "freeze", "seal", "defineproperty", "getownpropertynames", "getprototypeof", "setprototypeof",
                 "is", "hasownproperty", "isextensible", "isfrozen", "issealed", "isarray",
                 "exec", "test", "search", "replace", "tolowercase", "touppercase",
                 "padstart", "padend", "normalize", "repeat", "localecompare",
@@ -168,14 +167,13 @@ async def message_stats(days: int = 7):
                 "getownpropertydescriptors", "getownpropertysymbols", "preventextensions",
                 "toentries", "tostring", "valueof", "apply", "construct", "deleteproperty",
                 "ownkeys", "all", "allsettled", "any", "race", "reject", "resolve",
-                "add", "clear", "get", "has", "size", "typeof", "instanceof", "void",
-                "debugger", "eval", "arguments", "callee", "caller", "length", "name",
-                "prototype", "__proto__", "constructor", "isprototypeof",
+                "get", "has", "typeof", "instanceof", "void",
+                "debugger", "eval", "arguments", "callee", "caller", "length", "prototype", "__proto__", "isprototypeof",
                 "propertyisenumerable", "tolocalestring", "nan", "infinity", "undefined",
                 # URL 编码残留词（如 3dfalse -> dfalse, 2fshowmenu -> fshowmenu）
                 "dfalse", "fshowmenu", "fcorpid", "fback", "fnative", "faflow", "fdingtalk",
                 "dshowmenu", "dcorpid", "dback", "dnative", "daflow", "ddingtalk",
-                "corpid", "showmenu", "native", "aflow", "back",
+                "corpid", "showmenu", "aflow", "back",
             }
 
             def normalize_keyword_token(token: str) -> str:
@@ -273,8 +271,7 @@ async def message_stats(days: int = 7):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("获取消息统计失败: %s", e)
-        raise HTTPException(status_code=500, detail="内部服务器错误")
-
+        raise HTTPException(status_code=500, detail="内部服务器错误") from e
 
 @router.get("/api/stats/tools")
 async def tool_call_stats(days: int = 7, top_n: int = 12):
@@ -331,4 +328,4 @@ async def tool_call_stats(days: int = 7, top_n: int = 12):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("工具统计API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

@@ -506,10 +506,10 @@ class TestStopWords:
         """逗号分隔的停用词应正确解析为小写集合。"""
         from src.config import RulesConfig
         from src.rule_engine import RuleEngine
-        
+
         config = RulesConfig(**rule_engine_config)
         engine = RuleEngine(config=config, db_store=None)
-        
+
         assert "的" in engine.stop_words
         assert "谢谢" in engine.stop_words
         assert "好的" in engine.stop_words
@@ -517,13 +517,13 @@ class TestStopWords:
     def test_reload_stop_words_updates_set(self, rule_engine, rule_engine_config):
         """热重载停用词应更新内部集合。"""
         from src.config import RulesConfig
-        
+
         new_config = RulesConfig(**{
             **rule_engine_config,
             "stop_words": ["新增词,另一个词"],
         })
         rule_engine.reload_stop_words(new_config)
-        
+
         assert "新增词" in rule_engine.stop_words
         assert "另一个词" in rule_engine.stop_words
 

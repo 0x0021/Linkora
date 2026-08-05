@@ -84,8 +84,10 @@ def test_concurrent_enqueue_dequeue_no_crash_no_loss():
 
     t1 = threading.Thread(target=enqueue)
     t2 = threading.Thread(target=dequeue)
-    t1.start(); t2.start()
-    t1.join(); t2.join()
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
 
     # 取消所有残留 Timer，避免测试后回调触发
     for t in app._pending_timers.values():

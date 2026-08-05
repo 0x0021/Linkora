@@ -55,7 +55,7 @@ def _step_normalize_layout(text: str) -> str:
     """Step 4: 排版规范化 —— 合并连续空行、去除首尾空白、去除仅空白行。"""
     lines = text.split("\n")
     # 去掉纯空白行
-    lines = [l.strip() for l in lines if not _WHITESPACE_LINE.match(l)]
+    lines = [line.strip() for line in lines if not _WHITESPACE_LINE.match(line)]
     text = "\n".join(lines)
     # 合并连续空行（≥3 个换行 → 2 个换行，保留段落间距）
     text = _MULTI_BLANK.sub("\n\n", text)

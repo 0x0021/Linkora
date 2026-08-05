@@ -14,7 +14,7 @@ import logging
 import sqlite3
 import threading
 from datetime import datetime, timedelta
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from src.memory.platform_context import get_current_platform
 

@@ -29,7 +29,7 @@ def test_auth_password_empty_string_keeps_existing(monkeypatch):
     fake_config = MagicMock()
     fake_config.web = fake_web
     with patch("web.api.load_config", return_value=fake_config), \
-         patch("web.api._write_config") as mock_write, \
+         patch("web.api._write_config"), \
          patch("src.shared_state.get_config_reload_callback", return_value=None):
         payload = ConfigUpdate(web_auth_password="")
         _run(update_config(payload))
@@ -48,7 +48,7 @@ def test_auth_password_whitespace_only_keeps_existing(monkeypatch):
     fake_config = MagicMock()
     fake_config.web = fake_web
     with patch("web.api.load_config", return_value=fake_config), \
-         patch("web.api._write_config") as mock_write, \
+         patch("web.api._write_config"), \
          patch("src.shared_state.get_config_reload_callback", return_value=None):
         payload = ConfigUpdate(web_auth_password="   \t\n  ")
         _run(update_config(payload))
@@ -112,7 +112,7 @@ def test_secret_fields_redacted_sentinel_keeps_existing(monkeypatch):
 
 def test_secret_fields_real_value_writes(monkeypatch):
     """非哨兵的真实密钥值应正常写入（不误杀正常更新）。"""
-    from web.routers.config import update_config, REDACTED_SENTINEL
+    from web.routers.config import update_config
     from web.api import ConfigUpdate
     fake_web = type("W", (), {
         "auth_enabled": True,

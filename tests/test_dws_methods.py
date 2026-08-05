@@ -252,7 +252,7 @@ class TestChatMessageSend:
     def test_send_at_all(self, adapter):
         with patch.object(adapter, "run") as m:
             m.return_value = {"ok": True}
-            r = adapter.chat_message_send(group="g1", text="hi", at_all=True)
+            adapter.chat_message_send(group="g1", text="hi", at_all=True)
         cmd = m.call_args[0][0]
         assert "--at-all" in " ".join(cmd)
 
@@ -270,7 +270,7 @@ class TestChatMessageSend:
         f.write_text("fake")
         with patch.object(adapter, "run") as m:
             m.return_value = {"ok": True}
-            r = adapter.chat_message_send(
+            adapter.chat_message_send(
                 group="g1", msg_type="image", media_id="mid-1",
                 file_path=str(f),
             )
@@ -365,7 +365,7 @@ class TestMedia:
             m_run.return_value.returncode = 0
             m_run.return_value.stdout = ""
             m_run.return_value.stderr = ""
-            with pytest.raises(Exception):
+            with pytest.raises(Exception):  # noqa: B017
                 adapter.download_media(
                     media_id="m1", message_id="msg1",
                     conversation_id="conv1", output_path="/tmp/out.png",
@@ -486,7 +486,7 @@ class TestConvenienceReadMethods:
     def test_mark_read(self, adapter):
         with patch.object(adapter, "run") as m:
             m.return_value = {"result": {"ok": True}}
-            r = adapter.mark_read("conv-1", "msg-1")
+            adapter.mark_read("conv-1", "msg-1")
 
     def test_mark_read_missing_args(self, adapter):
         with pytest.raises(ValueError):
@@ -609,7 +609,7 @@ class TestChatMessageReply:
 
     def test_native_reply_falls_back_to_send(self, adapter):
         """原生回复失败（fallback_to_send=True 默认）应降级为 chat_message_send。"""
-        with patch.object(adapter, "run", side_effect=RuntimeError("boom")) as m_run, \
+        with patch.object(adapter, "run", side_effect=RuntimeError("boom")), \
              patch.object(adapter, "chat_message_send") as m_send:
             m_send.return_value = {"result": {"openTaskId": "t2"}}
             r = adapter.chat_message_reply(

@@ -12,7 +12,6 @@ import asyncio
 import json
 import subprocess
 import time as _time
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -50,7 +49,6 @@ async def _run_dws(args: list, timeout: int = 15) -> dict:
     if proc.returncode != 0:
         raise RuntimeError(f"DWS 命令失败: {proc.stderr.strip()[:200]}")
     return json.loads(proc.stdout)
-
 
 def _cache_get(key: str):
     item = _DEPT_CACHE.get(key)
@@ -192,23 +190,22 @@ async def clear_department_cache():
 @router.post("/api/history/import")
 async def import_history_messages(full: bool = False):
     """触发历史消息导入（增量或全量）。
-    
+
     - full=False: 增量导入（从上次导入时间开始）
     - full=True: 全量导入（拉取过去 90 天）
     """
     try:
         import subprocess
-        from pathlib import Path
-        
+
         project_root = _get_project_root()
         script_path = project_root / "import_history.py"
         venv_python = project_root / ".venv" / "bin" / "python"
-        
+
         if full:
             cmd = [str(venv_python), str(script_path), "--full"]
         else:
             cmd = [str(venv_python), str(script_path)]
-        
+
         # 异步执行（不阻塞 API 响应）
         import asyncio
         loop = asyncio.get_event_loop()
@@ -222,7 +219,7 @@ async def import_history_messages(full: bool = False):
                 timeout=300  # 5 分钟超时
             )
         )
-        
+
         if result.returncode == 0:
             return {
                 "success": True,
@@ -233,11 +230,11 @@ async def import_history_messages(full: bool = False):
             raise HTTPException(
                 status_code=500,
                 detail=f"导入失败: {result.stderr[-500:]}"
-            )
+            ) from None
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="导入超时（超过 5 分钟）")
+        raise HTTPException(status_code=504, detail="导入超时（超过 5 分钟）") from None
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/history/import/status")
@@ -259,4 +256,4 @@ async def get_import_status():
         else:
             return {"success": True, "state": None, "message": "尚未导入历史消息"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

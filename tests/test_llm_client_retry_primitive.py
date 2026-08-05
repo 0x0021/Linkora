@@ -93,7 +93,7 @@ def test_check_budget_rate_limited_raises_special():
     s = _RetryState(global_max_attempts=10, total_attempts=11, rate_limited_observed=True, last_err=RuntimeError("x"))
     try:
         s.check_budget("phase")
-        assert False, "should raise"
+        raise AssertionError("should raise")
     except LLMRateLimitExhaustedError:
         pass
 
@@ -102,7 +102,7 @@ def test_check_budget_no_ratelimit_raises_runtime():
     s = _RetryState(global_max_attempts=10, total_attempts=11, rate_limited_observed=False, last_err=RuntimeError("x"))
     try:
         s.check_budget("phase")
-        assert False, "should raise"
+        raise AssertionError("should raise")
     except RuntimeError:
         pass
 
@@ -148,7 +148,7 @@ def test_retry_primary_budget_exhausted_raises():
     state = _RetryState(global_max_attempts=10, total_attempts=10, rate_limited_observed=True, last_err=RuntimeError("x"))
     try:
         c._retry_primary_model(c.client, "m1", {"model": "m1"}, state, 2, 0.05)
-        assert False, "should raise budget error"
+        raise AssertionError("should raise budget error")
     except LLMRateLimitExhaustedError:
         pass
 

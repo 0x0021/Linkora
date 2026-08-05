@@ -135,7 +135,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             # 连接回收（与主库同策略：仅回收已死线程的连接）
             if len(self._conv_conns) > self._max_conns:
                 alive = {t.ident for t in threading.enumerate() if t.ident is not None}
-                for (otid, oplat), (op, oconn) in list(self._conv_conns.items()):
+                for (otid, oplat), (_op, oconn) in list(self._conv_conns.items()):
                     if otid == tid:
                         continue
                     if otid not in alive:

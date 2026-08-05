@@ -83,7 +83,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "web-search", "name: web-search\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             assert router.detect_explicit("用 web-search 技能 搜一下") == "web-search"
 
@@ -92,7 +93,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # 正则「激活\s*(\S+)(?:\s*(?:技能|skill))?」为贪婪匹配，
             # "激活 weather" → 捕获完整 "weather"，命中已启用技能 → 返回 "weather"
@@ -104,7 +106,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "calculator", "name: calculator\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # 正则「use[_ ]*(\S+)(?:\s*skill)?」贪婪匹配，
             # "use calculator skill now" → 捕获 "calculator"（遇空白停），命中已启用技能
@@ -115,7 +118,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "w", "name: w\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             assert router.detect_explicit("激活 w") == "w"
 
@@ -123,7 +127,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             assert router.detect_explicit("今天天气怎么样") is None
 
@@ -132,7 +137,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\nenabled: false\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             assert router.detect_explicit("用 weather 技能查询") is None
 
@@ -140,7 +146,8 @@ class TestExplicit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # "foobar" not in manager
             assert router.detect_explicit("用 foobar 技能帮忙") is None
@@ -154,7 +161,8 @@ class TestMatchByIntent:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: weather\nintent_keywords:\n- 天气\nweight: 1.0\n"
             _write_skill(Path(td), "weather", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.match_by_intent("今天天气怎么样")
             assert len(matches) >= 1
@@ -166,7 +174,8 @@ class TestMatchByIntent:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: weak\nintent_keywords:\n- 微\nweight: 0.1\n"
             _write_skill(Path(td), "weak", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.match_by_intent("一条微弱信号")
             assert len(matches) == 0
@@ -179,7 +188,8 @@ class TestMatchByIntent:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: search\nintent_keywords:\n- 搜索\nweight: 1.0\n"
             _write_skill(Path(td), "search", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr, skills_config=Config())
             # 传入假 embedding，但语义路由被禁用
             fake_emb = [0.1] * 128
@@ -195,7 +205,8 @@ class TestMatchByIntent:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: weather\nintent_keywords:\n- 天气\nweight: 1.0\n"
             _write_skill(Path(td), "weather", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # 即使语义评分失败，关键词匹配仍能命中
             matches = router.match_by_intent("今天天气不错", query_embedding=[0.1] * 128)
@@ -211,7 +222,8 @@ class TestMatchByKeywords:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: weather\nweight: 1.0\n"
             _write_skill(Path(td), "weather", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # 消息中直接包含技能名
             matches = router.match_by_keywords("用 weather 来帮我")
@@ -225,7 +237,8 @@ class TestMatchByKeywords:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: web-search-tool\nweight: 1.0\n"
             _write_skill(Path(td), "web-search-tool", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # name_words: web(+2), search(+2), tool(+2) → 6 >= 4
             matches = router.match_by_keywords("web search tool")
@@ -237,7 +250,8 @@ class TestMatchByKeywords:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: zzz\ndescription: 天气, 查询, 预报, 气象, 服务\nweight: 1.0\n"
             _write_skill(Path(td), "zzz", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             # desc_words: 天气(+1), 查询(+1), 预报(+1), 气象(+1), 服务(+1) → 5 >= 4
             matches = router.match_by_keywords("天气 查询 预报 气象 服务")
@@ -248,7 +262,8 @@ class TestMatchByKeywords:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: zzz\nweight: 1.0\n"
             _write_skill(Path(td), "zzz", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.match_by_keywords("完全无关的消息内容")
             assert len(matches) == 0
@@ -259,7 +274,8 @@ class TestMatchByKeywords:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: offline\nenabled: false\nweight: 1.0\n"
             _write_skill(Path(td), "offline", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.match_by_keywords("offline")
             assert len(matches) == 0  # disabled，不会匹配
@@ -272,7 +288,8 @@ class TestGoalFit:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             skill = mgr.get("weather")
             fit = router._compute_goal_fit("一条没有动作动词的消息", skill)
@@ -283,7 +300,8 @@ class TestGoalFit:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: search\ndescription: 搜索与查询工具\n"
             _write_skill(Path(td), "search", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             skill = mgr.get("search")
             fit = router._compute_goal_fit("帮我搜索一下最新的论文", skill)
@@ -294,7 +312,8 @@ class TestGoalFit:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: weather\ndescription: 天气查询\n"
             _write_skill(Path(td), "weather", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             skill = mgr.get("weather")
             # "删除" 不在 weather 技能的文本中
@@ -309,7 +328,8 @@ class TestRouteCombo:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.route_combo("用 weather 技能查天气")
             assert len(matches) == 1
@@ -323,7 +343,8 @@ class TestRouteCombo:
             _write_skill(Path(td), "weather", fm)
             fm2 = "name: search\nintent_keywords:\n- 搜索\nweight: 1.0\ncomposable: true\n"
             _write_skill(Path(td), "search", fm2)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.route_combo("今天天气怎么样要不要搜索一下")
             assert len(matches) >= 1
@@ -337,7 +358,8 @@ class TestRouteCombo:
             _write_skill(Path(td), "weather", fm)
             fm2 = "name: search\nintent_keywords:\n- 搜索\nweight: 0.9\ncomposable: true\n"
             _write_skill(Path(td), "search", fm2)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr, skills_config=Config())
             matches = router.route_combo("今天天气怎么样要不要搜索一下")
             # combo 禁用，只保留一个
@@ -347,7 +369,8 @@ class TestRouteCombo:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\nintent_keywords:\n- 天气\nweight: 0.1\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.route_combo("完全不相关的信息")
             assert matches == []
@@ -359,7 +382,8 @@ class TestRouteCombo:
             # 但消息不含「工具」，所以 intent 命中为 0 → 回退到 keyword 匹配
             fm = "name: zzz-tool\ndescription: 工具\nweight: 1.0\n"
             _write_skill(Path(td), "zzz-tool", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             matches = router.route_combo("zzz tool")
             assert len(matches) >= 1
@@ -373,7 +397,8 @@ class TestRoute:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\nbody: 天气技能正文\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             name, prompt = router.route("用 weather 技能查天气")
             assert name == "weather"
@@ -383,7 +408,8 @@ class TestRoute:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\nintent_keywords:\n- 天气\nweight: 0.1\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             name, prompt = router.route("完全不相关")
             assert name is None
@@ -402,11 +428,12 @@ class PostActivationQueries:
         assert "Prompt A" in combined
         assert "Prompt B" in combined
 
-    def test_get_activated_tools(self):
+    def test_get_activated_tools(self, monkeypatch):
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\nallowed-tools: Bash, Python\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             router.route_combo("用 weather 技能")
             tools = router.get_activated_tools()
@@ -417,7 +444,8 @@ class PostActivationQueries:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             router.route_combo("用 weather 技能")
             assert router.get_activated_skill_name() == "weather"
@@ -434,7 +462,8 @@ class PostActivationQueries:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             router.route_combo("用 weather 技能")
             assert "weather" in router.get_activated_skill_names()
@@ -444,7 +473,8 @@ class PostActivationQueries:
             _patch_skill_dirs(monkeypatch, td)
             fm = "name: weather\nfallback_tools: web_search, send_message\n"
             _write_skill(Path(td), "weather", fm)
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             router = SkillRouter(mgr)
             router.route_combo("用 weather 技能")
             tools = router.get_activated_fallback_tools()

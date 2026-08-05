@@ -333,7 +333,7 @@ def _ensure_skillhub_cli() -> tuple[bool, str]:
         if _sha256_of_file(tmp_path) != SKILLHUB_INSTALL_SHA256:
             return False, "skillhub 安装脚本 SHA256 校验失败，已拒绝执行"
         # 非 shell 执行（去 shell=True 反模式，杜绝 shell 注入）
-        proc = subprocess.run(
+        subprocess.run(
             ["bash", str(tmp_path), "--cli-only"],
             capture_output=True, text=True, timeout=120,
             env={**os.environ, "PATH": f"{os.environ.get('HOME', '/root')}/.local/bin:{os.environ.get('PATH', '')}"},
@@ -475,7 +475,7 @@ async def _fetch_market_rankings(force: bool = False) -> dict:
         except subprocess.TimeoutExpired:
             if cache["data"] is not None:
                 return {**cache["data"], "stale": True}
-            raise HTTPException(status_code=504, detail="SkillHub 榜单获取超时")
+            raise HTTPException(status_code=504, detail="SkillHub 榜单获取超时") from None
 
         if proc.returncode != 0:
             if cache["data"] is not None:
@@ -493,7 +493,7 @@ async def _fetch_market_rankings(force: bool = False) -> dict:
         except _json.JSONDecodeError:
             if cache["data"] is not None:
                 return {**cache["data"], "stale": True}
-            raise HTTPException(status_code=500, detail="SkillHub 返回格式异常，无法解析")
+            raise HTTPException(status_code=500, detail="SkillHub 返回格式异常，无法解析") from None
 
         rankings = raw.get("rankings", {}) if isinstance(raw, dict) else {}
 

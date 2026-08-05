@@ -376,7 +376,7 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
                          due: str = "", priority: str = "") -> dict:
         """创建待办任务。默认抛 NotImplementedError（仅钉钉支持）。"""
         raise NotImplementedError(
-            f"todo_task_create not implemented for {self.__class__.__name__}")
+            f"todo_task_create not implemented for {self.__class__.__name__}") from None
 
     def oa_approval_redirect_task(self, *, task_id: str, to_actioner_id: str,
                                   remark: str = "") -> dict:
@@ -386,4 +386,4 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
         DingTalkApprovalProvider 等 Provider 会捕获异常并转成失败回执。
         """
         raise NotImplementedError(
-            f"oa_approval_redirect_task not implemented for {self.__class__.__name__}")
+            f"oa_approval_redirect_task not implemented for {self.__class__.__name__}") from None

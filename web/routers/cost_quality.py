@@ -132,7 +132,7 @@ async def cost_quality_summary(hours: int = Query(default=24, ge=1, le=720)):
         return await run_in_threadpool(_work_summary, hours)
     except Exception as e:
         logger.error("成本质量看板 summary API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/cost-quality/confidence-hist")
@@ -141,7 +141,7 @@ async def cost_quality_confidence_hist(hours: int = Query(default=24, ge=1, le=7
     try:
         def _work():
             acc = [0] * 10
-            for pid, store in _iter_platform_stores():
+            for _, store in _iter_platform_stores():
                 hist = _confidence_hist(store, hours)
                 for i, b in enumerate(hist):
                     acc[i] += b["count"]
@@ -156,7 +156,7 @@ async def cost_quality_confidence_hist(hours: int = Query(default=24, ge=1, le=7
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("成本质量看板 confidence-hist API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/cost-quality/trend")
@@ -172,14 +172,12 @@ async def cost_quality_trend(days: int = Query(default=7, ge=1, le=365)):
                 day_cost_cny = 0.0
                 day_handoff = 0
                 day_total = 0
-                for pid, store in _iter_platform_stores():
+                for _, store in _iter_platform_stores():
                     c = MetricsCollector(store)
-                    ts = c.token_stats(time_range_hours=None)
+                    c.token_stats(time_range_hours=None)
                     # 按天筛选 token_stats 的 hourly（最近 24h 窗口）不可靠，改为直接按 created_at 日聚合
                     day_cost_cny += store._routing_quality_repo.get_daily_cost_usd(day_start) * USD_CNY_RATE
-                    q = store._decisions_repo.get_quality_stats(
-                        time_range_hours=None
-                    )
+                    store._decisions_repo.get_quality_stats(time_range_hours=None)
                     # 按天筛选 decisions
                     dr = store._decisions_repo.get_daily_handoff_stats(day_start)
                     day_total += dr["total"]
@@ -194,7 +192,7 @@ async def cost_quality_trend(days: int = Query(default=7, ge=1, le=365)):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("成本质量看板 trend API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/cost-quality/citations")
@@ -213,7 +211,7 @@ async def cost_quality_citations(limit: int = Query(default=20, ge=1, le=100)):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("成本质量看板 citations API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 导出成本质量数据为 CSV ─────────────────────────────────────────────
@@ -299,4 +297,4 @@ async def export_cost_quality(hours: int = Query(default=24, ge=1, le=720), limi
         )
     except Exception as e:
         logger.error("成本质量导出API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

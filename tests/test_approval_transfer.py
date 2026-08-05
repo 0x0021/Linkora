@@ -11,15 +11,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from src.approval.base import ApprovalProvider
 from src.approval.models import (
     ApprovalDetail,
     ApprovalNode,
-    ApprovalNotFoundError,
-    NoTransferableTaskError,
-    TargetUserInvalidError,
     TransferResult,
     TransferTarget,
 )

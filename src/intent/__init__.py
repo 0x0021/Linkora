@@ -16,13 +16,10 @@ from src.intent.matching import match_keyword, _SOCIAL_PRIORITY
 from src.intent.categories_disposition import DEFAULT_INTENTS as _DEFAULT_DISPOSITION
 from src.intent.categories_action import ACTION_INTENTS
 from src.intent.categories_domain import DOMAIN_INTENTS
-from src.intent.registry import IntentRegistry, default_registry, validate_tool_action_coverage
+from src.intent.registry import IntentRegistry, default_registry, validate_tool_action_coverage, TOOL_ACTION_MAP
 
 # 合并所有意图类别
 DEFAULT_INTENTS: list[IntentCategory] = _DEFAULT_DISPOSITION + ACTION_INTENTS + DOMAIN_INTENTS
-
-# TOOL_ACTION_MAP 从 registry 模块导入
-from src.intent.registry import TOOL_ACTION_MAP  # noqa: F401
 
 __all__ = [
     # 类型

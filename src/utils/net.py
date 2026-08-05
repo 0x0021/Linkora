@@ -73,7 +73,6 @@ def ssrf_safe_get(url: str, **kwargs):
     if not ips or not is_ssrf_safe(url):
         raise ValueError("URL 指向内网/保留地址或解析失败")
     dest_ip = next(iter(ips))
-
     # 惰性导入，避免非 Web 路径也拖入 requests/urllib3
     from requests import Session
     from requests.adapters import HTTPAdapter

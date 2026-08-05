@@ -212,7 +212,7 @@ def install_log_filter() -> None:
     # 但 root 上挂的 filter 会被子 logger 继承；这里保险起见都加）
     for h in root.handlers:
         h.addFilter(f)
-    setattr(root, "_rid_filter_installed", True)
+    root._rid_filter_installed = True
     logger.info("[rid] 日志过滤器已安装")
 
 

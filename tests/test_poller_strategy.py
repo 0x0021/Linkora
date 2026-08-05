@@ -157,7 +157,6 @@ class TestSyncFeishuExternalContacts:
             if name == "会失败":
                 raise RuntimeError("写库失败")
             return real_add(name=name, **kw)
-
         store._external_friend_repo.add_external_friend = flaky
         p._sync_feishu_external_contacts()
         del store._external_friend_repo.add_external_friend  # 还原为类方法

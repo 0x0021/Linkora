@@ -41,7 +41,8 @@ def _seed_data(store: SQLiteStore) -> None:
     conn = store.conn
     cur = conn.cursor()
     now = datetime.now()
-    ts = lambda hours_ago: (now - timedelta(hours=hours_ago)).strftime("%Y-%m-%dT%H:%M:%S")
+    def ts(hours_ago):
+        return (now - timedelta(hours=hours_ago)).strftime("%Y-%m-%dT%H:%M:%S")
 
     # ── tool_execution_logs ──
     tools_data = [

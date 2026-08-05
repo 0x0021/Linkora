@@ -210,7 +210,7 @@ class WecomCliAdapter(BaseIMAdapter):
             envelope = json.loads(raw)
         except json.JSONDecodeError as e:
             raise self._base_error_class()(
-                f"wecom: 无法解析 JSON 输出: {e}\n{raw[:500]}")
+                f"wecom: 无法解析 JSON 输出: {e}\n{raw[:500]}") from e
         if not isinstance(envelope, dict) or "result" not in envelope:
             raise self._base_error_class()(
                 f"wecom: 响应缺少 result 信封: {raw[:500]}")
@@ -721,7 +721,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 force_no_dry_run=True,
             )
         except Exception as e:  # noqa: BLE001
-            raise self._base_error_class()(f"wecom 下载媒体失败: {e}")
+            raise self._base_error_class()(f"wecom 下载媒体失败: {e}") from e
 
         b64: str | None = None
         if isinstance(resp, dict):
@@ -736,7 +736,7 @@ class WecomCliAdapter(BaseIMAdapter):
         try:
             data = base64.b64decode(b64)
         except Exception as e:  # noqa: BLE001
-            raise self._base_error_class()(f"wecom 媒体 base64 解码失败: {e}")
+            raise self._base_error_class()(f"wecom 媒体 base64 解码失败: {e}") from e
         out_dir = os.path.dirname(os.path.abspath(output_path)) or "."
         os.makedirs(out_dir, exist_ok=True)
         with open(output_path, "wb") as f:

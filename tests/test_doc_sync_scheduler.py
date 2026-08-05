@@ -57,7 +57,8 @@ class TestInit:
     def test_custom_params(self, tmp_db_path):
         dws = MagicMock()
         emb = MagicMock()
-        cb = lambda r: None
+        def cb(r):
+            return None
         s = DocSyncScheduler(dws=dws, db_path=str(tmp_db_path),
                              sync_interval_seconds=600,
                              embedding_client=emb, on_sync=cb)

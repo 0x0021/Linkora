@@ -17,7 +17,7 @@ class DedupMixin(PollerMixinBase):
 
     def _is_msg_processed(self, msg_id: str) -> bool:
         """检查消息是否已在之前的轮次中处理过（跨轮次去重）。
-        
+
         同时查内存和数据库，确保重启后也不重复处理。
         内存优先（快速路径），数据库兜底（重启恢复 + LRU 淘汰恢复）。
         """

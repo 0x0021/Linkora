@@ -15,7 +15,7 @@ from src.tools.utils import split_text
 
 import web.api as _api
 from web.schemas import DingTalkDocSync, DingTalkDocImportKb, AutoSyncUpdate
-from web.dependencies import logger, run_sync
+from web.dependencies import run_sync
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ async def list_dingtalk_docs(keyword: str = "", limit: int = 100):
         docs = await run_sync(_work)
         return {"docs": docs, "total": len(docs)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/dingtalk-docs/{doc_id}")
@@ -46,7 +46,7 @@ async def get_dingtalk_doc(doc_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/api/dingtalk-docs/{doc_id}")
@@ -58,7 +58,7 @@ async def delete_dingtalk_doc(doc_id: str):
         await run_sync(_work)
         return {"success": True, "message": "文档删除成功"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 
@@ -73,7 +73,7 @@ async def search_dingtalk_docs(body: DingTalkDocSync):
         results = await run_sync(_work)
         return {"docs": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/dingtalk-docs/sync/{doc_id}")
@@ -102,7 +102,7 @@ async def sync_dingtalk_doc(doc_id: str):
             return {"success": True, "doc": doc, "message": "文档同步成功"}
         return await run_sync(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/dingtalk-docs/sync-batch")
@@ -129,7 +129,7 @@ async def sync_dingtalk_docs_batch(body: DingTalkDocSync):
             return {"success": True, "synced": synced, "message": f"已同步 {synced} 篇文档元数据"}
         return await run_sync(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/dingtalk-docs/{doc_id}/auto-sync")
@@ -151,7 +151,7 @@ async def set_dingtalk_doc_auto_sync(doc_id: str, body: AutoSyncUpdate):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/dingtalk-docs/import-kb")
@@ -239,7 +239,7 @@ async def import_dingtalk_doc_to_kb(body: DingTalkDocImportKb):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/api/dingtalk-docs/{doc_id}")
@@ -264,5 +264,5 @@ async def update_dingtalk_doc(doc_id: str, body: dict | None = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 

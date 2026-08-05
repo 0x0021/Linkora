@@ -465,7 +465,7 @@ class FeishuDocMixin(IMAdapterBase):
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 return f.read()
         except Exception as e:
-            raise IMAdapterError(f"无法从文件抽取文本: {path} ({e})")
+            raise IMAdapterError(f"无法从文件抽取文本: {path} ({e})") from e
 
     def _doc_read_fallback(self, node_id: str, entity_type: str | None = None) -> dict:
         """非 docx 类型（file/wiki/sheet/bitable/slides 等）的导入回退链路。
@@ -576,7 +576,7 @@ class FeishuDocMixin(IMAdapterBase):
         except IMAdapterRateLimitError as e:
             logger.warning("飞书 doc_read 限频 (token=%s): %s", node_id, e)
             return {"error": "rate_limit", "message": str(e), "code": 429}
-        except IMAdapterUnsupportedTypeError as e:
+        except IMAdapterUnsupportedTypeError:
             # docx 路径失败（如旧 doc 等），再尝试导出/下载回退
             logger.info("飞书 doc_read 类型不支持，转回退链路 (token=%s, type=%s)",
                         node_id, et)

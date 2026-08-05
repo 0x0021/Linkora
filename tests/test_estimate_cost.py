@@ -7,7 +7,7 @@
 - PromptBuilder.estimate_cost 委托路径正确性
 """
 import pytest
-from src.llm.history import estimate_cost, get_model_price, _MODEL_PRICING
+from src.llm.history import estimate_cost, get_model_price
 
 
 class TestGetModelPrice:

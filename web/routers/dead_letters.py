@@ -31,7 +31,7 @@ async def dead_letters(status: str = "pending", limit: int = 100, offset: int = 
         return {"success": True, "items": items, "count": len(items), "total": total}
     except Exception as e:
         logger.error("获取死信列表失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/dead-letters/batch-replay")
@@ -40,7 +40,6 @@ async def batch_replay_dead_letters():
     app_instance = get_app_instance()
     if app_instance is None or not hasattr(app_instance, "replay_dead_letter"):
         raise HTTPException(status_code=500, detail="应用实例不可用，无法批量重放")
-
     def _work():
         store = get_store()
         return store._draft_repo.list_dead_letters(status="pending", limit=10000, offset=0)
@@ -48,7 +47,7 @@ async def batch_replay_dead_letters():
         items, total = await run_sync(_work)
     except Exception as e:
         logger.error("批量重放-取pending列表失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     if not items:
         return {"success": True, "total": 0, "replayed": 0, "failed": 0, "message": "没有待处理的死信"}
@@ -94,8 +93,7 @@ async def replay_dead_letter(dl_id: int):
     app_instance = get_app_instance()
     if app_instance is None or not hasattr(app_instance, "replay_dead_letter"):
         raise HTTPException(status_code=500, detail="应用实例不可用，无法重放")
-    result = await run_sync(app_instance.replay_dead_letter, dl_id,
-                            platform=get_current_platform())
+    result = await run_sync(app_instance.replay_dead_letter, dl_id,                            platform=get_current_platform())
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "replay_failed"))
     return {"success": True, "id": dl_id}
@@ -116,7 +114,7 @@ async def discard_dead_letter(dl_id: int):
         raise
     except Exception as e:
         logger.error("丢弃死信失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 导出死信队列为 CSV ─────────────────────────────────────────────────
@@ -151,4 +149,4 @@ async def export_dead_letters(status: str = "all", limit: int = 10000):
         )
     except Exception as e:
         logger.error("死信导出API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

@@ -67,7 +67,6 @@ class FeishuMediaMixin(IMAdapterBase):
         使用 ffmpeg 将视频首帧导出为同目录下的 ``.cover.jpg`` 临时文件。
         ffmpeg 不可用时返回 None，由调用方决定降级策略。
         """
-        import subprocess
         if not os.path.isfile(video_path):
             return None
         cover_path = video_path + ".cover.jpg"
@@ -98,7 +97,6 @@ class FeishuMediaMixin(IMAdapterBase):
         if not file_path or not os.path.exists(file_path):
             raise ValueError(f"media_upload: 文件不存在 {file_path!r}")
         return file_path
-
     def download_media(self, *, media_id: str, message_id: str,
                        conversation_id: str, output_path: str) -> str:
         """下载聊天中的图片 / 文件到本地，返回写入的本地路径。
@@ -112,7 +110,6 @@ class FeishuMediaMixin(IMAdapterBase):
         """
         if not media_id or not message_id:
             raise ValueError("download_media 需提供 media_id 与 message_id")
-
         out_dir = os.path.dirname(os.path.abspath(output_path)) or "."
         out_name = os.path.basename(output_path) or (media_id or "resource")
         res_type = self._infer_resource_type(media_id)

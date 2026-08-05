@@ -16,8 +16,6 @@
 from __future__ import annotations
 
 import os
-import shutil
-import yaml
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -64,7 +62,7 @@ def _ensure_platform_config(config: AppConfig, platform_id: str):
 @router.post("/api/config/default")
 async def restore_default_config():
     try:
-        import yaml, shutil
+        import shutil
         from src.config import AppConfig
         # 备份当前配置
         backup_path = _api.CONFIG_PATH + ".bak"
@@ -92,7 +90,7 @@ async def restore_default_config():
         _api._write_config(default_config.model_dump())
         return {"success": True, "message": f"已恢复默认配置（原配置备份为 {backup_path}；已保留 embedding/skills 已开启的核心开关与限频）"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/config")
 async def get_config(platform: str = ""):
@@ -147,13 +145,12 @@ async def get_config(platform: str = ""):
         return data
     except Exception as e:
         logger.error("获取配置失败: %s", e)
-        raise HTTPException(status_code=500, detail="内部服务器错误")
+        raise HTTPException(status_code=500, detail="内部服务器错误") from e
 
 
 @router.post("/api/config")
 async def update_config(update: ConfigUpdate):
     try:
-        import yaml
         config = _api.load_config(_api.CONFIG_PATH)
         # DWS 配置
         if update.dws_cli_path is not None:
@@ -508,7 +505,7 @@ async def update_config(update: ConfigUpdate):
 
         return {"success": True, "message": "配置更新成功并已生效", **wresult}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # —— 落盘前敏感字段校验：避免任意路径/越界端口写入导致 bot 起不来或越权写文件 ——
@@ -535,7 +532,7 @@ def _safe_writable_path(value: str, field: str) -> str:
         # 拒绝 ``..`` 段 + 系统目录黑名单 + 父目录可写性闸门共同构成路径穿越屏障。
         resolved = Path(os.path.abspath(os.path.expanduser(value)))
     except Exception:
-        raise HTTPException(status_code=400, detail=f"{field} 路径无法解析: {value}")
+        raise HTTPException(status_code=400, detail=f"{field} 路径无法解析: {value}") from None
     rstr = str(resolved)
     for bad in _FORBIDDEN_PATH_PREFIXES:
         if rstr == bad or rstr.startswith(bad + os.sep):
@@ -548,7 +545,7 @@ def _safe_writable_path(value: str, field: str) -> str:
             parent.mkdir(parents=True, exist_ok=True)
         except Exception:
             raise HTTPException(status_code=400,
-                                detail=f"{field} 父目录不可创建: {value}")
+                                detail=f"{field} 父目录不可创建: {value}") from None
     if not os.access(str(parent), os.W_OK):
         raise HTTPException(status_code=400, detail=f"{field} 父目录不可写: {value}")
     return value
@@ -583,7 +580,7 @@ async def tools():
             "rate_limit": config.tools.rate_limit,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============ LLM ============
@@ -594,19 +591,18 @@ async def get_system_prompt():
         config = _api._get_cfg()
         return {"system_prompt": config.llm.system_prompt}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/llm/prompt")
 async def update_system_prompt(update: SystemPromptUpdate):
     try:
-        import yaml
         config = _api.load_config(_api.CONFIG_PATH)
         config.llm.system_prompt = update.system_prompt
         _api._write_config(config.model_dump())
         return {"success": True, "message": "系统提示词更新成功"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============ Message Stats ============
@@ -677,7 +673,7 @@ async def export_config():
         )
     except Exception as e:
         logger.error("导出配置失败: %s", e)
-        raise HTTPException(status_code=500, detail="内部服务器错误")
+        raise HTTPException(status_code=500, detail="内部服务器错误") from e
 
 
 @router.post("/api/config/import")
@@ -686,12 +682,12 @@ async def import_config(file: UploadFile = File(...)):
     try:
         content = await file.read()
         text = content.decode("utf-8")
-        
+
         import yaml
         imported_data = yaml.safe_load(text)
         if not isinstance(imported_data, dict):
             raise HTTPException(status_code=400, detail="无效的配置文件格式")
-        
+
         # 验证关键字段（poller 已迁移到各平台块，导入文件不再要求含 root poller 键）
         required_keys = ["dws", "llm", "storage"]
         for key in required_keys:
@@ -703,7 +699,7 @@ async def import_config(file: UploadFile = File(...)):
         try:
             AppConfig(**imported_data)
         except Exception as val_err:
-            raise HTTPException(status_code=400, detail=f"配置数据校验失败：{val_err}")
+            raise HTTPException(status_code=400, detail=f"配置数据校验失败：{val_err}") from val_err
 
         # 还原脱敏哨兵：仅从「磁盘文件原本就有的明文值」还原，
         # 不使用经环境变量注入的真实密钥（避免把只存于 .env 的密钥落盘成 config.yaml 明文）。
@@ -735,5 +731,5 @@ async def import_config(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error("导入配置失败: %s", e)
-        raise HTTPException(status_code=500, detail="内部服务器错误")
+        raise HTTPException(status_code=500, detail="内部服务器错误") from e
 

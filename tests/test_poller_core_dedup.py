@@ -7,7 +7,6 @@ _check_if_bot_message 正向路径 + 边界条件 + 异常处理。
 from collections import OrderedDict
 from unittest.mock import MagicMock
 
-import pytest
 
 from src.poller_core_dedup import DedupMixin
 

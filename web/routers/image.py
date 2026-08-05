@@ -107,7 +107,7 @@ async def serve_image(path: str, it: Optional[str] = None):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 外部图片代理（解决 CSP img-src 限制）──────────────────────────────
@@ -136,7 +136,7 @@ async def proxy_image(url: str = ""):
     try:
         parsed = urlparse(url)
     except Exception:
-        raise HTTPException(status_code=400, detail="url 格式无效")
+        raise HTTPException(status_code=400, detail="url 格式无效") from None
     if parsed.scheme != "https":
         raise HTTPException(status_code=400, detail="仅支持 https")
     host = (parsed.hostname or "").lower()
@@ -161,7 +161,7 @@ async def proxy_image(url: str = ""):
                 headers={"User-Agent": "Linkora-ImageProxy/1.0", "Host": host},
             )
     except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail="上游请求失败")
+        raise HTTPException(status_code=502, detail="上游请求失败") from e
 
     if r.status_code != 200 or r.status_code >= 300:
         raise HTTPException(status_code=502, detail=f"上游返回 {r.status_code}")

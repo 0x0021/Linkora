@@ -22,16 +22,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
-from typing import Any
 
 from .base_adapter import BaseIMAdapter
 from .errors import (
     IMAdapterError,
     IMAdapterPermissionError,
-    IMAdapterResourceNotFoundError,
-    IMAdapterRateLimitError,
-    IMAdapterShutdownError,
     IMAdapterUnsupportedTypeError,
 )
 

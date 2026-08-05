@@ -111,7 +111,7 @@ class MemoryMixin(EngineMixinBase):
                             )
                         except Exception as cls_err:
                             logger.warning("[记忆] 范围分类失败，默认个人: %s", cls_err)
-                            scope, scope_reason = "personal", "分类异常，默认个人"
+                            scope = "personal"
 
                         # === 去重检查（异常时保守跳过，避免重复入库）===
                         try:

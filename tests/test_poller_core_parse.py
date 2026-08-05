@@ -7,7 +7,6 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import json
-import pytest
 
 from src.poller_core_parse import ParseMixin
 

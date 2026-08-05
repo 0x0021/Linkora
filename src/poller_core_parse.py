@@ -140,13 +140,13 @@ class ParseMixin(PollerMixinBase):
         """检测消息类型：text, system, app, file, image, voice, video, link, oa, markdown, call, edit, recall, read_receipt。"""
         # 1. 系统消息判断（先检查明确的系统标识，再检查 sender_id）
         sender = raw.get("sender") or raw.get("senderName") or ""
-        
+
         # 明确的系统标识（优先级最高）
         if sender in ("系统", "System"):
             return "system"
         if self._is_system_sender(sender):
             return "system"
-        
+
         # sender_id 为空时，不立即判定为 system——某些消息（如外部好友图片消息）可能没有 sender_id
         # 但有 sender_name，可以从其他字段推断类型
         sender_id = raw.get("senderOpenDingTalkId") or raw.get("senderId") or ""
@@ -610,7 +610,7 @@ class ParseMixin(PollerMixinBase):
             groups[key].append(msg)
 
         merged = []
-        for key, group in groups.items():
+        for _, group in groups.items():
             group.sort(key=lambda m: m.timestamp)
             current_group: list[Message] = []
 

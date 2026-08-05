@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 
-import pytest
 
 from src.platform.resilience import init_platform_safe
 
@@ -16,7 +15,6 @@ def _has_resilience_log(records, level_class=logging.ERROR):
 
 
 def test_build_ok_no_register_returns_true():
-    calls = []
     ok = init_platform_safe("feishu", "飞书", build=lambda: object())
     assert ok is True
 

@@ -104,10 +104,10 @@ class TestThreadSafety:
             try:
                 for _ in range(100):
                     s = mgr.get("shared")
-                    names = mgr.list_names()
-                    all_s = mgr.list_all()
-                    prompt = mgr.skills_prompt_section()
-                    act = mgr.activate_prompt("shared")
+                    mgr.list_names()
+                    mgr.list_all()
+                    mgr.skills_prompt_section()
+                    mgr.activate_prompt("shared")
                     assert s is not None
             except Exception as e:
                 errors.append(e)

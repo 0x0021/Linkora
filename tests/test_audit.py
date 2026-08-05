@@ -5,7 +5,6 @@ import json
 
 import pytest
 
-from src import audit as audit_mod
 from src.audit import audit, get_audit_log_path, set_audit_log_path
 
 

@@ -81,7 +81,7 @@ def test_image_requires_media_id():
     dws = _adapter()
     try:
         dws.chat_message_send(group="G", msg_type="image", text="x")
-        assert False, "应抛 ValueError"
+        raise AssertionError("应抛 ValueError")
     except ValueError as e:
         assert "media_id" in str(e)
 
@@ -90,7 +90,7 @@ def test_file_requires_file_path():
     dws = _adapter()
     try:
         dws.chat_message_send(group="G", msg_type="file", text="x")
-        assert False, "应抛 ValueError"
+        raise AssertionError("应抛 ValueError")
     except ValueError as e:
         assert "file_path" in str(e)
 
@@ -343,7 +343,7 @@ class _FakeAdapter:
             raise RuntimeError(
                 'lark-cli exit 3: {"ok":false,"identity":"user","error":'
                 '{"code":230027,"message":"access denied... user_unauthorized"}}'
-            )
+            ) from None
         # 第二次（bot 身份）— 按配置
         if self._second_call_ok:
             return {"ok": True, "identity": "bot", "data": {"message_id": "om_bot_ok"}}
@@ -364,7 +364,7 @@ def test_user_fails_bot_succeeds_degrades_silently():
             raise RuntimeError(
                 '{"ok":false,"identity":"user","error":{"code":230027,'
                 '"message":"user_unauthorized... access denied"}}'
-            )
+            ) from None
         # 第二次 --as bot 调用，返成功
         return {"ok": True, "identity": "bot",
                 "data": {"chat_id": "oc_x", "message_id": "om_bot_ok"}}
@@ -388,7 +388,7 @@ def test_both_fail_returns_error_no_retry_loop():
         calls.append(list(args))
         raise RuntimeError(
             '{"ok":false,"error":{"code":230027,"message":"user_unauthorized"}}'
-        )
+        ) from None
     a.run = fake_run
     with __import__("pytest").raises(RuntimeError):
         a.chat_message_send(group="oc_x", text="hi", uuid="u2")

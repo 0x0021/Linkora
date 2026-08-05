@@ -26,7 +26,6 @@ import logging
 import os
 import time
 import traceback
-from pathlib import Path
 from typing import Callable, Optional
 
 from src.paths import data_path, get_config_path, get_log_dir

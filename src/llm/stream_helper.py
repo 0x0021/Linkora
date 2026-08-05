@@ -8,8 +8,6 @@ import logging
 import time
 from typing import Iterator
 
-from src.llm.style import gate_reply, enforce_brevity
-
 logger = logging.getLogger(__name__)
 
 

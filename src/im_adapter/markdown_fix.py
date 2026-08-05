@@ -117,8 +117,11 @@ def _render_box_table(rows: list[list[str]], *, max_cell_width: int) -> str:
         for i, c in enumerate(r):
             widths[i] = max(widths[i], _disp_width(c))
     # 列内边距各 1 空格，故边框段长度 = 列宽 + 2
-    hseg = lambda w: "─" * (w + 2)
-    dseg = lambda w: "═" * (w + 2)
+    def hseg(w: int) -> str:
+        return "─" * (w + 2)
+
+    def dseg(w: int) -> str:
+        return "═" * (w + 2)
 
     def row_str(r: list[str]) -> str:
         cells = [" " + _pad_right(c, widths[i]) + " " for i, c in enumerate(r)]

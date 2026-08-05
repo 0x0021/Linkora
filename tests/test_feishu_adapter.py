@@ -20,7 +20,6 @@ from src.im_adapter.base import BaseIMAdapter  # noqa: E402
 from src.im_adapter.base_adapter import BaseIMAdapter as BaseIMAdapterCore  # noqa: E402
 from src.im_adapter.errors import (  # noqa: E402
     IMAdapterError,
-    IMAdapterPermissionError,
     IMAdapterRetryableError,
 )
 from src.im_adapter.feishu import FeishuCliAdapter  # noqa: E402

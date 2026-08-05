@@ -42,7 +42,7 @@ async def memories(limit: int = 200, object_type: str = "all",
             return {"memories": memories_list}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/memories/facets")
 async def memory_facets():
@@ -53,7 +53,7 @@ async def memory_facets():
             return store._memory_repo.get_memory_facets()
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/api/memories/classify-spec")
 async def memory_classify_spec():
@@ -62,7 +62,7 @@ async def memory_classify_spec():
         from src.memory.classifier import ALGORITHM_SPEC
         return {"spec": ALGORITHM_SPEC}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/memories")
@@ -88,7 +88,7 @@ async def add_memory(item: MemoryItem):
             return {"success": True, "memory_id": memory_id, "scope": scope, "message": "记忆添加成功"}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.delete("/api/memories/{mem_id}")
 async def delete_memory(mem_id: int):
@@ -99,7 +99,7 @@ async def delete_memory(mem_id: int):
             return {"success": True, "message": "记忆删除成功"}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.put("/api/memories/{mem_id}")
 async def update_memory(mem_id: int, update: MemoryUpdate):
@@ -110,4 +110,4 @@ async def update_memory(mem_id: int, update: MemoryUpdate):
             return {"success": True, "message": "记忆更新成功"}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

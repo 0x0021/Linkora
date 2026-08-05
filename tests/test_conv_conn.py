@@ -5,7 +5,6 @@ import os
 import pytest
 
 import src.memory.account_identity as ai
-import src.memory.sqlite_store as ss
 from src.memory.sqlite_store import SQLiteStore
 
 

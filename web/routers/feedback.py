@@ -32,7 +32,7 @@ async def add_feedback(item: FeedbackItem):
         fb_id = await run_sync(_work)
         return {"success": True, "feedback_id": fb_id, "message": "反馈已记录"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/feedback")
@@ -45,4 +45,4 @@ async def list_feedback(limit: int = 200):
         rows = await run_sync(_work)
         return {"success": True, "feedback": rows}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

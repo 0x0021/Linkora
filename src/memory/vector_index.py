@@ -163,7 +163,7 @@ class VectorIndex:
             scores, indices = self._index.search(vec, k)
 
             results = []
-            for score, idx in zip(scores[0], indices[0]):
+            for score, idx in zip(scores[0], indices[0], strict=True):
                 if idx < 0:
                     continue
                 chunk_id = self._id_map.get(int(idx))

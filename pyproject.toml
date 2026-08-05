@@ -112,10 +112,36 @@ max-complexity = 60
 # 已知待拆 / 高复杂度模块（渐进收紧，拆分或重构降复杂度后移除豁免）。
 "src/platform/runtime.py" = ["C901"]       # F1 计划中：组合根（薄 re-export）
 "src/platform/runtime_*.py" = ["C901", "F405"]  # F1 拆分产物：与 runtime.py 同构的 star-import 与高复杂度方法
-"src/poller_strategy.py" = ["C901"]        # poll_once 复杂度 93，待拆
+"src/poller_strategy.py" = ["C901", "E402"]  # poll_once 复杂度 93，待拆；E402 因 `from typing import Callable` 在 docstring+初始 import 之后
 "web/routers/config.py" = ["C901"]          # update_config 复杂度 145，待拆
 "src/config.py" = ["F401"]                   # config_models 重导出层（保 `from src.config import AppConfig` 旧路径兼容）
 "src/dws_adapter/__init__.py" = ["F401"]      # dws_adapter 组合根（保 `from src.dws_adapter import DwsError, is_permission_error, ...` 旧路径兼容）
+"src/platform/base.py" = ["F401", "E402"]     # 星号重导出层（被 runtime_*.py `from .base import *` 转出）；E402 因 load_dotenv() 必须在 import 之后调用
+"src/platform/lifecycle.py" = ["F403", "F405"]  # `from .base import *` 星号转出符号使用时本就不在本模块显式 import
+"src/platform/memory.py" = ["F403", "F405", "F401"]  # 同上（星号从 base.py 转出） + 多余的 _active_platform_ctx 重导出显式 line
+"src/platform/message_loop.py" = ["F403", "F405"]  # 同上
+"src/platform/primary.py" = ["F403", "F405"]  # 同上
+"src/platform/reply_helpers.py" = ["F403", "F405"]  # 同上
+# E402：以下模块存在「模块级代码之后的 import」——多为 `logger = ...` 之后的 mixin 导入，
+# 或 web/api.py / web/routers/kb.py 为规避循环导入而刻意后置的惰性 import（见 kb.py 顶部注释）。
+# 这些 import 无副作用依赖，属结构性后置，按 base.py 先例用 per-file-ignores 抑制而非强行上移。
+"src/poller_core_access.py" = ["E402"]
+"src/poller_core_dedup.py" = ["E402"]
+"src/poller_core_discovery.py" = ["E402"]
+"src/poller_core_dispatch.py" = ["E402"]
+"src/poller_core_history.py" = ["E402"]
+"src/poller_core_ocr.py" = ["E402"]
+"src/poller_core_parse.py" = ["E402"]
+"src/rule_engine.py" = ["E402"]
+"src/semantic.py" = ["E402"]
+"web/api.py" = ["E402"]
+"web/routers/kb.py" = ["E402"]
+"src/im_adapter/wecom.py" = ["E402", "PGH003"]  # 循环导入规避的后置 import + line 191 的 bare type:ignore
+"tests/test_dws_methods.py" = ["E402"]
+"tests/test_memory_tool.py" = ["E402"]
+"tests/test_poller.py" = ["E402"]
+"tests/test_poller_core_parse.py" = ["E402"]
+"tests/test_semantic_routing.py" = ["E402"]
 
 [tool.pyright]
 # 渐进类型门禁配置（F9）。当前 src+web 基线 205 条类型告警（已锁定在

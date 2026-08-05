@@ -5,7 +5,6 @@
 这是 2026-07-28 修复的 pre-existing bug。
 """
 
-import pytest
 
 from src.llm.prompt_builder import PromptBuilder
 

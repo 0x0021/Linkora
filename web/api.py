@@ -1,40 +1,30 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import hmac
 import ipaddress
-import json
 import logging
 import os
-import re
-import tempfile
 import threading
 import time
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 # 抑制 jieba 内部 pkg_resources 弃用警告（在 import jieba 之前设置）
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pkg_resources")
 warnings.filterwarnings("ignore", message=".*pkg_resources.*")
 
-import jieba
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from web.errors import SAFE_INTERNAL_ERROR
-from pydantic import BaseModel
 
 from src.config import load_config
-from src.intent import IntentRegistry
 from src.dws_adapter import DwsAdapter
-from src.memory.sqlite_store import SQLiteStore
 from src.shared_state import get_app_instance, get_config as _get_shared_config
-from src.tools.utils import split_text
-from src.utils.logger import get_log_buffer
 from src.utils.request_id import request_id_scope
 from src.paths import (
     get_config_path, get_data_dir, get_log_dir, get_static_dir,
@@ -42,9 +32,7 @@ from src.paths import (
 )
 # 共享资源访问器（get_store 等）下沉到 web.dependencies，避免与各子路由循环导入。
 from web.dependencies import (
-    get_store,
     get_platforms,
-    get_rag_config,
     set_platform_context,
     _platform_ctx,
 )
@@ -115,7 +103,6 @@ def _require_cfg() -> "AppConfig":
     if config is None:
         raise HTTPException(status_code=503, detail="配置尚未就绪（配置文件缺失或解析失败）")
     return config
-
 
 # 提高 uvicorn.access 日志级别（避免 API 请求刷屏）
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
@@ -488,7 +475,6 @@ async def platform_health():
     对每个已启用的平台探测：适配器可用性、数据库连通性、CLI 就绪状态。
     结果含 per-platform 的 health / error 字段，供前端状态监控面板展示。
     """
-    from src.shared_state import get_app_instance
 
     result = {"platforms": [], "overall": "healthy"}
     platforms = get_platforms()
@@ -650,20 +636,6 @@ def _write_config(config_dict: dict, changed_keys: set[str] | None = None) -> di
 
 # ============ Request Models ============
 # Pydantic 模型已提取到 web/schemas.py；以下仅为向后兼容的 re-export。
-from web.schemas import (
-    AutoSyncUpdate,
-    ConfigUpdate,
-    DingTalkDocImportKb,
-    DingTalkDocSync,
-    KbDocumentCreate,
-    KeywordBatchOp,
-    KeywordMatchTest,
-    KeywordUpdate,
-    RagChatQuery,
-    RagQuery,
-    RuleKeyword,
-    SystemPromptUpdate,
-)
 
 
 # ============ Utility ============
@@ -871,11 +843,11 @@ def run_web(port: int = 8000, host: str | None = None):
                 record.levelno = logging.DEBUG
                 record.levelname = 'DEBUG'
             return True
-    
+
     # 获取 uvicorn.access logger 并添加过滤器
     access_logger = logging.getLogger('uvicorn.access')
     access_logger.addFilter(AccessLogFilter())
-    
+
     # 设置 uvicorn 日志级别为 WARNING，只显示警告和错误
     # 这样静态资源的 DEBUG 日志和非 API 请求的 INFO 日志都不会显示
     uvicorn.run(app, host=host, port=port, log_level="warning")

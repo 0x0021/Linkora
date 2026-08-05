@@ -42,7 +42,7 @@ async def recent_decisions(n: int = 50, platform: str = ""):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("决策追踪API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/decisions/history")
@@ -76,7 +76,7 @@ async def decisions_history(
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("决策历史API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/decisions/stats")
@@ -92,7 +92,7 @@ async def decisions_stats(platform: str = ""):
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("决策统计API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ── 导出决策记录为 CSV ─────────────────────────────────────────────────
@@ -143,4 +143,4 @@ async def export_decisions(
         )
     except Exception as e:
         logger.error("决策导出API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

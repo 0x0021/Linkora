@@ -12,15 +12,9 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-import sys
-import tempfile
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-from pathlib import Path
 
-import pytest
 
 from src.models import Message
 from src.llm.agent import AgentReply, LLMAgent
@@ -29,7 +23,7 @@ from src.config import RulesConfig, LlmConfig, LlmAdvancedConfig
 from src.rule_engine import RuleEngine
 from src.memory.sqlite_store import SQLiteStore
 from src.decision_tracker import DecisionTracker
-from src.tools.base import ToolRouter, ToolCallResult
+from src.tools.base import ToolCallResult
 
 
 # ============================================================

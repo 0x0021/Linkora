@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from src.audit import get_audit_log_path, set_audit_log_path
+from src.audit import set_audit_log_path
 
 
 class FakeEmbeddingClient:
@@ -131,7 +131,6 @@ class TestKbPipelineE2E:
         assert body["success"] is True
         assert body["id"] > 0
         assert body["chunks"] >= 1
-        doc_id = body["id"]
 
         # 2) 列表可见
         lst = client.get("/api/kb/documents")
@@ -186,7 +185,7 @@ class TestConfigAuditE2E:
         assert audit_tmp.exists()
         lines = audit_tmp.read_text(encoding="utf-8").splitlines()
         assert lines, "审计日志应为空文件以外有内容"
-        records = [json.loads(l) for l in lines]
+        records = [json.loads(line) for line in lines]
         cfg_audits = [r for r in records if r["event"] == "config_write"]
         assert cfg_audits, "应记录一条 config_write 审计"
         assert cfg_audits[0]["action"] == "update_config"

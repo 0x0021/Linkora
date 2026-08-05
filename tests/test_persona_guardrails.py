@@ -186,7 +186,8 @@ class TestStyleProfileVersions(unittest.TestCase):
     """#3 画像版本管理：覆盖前归档、trigger 溯源、回滚不丢链、字段剥离。"""
 
     def _store(self):
-        import tempfile, os
+        import tempfile
+        import os
         d = tempfile.mkdtemp()
         return SQLiteStore(os.path.join(d, "v.db"))
 

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 # 与原方法内正则一致，避免重复编译
 _RE_NORMALIZE_WS = re.compile(r"\s+")

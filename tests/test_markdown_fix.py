@@ -36,7 +36,7 @@ class TestConvertMarkdownTables:
         src = "| 名称 | 数量 |\n| --- | --- |\n| 苹果 | 2 |\n| 梨 | 1 |"
         out = convert_markdown_tables(src)
         # 苹果行补了空格（名称宽 2，苹果宽 4 → 右补 2 空格）——核心是对齐存在
-        lines = [l for l in out.splitlines() if "苹果" in l]
+        lines = [line for line in out.splitlines() if "苹果" in line]
         assert lines, "苹果行应保留"
         assert "苹果" in lines[0]
 
@@ -162,7 +162,7 @@ class TestBoxDrawingTable:
         # 「苹果」显示宽 4，应与表头「名称」(宽 4) 对齐 —— 验证右补空格
         src = "| 名称 | 数量 |\n| --- | --- |\n| 苹果 | 2 |\n| 梨 | 1 |"
         out = convert_markdown_tables(src)
-        apple_lines = [l for l in out.splitlines() if "苹果" in l]
+        apple_lines = [line for line in out.splitlines() if "苹果" in line]
         assert apple_lines, "苹果行应保留"
         # 苹果行应在等宽单元格内（被空格补齐到表头宽度）
         assert "苹果" in apple_lines[0]

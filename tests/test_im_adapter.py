@@ -266,7 +266,7 @@ def test_dws_download_media_empty_file_raises(monkeypatch):
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Res(0))
     monkeypatch.setattr(os.path, "exists", lambda p: True)
     monkeypatch.setattr(os.path, "getsize", lambda p: 0)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017
         adapter.download_media(
             media_id="m1", message_id="msg1",
             conversation_id="c1", output_path="/tmp/out.png",

@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 
 import src.tools.weather as weather_mod
 

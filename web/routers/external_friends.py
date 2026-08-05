@@ -45,7 +45,7 @@ async def add_external_friend(body: ExternalFriendCreate, platform: str = Query(
     try:
         return {"success": True, "data": ef, "message": f"已添加外部好友：{body.name}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.delete("/api/external-friends/{user_id}")
 async def delete_external_friend(user_id: str, platform: str = Query(default="")):
@@ -61,4 +61,4 @@ async def delete_external_friend(user_id: str, platform: str = Query(default="")
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

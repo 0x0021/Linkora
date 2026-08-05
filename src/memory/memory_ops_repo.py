@@ -15,14 +15,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.memory.platform_context import get_current_platform
+from src.memory.sqlite_store import _redact_pii, _is_inappropriate
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
-
-# Import module-level PII utilities from sqlite_store
-from src.memory.sqlite_store import _redact_pii, _is_inappropriate
 
 
 class MemoryOpsRepo:
@@ -75,14 +73,11 @@ class MemoryOpsRepo:
         rows = [r["content"] for r in cur.fetchall() if r["content"]]
         if not rows:
             return {}
-        import re as _re
-        from collections import Counter
         emoji_re = _re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
         polite_re = _re.compile(r"您|请|谢谢|感谢|麻烦|辛苦")
         casual_re = _re.compile(r"哈|哦|嗯|搞|整|咋|啥|呗")
         # ---- 二次清洗：去除媒体占位符、Markdown 残留、纯标点等噪声 ----
         media_re = _re.compile(r"^\s*\[(?:图片|文件|视频|动画表情|链接|语音|位置|红包|名片|小程序|互动卡片|AI卡片)")
-        md_prefix_re = _re.compile(r"^\s*(?:\*{1,3}|#{1,6}|>\s*|```)+")
         punct_only_re = _re.compile(r"^[\s\W_]+$")
         ascii_short_re = _re.compile(r"^[A-Za-z0-9\s.,!?;:'\"()\-_]{1,4}$")
 

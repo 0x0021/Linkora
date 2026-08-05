@@ -3,7 +3,7 @@
 用 FastAPI TestClient + mock _run_dws / _get_project_root 隔离外部依赖。
 """
 
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -52,7 +52,7 @@ class TestDepartmentTree:
         mock_data = {"result": [{"deptId": 1, "deptName": "缓存部"}]}
         with patch("web.routers.departments._run_dws", new_callable=AsyncMock) as mock_dws:
             mock_dws.return_value = mock_data
-            resp1 = client.get("/api/departments/tree")
+            client.get("/api/departments/tree")
             resp2 = client.get("/api/departments/tree")
         assert resp2.json()["cached"] is True
         assert mock_dws.call_count == 1

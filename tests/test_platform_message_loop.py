@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 import time
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.models import Message
 from src.platform.message_loop import MessageLoopMixin

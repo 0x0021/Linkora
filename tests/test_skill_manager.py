@@ -50,7 +50,7 @@ class TestLoading:
     def test_name_conflict_warns(self, caplog):
         """同名技能：data/skills 和 .agents/skills 都有的情况。"""
         with tempfile.TemporaryDirectory() as td:
-            d1 = _write_skill(Path(td), "weather", "name: weather\ndescription: 新版本\n")
+            _write_skill(Path(td), "weather", "name: weather\ndescription: 新版本\n")
             d2 = Path(td) / ".agents" / "skills" / "weather"
             d2.mkdir(parents=True)
             (d2 / "SKILL.md").write_text("---\nname: weather\ndescription: 旧版\n---\n\n# Body\n", encoding="utf-8")
@@ -67,7 +67,8 @@ class TestQuery:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             skill = mgr.get("weather")
             assert skill is not None
             assert skill.name == "weather"
@@ -83,7 +84,8 @@ class TestQuery:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
             _write_skill(Path(td), "search", "name: search\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             skills = mgr.list_all()
             assert len(skills) == 2
 
@@ -91,7 +93,8 @@ class TestQuery:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             names = mgr.list_names()
             assert "weather" in names
 
@@ -99,7 +102,8 @@ class TestQuery:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\n", body="## 使用方法\n查询天气。\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             prompt = mgr.activate_prompt("weather")
             assert prompt is not None
             assert "已激活技能" in prompt
@@ -122,7 +126,8 @@ class TestQuery:
         with tempfile.TemporaryDirectory() as td:
             _patch_skill_dirs(monkeypatch, td)
             _write_skill(Path(td), "weather", "name: weather\ndescription: 天气查询\n")
-            mgr = SkillManager(td); mgr.reload()
+            mgr = SkillManager(td)
+            mgr.reload()
             section = mgr.skills_prompt_section()
             assert "可用技能" in section
             assert "weather" in section

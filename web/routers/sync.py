@@ -122,7 +122,6 @@ async def sync_history(req: SyncHistoryRequest, platform: str = Query(default=""
         request_platform = "dingtalk"
     if request_platform not in _KNOWN_PLATFORMS:
         raise HTTPException(status_code=400, detail=f"未知平台: {request_platform}")
-
     # 平台启用性校验（仅做轻量前置检查，真正的 DWS/适配器错误由 worker 回报状态文件）
     app_instance = get_app_instance()
     if app_instance is not None and hasattr(app_instance, "platforms"):
@@ -131,12 +130,12 @@ async def sync_history(req: SyncHistoryRequest, platform: str = Query(default=""
             raise HTTPException(
                 status_code=400,
                 detail=f"平台 {request_platform} 未启用或未配置，请在 config.yaml 的 platforms 段中添加",
-            )
+            ) from None
         if not getattr(ctx, "enabled", True):
             raise HTTPException(
                 status_code=400,
                 detail=f"平台 {ctx.display_name or request_platform} 已禁用",
-            )
+            ) from None
 
     # 解析 range → days / full
     range_raw = (req.range or "7").strip().lower()
@@ -156,7 +155,6 @@ async def sync_history(req: SyncHistoryRequest, platform: str = Query(default=""
     conv_id = req.conversation_id.strip() if (req.scope == "current" and req.conversation_id) else ""
     if req.scope == "current" and not conv_id:
         raise HTTPException(status_code=400, detail="同步当前会话需要传入 conversation_id")
-
     chat_types = [t for t in (req.chat_types or []) if t in ("single", "group")]
 
     job_id = f"sync_{uuid.uuid4().hex[:12]}"
@@ -170,7 +168,7 @@ async def sync_history(req: SyncHistoryRequest, platform: str = Query(default=""
         raise HTTPException(
             status_code=409,
             detail=f"已有同步任务进行中（job_id={_cur.get('job_id')}），请等待完成或先取消",
-        )
+        ) from None
 
     # 写初始状态，保证前端首轮轮询就能读到 starting
     try:

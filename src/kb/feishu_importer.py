@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 from src.memory.embedding import EmbeddingClient
@@ -34,13 +33,11 @@ def _get_feishu_adapter():
     inst = get_app_instance()
     if inst is None:
         raise FeishuImportError("应用未启动（共享状态不可用）", status_code=503)
-
     for pctx in inst.platforms.values():
         if pctx.adapter_type == "feishu":
             return pctx.dws
 
     raise FeishuImportError("飞书适配器不可用", status_code=503)
-
 
 def _create_embedding_client(config: Any) -> EmbeddingClient | None:
     """根据配置创建 EmbeddingClient，embedding 未启用则返回 None。"""
@@ -87,23 +84,22 @@ def import_single_feishu_doc(
         raise FeishuImportError(
             "无法读取飞书文档 {}".format(doc_token),
             status_code=404,
-        )
+        ) from None
     if isinstance(doc_data, dict) and doc_data.get("error"):
         err = doc_data.get("error")
         if err == "auth":
             raise FeishuImportError(
                 doc_data.get("message", "飞书认证失败，请检查 lark-cli 登录状态"),
                 status_code=401,
-            )
+            ) from None
         raise FeishuImportError(
             doc_data.get("message", "飞书文档读取失败: {}".format(err)),
             status_code=400,
-        )
+        ) from None
 
     content = doc_data.get("content", "")
     if not content:
         raise FeishuImportError("飞书文档内容为空", status_code=400)
-
     if not title:
         title = doc_data.get("title", doc_token)
 

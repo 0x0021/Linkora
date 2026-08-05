@@ -3,9 +3,7 @@
 覆盖: _extract_media_id 钉钉/飞书格式 + 边界条件。
 """
 
-from unittest.mock import MagicMock
 
-import pytest
 
 from src.poller_core_ocr import OcrMixin
 

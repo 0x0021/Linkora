@@ -6,35 +6,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-import threading
 
-import time
 
-from collections import OrderedDict
 
-from concurrent.futures import ThreadPoolExecutor
 
 from datetime import datetime, timedelta
 
-from typing import Callable
 
 
 
-from src.config import PollerConfig
 
-from src.dws_adapter import DwsAdapter, DwsPermissionError
 
 from src.models import Message
 
-from src.poller_core_ocr import OcrMixin
 
-from src.poller_core_parse import ParseMixin
 
-from src.poller_core_dedup import DedupMixin
 
-from src.poller_core_access import AccessControlMixin
 
-from src.poller_core_dispatch import DispatchMixin
 
 
 
@@ -308,18 +296,18 @@ class HistorySyncMixin(PollerMixinBase):
 
     def _handle_edit_message(self, msg: Message) -> None:
         """处理消息编辑事件：更新本地消息记录。
-        
+
         编辑消息通常包含原始消息的引用信息或新内容，需要从中提取被编辑的原消息ID
         和新内容，然后更新本地数据库中的对应记录。
         """
         raw = msg.raw or {}
-        
+
         original_msg_id = raw.get("originalMsgId") or raw.get("targetMsgId") or ""
         if not original_msg_id:
             original_msg_id = msg.msg_id
-        
+
         new_content = raw.get("newContent") or raw.get("content") or msg.content
-        
+
         if original_msg_id and new_content:
             success = self.store._message_repo.update_message(original_msg_id, new_content)
             if success:
@@ -332,16 +320,16 @@ class HistorySyncMixin(PollerMixinBase):
 
     def _handle_recall_message(self, msg: Message) -> None:
         """处理消息撤回事件：删除本地消息记录。
-        
+
         撤回消息通常包含被撤回消息的引用信息，需要从中提取被撤回的消息ID，
         然后删除本地数据库中的对应记录。
         """
         raw = msg.raw or {}
-        
+
         recalled_msg_id = raw.get("recalledMsgId") or raw.get("targetMsgId") or raw.get("originalMsgId") or ""
         if not recalled_msg_id:
             recalled_msg_id = msg.msg_id
-        
+
         if recalled_msg_id:
             success = self.store._message_repo.delete_message(recalled_msg_id)
             if success:

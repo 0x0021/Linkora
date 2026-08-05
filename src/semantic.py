@@ -64,41 +64,41 @@ _semantic_state = _SemanticState()
 # 使用 weakref 或直接引用保持与旧测试的兼容性
 class _CacheProxy:
     """缓存字典代理，支持 dict 操作和 len/contains。"""
-    
+
     def __init__(self, cache_attr: str):
         self._cache_attr = cache_attr
-    
+
     def __getitem__(self, key: str):
         return getattr(_semantic_state, self._cache_attr)[key]
-    
+
     def __setitem__(self, key: str, value):
         getattr(_semantic_state, self._cache_attr)[key] = value
-    
+
     def __delitem__(self, key: str):
         del getattr(_semantic_state, self._cache_attr)[key]
-    
+
     def __contains__(self, key: str) -> bool:
         return key in getattr(_semantic_state, self._cache_attr)
-    
+
     def __len__(self) -> int:
         return len(getattr(_semantic_state, self._cache_attr))
-    
+
     def clear(self) -> None:
         getattr(_semantic_state, self._cache_attr).clear()
 
 
 class _ClientProxy:
     """客户端代理，支持读写并同步到 _semantic_state。"""
-    
+
     def __init__(self):
         self._value = None
-    
+
     def __getattr__(self, name: str):
         client = self._value
         if client is None:
-            raise AttributeError(f"client is None")
+            raise AttributeError("client is None")
         return getattr(client, name)
-    
+
     def __setattr__(self, name: str, value):
         if name == '_value':
             super().__setattr__(name, value)
@@ -107,7 +107,7 @@ class _ClientProxy:
         else:
             client = self._value
             if client is None:
-                raise AttributeError(f"client is None")
+                raise AttributeError("client is None")
             setattr(client, name, value)
 
 

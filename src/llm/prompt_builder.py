@@ -5,8 +5,6 @@ import logging
 import re as _re
 from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
-
 from src.llm.history import _RE_CHINESE, estimate_cost as _history_estimate_cost
 from src.llm.message_wrap import wrap_incoming_message
 from src.llm.rag_inject import inject_rag_knowledge
@@ -15,7 +13,7 @@ if TYPE_CHECKING:
     from src.llm.agent import LLMAgent
     from src.models import Message
 
-# ── RAG query 清洗：抱怨/追问消息的模式检测 ────────────────────────────────
+logger = logging.getLogger(__name__)
 # 用户追问/抱怨时文本含大量情绪词，若直接用作 RAG 检索 query 会把
 # 「你为什么没仔细查就瞎编」embedding 后语义完全跑偏，搜不到任何知识。
 # 本模块负责从抱怨文本中提取真实信息需求，或回溯历史消息获取原始问题。
@@ -91,7 +89,7 @@ class PromptBuilder:
     def __init__(self, agent: "LLMAgent") -> None:
         self._agent = agent
 
-    @functools.lru_cache(maxsize=1024)
+    @functools.lru_cache(maxsize=1024)  # noqa: B019  # instance method + lru_cache 已知风险；PromptBuilder 与 agent 一对一共享，等价于全局缓存
     def estimate_tokens(self, text: str) -> int:
         if not text:
             return 0

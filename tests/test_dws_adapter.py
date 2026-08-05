@@ -112,39 +112,39 @@ class TestDwsAdapterBasics:
     def test_dry_run_appends_flag(self, mock_dws):
         """dry_run=True 时命令应自动追加 --dry-run。"""
         adapter = DwsAdapter(cli_path="dws", dry_run=True)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0, stdout='{"result": {}}', stderr=""
             )
             adapter.run(["chat", "message", "send"])
-            
+
             cmd = mock_run.call_args[0][0]
             assert "--dry-run" in cmd
 
     def test_dry_run_false_no_flag(self, mock_dws):
         """dry_run=False 时不应追加 --dry-run。"""
         adapter = DwsAdapter(cli_path="dws", dry_run=False)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0, stdout='{"result": {}}', stderr=""
             )
             adapter.run(["auth", "status"])
-            
+
             cmd = mock_run.call_args[0][0]
             assert "--dry-run" not in cmd
 
     def test_profile_appended_when_set(self, mock_dws):
         """设置 profile 时应追加 --profile 参数。"""
         adapter = DwsAdapter(cli_path="dws", profile="work-account")
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0, stdout='{"result": {}}', stderr=""
             )
             adapter.run(["auth", "status"])
-            
+
             cmd = mock_run.call_args[0][0]
             assert "--profile" in cmd
             assert "work-account" in cmd
@@ -152,7 +152,7 @@ class TestDwsAdapterBasics:
     def test_json_parse_success(self, mock_dws):
         """成功响应应正确解析 JSON。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
@@ -160,13 +160,13 @@ class TestDwsAdapterBasics:
                 stderr="",
             )
             result = adapter.run(["contact", "user", "get-self"])
-            
+
             assert result == {"success": True, "result": {"userId": "123"}}
 
     def test_json_parse_invalid_raises(self, mock_dws):
         """无效 JSON 应抛出 DwsError。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0, stdout="not valid json{{{", stderr=""
@@ -177,7 +177,7 @@ class TestDwsAdapterBasics:
     def test_nonzero_exit_code_raises(self, mock_dws):
         """非零退出码应抛出对应分类的错误。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="authentication failed"
@@ -188,7 +188,7 @@ class TestDwsAdapterBasics:
     def test_empty_output_returns_empty_dict(self, mock_dws):
         """空输出应返回空字典而非报错。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0, stdout="", stderr=""
@@ -205,55 +205,55 @@ class TestRetryMechanism:
     def test_retryable_error_retries_then_succeeds(self, mock_dws):
         """可重试错误应在重试后成功。"""
         adapter = DwsAdapter(cli_path="dws", retries=2)
-        
+
         call_count = 0
-        
+
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count <= 2:
                 raise DwsRetryableError("timeout")
             return MagicMock(returncode=0, stdout='{"result": {}}', stderr="")
-        
+
         with patch("subprocess.run", side_effect=side_effect):
-            result = adapter.run(["test", "cmd"])
+            adapter.run(["test", "cmd"])
             assert call_count == 3  # 2次失败 + 1次成功
 
     def test_non_retryable_error_no_retry(self, mock_dws):
         """不可重试错误应立即抛出，不重试。"""
         adapter = DwsAdapter(cli_path="dws", retries=3)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="401 Unauthorized"
             )
             with pytest.raises(DwsNonRetryableError):
                 adapter.run(["auth", "status"])
-            
+
             # 只调用了一次，没有重试
             assert mock_run.call_count == 1
 
     def test_all_retries_exhausted_raises_last_error(self, mock_dws):
         """所有重试耗尽后应抛出最后一次错误。"""
         adapter = DwsAdapter(cli_path="dws", retries=2)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="timeout"
             )
             with pytest.raises(DwsRetryableError):
                 adapter.run(["test", "cmd"])
-            
+
             # 初始1次 + 重试2次 = 3次
             assert mock_run.call_count == 3
 
     def test_timeout_always_retryable(self, mock_dws):
         """超时始终可重试。"""
         adapter = DwsAdapter(cli_path="dws", retries=1, timeout=1)
-        
+
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired(cmd=["dws"], timeout=1)
-            
+
             with pytest.raises(DwsRetryableError, match="timeout"):
                 adapter.run(["test", "cmd"])
 
@@ -266,7 +266,7 @@ class TestHighLevelMethods:
     def test_contact_user_get_self_extracts_result(self, mock_dws):
         """contact_user_get_self 应提取 result 字段。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch.object(adapter, "run") as mock_run:
             mock_run.return_value = {
                 "result": {
@@ -282,7 +282,7 @@ class TestHighLevelMethods:
     def test_chat_message_list_unread_conversations_extracts_list(self, mock_dws):
         """unread conversations 应提取 conversations 列表。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch.object(adapter, "run") as mock_run:
             mock_run.return_value = {
                 "result": {
@@ -299,7 +299,7 @@ class TestHighLevelMethods:
     def test_todo_task_create_builds_correct_args(self, mock_dws):
         """create_todo 应构建正确的命令行参数。"""
         adapter = DwsAdapter(cli_path="dws")
-        
+
         with patch.object(adapter, "run") as mock_run:
             mock_run.return_value = {"result": {"taskId": "t1"}}
             adapter.todo_task_create(
@@ -308,7 +308,7 @@ class TestHighLevelMethods:
                 due="2026-07-08T10:00:00Z",
                 priority="high",
             )
-            
+
             args = mock_run.call_args[0][0]
             assert "--title" in args
             assert "测试待办" in args
@@ -391,5 +391,8 @@ class TestDryRunThreadSafety:
 
             t1 = threading.Thread(target=do_reads)
             t2 = threading.Thread(target=do_writes)
-            t1.start(); t2.start(); t1.join(); t2.join()
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
         assert not violations, f"dry-run 模式下写操作丢失 --dry-run（串线程）: {violations[:3]}"

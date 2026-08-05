@@ -202,7 +202,7 @@ class LLMClient:
         self.fallback_base_url = os.environ.get("LLM_FALLBACK_BASE_URL") or getattr(config, 'fallback_base_url', None)
         # 备用模型池（跨服务商兜底，与主/同池都失败后的最终降级层）
         self.fallback_model_pool: list[str] = list(getattr(config, 'fallback_model_pool', []) or [])
-        
+
         # 第二层备用模型配置（fallback 全部失败后切换）
         self.secondary_fallback_model = os.environ.get("LLM_SECONDARY_FALLBACK_MODEL") or getattr(config, 'secondary_fallback_model', None)
         self.secondary_fallback_api_key = os.environ.get("LLM_SECONDARY_FALLBACK_API_KEY") or getattr(config, 'secondary_fallback_api_key', None)
@@ -253,7 +253,7 @@ class LLMClient:
             self.fallback_clients = None
             self.fallback_order: list[str] = []
             logger.info("LLM 客户端已初始化,base_url: %s,模型: %s(无备用模型)", base_url, config.model)
-        
+
         # 第二层备用模型（fallback 全部失败后切换）
         # 本地模型通常部署在 127.0.0.1，需要绕过系统代理避免 502
         sf_http_client = None

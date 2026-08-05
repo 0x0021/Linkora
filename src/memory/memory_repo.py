@@ -8,15 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-import numpy as np
-
 from src.memory.sqlite_store import cosine_similarity
-from src.models import Message
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore

@@ -5,7 +5,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 
 from src.poller_core_discovery import DiscoveryMixin
 

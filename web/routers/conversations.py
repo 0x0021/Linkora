@@ -53,7 +53,7 @@ async def conversations(limit: int = 50):
             return {"conversations": result}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/messages")
@@ -202,7 +202,7 @@ async def messages(chat_id: str = "", limit: int = 50):
             }
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/messages/batch-delete")
@@ -220,7 +220,6 @@ async def batch_delete_messages(payload: dict):
         if len(raw_ids) > 200:
             raise HTTPException(status_code=400, detail="单次最多删除 200 个会话")
         chat_ids = [str(c) for c in raw_ids]
-
         def _work():
             store = _api.get_store()
             platform = get_current_platform()
@@ -230,7 +229,7 @@ async def batch_delete_messages(payload: dict):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _resolve_missing_image_path(msg: dict) -> str:
@@ -325,4 +324,4 @@ async def export_messages(chat_id: str = "", limit: int = 1000):
             headers={"Content-Disposition": f"attachment; filename=messages_{date_tag}.csv"},
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

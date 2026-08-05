@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 
 from src.tools.media import is_allowed_local_path
 from src.tools.chat import SendMessageTool

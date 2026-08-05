@@ -104,4 +104,4 @@ async def list_tools(platform: str = ""):
         }
     except Exception as e:
         logger.error("工具链路API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

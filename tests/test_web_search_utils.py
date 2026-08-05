@@ -33,7 +33,6 @@ def _disable_real_network(monkeypatch):
 
     def _blocked(*args, **kwargs):
         raise _req.ConnectionError("测试中被禁用的真实网络请求（存在未 mock 的网络调用）")
-
     monkeypatch.setattr(_req, "get", _blocked)
 
 
@@ -329,7 +328,7 @@ class TestHttpGet:
     def test_success_first_try(self):
         with patch("src.tools.web_search.ssrf_safe_get") as m:
             m.return_value = MagicMock(status_code=200)
-            r = _http_get("https://example.com", timeout=5)
+            _http_get("https://example.com", timeout=5)
             assert m.call_count == 1
 
     def test_retry_on_error(self):
@@ -338,7 +337,7 @@ class TestHttpGet:
                 requests.ConnectionError("first"),
                 MagicMock(status_code=200),
             ]
-            r = _http_get("https://example.com", timeout=5, retries=3)
+            _http_get("https://example.com", timeout=5, retries=3)
             assert m.call_count == 2
 
     def test_exhaust_retries(self):

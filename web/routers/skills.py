@@ -53,7 +53,7 @@ async def list_skills(platform: str = ""):
         app_instance = _api.get_app_instance()
         if not app_instance or not app_instance.llm_agent or not app_instance.llm_agent.skill_manager:
             return {"skills": [], "message": "技能引擎未启用"}
-        
+
         mgr = app_instance.llm_agent.skill_manager
         skills = []
         for skill in mgr.list_all():
@@ -70,7 +70,7 @@ async def list_skills(platform: str = ""):
                 "has_config": skill.has_config,
                 "platforms": getattr(skill, "platforms", []) or [],
             })
-        
+
         # 也列出 data/skills 目录下未加载的（可能是安装后尚未 reload）
         data_skills_dir = data_path("skills")
         loaded_names = {s["name"] for s in skills}
@@ -90,7 +90,7 @@ async def list_skills(platform: str = ""):
                             "unloaded": True,
                             "platforms": [],
                         })
-        
+
         # 平台过滤
         if platform:
             skills = [s for s in skills if _skill_supports_platform(s, platform)]
@@ -98,7 +98,7 @@ async def list_skills(platform: str = ""):
         return {"skills": skills, "platform": platform}
     except Exception as e:
         logger.error("技能列表API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _skill_supports_platform(skill: dict, platform: str) -> bool:
@@ -151,19 +151,17 @@ async def get_skill_detail(skill_name: str):
         app_instance = _api.get_app_instance()
         if not app_instance or not app_instance.llm_agent or not app_instance.llm_agent.skill_manager:
             raise HTTPException(status_code=503, detail="技能引擎未启用")
-        
         mgr = app_instance.llm_agent.skill_manager
         skill = mgr.get(skill_name)
         if not skill:
             raise HTTPException(status_code=404, detail=f"技能 '{skill_name}' 未找到")
-        
         # 读取原始文件内容
         raw_content = ""
         try:
             raw_content = Path(skill.source_path).read_text(encoding="utf-8")
         except Exception:
             pass
-        
+
         return {
             "name": skill.name,
             "description": skill.description,
@@ -178,7 +176,7 @@ async def get_skill_detail(skill_name: str):
         raise
     except Exception as e:
         logger.error("技能详情API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/skills/{skill_name}/config")
@@ -188,12 +186,10 @@ async def get_skill_config(skill_name: str):
         app_instance = _api.get_app_instance()
         if not app_instance or not app_instance.llm_agent or not app_instance.llm_agent.skill_manager:
             raise HTTPException(status_code=503, detail="技能引擎未启用")
-
         mgr = app_instance.llm_agent.skill_manager
         skill = mgr.get(skill_name)
         if not skill:
             raise HTTPException(status_code=404, detail=f"技能 '{skill_name}' 未找到")
-
         skill_dir = Path(skill.source_path).parent
         config_file = skill_dir / "config.yaml"
         if not config_file.is_file():
@@ -205,7 +201,7 @@ async def get_skill_config(skill_name: str):
         raise
     except Exception as e:
         logger.error("读取技能配置错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/api/skills/{skill_name}/config")
@@ -215,16 +211,13 @@ async def update_skill_config(skill_name: str, data: dict):
         app_instance = _api.get_app_instance()
         if not app_instance or not app_instance.llm_agent or not app_instance.llm_agent.skill_manager:
             raise HTTPException(status_code=503, detail="技能引擎未启用")
-
         mgr = app_instance.llm_agent.skill_manager
         skill = mgr.get(skill_name)
         if not skill:
             raise HTTPException(status_code=404, detail=f"技能 '{skill_name}' 未找到")
-
         raw_yaml = (data.get("raw_yaml") or "").strip()
         if not raw_yaml:
             raise HTTPException(status_code=400, detail="raw_yaml 不能为空")
-
         skill_dir = Path(skill.source_path).parent
         config_file = skill_dir / "config.yaml"
         config_file.write_text(raw_yaml, encoding="utf-8")
@@ -236,7 +229,7 @@ async def update_skill_config(skill_name: str, data: dict):
         raise
     except Exception as e:
         logger.error("更新技能配置错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/skills/install")
@@ -248,23 +241,23 @@ async def install_skill(req: SkillInstallRequest):
     可选 platform 参数会写入 SKILL.md frontmatter。
     """
     try:
-        import subprocess, shutil
+        import subprocess
+        import shutil
 
-        project_root = _project_root()
+        _project_root()
         data_skills = data_path("skills")
         data_skills.mkdir(parents=True, exist_ok=True)
 
         repo = req.repo.strip()
         if not repo:
             raise HTTPException(status_code=400, detail="repo 不能为空")
-
         platform = req.platform.strip() if req.platform else ""
         installed_name = ""
 
         # 尝试 npx skills add（cwd 设为数据目录父，使其落到 data/skills）
         cmd = ["npx", "skills", "add", repo, "-y"]
         proc = await run_in_threadpool(subprocess.run, cmd, cwd=str(data_path("skills").parent), capture_output=True, text=True, timeout=60)
-        
+
         if proc.returncode != 0:
             # npx 方式失败，尝试手动 git clone
             # 解析 repo 格式：owner/repo@skill_name 或 owner/repo
@@ -274,7 +267,7 @@ async def install_skill(req: SkillInstallRequest):
             else:
                 repo_url = f"https://github.com/{repo}.git"
                 skill_filter = ""
-            
+
             tmp_dir = data_path("skills", ".tmp_clone")
             if tmp_dir.exists():
                 await run_in_threadpool(shutil.rmtree, str(tmp_dir))
@@ -284,28 +277,27 @@ async def install_skill(req: SkillInstallRequest):
                 ["git", "clone", "--depth", "1", repo_url, str(tmp_dir)],
                 capture_output=True, text=True, timeout=120,
             )
-            
+
             if clone_proc.returncode != 0:
                 raise HTTPException(
                     status_code=500,
                     detail=f"npx: {proc.stderr.strip()}\ngit: {clone_proc.stderr.strip()}"
-                )
-            
+                ) from None
+
             # 搜索 SKILL.md
             skill_dirs = []
             for skill_md in tmp_dir.rglob("SKILL.md"):
                 skill_dir = skill_md.parent
                 # 解析 name
-                raw = skill_md.read_text(encoding="utf-8")
+                skill_md.read_text(encoding="utf-8")
                 name = skill_dir.name
                 if skill_filter and name != skill_filter:
                     continue
                 skill_dirs.append((name, skill_dir))
-            
+
             if not skill_dirs:
                 await run_in_threadpool(shutil.rmtree, str(tmp_dir))
                 raise HTTPException(status_code=400, detail="仓库中未找到 SKILL.md")
-            
             # 安装第一个匹配的技能
             name, skill_dir = skill_dirs[0]
             dest = data_skills / name
@@ -313,7 +305,7 @@ async def install_skill(req: SkillInstallRequest):
                 await run_in_threadpool(shutil.rmtree, str(dest))
             await run_in_threadpool(shutil.move, str(skill_dir), str(dest))
             await run_in_threadpool(shutil.rmtree, str(tmp_dir))
-            
+
             installed_name = name
             install_msg = f"已从 git 安装技能: {name}"
         else:
@@ -323,25 +315,25 @@ async def install_skill(req: SkillInstallRequest):
                 if entry.is_dir() and not entry.name.startswith(".") and (entry / "SKILL.md").exists():
                     installed_name = entry.name
                     break
-        
+
         # 写入 platforms 到 SKILL.md frontmatter
         if platform and installed_name:
             _write_platforms_to_skill_md(data_skills / installed_name / "SKILL.md", platform)
-        
+
         # reload 技能引擎
         app_instance = _api.get_app_instance()
         if app_instance and app_instance.llm_agent and app_instance.llm_agent.skill_manager:
             count = app_instance.llm_agent.skill_manager.reload()
             return {"success": True, "message": install_msg, "loaded_count": count, "platform": platform}
-        
+
         return {"success": True, "message": install_msg, "platform": platform}
     except HTTPException:
         raise
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="安装超时（60s）")
+        raise HTTPException(status_code=500, detail="安装超时（60s）") from None
     except Exception as e:
         logger.error("技能安装API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _write_platforms_to_skill_md(skill_md_path: Path, platform: str) -> None:
@@ -387,7 +379,6 @@ async def uninstall_skill(skill_name: str):
 
         if not skill_dir.exists():
             raise HTTPException(status_code=404, detail=f"技能目录不存在: {skill_dir}")
-
         # 彻底删除目录
         await run_in_threadpool(shutil.rmtree, str(skill_dir))
 
@@ -401,7 +392,7 @@ async def uninstall_skill(skill_name: str):
         raise
     except Exception as e:
         logger.error("技能卸载API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/skills/reload")
@@ -411,7 +402,6 @@ async def reload_skills():
         app_instance = _api.get_app_instance()
         if not app_instance or not app_instance.llm_agent or not app_instance.llm_agent.skill_manager:
             raise HTTPException(status_code=503, detail="技能引擎未启用")
-
         mgr = app_instance.llm_agent.skill_manager
         count = mgr.reload()
         # 收集 watcher 状态
@@ -426,7 +416,7 @@ async def reload_skills():
         raise
     except Exception as e:
         logger.error("技能reload API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class GenerateIntentsRequest(BaseModel):
@@ -447,7 +437,6 @@ async def generate_intents(req: GenerateIntentsRequest):
             raise HTTPException(status_code=503, detail="技能引擎未启用")
         if not getattr(app_instance, "llm_client", None):
             raise HTTPException(status_code=503, detail="LLM 客户端未就绪")
-
         # 安全闸门：ai_intent_generation_enabled 默认关闭，避免意外烧 LLM 额度
         cfg = _get_shared_config()
         skills_cfg = getattr(cfg, "skills", None)
@@ -456,7 +445,7 @@ async def generate_intents(req: GenerateIntentsRequest):
                 status_code=403,
                 detail="未启用 AI 意图词生成（skills.ai_intent_generation_enabled=false）。"
                        "请在 config.yaml / config.py 中开启后再调用。",
-            )
+            ) from None
 
         mgr = app_instance.llm_agent.skill_manager
         client = app_instance.llm_client
@@ -480,7 +469,7 @@ async def generate_intents(req: GenerateIntentsRequest):
         raise
     except Exception as e:
         logger.error("AI 意图词生成API错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class GenerateIntentTraceRequest(BaseModel):
@@ -502,7 +491,6 @@ async def generate_intent_trace(req: GenerateIntentTraceRequest):
             raise HTTPException(status_code=503, detail="技能引擎未启用")
         if not getattr(app_instance, "llm_client", None):
             raise HTTPException(status_code=503, detail="LLM 客户端未就绪")
-
         mgr = app_instance.llm_agent.skill_manager
         client = app_instance.llm_client
 
@@ -521,7 +509,7 @@ async def generate_intent_trace(req: GenerateIntentTraceRequest):
         raise
     except Exception as e:
         logger.error("AI 意图词 trace API 错误: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _watcher_status(skill_manager) -> dict:
@@ -544,20 +532,16 @@ async def update_skill_meta(skill_name: str, data: dict):
         app_instance = _api.get_app_instance()
         if not app_instance or not app_instance.llm_agent or not app_instance.llm_agent.skill_manager:
             raise HTTPException(status_code=503, detail="技能引擎未启用")
-
         mgr = app_instance.llm_agent.skill_manager
         skill = mgr.get(skill_name)
         if not skill:
             raise HTTPException(status_code=404, detail=f"技能 {skill_name} 不存在")
-
         skill_md_path = Path(skill.source_path)
         if not skill_md_path.exists():
             raise HTTPException(status_code=404, detail=f"SKILL.md 不存在: {skill_md_path}")
-
         content = skill_md_path.read_text(encoding="utf-8")
         if not content.startswith("---"):
             raise HTTPException(status_code=400, detail="SKILL.md 缺少 frontmatter")
-
         # 找到 frontmatter 边界
         second_delim = content.find("---", 3)
         if second_delim == -1:
@@ -569,8 +553,7 @@ async def update_skill_meta(skill_name: str, data: dict):
         try:
             fm = _yaml.safe_load(frontmatter_str) or {}
         except _yaml.YAMLError:
-            raise HTTPException(status_code=400, detail="SKILL.md frontmatter YAML 格式错误")
-
+            raise HTTPException(status_code=400, detail="SKILL.md frontmatter YAML 格式错误") from None
         # 合并更新
         updates = {}
         if "weight" in data:
@@ -580,8 +563,7 @@ async def update_skill_meta(skill_name: str, data: dict):
                 fm["weight"] = w
                 updates["weight"] = w
             except (TypeError, ValueError):
-                raise HTTPException(status_code=400, detail="weight 必须是 0.0-1.0 的数值")
-
+                raise HTTPException(status_code=400, detail="weight 必须是 0.0-1.0 的数值") from None
         if "enabled" in data:
             fm["enabled"] = bool(data["enabled"])
             updates["enabled"] = fm["enabled"]
@@ -617,10 +599,8 @@ async def update_skill_meta(skill_name: str, data: dict):
             else:
                 raise HTTPException(status_code=400, detail="platforms 必须是字符串数组或 null")
             updates["platforms"] = fm.get("platforms", [])
-
         if not updates:
             raise HTTPException(status_code=400, detail="无有效更新字段（支持 weight / enabled / intent_keywords / system_prompt / platforms）")
-
         # 重新序列化 frontmatter，尽量保持格式
         new_frontmatter = _yaml.dump(fm, allow_unicode=True, default_flow_style=False, sort_keys=False).strip()
         new_content = f"---\n{new_frontmatter}\n---{body}"
@@ -636,5 +616,5 @@ async def update_skill_meta(skill_name: str, data: dict):
         raise
     except Exception as e:
         logger.error("更新技能元数据失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 

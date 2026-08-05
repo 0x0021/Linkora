@@ -319,7 +319,7 @@ async def get_persona():
         return await run_in_threadpool(_work)
     except Exception as e:
         logger.error("[persona] 读画像失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _build_cold_start(auto_profile: dict, owner_messages) -> dict:
@@ -391,7 +391,7 @@ async def update_persona_override(update: PersonaOverrideUpdate):
         }
     except Exception as e:
         logger.error("[persona] 保存手动覆盖失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/persona/few-shot")
@@ -415,7 +415,7 @@ async def update_few_shot(update: PersonaFewShotUpdate):
         raise
     except Exception as e:
         logger.error("[persona] 保存 few-shot 失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/persona/few-shot/adopt")
@@ -447,7 +447,7 @@ async def adopt_few_shot(payload: PersonaFewShotAdopt):
         raise
     except Exception as e:
         logger.error("[persona] 采纳 few-shot 失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _resolve_platform(platform: str | None) -> str:
@@ -494,8 +494,6 @@ def _count_owner_messages(store, owner: str) -> int:
     except Exception:
         logger.warning("[resilience] silent exception in _count_owner_messages", exc_info=True)
         return 0
-    # 兜底：store 不支持时回退全局 config
-    return getattr(cfg.llm, "few_shot_examples", []) or []
 
 
 @router.post("/api/persona/reanalyze")
@@ -528,7 +526,7 @@ async def reanalyze():
         raise
     except Exception as e:
         logger.error("[persona] 重新分析失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/persona/versions")
@@ -546,7 +544,7 @@ async def list_persona_versions(limit: int = 20):
         raise
     except Exception as e:
         logger.error("[persona] 读版本列表失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/persona/versions/{version_id}")
@@ -566,7 +564,7 @@ async def get_persona_version(version_id: int):
         raise
     except Exception as e:
         logger.error("[persona] 读版本详情失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/persona/versions/rollback")
@@ -588,7 +586,7 @@ async def rollback_persona_version(req: PersonaVersionRollback):
         raise
     except Exception as e:
         logger.error("[persona] 回滚版本失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/persona/backtest")
@@ -686,7 +684,7 @@ def backtest(limit: int = 6):
     except Exception as e:
         # 详细 stacktrace（包含了 LLM 调用链上下文）
         logger.error("[persona] 回测失败: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 def _clone_reply_production(client, cfg, agent, user_msg: str,
@@ -836,7 +834,7 @@ async def backtest_history(limit: int = 30):
         raise
     except Exception as e:
         logger.error("[persona] 读回测历史失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/persona/recommend-few-shot")
@@ -872,4 +870,4 @@ async def recommend_few_shot(limit: int = 6):
         raise
     except Exception as e:
         logger.error("[persona] 推荐 few-shot 失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

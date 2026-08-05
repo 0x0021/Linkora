@@ -219,7 +219,9 @@ async def serve_skill_icon(slug: str):
     首次请求时若本地无缓存，会自动触发后台下载；下次请求命中 PNG。
     """
     safe = _slug_to_safe_name(slug)
-    icon_path = get_skill_icons_dir() / f"{safe}.png"
+    # os.path.basename 在 sink 拼接处显式净化（CodeQL py/path-injection sanitizer），
+    # 与 _slug_to_safe_name 内部兜底构成双重保险，确保拼入路径的只有文件名。
+    icon_path = get_skill_icons_dir() / f"{os.path.basename(safe)}.png"
     if icon_path.is_file():
         return FileResponse(
             str(icon_path),
@@ -294,7 +296,7 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
     if not icon_url or not icon_url.startswith(("http://", "https://")):
         return False
     safe = _slug_to_safe_name(slug)
-    dest = get_skill_icons_dir() / f"{safe}.png"
+    dest = get_skill_icons_dir() / f"{os.path.basename(safe)}.png"
     if dest.is_file():
         return True  # 已有缓存，幂等跳过
     try:
@@ -316,7 +318,7 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
 def _skill_icon_local_url(slug: str) -> str | None:
     """若技能图标已本地缓存则返回 /api/skill-icons/<safe> 路径，否则 None。"""
     safe = _slug_to_safe_name(slug)
-    if (get_skill_icons_dir() / f"{safe}.png").is_file():
+    if (get_skill_icons_dir() / f"{os.path.basename(safe)}.png").is_file():
         return f"/api/skill-icons/{safe}"
     return None
 
@@ -341,7 +343,7 @@ async def prefetch_all_skill_icons(icon_url_map: dict[str, str]) -> None:
         # 跳过安全名的反向映射条目（safe→url），只处理真正的 slug
         if safe != slug and slug in icon_url_map and safe in icon_url_map:
             continue
-        dest = get_skill_icons_dir() / f"{safe}.png"
+        dest = get_skill_icons_dir() / f"{os.path.basename(safe)}.png"
         if dest.is_file():
             continue
         to_download.append((slug, raw_url))

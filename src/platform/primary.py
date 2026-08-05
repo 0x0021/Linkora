@@ -186,12 +186,15 @@ class PrimaryMixin(EngineMixinBase):
             user_info.get("openDingTalkId") or self._resolve_own_open_dingtalk_id() or ""
         )
         _oid = self.current_open_dingtalk_id
-        # 脱敏：openDingTalkId 属敏感标识，日志仅保留首尾各 2 位，避免明文落盘（CWE-532）。
+        _uid = self.current_user_id
+        _dept = self.current_user_dept or ""
+        # 脱敏：openDingTalkId / userId 属敏感标识，日志仅保留首尾各 2 位；
+        # 部门名短，仅保留首尾各 1 位，避免明文落盘（CWE-532）。
         _oid_display = f"{_oid[:2]}***{_oid[-2:]}" if len(_oid) > 4 else "***"
+        _uid_display = f"{_uid[:2]}***{_uid[-2:]}" if len(_uid) > 4 else "***"
+        _dept_display = f"{_dept[:1]}**{_dept[-1:]}" if len(_dept) > 2 else ("**" if _dept else "-")
         logger.info("当前用户: %s (userId: %s, openDingTalkId: %s, 部门: %s)",
-                    self.current_user_name, self.current_user_id,
-                    _oid_display,
-                    self.current_user_dept)
+                    self.current_user_name, _uid_display, _oid_display, _dept_display)
 
     def _merge_platform_title(self, candidate: str) -> None:
         """跨平台聚合 owner 职位：仅当当前为空时采用（钉钉主平台优先）。"""

@@ -490,7 +490,8 @@ async def platform_health():
                 auth = adapter.auth_status() if hasattr(adapter, "auth_status") else {}
                 status["adapter_auth"] = auth.get("authenticated", False)
             except Exception as e:
-                status["errors"].append(f"CLI 探测失败: {e}")
+                logger.warning("CLI 探测失败: %s", e)
+                status["errors"].append("CLI 探测失败")
 
             # 数据库连通性（通过 store.conn 触发懒连接即可验证）
             try:

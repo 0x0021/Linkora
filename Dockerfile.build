@@ -1,7 +1,7 @@
 # Linkora Linux 二进制容器化构建（仅产出 Linux ELF）
 # 用法见 scripts/docker-build-linux.sh
 # 注意：本 Dockerfile 只解决 Linux 二进制；macOS/Windows 需各自原生环境（见 docs/BINARY_PACKAGING_PLAN.md §3.1）。
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 # 系统依赖：
 # - libgomp1      : torch 运行时需 OpenMP

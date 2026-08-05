@@ -3,16 +3,14 @@ name = "linkora"
 version = "0.1.0"
 description = "灵桥 (Linkora) — 多平台 AI 自动回复助手（钉钉/飞书/企业微信 + RAG + 规则引擎 + Web 管理台）"
 readme = "README.md"
-# 真实下限由已钉版依赖决定，不能随手放宽：numpy==2.5.1 要求 >=3.12（无 cp39/cp310/cp311 wheel），
-# fastapi/uvicorn/pillow/requests 等一批要求 >=3.10。此前这里写 ">=3.9" 与实际依赖矛盾，
-# 会让 3.9/3.11 环境在 install 阶段才炸。改动依赖版本后请重跑 `python scripts/check_deps.py`。
-requires-python = ">=3.12"
+# requires-python = ">=3.14"：项目仅支持 Python 3.14 系列（CI / 工作流 / Docker 统一切到 3.14.6），
+# 不再兼容 3.12 / 3.13。锁定依赖（numpy==2.5.1、tokenizers==0.22.2、rapidocr-onnxruntime==1.2.3 等）
+# 均已确认提供 cp314 wheel 或在 3.14.6 下可从 sdist 构建。改动依赖版本后请重跑 `python scripts/check_deps.py`。
+requires-python = ">=3.14"
 authors = [{ name = "Linkora Team" }]
 license = "GPL-3.0-or-later"
 keywords = ["ai", "chatbot", "dingtalk", "feishu", "wecom", "rag", "llm"]
 classifiers = [
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
@@ -131,7 +129,7 @@ exclude = [
     "**/build",
     "**/dist",
 ]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 typeCheckingMode = "basic"
 # 第三方包缺类型 stub 时（如部分 ML 库）不报「unknown import」，让基线聚焦在自有代码。
 reportMissingImports = false

@@ -188,7 +188,7 @@ opencv-python==5.0.0.93
     # via rapidocr-onnxruntime
 openpyxl==3.1.5
     # via -r requirements.txt
-packaging==26.2
+packaging==26.3
     # via
     #   faiss-cpu
     #   huggingface-hub

@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: "3.14.6"
           cache: pip
 
       - name: Dependency consistency gate
@@ -73,10 +73,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 下限由已钉版依赖决定：numpy==2.5.1 要求 >=3.12（无 cp39/cp310/cp311 wheel）。
-        # 此前矩阵里的 3.9 在 `pip install -r requirements.lock` 阶段必然失败。
-        # 与 pyproject.toml 的 requires-python 由 scripts/check_deps.py 联动校验。
-        python-version: ["3.12", "3.13"]
+        # 项目统一仅支持 Python 3.14 系列（CI / 工作流 / Docker 均已切换到 3.14.6），
+        # 不再检查或匹配 3.12 / 3.13 等其他版本。
+        # 与 pyproject.toml 的 requires-python = ">=3.14" 由 scripts/check_deps.py 联动校验。
+        python-version: ["3.14.6"]
 
     steps:
       - name: Checkout

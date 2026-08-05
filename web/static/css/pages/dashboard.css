@@ -384,24 +384,7 @@
     z-index: 3;
     pointer-events: none;
 }
-/* 极光光斑（静态渐变，零动画开销） */
-.ov-aurora {
-    position: absolute;
-    top: -55%;
-    right: -8%;
-    width: 560px;
-    height: 560px;
-    z-index: 0;
-    pointer-events: none;
-    background:
-        radial-gradient(circle at 62% 42%, rgba(37, 99, 235, 0.10), transparent 62%),
-        radial-gradient(circle at 28% 72%, rgba(139, 92, 246, 0.075), transparent 60%);
-}
-[data-theme="dark"] .ov-aurora {
-    background:
-        radial-gradient(circle at 62% 42%, rgba(59, 130, 246, 0.16), transparent 62%),
-        radial-gradient(circle at 28% 72%, rgba(139, 92, 246, 0.13), transparent 60%);
-}
+/* 极光光斑装饰 — 已移除（v2 后显得突兀，与 hero 整体不统一） */
 .ov-panel > .panel-header,
 .ov-panel > .panel-body {
     position: relative;
@@ -522,20 +505,7 @@
     width: 3px;
     background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
 }
-/* 背景水印大图标 */
-.ov-hero-glyph {
-    position: absolute;
-    right: 1.4rem;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 5rem;
-    line-height: 1;
-    color: var(--brand-primary);
-    opacity: 0.065;
-    pointer-events: none;
-    z-index: 0;
-}
-[data-theme="dark"] .ov-hero-glyph { opacity: 0.09; }
+/* 背景水印大图标 — 已移除（暗色下透明白剪影看着像额外元素） */
 
 .ov-hero-main {
     flex: 1;
@@ -826,7 +796,6 @@
         gap: 0.8rem;
         padding: 0.85rem 1rem;
     }
-    .ov-hero-glyph { display: none; }
     .ov-hero-value { font-size: 1.85rem; min-height: 2rem; }
     .ov-hero-side { display: none; }
     .ov-head-sub { display: none; }

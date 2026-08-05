@@ -1,4 +1,4 @@
-name: Dependabot Auto-merge
+name: Dependabot 自动合并
 
 # 对 Dependabot 的 minor / patch 升级 PR 自动审批，并等待 CI 的必填检查
 # （test）通过后再合并；major 升级保留人工评审，避免破坏性变更被无脑合入。
@@ -16,13 +16,13 @@ jobs:
     timeout-minutes: 50
     if: github.actor == 'dependabot[bot]'
     steps:
-      - name: Fetch Dependabot metadata
+      - name: 获取 Dependabot 元数据
         id: meta
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Approve and merge (minor/patch only)
+      - name: 审批并合并（仅 minor/patch）
         if: >-
           steps.meta.outputs.update-type == 'version-update:semver-patch' ||
           steps.meta.outputs.update-type == 'version-update:semver-minor'
@@ -34,17 +34,17 @@ jobs:
           # 轮询等待 ci.yml 的 test 检查全部成功（分支保护要求的必填 status check）
           for i in $(seq 1 50); do
             states=$(gh pr checks "$PR_URL" --json name,state --jq '[.[] | select(.name=="test") | .state] | unique | join(",")')
-            echo "attempt $i: test states = $states"
+            echo "第 $i 次尝试：test 状态 = $states"
             if [ "$states" = "SUCCESS" ]; then
-              echo ">> all test checks passed, merging"
+              echo ">> 全部 test 检查通过，开始合并"
               gh pr merge --squash "$PR_URL"
               exit 0
             fi
             if echo "$states" | grep -q "FAILURE"; then
-              echo ">> test failed, abort auto-merge"
+              echo ">> test 失败，中止自动合并"
               exit 1
             fi
             sleep 30
           done
-          echo ">> timed out waiting for tests"
+          echo ">> 等待测试超时"
           exit 1

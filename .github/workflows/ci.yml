@@ -1,4 +1,4 @@
-name: CI
+name: CI 持续集成
 
 on:
   push:
@@ -16,34 +16,34 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: Set up Python
+      - name: 配置 Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.14.6"
           cache: pip
 
-      - name: Dependency consistency gate
+      - name: 依赖一致性门禁
         # 断言 requirements.txt / pyproject.toml / requirements.lock / uv.lock
         # 四处依赖声明版本一致。纯标准库、不联网、毫秒级，放在装依赖之前快速失败。
         # 历史事故：requirements.txt 钉 fastapi==0.140.0 而 lock 停在 0.139.0，
         # uv.lock 里根本没有 fastapi/openai 条目 —— CI 测的和实际发布的不是同一套版本。
         run: python scripts/check_deps.py
 
-      - name: Install lint tools
+      - name: 安装静态检查工具
         run: |
           python -m pip install --upgrade pip
           # 钉版：ruff 版本直接影响 lint 结论，浮动会导致「昨天绿、今天红」。
           # 需与 pyproject.toml 的 dev extra 保持一致。
           pip install ruff==0.16.0
 
-      - name: Run ruff linter
+      - name: 运行 ruff 检查
         run: ruff check src tests web scripts --output-format=github
         continue-on-error: true
 
-      - name: Static check gate (C901 complexity + PGH004 f-string safety)
+      - name: 静态检查门禁（C901 圈复杂度 + PGH004 f-string 安全）
         # 硬门禁：只针对「新代码零容忍」的两条规则，避免被 1127 条存量风格告警淹没。
         #  - C901：圈复杂度（阈值 60，runtime/poller_strategy/config 三个上帝类临时豁免，
         #    随 F1/F7 拆分推进逐步移除豁免收紧）。基线 0 违规。
@@ -51,7 +51,7 @@ jobs:
         # 任一文件新增违规即阻断合并；其余风格类 ruff 规则仍保持 report-only。
         run: ruff check src tests web scripts --select C901,PGH004 --output-format=github
 
-      - name: Syntax gate (P0)
+      - name: 语法门禁（P0）
         # 杜绝 f-string 嵌套引号等导致 uvicorn 启动失败的 SyntaxError。
         # AST 解析零依赖、毫秒级；与 .gitlab-ci.yml lint stage 等价。
         run: |
@@ -65,10 +65,10 @@ jobs:
                   except SyntaxError as e:
                       bad.append(f"{f}:{e.lineno}: {e.msg}")
           if bad:
-              print("SyntaxError in:")
+              print("以下文件存在语法错误：")
               print("\n".join(bad))
               sys.exit(1)
-          print("OK: all Python modules parse")
+          print("OK：所有 Python 模块均可解析")
           PY
 
   test:
@@ -83,31 +83,31 @@ jobs:
         python-version: ["3.14.6"]
 
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: 配置 Python ${{ matrix.python-version }}
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.lock
 
-      - name: Provide test config
+      - name: 准备测试配置
         # config.yaml is gitignored (contains secrets). Tests that call
         # load_config need a config file to exist; the committed example is a
         # complete, valid template with placeholder keys. dws/LLM are mocked in
         # tests, so no real credentials are required.
         run: cp config.yaml.example config.yaml
 
-      - name: Run tests with coverage
+      - name: 运行测试（含覆盖率）
         run: pytest --cov=src --cov-report=term-missing --cov-report=xml
 
-      - name: Dependency vulnerability scan (pip-audit)
+      - name: 依赖漏洞扫描（pip-audit）
         # 供应链安全：扫描 requirements.lock 中已知漏洞（基于锁定版本，复现一致）。
         # 报告型，不阻断 CI（避免上游传递依赖的误报挂死构建），但会暴露问题供后续处理。
         continue-on-error: true
@@ -115,7 +115,7 @@ jobs:
           python -m pip install pip-audit
           pip-audit -r requirements.lock || true
 
-      - name: Upload coverage report
+      - name: 上传覆盖率报告
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -126,24 +126,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: Set up Python
+      - name: 配置 Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.14.6"
           cache: pip
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.lock
 
-      - name: Install pyright
+      - name: 安装 pyright
         run: python -m pip install pyright==1.1.411
 
-      - name: Type check (non-regression gate, F9)
+      - name: 类型检查（非回归门禁，F9）
         # 渐进类型门禁（F9）第一步：锁定基线，只允许减少、不允许增加。
         # 基线由 scripts/type_baseline.py 的 TYPE_ERROR_BASELINE 控制（当前 1057 条，
         # 2026-08-05 在 main / Python 3.14.6 实测 src+web 的 pyright error 数）。
@@ -155,7 +155,7 @@ jobs:
           pyright --outputjson > pyright-report.json || true
           python scripts/type_baseline.py pyright-report.json
 
-      - name: Upload pyright report
+      - name: 上传 pyright 报告
         if: always()
         uses: actions/upload-artifact@v7
         with:

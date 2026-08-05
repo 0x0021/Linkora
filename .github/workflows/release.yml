@@ -1,4 +1,4 @@
-name: Release
+name: 发布 Release
 
 # 打 tag（如 v1.2.3）推送到 main 时，自动创建 GitHub Release 并生成变更说明。
 on:
@@ -11,15 +11,15 @@ permissions:
 
 jobs:
   release:
-    name: Create Release
+    name: 创建 Release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Create GitHub Release (auto-generated notes)
+      - name: 创建 GitHub Release（自动生成变更说明）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

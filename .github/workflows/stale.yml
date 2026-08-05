@@ -1,4 +1,4 @@
-name: Stale
+name: 过期标记
 
 # 自动标记长期无活动的 Issue / PR，减轻维护负担。
 # 仅打标、不打扰、不自动关闭 —— 保留协作弹性。
@@ -17,7 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/stale@v11
+      - name: 标记过期 Issue / PR
+        uses: actions/stale@v11
         with:
           # Issue：60 天无活动打标，再 14 天无活动保持标记（不自动关）
           days-before-stale: 60

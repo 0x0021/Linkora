@@ -1,4 +1,4 @@
-name: Dependency Review
+name: 依赖审查
 
 # PR 依赖增量审计：比对 base 与 head 的依赖清单，拦截引入已知漏洞的包。
 # 对 public 仓库免费。仅高危及以上阻断合并，中低危只报告，避免误伤。
@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: Dependency Review
+      - name: 依赖审查
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -30,7 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.config import load_config
+from src.config import load_config  # noqa: E402
 
 # 默认数据库路径从配置派生（主库 linkora.db），不再硬编码已弃用的 dingtalk-ai.db
 try:
@@ -288,7 +287,7 @@ def main(db_path: Path, dry_run: bool = False, fix_image_markers: bool = False) 
         # ── 写入 ──
         if dry_run:
             print(f"  [DRY] id={rq_id:3d} | {len(logs)} fields | msg='{cp[:30]}'")
-            for f, old, new, reason in logs:
+            for f, old, new, _reason in logs:
                 old_s = (old or "")[:40] if isinstance(old, str) else str(old)
                 new_s = (new or "")[:40] if isinstance(new, str) else str(new)
                 print(f"       {f}: {old_s!r} → {new_s!r}")
@@ -310,13 +309,13 @@ def main(db_path: Path, dry_run: bool = False, fix_image_markers: bool = False) 
 
     if not dry_run:
         conn.commit()
-        print(f"✅ 修复完成:")
+        print("✅ 修复完成:")
         for k, v in stats.items():
             print(f"   - {k}: {v} 次")
         total_logs = sum(stats.values())
         print(f"   修复日志: routing_quality_repair_log ({len(rows)} 条 rq_id × 共 {total_logs} 条字段变更)")
     else:
-        print(f"\n💡 DRY-RUN 模式，未实际写入。移除 --dry-run 执行。")
+        print("\n💡 DRY-RUN 模式，未实际写入。移除 --dry-run 执行。")
 
     conn.close()
     return 0

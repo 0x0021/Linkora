@@ -15,9 +15,8 @@ import hashlib
 import logging
 import os
 import threading
-import typing
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field

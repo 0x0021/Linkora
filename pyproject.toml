@@ -114,6 +114,7 @@ max-complexity = 60
 "src/platform/runtime_*.py" = ["C901", "F405"]  # F1 拆分产物：与 runtime.py 同构的 star-import 与高复杂度方法
 "src/poller_strategy.py" = ["C901"]        # poll_once 复杂度 93，待拆
 "web/routers/config.py" = ["C901"]          # update_config 复杂度 145，待拆
+"src/config.py" = ["F401"]                   # config_models 重导出层（保 `from src.config import AppConfig` 旧路径兼容）
 
 [tool.pyright]
 # 渐进类型门禁配置（F9）。当前 src+web 基线 205 条类型告警（已锁定在

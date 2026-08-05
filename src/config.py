@@ -11,7 +11,8 @@
 """
 from __future__ import annotations
 
-# ruff: noqa: F401  # 整文件是 config_models 重导出层（保 `from src.config import AppConfig` 等旧路径兼容）
+# 此文件是 config_models 重导出层（保 `from src.config import AppConfig` 等旧路径兼容）
+# F401 抑制见 pyproject.toml [tool.ruff.lint.per-file-ignores]
 
 import hashlib
 import logging

@@ -146,7 +146,9 @@ jobs:
         # 每收敛一批类型错误后，重跑 `pyright --outputjson` 并将该常量随之下调，门禁随之收紧。
         # 配置见 pyproject.toml [tool.pyright]（include=src,web / typeCheckingMode=basic）。
         run: |
-          pyright --outputjson > pyright-report.json
+          # pyright 在发现类型错误时会以 exit 1 退出；用 || true 避免 bash -e 提前中止，
+          # 让 type_baseline.py 成为唯一的判定方（错误数是否超基线）。
+          pyright --outputjson > pyright-report.json || true
           python scripts/type_baseline.py pyright-report.json
 
       - name: Upload pyright report

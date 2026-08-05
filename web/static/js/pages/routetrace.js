@@ -85,7 +85,20 @@ async function loadRouteTraceAggregate() {
             label: "健康率",
             icon: "✅",
             value: healthRate + "%",
-            sub: `空回复率 ${(agg.empty_rate??0)*100}%`,
+            sub: `空回复率 ${((agg.empty_rate??0)*100).toFixed(1)}%`,
+        });
+        // 补齐 llm / max 卡片：与 total/avg/health 风格一致（icon + label + value + sub）
+        renderKpiCard("rt-kpi-llm", {
+            label: "平均 LLM 推理",
+            icon: "🧠",
+            value: rtFmtMs(agg.avg_llm_ms ?? 0),
+            sub: "LLM 推理耗时均值"
+        });
+        renderKpiCard("rt-kpi-max", {
+            label: "峰值总耗时",
+            icon: "📈",
+            value: rtFmtMs(agg.max_total_ms ?? 0),
+            sub: "全链路最长记录"
         });
         renderRouteFlow(agg);
         renderObsPanels(agg);
@@ -412,8 +425,8 @@ async function loadRouteTraceStats() {
         const st = await RoutingQualityService.loadStats();
         if (!st || st.available === false) { /* 忽略 */ }
         else {
-            setText("rt-kpi-llm", rtFmtMs(st.avg_llm_ms ?? 0));
-            setText("rt-kpi-max", rtFmtMs(st.max_total_ms ?? 0));
+            // llm / max 由 loadRouteTraceAggregate 统一渲染（aggregate 已包含这两个字段），
+            // 此处不再 setText，避免破坏 renderKpiCard 注入的 icon + sub 结构。
             fillSelectOnce("rt-filter-skill", st.skills || []);
             fillSelectOnce("rt-filter-source", st.sources || []);
         }
@@ -558,6 +571,17 @@ function _setupRtAggregateSubscription() {
             label: "健康率", icon: "✅",
             value: healthRate + "%",
             sub: "空回复率 " + ((agg.empty_rate ?? 0) * 100).toFixed(1) + "%",
+        });
+        // 同步 llm / max，避免 polling 周期中两个卡片停在过期值
+        renderKpiCard("rt-kpi-llm", {
+            label: "平均 LLM 推理", icon: "🧠",
+            value: rtFmtMs(agg.avg_llm_ms ?? 0),
+            sub: "LLM 推理耗时均值"
+        });
+        renderKpiCard("rt-kpi-max", {
+            label: "峰值总耗时", icon: "📈",
+            value: rtFmtMs(agg.max_total_ms ?? 0),
+            sub: "全链路最长记录"
         });
     });
 }

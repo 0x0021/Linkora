@@ -34,10 +34,6 @@ import subprocess
 import time
 from typing import Any
 
-# 重试退避上限（秒）：防止 retries 配置被调大时 2**attempt 指数退避暴涨，
-# 长时间阻塞调用线程（原逻辑 wait = min(2 ** attempt, MAX_BACKOFF_SECONDS) 无封顶）。
-MAX_BACKOFF_SECONDS = 30
-
 from .errors import (
     IMAdapterError,
     IMAdapterNonRetryableError,
@@ -45,6 +41,10 @@ from .errors import (
     IMAdapterRetryableError,
     IMAdapterShutdownError,
 )
+
+# 重试退避上限（秒）：防止 retries 配置被调大时 2**attempt 指数退避暴涨，
+# 长时间阻塞调用线程（原逻辑 wait = min(2 ** attempt, MAX_BACKOFF_SECONDS) 无封顶）。
+MAX_BACKOFF_SECONDS = 30
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ class BaseIMAdapter:
 
                 return data
 
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as err:
                 last_error = self._retryable_error_class()(
                     f"{self.cli_path} timeout after {timeout}s")
                 if attempt < retries:
@@ -206,7 +206,7 @@ class BaseIMAdapter:
                     time.sleep(wait)
                 else:
                     logger.error("%s 重试 %d 次后失败: 超时", self.cli_path, retries + 1)
-                    raise last_error
+                    raise last_error from err
 
             except self._permission_error_class() as e:
                 logger.debug("%s 权限错误（不重试）: %s", self.cli_path, e)
@@ -233,7 +233,7 @@ class BaseIMAdapter:
                     logger.error("%s 重试 %d 次后失败: %s", self.cli_path, retries + 1, e)
                     raise
 
-            except self._shutdown_error_class() as e:
+            except self._shutdown_error_class():
                 # 关机阶段子进程被信号杀掉：已按 debug 记过，原样抛出让上层感知中断
                 raise
 
@@ -245,7 +245,7 @@ class BaseIMAdapter:
                     logger.error("%s 未知错误: %s", self.cli_path, e)
                 raise
 
-        raise last_error  # type: ignore
+        raise last_error  # type: ignore[possibly-undefined]  # retry 分支均对 last_error 赋值，但 pyright 在所有 path 分析后仍报可能未绑定
 
     def _run_download(self, args: list[str], output_path: str,
                       *, timeout: int | None = None,
@@ -291,7 +291,7 @@ class BaseIMAdapter:
                         f"{self.cli_path} 下载文件过大 ({file_size / 1024 / 1024:.1f}MB)，"
                         f"超出 {MAX_DOWNLOAD_SIZE / 1024 / 1024:.0f}MB 限制: {output_path}")
                 return output_path
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as err:
                 last_error = self._retryable_error_class()(
                     f"{self.cli_path} download timeout after {timeout}s")
                 if attempt < retries:
@@ -300,7 +300,7 @@ class BaseIMAdapter:
                                    self.cli_path, attempt + 1, wait)
                     time.sleep(wait)
                 else:
-                    raise last_error
+                    raise last_error from err
             except self._permission_error_class() as e:
                 logger.debug("%s 下载权限错误（不重试）: %s", self.cli_path, e)
                 raise
@@ -331,4 +331,4 @@ class BaseIMAdapter:
                 else:
                     logger.error("%s 下载未知错误: %s", self.cli_path, e)
                 raise
-        raise last_error  # type: ignore
+        raise last_error  # type: ignore[possibly-undefined]  # retry 分支均对 last_error 赋值，但 pyright 在所有 path 分析后仍报可能未绑定

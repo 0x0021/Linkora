@@ -596,9 +596,12 @@ async def kb_chat(query: RagChatQuery):
                         if response["llm_status"] == "failed":
                             response["llm_skip_reason"] = "LLM 返回为空（可能上游限流或模型不可用）"
                     except Exception as e:
+                        # 真实异常仅进服务端日志（含 traceback）；响应体不暴露内部错误，
+                        # 避免 LLM 上游异常（可能含 API Key / 模型内部错误）泄露给客户端
+                        logger.warning("[KB] LLM 问答调用失败: %s", e, exc_info=True)
                         response["llm_status"] = "failed"
-                        response["llm_skip_reason"] = f"LLM 调用失败: {str(e)}"
-                        response["answer"] = f"LLM 调用失败: {str(e)}"
+                        response["llm_skip_reason"] = SAFE_OPERATION_FAILED
+                        response["answer"] = "（知识库问答暂时不可用，请稍后重试）"
 
             return response
         return await run_sync(_work)

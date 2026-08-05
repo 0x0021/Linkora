@@ -25,6 +25,7 @@ import jieba
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from web.errors import SAFE_INTERNAL_ERROR
 from pydantic import BaseModel
 
 from src.config import load_config
@@ -147,6 +148,34 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """统一收敛异常信息泄露（CodeQL py/stack-trace-exposure）。
+
+    - 4xx（客户端输入 / 鉴权问题）：保留原 detail，便于前端 / 用户定位，
+      这类文案不含内部结构，可安全回传。
+    - 5xx（服务器内部错误）：无论路由里写的是 ``detail=str(e)`` 还是别的，
+      一律替换为安全常量文案；真实异常仅记入服务端日志（含 traceback），
+      从响应体切断「异常文本 → 客户端」的链路。
+    """
+    if exc.status_code >= 500:
+        logger.error(
+            "[API %d] Internal error on %s %s: %s",
+            exc.status_code, request.method, request.url.path, exc.detail,
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": SAFE_INTERNAL_ERROR},
+            headers=exc.headers,
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers,
     )
 
 

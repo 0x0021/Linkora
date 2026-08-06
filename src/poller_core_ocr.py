@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from src.image_path import account_id_dir, image_rel_path
+from src.poller_mixins_base import PollerMixinBase
 
 if TYPE_CHECKING:
     from src.config import AppConfig
-
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,6 @@ def _search_image_key(obj):
                 return r
     return None
 
-
-from src.poller_mixins_base import PollerMixinBase
 
 
 class OcrMixin(PollerMixinBase):

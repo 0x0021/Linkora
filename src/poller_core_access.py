@@ -4,12 +4,10 @@ import logging
 import time
 
 from src.memory.platform_context import get_current_platform
+from src.poller_mixins_base import PollerMixinBase
 
 
 logger = logging.getLogger(__name__)
-
-
-from src.poller_mixins_base import PollerMixinBase
 
 
 class AccessControlMixin(PollerMixinBase):

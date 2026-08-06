@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.models import Message
+from src.poller_mixins_base import PollerMixinBase
 from src.poller_utils import is_read_receipt_content
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,6 @@ def _extract_post_text_and_img(post: dict) -> tuple[str, bool]:
                 elif tag == "img":
                     has_img = True
     return " ".join(texts).strip(), has_img
-
-
-from src.poller_mixins_base import PollerMixinBase
 
 
 class ParseMixin(PollerMixinBase):

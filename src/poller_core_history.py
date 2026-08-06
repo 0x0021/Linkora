@@ -1,23 +1,11 @@
 from __future__ import annotations
 
-
-
 import logging
+from datetime import datetime, timedelta
+from src.models import Message
+from src.poller_mixins_base import PollerMixinBase
 
 logger = logging.getLogger(__name__)
-
-
-
-
-
-from datetime import datetime, timedelta
-
-
-
-
-
-
-from src.models import Message
 
 
 
@@ -31,9 +19,6 @@ from src.models import Message
 class _SyncCancelled(Exception):
     """由 cancel_check 在同步过程中抛出，用于优雅中止历史同步（前端「取消」按钮）。"""
     pass
-
-
-from src.poller_mixins_base import PollerMixinBase
 
 
 class HistorySyncMixin(PollerMixinBase):

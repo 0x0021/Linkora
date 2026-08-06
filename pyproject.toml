@@ -84,7 +84,7 @@ constraint-dependencies = [
 [tool.ruff]
 # 轻量 lint 配置：默认规则 + 中文注释友好。
 # 与 CI lint stage 的 `ruff check` 等价；本地可直接 `ruff check .`
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
@@ -105,15 +105,17 @@ ignore = [
 ]
 
 [tool.ruff.lint.mccabe]
-# 渐进阈值：当前设为 60，仅拦截真正失控的巨型函数；随 F1 拆分推进逐步下调。
-max-complexity = 60
+# 渐进阈值 50：在 max(实际非豁免函数)=~34 之上留 ~50% headroom，新代码必须遵守。
+# 随后续拆分继续下调至 35 → 25 → 目标 20。
+max-complexity = 50
 
 [tool.ruff.lint.per-file-ignores]
 # 已知待拆 / 高复杂度模块（渐进收紧，拆分或重构降复杂度后移除豁免）。
 "src/platform/runtime.py" = ["C901"]       # F1 计划中：组合根（薄 re-export）
 "src/platform/runtime_*.py" = ["C901", "F405"]  # F1 拆分产物：与 runtime.py 同构的 star-import 与高复杂度方法
-"src/poller_strategy.py" = ["C901", "E402"]  # poll_once 复杂度 93，待拆；E402 因 `from typing import Callable` 在 docstring+初始 import 之后
-"web/routers/config.py" = ["C901"]          # update_config 复杂度 145，待拆
+"src/poller_strategy.py" = ["C901", "E402"]       # poll_once 复杂度 ~93，待 T5 拆分；E402 见下方说明
+"src/poller_core_discovery.py" = ["C901", "E402"]   # _fetch_messages_via_list_all 复杂度 52；E402 结构性后置 import
+# web/routers/config.py 已于 2026-08-06 移除 C901 豁免（update_config 拆分出 ~27 个 domain helper）
 "src/config.py" = ["F401"]                   # config_models 重导出层（保 `from src.config import AppConfig` 旧路径兼容）
 "src/dws_adapter/__init__.py" = ["F401"]      # dws_adapter 组合根（保 `from src.dws_adapter import DwsError, is_permission_error, ...` 旧路径兼容）
 "src/platform/base.py" = ["F401", "E402"]     # 星号重导出层（被 runtime_*.py `from .base import *` 转出）；E402 因 load_dotenv() 必须在 import 之后调用
@@ -125,13 +127,7 @@ max-complexity = 60
 # E402：以下模块存在「模块级代码之后的 import」——多为 `logger = ...` 之后的 mixin 导入，
 # 或 web/api.py / web/routers/kb.py 为规避循环导入而刻意后置的惰性 import（见 kb.py 顶部注释）。
 # 这些 import 无副作用依赖，属结构性后置，按 base.py 先例用 per-file-ignores 抑制而非强行上移。
-"src/poller_core_access.py" = ["E402"]
-"src/poller_core_dedup.py" = ["E402"]
-"src/poller_core_discovery.py" = ["E402"]
-"src/poller_core_dispatch.py" = ["E402"]
-"src/poller_core_history.py" = ["E402"]
-"src/poller_core_ocr.py" = ["E402"]
-"src/poller_core_parse.py" = ["E402"]
+# T6: 以下 poller_core_* 模块已通过导入顺序修复，不再需要豁免。
 "src/rule_engine.py" = ["E402"]
 "src/semantic.py" = ["E402"]
 "web/api.py" = ["E402"]

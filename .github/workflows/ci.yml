@@ -5,6 +5,7 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 # 最小权限基线：CI 全部 job 只需读仓库内容，显式声明后 GITHUB_TOKEN 不再
 # 默认可写（CodeQL actions/missing-workflow-permissions 告警）。

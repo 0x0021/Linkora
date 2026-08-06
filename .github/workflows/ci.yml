@@ -146,8 +146,8 @@ jobs:
 
       - name: 类型检查（非回归门禁，F9）
         # 渐进类型门禁（F9）第一步：锁定基线，只允许减少、不允许增加。
-        # 基线由 scripts/type_baseline.py 的 TYPE_ERROR_BASELINE 控制（当前 1057 条，
-        # 2026-08-05 在 main / Python 3.14.6 实测 src+web 的 pyright error 数）。
+        # 基线由 scripts/type_baseline.py 的 TYPE_ERROR_BASELINE 控制（当前 94 条，
+        # 2026-08-07 在 main / Python 3.14.6 实测 src+web 的 pyright error 数）。
         # 每收敛一批类型错误后，重跑 `pyright --outputjson` 并将该常量随之下调，门禁随之收紧。
         # 配置见 pyproject.toml [tool.pyright]（include=src,web / typeCheckingMode=basic）。
         run: |

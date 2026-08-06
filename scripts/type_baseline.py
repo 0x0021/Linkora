@@ -29,8 +29,9 @@ from pathlib import Path
 # 当前 95：lint 清理修复 web/api 被误删的 re-export（get_store/get_rag_config）与
 # request_id 动态属性 setattr 写法后，pyright==1.1.411 在 src+web 实测值。
 # 此前 96 为 lint 自动化过程中被误降至 96，未真实反映代码状态；现按实测下调。
-# 后续 95 = 基线，继续「只减不增」。
-TYPE_ERROR_BASELINE = 95
+# 95 = 上一轮收敛基线；本轮回退 src/tools/management.py 两处 load_config 的
+# Path→str 类型错误后实测 94，随之下调至 94 固化收敛，继续「只减不增」。
+TYPE_ERROR_BASELINE = 94
 
 
 def count_errors(report: dict) -> int:

@@ -23,7 +23,8 @@
 
 ### 路径可重定位（LOW）
 - **fix(management)**: `src/tools/management.py` 三处硬编码 `"config.yaml"`（view/update 回退读取、`update` 落盘）统一改为 `paths.get_config_path()`，尊重打包态/数据目录重定位，不再依赖 CWD 恰好是项目根。
-- **fix(management)**: `get_config_path()` 返回 `Path`，对 `load_config(path: str)` 两处调用显式包 `str(...)`，消除 pyright `reportArgumentType`（类型检查门禁基线 95 守住；CI 初跑曾因 +1 报红，已修）。
+- **fix(management)**: `get_config_path()` 返回 `Path`，对 `load_config(path: str)` 两处调用显式包 `str(...)`，消除 pyright `reportArgumentType`（类型检查门禁 CI 初跑曾因 +1 报红，已修）。
+- **chore(types)**: `scripts/type_baseline.py::TYPE_ERROR_BASELINE` 由 95 下调至 94 固化本轮收敛（management 两处 Path→str 修复后实测 94）；同步修正 `ci.yml` 注释中过时的「1057 条」。
 
 ---
 

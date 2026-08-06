@@ -72,11 +72,9 @@ def _apply_feishu_platform(update: ConfigUpdate, cfg: AppConfig):
         _fp.poller.reply_cooldown_seconds = update.feishu_reply_cooldown_seconds
 
 
-def _apply_wecom_platform(update: ConfigUpdate, cfg: AppConfig):
+def _apply_wecom_platform(update: ConfigUpdate, cfg: AppConfig) -> None:  # noqa: ARG001
     """企微平台配置（占位，后续接入 adapter 后激活写入）"""
-    _wp = _ensure_platform_config(cfg, "wecom")
-    # fields reserved for future wecom adapter integration
-    del _wp
+    _ensure_platform_config(cfg, "wecom")  # ensure it exists for API consistency
 
 
 def _apply_poller_base(update: ConfigUpdate, cfg: AppConfig):

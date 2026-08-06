@@ -223,13 +223,13 @@ def _build_dingtalk_platform(config: AppConfig) -> "PlatformConfig":
         # 深拷贝，避免与 config.storage / config.poller 共享可变实例
         storage=StorageConfig(**config.storage.model_dump()),
         poller=PollerConfig(**config.poller.model_dump()),
-        adapter={
-            "cli_path": config.dws.cli_path,
-            "timeout": config.dws.timeout,
-            "retries": config.dws.retries,
-            "dry_run": config.dws.dry_run,
-            "profile": config.dws.profile,
-        },
+        adapter=AdapterOverrideConfig(
+            cli_path=config.dws.cli_path,
+            timeout=config.dws.timeout,
+            retries=config.dws.retries,
+            dry_run=config.dws.dry_run,
+            profile=config.dws.profile,
+        ),
     )
 
 

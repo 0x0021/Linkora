@@ -51,7 +51,7 @@ class PollerStrategyMixin(PollerMixinBase):
             return
 
         try:
-            discovered = self.dws.sync_external_contacts()
+            discovered = self.dws.sync_external_contacts()  # type: ignore[attr-defined]
         except Exception as e:
             logger.warning("[轮询器] 飞书外部联系人自动发现失败: %s", e)
             return

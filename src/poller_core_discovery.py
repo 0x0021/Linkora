@@ -1,36 +1,13 @@
 from __future__ import annotations
 
-
-
 import logging
-
-logger = logging.getLogger(__name__)
-
-from src.poller_utils import match_notification_signature
-
-
-
-
-
 from datetime import datetime, timedelta
 
-
-
-
-
-
 from src.models import Message
-
-
-
-
-
-
-
-
-
-
 from src.poller_mixins_base import PollerMixinBase
+from src.poller_utils import match_notification_signature
+
+logger = logging.getLogger(__name__)
 
 
 class DiscoveryMixin(PollerMixinBase):

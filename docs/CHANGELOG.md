@@ -92,6 +92,9 @@
 - **fix(pages)·排除干扰项**：一度在 f0b5ce5 加回 `theme: jekyll-theme-cayman` 并误判「cayman 主题导致失败」，但 6cab0cc 去主题后仍 `errored`——证明主题非元凶，真正差异在 `skip_config_check` 与 exclude 列表。故最终配置不加 `theme`，`.md` 以默认样式渲染（cayman 主题需单独排查，留作后续）。
 - **fix(pages)·部署超时（第二类独立故障）**：还原配置后 Jekyll 构建已成功（`Build with Jekyll` 步骤 `success`，14:24:49Z），但 `Deploy to GitHub Pages` 步骤卡在 `deployment_in_progress` 直至 **10 分钟超时取消**（`##[error]Timeout reached, aborting!`）。根因是 13:33→14:24 在半小时内连推 6 次，`github-pages` 环境部署锁/队列积压，新部署一直排不到。排查确认环境无残留 `in_progress`/`queued` 部署（`wait_timer=None`、无 reviewers、旧部署均已是 terminal 状态）后，**重跑** `pages-build-deployment` 工作流，部署在环境空闲时顺利完成——站点恢复可访问（`https://0x0021.github.io/Linkora/` 与各 `.html` 文档页均 HTTP 200，`latest deployment state=success`）。后续密集迭代时避免短时间连推，以防再次触发部署锁积压。
 
+### 首页文案润色（中文表达提质）
+- **docs(web)**: 重写 `docs/index.html` 落地页文案，纠正数处「机翻感」直译与生硬口语，改为更自然、有中文质感的表达（保持 Apple 极简克制语气）：标题与首屏主句「已经上班了」→「已经就位」；首屏 lede「它待在你每天用的群里…」→「它就在你每日所用的群里待命…也懂得何时该请真人接手」；平台段「谁也看不见谁」→「彼此互不可见」、飞书「知识库自动跟着更新」→「知识库随之自动更新」；能力段「该它上的时候上，该让人来的时候退」→「该出手时出手，该让位时让位」、知识库「心里没底就不硬答」→「没有十足把握时，绝不出言妄断」、「知道什么时候闭嘴」→「懂得分寸」；数字段「都是实测的」→「皆有实测为证」；上手段「不用买服务，不用交数据」→「无需购买服务，也无需交出数据」、三步叙述规范化；文档段「都在这儿」→「尽在于此」；结尾「开源的 / 可以拿去用，可以改」→「开源，自由可塑 / 你可自由使用、修改，也欢迎一同将它打磨得更好」；页脚版权「基于 GPL-3.0 开源发布」→「基于 GPL-3.0 协议开源发布」。同步更新 `<title>`/`<meta name="description">`/`<meta property="og:description">` 等 SEO 文案。
+
 ---
 
 ## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一

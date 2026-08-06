@@ -83,7 +83,7 @@ class SystemStatusTool(BaseTool):
         cfg = self.config
         if cfg is None:
             try:
-                cfg = load_config(get_config_path())
+                cfg = load_config(str(get_config_path()))
             except Exception as e:
                 logger.debug("load_config failed: %s", e)
                 cfg = None
@@ -382,7 +382,7 @@ class ConfigManageTool(BaseTool):
         action = args.get("action", "view")
 
         try:
-            config = load_config(get_config_path())
+            config = load_config(str(get_config_path()))
 
             if action == "view":
                 section = args.get("section")

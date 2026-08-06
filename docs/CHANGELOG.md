@@ -85,11 +85,11 @@
 - **fix(web)**: 删除 `web/api.py::_read_bundle_manifest()` 内冗余的局部 `from pathlib import Path`（模块顶层已导入且 `Path(CONFIG_PATH)` 在用），消除 ruff `F401` 触发 `lint` job 失败（该导入在本函数内未被引用，非重导出陷阱，安全移除）。
 - **ci(frontend)**: `ci.yml` 的 `actions/setup-node` 由 `@v4` 升 `@v7`，消除「Node.js 20 runtime 弃用、被强制跑在 Node 24」的 workflow 告警（与既有 `checkout`/`upload-artifact@v7` 一致）；`node-version: "22"` 与 `cache: npm` 保持不变。
 
-### Pages 构建失败修复（冲突 workflow + 误改静态方向 + 首页被删）
-- **fix(pages)**: 根因之一是「双部署路径互相打架」——GitHub Pages 源已是 `branch: main /docs`（分支部署，push 自动发布 `docs/`），但仓库里又多了一个自定义 `.github/workflows/pages.yml`（`actions/deploy-pages@v4` 从 `docs/` 打包 artifact 部署）。它与 GitHub 自动的 `pages-build-deployment`（`@v5`，历史曾从仓库根目录打包）抢同一个 `github-pages` 环境，且都用了 `concurrency: group: pages` 互相 `cancel-in-progress`，导致部署卡在 `deployment_queued` 直到超时失败（根目录打包把整个仓库含 `data/` 两千多文件打进 artifact 是主因）。已删除该冗余 workflow。
-- **fix(pages)**: 根因之二是「误把站点改成纯静态，却删了首页」——前一轮 `chore(pages): 移除大型静态文件` 把落地页 `docs/index.html`（Apple 极简风、39KB、零内嵌资源）删掉，只留 160B 占位 `index.md`；又加 `.nojekyll` 想走静态。但 `docs/` 里是 `.md` 文档、落地页链接的是 `CHANGELOG.html` 等同名 `.html`——这套结构本是为 **Jekyll 模式**设计的（Jekyll 把 `.md` 渲染成 `.html`，链接才通）。静态模式不渲染 `.md`、又没有 `index.html` → 站点根路径 404。
-- **fix(pages)**: 恢复正确设计——① 从 `08947d7~1` 恢复 `docs/index.html` 作为文档入口首页（无 front matter，Jekyll 原样拷贝、不套主题）；② 删除 `docs/.nojekyll` 与占位 `docs/index.md`，让 Jekyll 正常运行；③ 把 `docs/_config.yml` 还原（`exclude: ["*.mermaid"]`）。提交后 GitHub 在 push 到 main 时自动对 `docs/` 做 Jekyll 分支部署，`.md` → 同名 `.html`、首页可访问。
-- **fix(pages)·根因更正**：真正让 Pages 反复 `errored` 的是 `docs/_config.yml` 里的 `theme: jekyll-theme-cayman`——GitHub Pages 当前 Jekyll 构建该主题会失败（13:09–13:32 全部 `errored`、14:05 加回主题也 `errored`，唯独 13:42 去掉主题后首次 `built` 成功）。之前那轮「添加 .nojekyll / 删首页 / 静态化」是把「主题构建失败」误判成「要关 Jekyll」，方向全错、反而把站点弄 404。现 _config.yml 暂不加 `theme`，`.md` 以默认样式渲染，站点可稳定构建；cayman 主题需单独排查（疑似主题 gem 在当前 GitHub Pages Jekyll 版本下加载失败），留作后续。
+### Pages 构建失败修复（冲突 workflow + 误改静态方向 + 首页被删 + 配置漂移）
+- **fix(pages)**: 根因一「双部署路径打架」——GitHub Pages 源已是 `branch: main /docs`（push 自动 Jekyll 构建 `docs/`），仓库却多了一个自定义 `.github/workflows/pages.yml`（`actions/deploy-pages@v4` 从 `docs/` 打 artifact）。它与官方自动 `pages-build-deployment`（`@v5`）抢同一个 `github-pages` 环境，且都 `concurrency: group: pages` 互相 `cancel-in-progress`，部署卡 `deployment_queued` 直至超时失败。已删除该冗余 workflow。
+- **fix(pages)**: 根因二「误把站点改成纯静态、却删了首页」——前轮 `chore(pages): 移除大型静态文件` 把落地页 `docs/index.html`（Apple 极简风、39KB、零内嵌资源）删掉、只留 160B 占位 `index.md`，又加 `.nojekyll` 想走静态。但 `docs/` 里是 `.md` 文档、首页链接 `CHANGELOG.html` 等同名 `.html`，这套结构本为 **Jekyll 模式**设计（`.md`→`.html`、链接才通）。静态化不渲染 `.md` 又无 `index.html` → 根路径 404。已从 `08947d7~1` 恢复 `index.html`、删除 `docs/.nojekyll` 与占位 `index.md`，让 Jekyll 正常运行。
+- **fix(pages)**: 根因三（决定性）「`_config.yml` 配置漂移」——多次来回改动中，文件丢失了 `skip_config_check: true` 及完整 `exclude`（`*.mermaid`/`audit/**/*`/`.git`/`*.yaml`/`*.yml`）/`destination: _site`。GitHub Pages 对 `_config.yml` 做严格校验，缺 `skip_config_check` 时遇到 `*.yml`/`*.yaml` 与 `audit` 大目录即 `errored`。实证：13:42 的 f4967c3 因带完整配置 `built` 成功；后续 6cab0cc 把配置砍到只剩 `exclude: ["*.mermaid"]` → 再次 `errored`。本次把 `_config.yml` 还原为 f4967c3 的完整配置，提交后 push 到 main 应恢复 `built`。
+- **fix(pages)·排除干扰项**：一度在 f0b5ce5 加回 `theme: jekyll-theme-cayman` 并误判「cayman 主题导致失败」，但 6cab0cc 去主题后仍 `errored`——证明主题非元凶，真正差异在 `skip_config_check` 与 exclude 列表。故最终配置不加 `theme`，`.md` 以默认样式渲染（cayman 主题需单独排查，留作后续）。
 
 ---
 

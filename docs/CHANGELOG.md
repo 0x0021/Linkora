@@ -85,11 +85,12 @@
 - **fix(web)**: 删除 `web/api.py::_read_bundle_manifest()` 内冗余的局部 `from pathlib import Path`（模块顶层已导入且 `Path(CONFIG_PATH)` 在用），消除 ruff `F401` 触发 `lint` job 失败（该导入在本函数内未被引用，非重导出陷阱，安全移除）。
 - **ci(frontend)**: `ci.yml` 的 `actions/setup-node` 由 `@v4` 升 `@v7`，消除「Node.js 20 runtime 弃用、被强制跑在 Node 24」的 workflow 告警（与既有 `checkout`/`upload-artifact@v7` 一致）；`node-version: "22"` 与 `cache: npm` 保持不变。
 
-### Pages 构建失败修复（冲突 workflow + 误改静态方向 + 首页被删 + 配置漂移）
+### Pages 构建失败修复（冲突 workflow + 误改静态方向 + 首页被删 + 配置漂移 + 部署锁积压）
 - **fix(pages)**: 根因一「双部署路径打架」——GitHub Pages 源已是 `branch: main /docs`（push 自动 Jekyll 构建 `docs/`），仓库却多了一个自定义 `.github/workflows/pages.yml`（`actions/deploy-pages@v4` 从 `docs/` 打 artifact）。它与官方自动 `pages-build-deployment`（`@v5`）抢同一个 `github-pages` 环境，且都 `concurrency: group: pages` 互相 `cancel-in-progress`，部署卡 `deployment_queued` 直至超时失败。已删除该冗余 workflow。
 - **fix(pages)**: 根因二「误把站点改成纯静态、却删了首页」——前轮 `chore(pages): 移除大型静态文件` 把落地页 `docs/index.html`（Apple 极简风、39KB、零内嵌资源）删掉、只留 160B 占位 `index.md`，又加 `.nojekyll` 想走静态。但 `docs/` 里是 `.md` 文档、首页链接 `CHANGELOG.html` 等同名 `.html`，这套结构本为 **Jekyll 模式**设计（`.md`→`.html`、链接才通）。静态化不渲染 `.md` 又无 `index.html` → 根路径 404。已从 `08947d7~1` 恢复 `index.html`、删除 `docs/.nojekyll` 与占位 `index.md`，让 Jekyll 正常运行。
 - **fix(pages)**: 根因三（决定性）「`_config.yml` 配置漂移」——多次来回改动中，文件丢失了 `skip_config_check: true` 及完整 `exclude`（`*.mermaid`/`audit/**/*`/`.git`/`*.yaml`/`*.yml`）/`destination: _site`。GitHub Pages 对 `_config.yml` 做严格校验，缺 `skip_config_check` 时遇到 `*.yml`/`*.yaml` 与 `audit` 大目录即 `errored`。实证：13:42 的 f4967c3 因带完整配置 `built` 成功；后续 6cab0cc 把配置砍到只剩 `exclude: ["*.mermaid"]` → 再次 `errored`。本次把 `_config.yml` 还原为 f4967c3 的完整配置，提交后 push 到 main 应恢复 `built`。
 - **fix(pages)·排除干扰项**：一度在 f0b5ce5 加回 `theme: jekyll-theme-cayman` 并误判「cayman 主题导致失败」，但 6cab0cc 去主题后仍 `errored`——证明主题非元凶，真正差异在 `skip_config_check` 与 exclude 列表。故最终配置不加 `theme`，`.md` 以默认样式渲染（cayman 主题需单独排查，留作后续）。
+- **fix(pages)·部署超时（第二类独立故障）**：还原配置后 Jekyll 构建已成功（`Build with Jekyll` 步骤 `success`，14:24:49Z），但 `Deploy to GitHub Pages` 步骤卡在 `deployment_in_progress` 直至 **10 分钟超时取消**（`##[error]Timeout reached, aborting!`）。根因是 13:33→14:24 在半小时内连推 6 次，`github-pages` 环境部署锁/队列积压，新部署一直排不到。排查确认环境无残留 `in_progress`/`queued` 部署（`wait_timer=None`、无 reviewers、旧部署均已是 terminal 状态）后，**重跑** `pages-build-deployment` 工作流，部署在环境空闲时顺利完成——站点恢复可访问（`https://0x0021.github.io/Linkora/` 与各 `.html` 文档页均 HTTP 200，`latest deployment state=success`）。后续密集迭代时避免短时间连推，以防再次触发部署锁积压。
 
 ---
 

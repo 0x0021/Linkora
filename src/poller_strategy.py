@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from src.dws_adapter import DwsPermissionError
 from src.models import Message
+from src.poller_mixins_base import PollerMixinBase
 from src.poller_utils import match_notification_signature
 from typing import Callable
 
@@ -27,10 +28,6 @@ _PLATFORM_CLI_LABEL: dict[str, str] = {
     "feishu": "lark-cli",
     "wecom": "wecom-cli",
 }
-
-
-
-from src.poller_mixins_base import PollerMixinBase
 
 
 class PollerStrategyMixin(PollerMixinBase):

@@ -5,6 +5,73 @@
 
 ---
 
+## 2026-08-06 — 配置安全治理 / 备份策略 / CI 回归修复
+
+> 全套测试 **3324 通过**（2 skipped / 2 xfailed），pyright 类型错误维持基线 95，CI 三盏灯全绿。
+
+### 配置与备份安全
+- **feat(backup)**: 配置每日滚动备份改为「启动触发 + 仅变更才备份」——bot/web 启动时 `maybe_backup()` 检查「今天是否已备份」与「内容相较最近备份是否有变化」两个门禁，命中其一即跳过；原子写入并滚动保留最近 16 份（已移除原来的固定时间 launchd 定时任务）。
+- **fix(config)**: `import_config` 改为合并语义（`_deep_merge`），导入文件只覆盖出现的 key，其余段/参数全部保留，彻底杜绝「导入不完整配置 → 静默丢其余所有段参数」的高危缺陷（回归测试 `test_import_config_preserves_unmentioned_sections` 守护）。
+- **fix(backup)**: 隔离测试配置备份（`tests/conftest.py` 将备份根重定向到临时目录），并清理 `data/config-backups/` 中 29 个测试产生的碎片备份（106~403B 假配置），仅保留完整配置。
+
+### CI 回归修复与文档
+- **fix(ci)**: 修复 ruff 全量清零（768→0）时误删重导出，导致 `test` 与 `type-check` 回归的问题，恢复 `web/api.py`、`src/platform/runtime.py` 等的 re-export。
+- **docs**: README 添加灵桥宣传配图（GitHub Pages 相对引用 `docs/banner.png`）。
+
+---
+
+## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一
+
+> 约 60+ 提交集中收敛质量与体验；全程测试持续通过。
+
+### 安全与合规（CodeQL 清零）
+- **fix(security)**: 修复 CodeQL 高危告警（SSRF / 敏感信息 / 路径穿越 / 异常泄露），路由响应统一走 `web/errors.py` 安全详情（真实错误只进服务端日志）。
+- **fix(security)**: 第二轮清零——logging 脱敏补全、路径净化下沉、CI 权限收紧。
+- **fix(security)**: 路径净化改用 `abspath`（CodeQL 认可的 sanitizer），清零 10 个误报告警。
+- **fix(security)**: 全局 5xx 不泄露内部异常 + KB 问答响应脱敏；同步 5xx 测试断言到全局脱敏处理器。
+- **fix(runtime)**: 回复锁令牌化 + 风格画像刷新 + 路径覆盖进程共享。
+
+### 类型收敛（F9）
+- **build(ci)**: 新增 pyright 非回归门禁（`type_baseline.py` 比对锁定基线，error 数只减不增）；修复门禁不被 pyright 非零退出码提前中止（`|| true`）。
+- **refactor(types)**: 三小家族建共享基类（类型错误 334→205→96）；poller / platform 建共享基类消动态 MRO 类型错误；顺带修复若干被掩盖的真实缺陷。
+
+### UI / 仪表盘重做
+- **feat(ui)**: 系统概览卡片 Premium v2 / v3 整体重设计（Hero + 自适应次级卡 + 状态胶囊流），合并「工具」与「配置自检」去重，每个 chip 加 hover 解释。
+- **refactor(metrics)**: 消除指标监控与成本/质量两页 KPI 卡重复；补齐 routetrace KPI 卡片 icon/sub。
+- **fix(frontend)**: 配置保存崩溃修复 + 成本/质量引文卡等高滚动。
+
+### CI / 构建 / 依赖
+- **build(ci)**: 统一 Python 版本到 **3.14.6**，移除 3.12/3.13 矩阵。
+- **fix(deps)**: 修正 Dependabot 升级导致的依赖锁漂移与 tokenizers 不可解析冲突；回退 `rapidocr-onnxruntime` 至 1.2.3 恢复 CI。
+- **ci(github)**: Dependabot 改为 workflow 内审批 + 等待 test 通过再合并；启用 CodeQL / 依赖审计 / Pages 文档站。
+- **style(lint)**: 全量清零 CI ruff annotations（768→0），含 `config.py` F401 抑制迁到 `pyproject.toml` per-file-ignores。
+
+### 文档站点
+- **feat(site)**: 重做 Pages 落地页为高级玻璃拟态 UI / Apple 极简风 + PPT 整页吸附滚动，启用赞助与自动发布。
+- **docs**: 归档历史审计报告到 `docs/audit/`（去噪，避免新人被过时内容带偏）。
+
+---
+
+## 2026-08-04 — 仓库重新发布 / 社区化 / poller 对话体验
+
+> 仓库以「清空历史、仅保留最新状态」方式重新发布为开源项目。
+
+### 仓库发布与治理
+- **chore**: 初始化仓库快照（清空历史，仅保留最新状态）；协议改为 **GPL-3.0**；移除源码/测试中的个人身份信息（PII），提交作者改中性署名。
+- **docs(repo)**: 补齐 GitHub 社区/安全/治理文件与 LICENSE。
+- **ci(github)**: 启用 CodeQL 扫描、依赖审计、Dependabot 自动合并与 Pages 文档站。
+- **docs(readme)**: 精简文档、闭合顶部居中 div 避免正文全部居中。
+
+### CI 修复
+- **fix(ci)**: 修复 GitHub Actions 全部测试失败。
+
+### poller / 对话体验
+- **feat(poller)**: 新增**真人在场冷却**，防止 AI 穿插真人对话。
+- **fix(poller)**: 避免业务请求里的「您好」和沟通结束后的表情误触发 keyword 回复；list-all 分页上限提示降为 INFO 并修复冷却失效。
+- **test(dws)**: 适配 list-all 封顶提示的日志级别与冷却实现。
+
+---
+
 ## 2026-08-03 — 稳定性 / 质量集中加固轮
 
 > 约 25 个提交，全量测试 **3275 通过、0 失败**。

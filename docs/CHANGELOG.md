@@ -88,7 +88,8 @@
 ### Pages 构建失败修复（冲突 workflow + 误改静态方向 + 首页被删）
 - **fix(pages)**: 根因之一是「双部署路径互相打架」——GitHub Pages 源已是 `branch: main /docs`（分支部署，push 自动发布 `docs/`），但仓库里又多了一个自定义 `.github/workflows/pages.yml`（`actions/deploy-pages@v4` 从 `docs/` 打包 artifact 部署）。它与 GitHub 自动的 `pages-build-deployment`（`@v5`，历史曾从仓库根目录打包）抢同一个 `github-pages` 环境，且都用了 `concurrency: group: pages` 互相 `cancel-in-progress`，导致部署卡在 `deployment_queued` 直到超时失败（根目录打包把整个仓库含 `data/` 两千多文件打进 artifact 是主因）。已删除该冗余 workflow。
 - **fix(pages)**: 根因之二是「误把站点改成纯静态，却删了首页」——前一轮 `chore(pages): 移除大型静态文件` 把落地页 `docs/index.html`（Apple 极简风、39KB、零内嵌资源）删掉，只留 160B 占位 `index.md`；又加 `.nojekyll` 想走静态。但 `docs/` 里是 `.md` 文档、落地页链接的是 `CHANGELOG.html` 等同名 `.html`——这套结构本是为 **Jekyll 模式**设计的（Jekyll 把 `.md` 渲染成 `.html`，链接才通）。静态模式不渲染 `.md`、又没有 `index.html` → 站点根路径 404。
-- **fix(pages)**: 恢复正确设计——① 从 `08947d7~1` 恢复 `docs/index.html` 作为文档入口首页（无 front matter，Jekyll 原样拷贝、不套主题）；② 删除 `docs/.nojekyll` 与占位 `docs/index.md`，让 Jekyll 正常运行；③ 把 `docs/_config.yml` 还原为原始正确配置（`theme: jekyll-theme-cayman`、`exclude: ["*.mermaid"]`，与 `68cc301` 一致）。提交后 GitHub 在 push 到 main 时自动对 `docs/` 做 Jekyll 分支部署，`.md` → 同名 `.html`、首页可访问。
+- **fix(pages)**: 恢复正确设计——① 从 `08947d7~1` 恢复 `docs/index.html` 作为文档入口首页（无 front matter，Jekyll 原样拷贝、不套主题）；② 删除 `docs/.nojekyll` 与占位 `docs/index.md`，让 Jekyll 正常运行；③ 把 `docs/_config.yml` 还原（`exclude: ["*.mermaid"]`）。提交后 GitHub 在 push 到 main 时自动对 `docs/` 做 Jekyll 分支部署，`.md` → 同名 `.html`、首页可访问。
+- **fix(pages)·根因更正**：真正让 Pages 反复 `errored` 的是 `docs/_config.yml` 里的 `theme: jekyll-theme-cayman`——GitHub Pages 当前 Jekyll 构建该主题会失败（13:09–13:32 全部 `errored`、14:05 加回主题也 `errored`，唯独 13:42 去掉主题后首次 `built` 成功）。之前那轮「添加 .nojekyll / 删首页 / 静态化」是把「主题构建失败」误判成「要关 Jekyll」，方向全错、反而把站点弄 404。现 _config.yml 暂不加 `theme`，`.md` 以默认样式渲染，站点可稳定构建；cayman 主题需单独排查（疑似主题 gem 在当前 GitHub Pages Jekyll 版本下加载失败），留作后续。
 
 ---
 

@@ -81,7 +81,7 @@ dingtalk/
 
 # Node (if web uses npm)
 node_modules/
-package-lock.json
+# package-lock.json 必须入库：CI frontend job 用 npm ci，依赖 lock 文件可复现构建
 npm-debug.log
 
 # pytest-cov residual

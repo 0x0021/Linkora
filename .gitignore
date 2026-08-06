@@ -7,6 +7,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+# 前端构建产物（esbuild 合并后的单 bundle）需入库，供 Docker COPY 与静态服务直接取用
+!web/static/dist/
 downloads/
 eggs/
 .eggs/

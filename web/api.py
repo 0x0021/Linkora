@@ -757,6 +757,27 @@ def _auto_page_versions(v_func) -> dict[str, str]:
     return result
 
 
+def _read_bundle_manifest() -> dict:
+    """读取前端构建产物 manifest（esbuild 合并后的单 bundle 文件名 + 内容哈希）。
+
+    存在时返回 {bundle_css_v, bundle_js_v}（哈希文件名），模板据此加载单 bundle；
+    缺失时返回空串，模板自动回退到逐文件加载（兼容未执行 build:frontend 的开发态）。
+    """
+    import json
+
+    from pathlib import Path
+
+    manifest = get_static_dir() / "dist" / "manifest.json"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        return {
+            "bundle_css_v": data.get("css", "") or "",
+            "bundle_js_v": data.get("js", "") or "",
+        }
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"bundle_css_v": "", "bundle_js_v": ""}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_path = get_templates_dir() / "index.html"
@@ -773,6 +794,7 @@ async def index():
                 return "1"
         return tpl.render(
             style_v=v("css/style.css"),
+            **_read_bundle_manifest(),
             theme_v=v("css/theme.css"),
             motion_v=v("css/motion.css"),
             override_v=v("css/bootstrap-override.css"),

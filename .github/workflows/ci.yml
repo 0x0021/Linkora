@@ -178,6 +178,14 @@ jobs:
       - name: 安装前端依赖
         run: npm ci
 
+      - name: 构建前端 bundle（esbuild 合并）
+        # 将 40+ CSS / 30+ JS 合并为单 bundle，减少首屏请求数；产物写入 web/static/dist/。
+        run: npm run build:frontend
+
+      - name: bundle 冒烟（全局符号校验）
+        # 在 jsdom 中求值打包产物，验证关键全局函数/对象已挂载、无重复声明错误。
+        run: node scripts/smoke_bundle.mjs
+
       - name: 前端测试（vitest）
         # 防前端回归：覆盖 api 客户端、工具函数、页面关键逻辑。
         # 仅跑既有 vitest 套件，不引入 eslint/axe（避免新依赖与存量告警阻塞 CI）。

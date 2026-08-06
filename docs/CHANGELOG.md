@@ -44,6 +44,13 @@
 - **perf(web)**: 评估脚本 `defer` 化——底部脚本已居 `</body>` 末，`defer` 收益可忽略；真正瓶颈为 40+ CSS/30+ JS 请求数，需构建链路合并，留作后续独立提案（动部署链路，审慎推进）。
 - **a11y(web)**: 移动端响应式审计——dashboard 已有 760px、messages 已有 768px 断点；skills/cost-quality 无专属 CSS，依赖 Bootstrap 栅格与通用 `dataTable` 组件（已自带响应式），无需硬加断点。
 
+### 前端构建链路（esbuild 合并，首屏请求 ~70 → 2）
+- **feat(web)**: 新增 `scripts/build_frontend.mjs`（esbuild 合并）——将 40+ CSS / 30+ 经典 `<script>` 按模板加载顺序合并为单 `bundle.<hash>.css` / `bundle.<hash>.js`，内容哈希命名（长效缓存），写入 `web/static/dist/`；`drafts.js`（`type=module`）不参与合并仍单独加载。
+- **perf(web)**: 合并在语义上等价于现有多 `<script>` 共享全局作用域（已审计确认无顶层同名 `const/let/class` 冲突，`DOMAIN` 等均在 IIFE 内）；逐文件剥离顶层 `'use strict'` 统一 sloppy，避免严格模式污染；esbuild 仅压缩不重命名顶层函数/var，故 `window.switchPage` 桥接与内联 `onclick` 处理器不受影响。
+- **refactor(web)**: `api.py` 新增 `_read_bundle_manifest()` 读取 `dist/manifest.json` 注入 `bundle_css_v`/`bundle_js_v`；模板 `index.html` 加 `{% if bundle_*_v %}` 分支——有 manifest 走单 bundle，缺失则自动回退逐文件加载（兼容未构建的开发态），`drafts.js` module 始终保留。
+- **test(web)**: 新增 `scripts/smoke_bundle.mjs`（jsdom 求值打包产物，断言 `escapeHtml`/`api`/`store`/`switchPage` 等关键全局符号已挂载、无重复声明错误）；`ci.yml` 的 `frontend` job 增加 `build:frontend` + `smoke_bundle` 步骤，将构建链路纳入门禁。
+- **chore**: `.gitignore` 放行 `web/static/dist/`（根 `dist/` 仍忽略）；`package.json` 加 `esbuild` devDep 与 `build:frontend` 脚本。
+
 ---
 
 ## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一

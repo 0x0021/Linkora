@@ -9,6 +9,10 @@
     <link rel="stylesheet" href="/static/fontawesome/all.min.css">
     <!-- Bootstrap 5 CSS -->
     <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
+    {% if bundle_css_v %}
+    <!-- 构建产物：esbuild 合并后的单 CSS bundle（内容哈希命名，长效缓存） -->
+    <link rel="stylesheet" href="/static/dist/{{ bundle_css_v }}">
+    {% else %}
     <link rel="stylesheet" href="/static/css/icons.css?v={{ icons_css_v }}">
     <!-- Bootstrap 组件覆盖 -->
     <link rel="stylesheet" href="/static/css/bootstrap-override.css?v={{ override_v }}">
@@ -47,6 +51,7 @@
     <link rel="stylesheet" href="/static/css/pages/intent.css?v={{ intent_css_v }}">
     <!-- 微交互与动效体系 -->
     <link rel="stylesheet" href="/static/css/motion.css?v={{ motion_v }}">
+    {% endif %}
     <script defer src="/static/vendor/chart.umd.min.js"></script>
     <script>
       (function () {
@@ -3418,6 +3423,11 @@
 
     <!-- Bootstrap 5 JS -->
     <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+    {% if bundle_js_v %}
+    <!-- 构建产物：esbuild 合并后的单 JS bundle（经典脚本合并，app.js 在末，
+         等价于多 <script> 共享全局作用域；详见 scripts/build_frontend.mjs） -->
+    <script src="/static/dist/{{ bundle_js_v }}"></script>
+    {% else %}
     <script src="/static/js/icons.js?v={{ icons_js_v }}"></script>
     <script src="/static/js/theme.js?v={{ theme_js_v }}"></script>
     <!-- 核心模块 -->
@@ -3440,7 +3450,6 @@
          使其 window.X = X 桥接能正确引用各 pages/*.js 中已定义的全局函数。 -->
     <script src="/static/js/pages/config.js?v={{ config_js_v }}"></script>
     <script src="/static/js/pages/dead_letters.js?v={{ dead_letters_js_v }}"></script>
-    <script type="module" src="/static/js/pages/drafts.js?v={{ drafts_js_v }}"></script>
     <script src="/static/js/pages/dashboard.js?v={{ dashboard_js_v }}"></script>
     <script src="/static/js/pages/departments.js?v={{ departments_js_v }}"></script>
     <script src="/static/js/pages/intent.js?v={{ intent_js_v }}"></script>
@@ -3458,6 +3467,9 @@
     <script src="/static/js/core/app.js?v={{ core_app_js_v }}"></script>
     <script src="/static/js/core/onboarding.js?v={{ core_onboarding_js_v }}"></script>
     <script src="/static/js/pages/simulate.js?v={{ simulate_js_v }}"></script>
+    {% endif %}
+    <!-- drafts.js 为 type=module，不参与合并，始终单独加载 -->
+    <script type="module" src="/static/js/pages/drafts.js?v={{ drafts_js_v }}"></script>
 
     <!-- 记忆新增 / 编辑 模态框 -->
     <div class="modal" id="memory-modal">

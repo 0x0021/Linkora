@@ -3,11 +3,13 @@
     "@fortawesome/fontawesome-free": "^7.3.0"
   },
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "jsdom": "^25.0.1",
     "vitest": "^4.1.10"
   },
   "scripts": {
     "test:frontend": "vitest run",
-    "test:frontend:watch": "vitest"
+    "test:frontend:watch": "vitest",
+    "build:frontend": "node scripts/build_frontend.mjs"
   }
 }

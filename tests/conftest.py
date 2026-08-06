@@ -18,6 +18,27 @@ import pytest
 from src.models import Message
 
 
+# ============ 配置写前备份隔离 ============
+# web.api._backup_config_before_write 默认备份到真实 data/config-backups/。
+# 测试若经 _write_config 写配置，会往真实目录塞碎片备份，污染备份盘且泄漏测试密钥。
+# 这里把备份根整体重定向到临时目录，覆盖整个测试会话，避免污染。
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_config_backup_dir():
+    import web.api as _api
+    import shutil
+
+    tmp_root = tempfile.mkdtemp(prefix="linkora-cfgbackup-")
+    backup_dir = Path(tmp_root) / "config-backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    prev = _api.CONFIG_BACKUP_ROOT
+    _api.CONFIG_BACKUP_ROOT = backup_dir
+    try:
+        yield
+    finally:
+        _api.CONFIG_BACKUP_ROOT = prev
+        shutil.rmtree(tmp_root, ignore_errors=True)
+
+
 # ============ 临时目录与数据库 ============
 
 @pytest.fixture

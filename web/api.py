@@ -197,6 +197,10 @@ class VersionedStaticFiles(StaticFiles):
 
 CONFIG_PATH = str(get_config_path())
 
+# 配置写前备份目录。默认 data/config-backups/；测试可 monkeypatch 此变量，
+# 把备份重定向到临时目录，避免测试写配置污染真实 data/ 目录（见 tests/conftest.py）。
+CONFIG_BACKUP_ROOT = data_path("config-backups")
+
 app.mount("/static", VersionedStaticFiles(directory=str(get_static_dir())), name="static")
 
 # ============ Web Auth Middleware ============
@@ -564,7 +568,7 @@ def _backup_config_before_write() -> None:
     src = Path(CONFIG_PATH)
     if not src.exists():
         return
-    backup_dir = data_path("config-backups")
+    backup_dir = CONFIG_BACKUP_ROOT
     backup_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dst = backup_dir / f"config_{ts}.yaml"

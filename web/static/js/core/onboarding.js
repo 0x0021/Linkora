@@ -25,7 +25,7 @@ async function checkBackendConfig() {
         if (res && res.llm && res.llm.api_key && res.llm.api_key.trim()) {
             _hasApiKey = true;
             // 后端已配好 → 视同完成引导，静默标记
-            localStorage.setItem(ONBOARDING_KEY, '1');
+            try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (_) {}
         }
     } catch (_) {
         // 网络异常等不阻断，降级为仅看 localStorage
@@ -40,7 +40,7 @@ async function checkBackendConfig() {
  */
 function shouldShowOnboarding() {
     // localStorage 已标记 → 永不再显示
-    if (localStorage.getItem(ONBOARDING_KEY)) return false;
+    try { if (localStorage.getItem(ONBOARDING_KEY)) return false; } catch (_) {}
     // 后端检测完成且发现已配 key → 不显示
     if (_backendChecked && _hasApiKey) return false;
     // 后端检测未完成 → 先不显示（等异步结果）
@@ -68,7 +68,7 @@ async function showOnboarding() {
 function hideOnboarding() {
     const overlay = document.getElementById('onboarding-overlay');
     if (overlay) overlay.classList.remove('active');
-    localStorage.setItem(ONBOARDING_KEY, '1');
+    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch (_) {}
 }
 
 /**

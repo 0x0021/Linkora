@@ -129,7 +129,7 @@ function _renderCardBody(body, imagePathMap) {
         const rel = imagePathMap && imagePathMap[key];
         if (rel) {
             const fullUrl = '/api/image/' + rel;
-            return `<img src="${escapeHtml(imgTokUrl(fullUrl))}" class="msg-card-img" alt="卡片图片" loading="lazy" onclick="openImageLightbox(this.src)">`;
+            return `<img src="${escapeHtml(imgTokUrl(fullUrl))}" class="msg-card-img" alt="卡片图片" loading="lazy" decoding="async" onclick="openImageLightbox(this.src)">`;
         }
         return imgPlaceholder;
     };
@@ -193,6 +193,8 @@ function _renderText(text) {
     s = s.replace(/\[([^\]]*)\]\(([^)]*?)\)/g, (_match, label, url) => {
         const cleanUrl = url.replace(/\s+/g, '');
         if (!cleanUrl) return _match;
+        // 协议白名单：仅允许 http/https/mailto，阻断 javascript:/data: 等 XSS 注入
+        if (!/^(https?:|mailto:)/i.test(cleanUrl)) return _match;
         return `<a class="msg-inline-link" href="${cleanUrl}" target="_blank" rel="noopener">${label}</a>`;
     });
     // **加粗**
@@ -267,6 +269,18 @@ async function loadMessages() {
     const threadMeta = document.getElementById('msg-thread-meta');
     if (!listContainer || !thread) return;
 
+    // 键盘可达性：会话项为按钮语义，Enter/Space 触发点击（事件委托，幂等）
+    if (!listContainer._kbdBound) {
+        listContainer.addEventListener('keydown', (e) => {
+            const t = e.target;
+            if ((e.key === 'Enter' || e.key === ' ') && t && t.classList && t.classList.contains('conversation-item')) {
+                e.preventDefault();
+                t.click();
+            }
+        });
+        listContainer._kbdBound = true;
+    }
+
     const filteredConversations = conversations.filter(c => {
         const name = (c.chat_name || c.chat_id || '').toLowerCase();
         return name.includes(search.toLowerCase());
@@ -323,7 +337,7 @@ async function loadMessages() {
                 const avatarHtml = isOther
                     ? '<div class="conv-avatar conv-avatar-other"><i class="fa-solid fa-bell"></i></div>'
                     : `<div class="conv-avatar" style="background:${color}">${escapeHtml(initial)}</div>`;
-                return `<div class="conversation-item ${c.chat_id === activeChatId ? 'active' : ''}" data-chat-id="${escapeHtml(c.chat_id)}" onclick="${clickHandler}">
+                return `<div class="conversation-item ${c.chat_id === activeChatId ? 'active' : ''}" role="button" tabindex="0" data-chat-id="${escapeHtml(c.chat_id)}" onclick="${clickHandler}">
                     ${batchCb}${avatarHtml}
                     <div class="conv-main">
                         <div class="conv-row1">
@@ -449,7 +463,7 @@ async function renderThread(chatId, conversations) {
             // 图片部分
             if (imgUrl) {
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
-                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(imgTokUrl(imgUrl))}" class="chat-image" alt="对话图片" loading="lazy" onclick="openImageLightbox(this.src)"/></div>`;
+                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(imgTokUrl(imgUrl))}" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox(this.src)"/></div>`;
             } else {
                 // 无 image_url 时用优雅占位提示（后端 OCR 可能未回写 path）
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
@@ -465,7 +479,7 @@ async function renderThread(chatId, conversations) {
             const isImageMsg = !!(m.image_url);
             if (isImageMsg) {
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
-                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(imgTokUrl(m.image_url))}" class="chat-image" alt="对话图片" loading="lazy" onclick="openImageLightbox(this.src)"/></div>`;
+                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(imgTokUrl(m.image_url))}" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox(this.src)"/></div>`;
             } else if (m.msg_type === 'image') {
                 // image 类型但没有 image_url 的兜底
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
@@ -1140,7 +1154,11 @@ async function _msgBatchDelete() {
     if (ids.length === 0) return;
     if (!confirm('确认删除 ' + ids.length + ' 个会话的历史消息？此操作不可恢复！')) return;
     try {
-        await api.post('/api/messages/batch-delete', { chat_ids: ids });
+        const res = await api.post('/api/messages/batch-delete', { chat_ids: ids });
+        if (!res || res.error) {
+            toast('批量删除失败: ' + (res && res.error ? res.error : '未知错误'));
+            return;
+        }
         _msgSelected = {};
         _msgBatchMode = false;
         toast('已删除 ' + ids.length + ' 个会话的消息');

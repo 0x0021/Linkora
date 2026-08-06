@@ -61,6 +61,7 @@
     </script>
 </head>
 <body>
+    <a class="skip-link" href="#main-content">跳到主内容</a>
     <div class="app-layout">
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -72,7 +73,7 @@
             <nav class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">总览</div>
-                    <a href="#" class="nav-item active" data-page="dashboard">
+                    <a href="#" class="nav-item active" data-page="dashboard" aria-current="page">
                         <span class="nav-icon"><i class="fa-solid fa-chart-bar"></i></span>
                         <span class="nav-text">仪表盘</span>
                     </a>
@@ -169,7 +170,7 @@
         <!-- 移动端侧边栏遮罩层 -->
         <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <header class="topbar">
                 <div class="topbar-left">
                     <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="切换导航菜单" title="菜单">
@@ -276,7 +277,7 @@
                                         <div class="stat-value" id="stat-kb-docs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
                                         <div class="stat-label">知识库文档</div>
                                     </div>
-                                    <div class="stat-card stat-card-v" id="stat-card-ddocs" onclick="showDingtalkImportModal()" style="cursor:pointer">
+                                    <div class="stat-card stat-card-v" id="stat-card-ddocs" role="button" tabindex="0" onclick="showDingtalkImportModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showDingtalkImportModal();}" style="cursor:pointer">
                                         <div class="stat-icon"><i class="fa-solid fa-file-lines"></i></div>
                                         <div class="stat-value" id="stat-ddocs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
                                         <div class="stat-label">钉钉文档</div>
@@ -1146,9 +1147,9 @@
 
                     <!-- Tab navigation -->
                     <div class="intent-tabs">
-                        <button class="intent-tab-btn active" data-tab="overview" onclick="switchIntentTab('overview')">概览</button>
-                        <button class="intent-tab-btn" data-tab="history" onclick="switchIntentTab('history')">决策追踪</button>
-                        <button class="intent-tab-btn" data-tab="routetrace" onclick="switchIntentTab('routetrace')">路由追踪</button>
+                        <button class="intent-tab-btn active" role="tab" aria-selected="true" data-tab="overview" onclick="switchIntentTab('overview')">概览</button>
+                        <button class="intent-tab-btn" role="tab" aria-selected="false" data-tab="history" onclick="switchIntentTab('history')">决策追踪</button>
+                        <button class="intent-tab-btn" role="tab" aria-selected="false" data-tab="routetrace" onclick="switchIntentTab('routetrace')">路由追踪</button>
                     </div>
 
                     <!-- Tab: 概览 -->
@@ -3033,7 +3034,7 @@
                 <button class="modal-close" onclick="closeImportModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body">
-                <div class="upload-area" id="upload-area" onclick="document.getElementById('import-file').click()">
+                <div class="upload-area" id="upload-area" role="button" tabindex="0" onclick="document.getElementById('import-file').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('import-file').click();}">
                     <div class="upload-icon"><i class="fa-solid fa-folder"></i></div>
                     <p>点击或拖拽文件到此处上传</p>
                     <p class="hint">支持 JSON、CSV、TXT 格式</p>
@@ -3412,7 +3413,7 @@
 
     <!-- Toast -->
     <div class="toast-container">
-        <div class="toast" id="toast"></div>
+        <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
 
     <!-- Bootstrap 5 JS -->

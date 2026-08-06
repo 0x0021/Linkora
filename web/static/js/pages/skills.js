@@ -455,7 +455,12 @@ async function installFromMarketplace(slug) {
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 安装中...'; }
     }
     try {
-        await api.post('/api/skills/marketplace/install', { slug });
+        const res = await api.post('/api/skills/marketplace/install', { slug });
+        if (!res || res.error) {
+            showToast(`安装失败: ${res && res.error ? res.error : '未知错误'}`, 'error');
+            renderMarketplace();  // 还原按钮
+            return;
+        }
         showToast(`技能 ${slug} 安装成功`, 'success');
         _installedSkillNames.add(slug);
         loadSkillsPage();      // 刷新已安装列表
@@ -549,8 +554,8 @@ async function loadSkillsPage() {
                        <div class="platform-toggle-wrap">
                          <button class="btn btn-xs platform-action-btn" onclick="togglePlatformDropdown(event, '${escapeHtml(s.name)}')">设为专有 ▾</button>
                          <div class="platform-dropdown" id="pdd-${escapeHtml(s.name)}" style="display:none;">
-                           <div class="platform-dropdown-item" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'dingtalk')"><i class="fa-solid fa-message" style="margin-right:4px;color:#1677ff;"></i>钉钉专属</div>
-                           <div class="platform-dropdown-item" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'feishu')"><i class="fa-solid fa-feather" style="margin-right:4px;color:#3370ff;"></i>飞书专属</div>
+                           <div class="platform-dropdown-item" role="menuitem" tabindex="0" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'dingtalk')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setSkillPlatform('${escapeHtml(s.name)}', 'dingtalk');}"><i class="fa-solid fa-message" style="margin-right:4px;color:#1677ff;"></i>钉钉专属</div>
+                           <div class="platform-dropdown-item" role="menuitem" tabindex="0" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'feishu')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setSkillPlatform('${escapeHtml(s.name)}', 'feishu');}"><i class="fa-solid fa-feather" style="margin-right:4px;color:#3370ff;"></i>飞书专属</div>
                            <div class="platform-dropdown-item" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'wecom')"><i class="fa-solid fa-building" style="margin-right:4px;color:#8b5cf6;"></i>企微专属</div>
                          </div>
                        </div>`;

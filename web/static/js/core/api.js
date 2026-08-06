@@ -14,20 +14,24 @@ class ApiClient {
     }
 
     _loadAuth() {
-        const creds = localStorage.getItem('web_auth');
-        if (creds) {
-            this._auth = creds;
+        try {
+            const creds = localStorage.getItem('web_auth');
+            if (creds) {
+                this._auth = creds;
+            }
+        } catch (_) {
+            // Safari 无痕/禁用存储时会抛 SecurityError，降级为未登录（不影响内存态运行）
         }
     }
 
     setAuth(username, password) {
         this._auth = 'Basic ' + btoa(unescape(encodeURIComponent(username + ':' + password)));
-        localStorage.setItem('web_auth', this._auth);
+        try { localStorage.setItem('web_auth', this._auth); } catch (_) {}
     }
 
     clearAuth() {
         this._auth = null;
-        localStorage.removeItem('web_auth');
+        try { localStorage.removeItem('web_auth'); } catch (_) {}
     }
 
     isAuthenticated() {

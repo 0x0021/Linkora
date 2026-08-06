@@ -230,10 +230,12 @@ let _decisionsHistoryFilters = {};
 function switchIntentTab(tab) {
     document.querySelectorAll('.intent-tab-btn').forEach(b => {
         b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
     });
     const btn = document.querySelector(`.intent-tab-btn[data-tab="${tab}"]`);
     if (btn) {
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
     }
     document.querySelectorAll('.intent-tab-pane').forEach(p => {
         p.classList.remove('active');

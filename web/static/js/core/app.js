@@ -224,7 +224,11 @@ function switchPage(page) {
     closeSidebar();
     // 先更新 DOM，再更新状态变量，消除 currentPage 与 DOM 的不一致窗口
     document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.page === page);
+        const on = item.dataset.page === page;
+        item.classList.toggle('active', on);
+        // 可访问性：用 aria-current 标记当前导航项，便于屏幕阅读器识别（WCAG 4.1.2）
+        if (on) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
     });
     document.querySelectorAll('.page').forEach(p => {
         p.classList.toggle('active', p.id === `page-${page}`);
@@ -293,6 +297,7 @@ function switchPage(page) {
     if (page === 'persona') { window.loadPersonaPage && window.loadPersonaPage(); }
     if (page === 'metrics') { loadMetricsPage(); startMetricsPolling(); window.loadMetricsReliability && window.loadMetricsReliability(); }
     if (page === 'cost-quality') { loadCostQualityPage(); startCostQualityPolling(); }
+    else { stopCostQualityPolling(); }
     if (page === 'simulate') { window.loadSimulatePage && window.loadSimulatePage(); }
 }
 
@@ -656,6 +661,7 @@ function hideLoginOverlay() {
 }
 
 async function doLogin() {
+    if (window.__loginInProgress) return;  // 防连按回车/重复提交
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     const errorEl = document.getElementById('login-error');
@@ -666,6 +672,8 @@ async function doLogin() {
     }
 
     errorEl.textContent = '';
+    window.__loginInProgress = true;
+    try {
     api.setAuth(username, password);
 
     // 验证凭证：调用一个受保护的 API
@@ -689,6 +697,7 @@ async function doLogin() {
             startRecentMessagesPolling();
             startEmbeddingStatusPolling();
             startRealtimeLogPolling();
+            if (typeof startDecisionPolling === 'function') startDecisionPolling();
         }
     } else if (data && data.error === 'unauthorized') {
         api.clearAuth();
@@ -696,6 +705,12 @@ async function doLogin() {
     } else {
         api.clearAuth();
         errorEl.textContent = '登录失败，请检查网络或服务状态';
+    }
+    } catch (e) {
+        api.clearAuth();
+        errorEl.textContent = '登录失败，请检查网络或服务状态';
+    } finally {
+        window.__loginInProgress = false;
     }
 }
 

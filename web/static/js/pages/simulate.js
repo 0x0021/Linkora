@@ -482,6 +482,7 @@ function clearSimulate() {
 }
 
 async function sendSimulatedMessage() {
+    if (window.__simSending) return;  // 防连按/快捷键重复发送昂贵的 LLM 请求
     const content = document.getElementById('simulate-content').value.trim();
     const senderName = document.getElementById('simulate-sender').value.trim();
     const enableStream = document.getElementById('simulate-stream').checked;
@@ -509,6 +510,7 @@ async function sendSimulatedMessage() {
     `);
     statusArea.innerHTML = '';
 
+    window.__simSending = true;
     const startTime = Date.now();
 
     try {
@@ -566,6 +568,8 @@ async function sendSimulatedMessage() {
                 'var(--brand-danger)'
             ));
         _resetSimulateCards();
+    } finally {
+        window.__simSending = false;
     }
 }
 

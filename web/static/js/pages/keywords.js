@@ -68,7 +68,7 @@ async function loadKeywords() {
     const tbody = document.getElementById('kw-body');
     try {
         const data = await api.getKeywords("", search);
-        if (!data) {
+        if (!data || data.error) {
             tbody.innerHTML = '<tr><td colspan="8" class="empty-cell" style="text-align:center;">加载失败，请重试</td></tr>';
             showToast('关键词列表加载失败', 'error');
             return;
@@ -177,6 +177,7 @@ function closeKeywordModal() {
 }
 
 async function saveKeyword() {
+    if (window.__kwSaving) return;  // 防双击重复提交创建重复规则
     const id = document.getElementById('kw-modal-id').value;
     const data = {
         match_pattern: document.getElementById('kw-modal-pattern').value.trim(),
@@ -191,6 +192,7 @@ async function saveKeyword() {
         return;
     }
 
+    window.__kwSaving = true;
     try {
     let result;
     if (id) {
@@ -209,6 +211,8 @@ async function saveKeyword() {
     } catch (e) {
         console.error('saveKeyword failed:', e);
         showToast('保存失败', 'error');
+    } finally {
+        window.__kwSaving = false;
     }
 }
 

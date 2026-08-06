@@ -667,7 +667,7 @@ async function refreshDingtalkImportList() {
         }
         listEl.innerHTML = data.docs.map(doc => `
             <div class="list-item ${ddocImportSelectedId === doc.doc_id ? 'selected' : ''}" 
-                 onclick="selectDingtalkImportDoc('${doc.doc_id}', this)">
+                 data-doc-id="${escapeHtml(doc.doc_id)}" onclick="selectDingtalkImportDoc(this.dataset.docId, this)">
                 <div class="list-item-title">${escapeHtml(doc.title)}</div>
                 <div class="list-item-meta">${formatTime(doc.synced_at)}</div>
             </div>

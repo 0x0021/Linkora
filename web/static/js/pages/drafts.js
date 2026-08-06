@@ -426,7 +426,11 @@ async function _draftBatchApprove() {
     if (ids.length === 0) return;
     if (!confirm('确认批准发送选中的 ' + ids.length + ' 条草稿？')) return;
     try {
-        await api.post('/api/drafts/batch-approve', { ids: ids });
+        const res = await api.post('/api/drafts/batch-approve', { ids: ids });
+        if (!res || res.error) {
+            toast('批量批准失败: ' + (res && res.error ? res.error : '未知错误'));
+            return;
+        }
         _draftSelected = {};
         toast('已批准发送 ' + ids.length + ' 条草稿');
         _draftPage = 1;
@@ -442,7 +446,11 @@ async function _draftBatchReject() {
     if (ids.length === 0) return;
     if (!confirm('确认拒绝 ' + ids.length + ' 条草稿（标记为已丢弃）？')) return;
     try {
-        await api.post('/api/drafts/batch-reject', { ids: ids });
+        const res = await api.post('/api/drafts/batch-reject', { ids: ids });
+        if (!res || res.error) {
+            toast('批量拒绝失败: ' + (res && res.error ? res.error : '未知错误'));
+            return;
+        }
         _draftSelected = {};
         toast('已拒绝 ' + ids.length + ' 条草稿');
         _draftPage = 1;

@@ -270,3 +270,19 @@
 .chat-empty-text {
     font-size: 0.875rem;
 }
+
+/* 窄屏（移动端）布局：会话栏改为顶部可滚动区域，避免挤压正文至不可操作 */
+@media (max-width: 768px) {
+    .chat-container {
+        flex-direction: column;
+    }
+    .chat-sidebar {
+        width: 100%;
+        max-height: 38vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .chat-main {
+        min-width: 0;
+    }
+}

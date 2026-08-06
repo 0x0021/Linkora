@@ -825,7 +825,7 @@ let realtimeLogPolling = null;
 let logAutoScroll = true;
 
 function renderLogLine(l) {
-    const raw = String(l.level || 'INFO').toUpperCase();
+    const raw = escapeHtml(String(l.level || 'INFO').toUpperCase());
     const cls = 'rt-level-' + raw.toLowerCase();
     const ts = escapeHtml((l.ts || '').slice(-8));        // 仅显示 HH:MM:SS
     const fullTs = escapeHtml(l.ts || '');

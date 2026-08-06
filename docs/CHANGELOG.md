@@ -18,6 +18,24 @@
 - **fix(ci)**: 修复 ruff 全量清零（768→0）时误删重导出，导致 `test` 与 `type-check` 回归的问题，恢复 `web/api.py`、`src/platform/runtime.py` 等的 re-export。
 - **docs**: README 添加灵桥宣传配图（GitHub Pages 相对引用 `docs/banner.png`）。
 
+### 前端可访问性与性能打磨
+- **a11y(web)**: 新增「跳到主内容」跳过链接（锚点 `#main-content`），键盘 Tab 首个可聚焦元素即可绕过侧栏导航，满足 WCAG 2.4.1 绕过区块。
+- **a11y(web)**: 全局 toast 提示增加 `role="status"` + `aria-live="polite"` + `aria-atomic="true"`，状态消息可被屏幕阅读器播报（WCAG 4.1.3 状态消息）。
+- **a11y(web)**: 侧栏导航当前项改用 `aria-current="page"` 标记（切换页与初始态均覆盖），替代仅视觉 `.active`（WCAG 4.1.2 名称/角色/值）。
+- **perf(web)**: 消息/对话图片统一加 `decoding="async"`，与既有 `loading="lazy"` 配合降低主线程解码阻塞。
+
+### 前端缺陷修复（深度审计）
+- **security(web)**: 消息渲染的 markdown 链接增加协议白名单校验，仅允许 `http/https/mailto`，阻断 `javascript:`/`data:` 等存储型 XSS 注入（外部会话可诱导管理员点击窃取 `web_auth` 凭据）。
+- **fix(web)**: `ApiClient` 构造与 `setAuth`/`clearAuth` 的 `localStorage` 访问全部包 `try/catch`，Safari 无痕/禁用存储抛 `SecurityError` 时降级为未登录而非整站白屏；引导标记 `localStorage` 写入同步兜底。
+- **fix(web)**: 批量批准/拒绝草稿、批量删除会话消息、安装技能市场等写操作，由「api 永不 reject 导致失败仍报成功」改为显式检查 `res.error` 再提示成功，杜绝不可恢复操作的误报成功。
+- **fix(web)**: `switchPage` 离开 cost-quality 页时显式 `stopCostQualityPolling()`，修复离开后 `setInterval` 永久运行持续请求并回写已隐藏 DOM 的轮询泄漏。
+- **fix(web)**: 关键词列表加载失败时（返回 `{error}` 真值）不再误渲染「暂无规则」空态，正确提示加载失败。
+- **fix(web)**: `doLogin`、模拟发送、关键词保存增加「进行中」标志防连按/快捷键重复提交（避免重复昂贵 LLM 请求与重复规则）。
+- **fix(web)**: 登录成功路径补 `startDecisionPolling()`，与 `switchPage` 路径一致，避免登录后仪表盘决策流不刷新。
+- **perf(web)**: 消息页 `.chat-sidebar` 增加 `max-width:768px` 媒体查询，窄屏改为顶部可滚动区域，正文区不再被挤压至不可操作。
+- **a11y(web)**: 消息会话项、技能平台下拉项、仪表盘钉钉文档卡、导入上传区等可点击元素补 `role`/`tabindex`/键盘 `Enter`·`Space` 激活；意图页 tab 加 `role="tab"` 且 `switchIntentTab` 同步 `aria-selected`。
+- **fix(web)**: 钉钉文档导入项 `onclick` 由内联 JS 字符串字面量改为 `data-doc-id` 属性 + 事件读取，杜绝 `doc_id` 含单引号越出属性的注入；日志级别 `title` 属性增加 `escapeHtml` 防御。
+
 ---
 
 ## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一

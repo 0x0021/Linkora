@@ -161,3 +161,24 @@ jobs:
         with:
           name: pyright-report
           path: pyright-report.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 安装前端依赖
+        run: npm ci
+
+      - name: 前端测试（vitest）
+        # 防前端回归：覆盖 api 客户端、工具函数、页面关键逻辑。
+        # 仅跑既有 vitest 套件，不引入 eslint/axe（避免新依赖与存量告警阻塞 CI）。
+        run: npm run test:frontend

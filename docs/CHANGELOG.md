@@ -36,6 +36,14 @@
 - **a11y(web)**: 消息会话项、技能平台下拉项、仪表盘钉钉文档卡、导入上传区等可点击元素补 `role`/`tabindex`/键盘 `Enter`·`Space` 激活；意图页 tab 加 `role="tab"` 且 `switchIntentTab` 同步 `aria-selected`。
 - **fix(web)**: 钉钉文档导入项 `onclick` 由内联 JS 字符串字面量改为 `data-doc-id` 属性 + 事件读取，杜绝 `doc_id` 含单引号越出属性的注入；日志级别 `title` 属性增加 `escapeHtml` 防御。
 
+### 前端工程化与可访问性深化（工具层 / 焦点陷阱 / 全局错误 / CI 门禁）
+- **refactor(web)**: 抽公共工具层 `web/static/js/core/util.js`（`escapeHtml`/`setText` 单一来源），在模板中于 `store.js` 之后、`app.js` 之前加载；删除 `app.js` 与 `routetrace.js` 的重复定义（原靠加载顺序覆盖，routetrace 版本为死代码），消除脆弱性；`api.py` 模板上下文补 `core_util_js_v`。
+- **a11y(web)**: 模态框增加焦点陷阱（Tab/Shift+Tab 在 `role="dialog"` 内循环），补齐 WCAG 2.4.3 焦点顺序；错误类 toast 动态切 `role="alert"`，与既有 `role="status"` 区分紧急度。
+- **fix(web)**: `ApiClient._fetchWithRetry` 增加全局错误反馈层（`_notifyGlobalError`），网络错误/超时/5xx 重试耗尽时统一 `showToast(..., 'error')`，替代原先仅 `console.error` 静默。
+- **ci(web)**: `ci.yml` 新增 `frontend` job（Node 22 + `npm ci` + `npm run test:frontend`），与 Python lint/test/type-check 并列，防前端回归（不引入 eslint/axe 以免新依赖与存量告警阻塞 CI）。
+- **perf(web)**: 评估脚本 `defer` 化——底部脚本已居 `</body>` 末，`defer` 收益可忽略；真正瓶颈为 40+ CSS/30+ JS 请求数，需构建链路合并，留作后续独立提案（动部署链路，审慎推进）。
+- **a11y(web)**: 移动端响应式审计——dashboard 已有 760px、messages 已有 768px 断点；skills/cost-quality 无专属 CSS，依赖 Bootstrap 栅格与通用 `dataTable` 组件（已自带响应式），无需硬加断点。
+
 ---
 
 ## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一

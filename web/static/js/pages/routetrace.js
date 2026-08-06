@@ -599,15 +599,6 @@ function stopRouteTracePolling() {
     if (_rtPolling) { clearInterval(_rtPolling); _rtPolling = null; }
 }
 
-function setText(id, txt) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = txt;
-}
-
-function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
 // 解析「被停用技能级联屏蔽」的工具列表（落库为 JSON 数组字符串）
 function parseBlockedList(raw) {
     if (Array.isArray(raw)) return raw;

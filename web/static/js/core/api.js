@@ -57,6 +57,14 @@ class ApiClient {
         }
     }
 
+    // 全局错误反馈层：网络/超时/5xx 等不可恢复异常统一提示（复用 showToast 的 error 角色）。
+    // showToast 由 app.js 在运行时挂载到 window，api.js 先加载不影响（调用发生在用户操作之后）。
+    _notifyGlobalError(msg) {
+        if (typeof window.showToast === 'function') {
+            try { window.showToast(msg, 'error'); } catch (_) {}
+        }
+    }
+
     _downloadBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -140,6 +148,8 @@ class ApiClient {
             if (this._retryConfig.retryOnStatus.includes(res.status) && retries < this._retryConfig.maxRetries) {
                 await new Promise(r => setTimeout(r, this._retryConfig.retryDelay * (retries + 1)));
                 return this._fetchWithRetry(url, method, body, retries + 1);
+            } else if (this._retryConfig.retryOnStatus.includes(res.status)) {
+                this._notifyGlobalError(`服务端错误（${res.status}），请稍后重试`);
             }
 
             const ct = (res.headers.get('content-type') || '').toLowerCase();
@@ -154,8 +164,10 @@ class ApiClient {
             return json;
         } catch (e) {
             if (e.name === 'AbortError') {
+                this._notifyGlobalError(`请求超时（${timeoutMs / 1000}s），请检查网络后重试`);
                 return { error: 'timeout', message: `请求超时（${timeoutMs / 1000}s）` };
             }
+            this._notifyGlobalError('网络请求失败，请检查网络连接');
             console.error('[api] fetch 异常:', url, e);
             return { error: 'network_error', message: e.message };
         } finally {

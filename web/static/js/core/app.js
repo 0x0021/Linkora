@@ -104,7 +104,8 @@ function showToast(message, type = 'success') {
     if (!toast) return;
     toast.textContent = message;
     toast.className = `toast show ${type}`;
-    setTimeout(() => { toast.className = 'toast'; }, 3000);
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    setTimeout(() => { toast.className = 'toast'; toast.setAttribute('role', 'status'); }, 3000);
 }
 // 暴露到 window，供按页拆分的模块（如 persona.js）复用，避免 fallback 到 console
 window.showToast = showToast;
@@ -153,16 +154,6 @@ function renderPager_go(containerId, page, pageSize) {
     const cb = window.__pagerCb && window.__pagerCb[containerId];
     if (typeof cb === 'function') cb(page, pageSize);
     return false;
-}
-
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 // 将 UTC ISO 字符串（来自决策追踪器 datetime.now(timezone.utc).isoformat()）
@@ -849,6 +840,17 @@ window.debouncedFilterThread = debounce(filterThread, 300);
 
     // Esc 关闭最上层模态框
     document.addEventListener('keydown', e => {
+        if (e.key === 'Tab') {
+            const m = topModal();
+            if (m) {
+                const f = m.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])');
+                if (f.length === 0) { e.preventDefault(); return; }
+                const first = f[0];
+                const last = f[f.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        }
         if (e.key === 'Escape') {
             const m = topModal();
             if (m) { e.preventDefault(); closeModal(m); }

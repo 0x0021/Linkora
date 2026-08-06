@@ -783,6 +783,7 @@ async def index():
             # 每个 core 脚本使用自身 mtime 版本号（不能共用 app_js_v，否则改 core/app.js 后浏览器仍用旧缓存）
             core_api_js_v=v("js/core/api.js"),
             core_store_js_v=v("js/core/store.js"),
+            core_util_js_v=v("js/core/util.js"),
             core_app_js_v=v("js/core/app.js"),
             core_onboarding_js_v=v("js/core/onboarding.js"),
             theme_js_v=v("js/theme.js"),

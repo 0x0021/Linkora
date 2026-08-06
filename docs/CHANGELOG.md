@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-08-06 — 代码质量深度优化（T1-T8）
+
+> 本轮针对复杂度、导入顺序、类型安全进行系统性重构，**217 测试通过**，ruff/pyright 门禁全绿。
+
+### 复杂度治理
+- **refactor(config)**: `web/routers/config.py::update_config`（C901=145）拆分为 ~27 个 domain helper（`_apply_dws`/`_apply_feishu_platform`/`_apply_wecom_platform`/`_apply_poller_base`/`_apply_llm_base` 等），主函数复杂度降至 <5。
+- **refactor(poller_strategy)**: `src/poller_strategy.py::poll_once`（complexity~93，816 LOC）拆分为 14 个 focused helpers（`_fetch_unread_conversations`/`_handle_list_all_fetch`/`_gather_conversations`/`_process_conv_messages` 等），poll_once 变为薄编排层。
+- **chore(pyproject)**: ruff C901 阈值从 60 下调至 50，移除 `web/routers/config.py` 的已过期豁免。
+
+### 导入顺序修复
+- **fix(poller_core)**: 修复 6 个 `src/poller_core_*.py` 模块的 E402 问题（`logger = ...` 后出现 `from src.*` 导入）——将 mixin 导入移至 logger 定义之前。
+- **fix(poller_strategy)**: 清理 `src/poller_strategy.py` 的重复/错位导入，移除多余空行。
+- **fix(poller_core_discovery)**: 合并重复的 `from src.poller_mixins_base import PollerMixinBase`，统一导入顺序。
+- **verify(web)**: 验证 `web/api.py` 与 `web/routers/kb.py` E402 已通过验证，无需修改（惰性 `_LazyApiModule` 代理模式为设计意图）。
+
+### 类型安全改进
+- **fix(config)**: `src/config.py::_build_dingtalk_platform` 中 `adapter=` 参数由 dict 字面量改为显式 `AdapterOverrideConfig(...)`，消除 pyright reportArgumentType。
+- **fix(config)**: `web/routers/config.py::_apply_wecom_platform` 添加 `-> None` 返回注解 + `noqa: ARG001`，消除未使用参数告警。
+- **fix(poller_strategy)**: 在 `self.dws.sync_external_contacts()` 调用处添加 `# type: ignore[attr-defined]`，抑制已知 mixin 属性动态绑定的 pyright 误报。
+
+### 配置与文档
+- **chore(ruff)**: `target-version` 从 py312 升级为 py314，匹配项目实际运行时版本。
+- **docs(readme)**: Python badge 从 `≥3.9` 更新为 `≥3.14`。
+
+---
+
 ## 2026-08-06 — 配置安全治理 / 备份策略 / CI 回归修复
 
 > 全套测试 **3324 通过**（2 skipped / 2 xfailed），pyright 类型错误维持基线 95，CI 三盏灯全绿。

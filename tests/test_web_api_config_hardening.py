@@ -174,3 +174,48 @@ def test_all_router_annotations_are_runtime_resolvable():
 
     assert checked > 100, f"扫描到的路由函数过少（{checked}），护栏可能已失效"
     assert not bad, "以下路由函数注解无法在运行时求值（FastAPI 会推导不出请求体）：\n  " + "\n  ".join(bad)
+
+
+def test_revert_env_plaintext_to_disk_original(monkeypatch):
+    """来自 .env 的明文密钥（_apply_env_overrides 注入）写回前应还原为磁盘原值，不落盘。"""
+    from web.routers.config import _revert_env_masked_secrets_to_disk
+    secret = "sk-ENV-PLAINTEXT-SECRET-9"
+    monkeypatch.setenv("LLM_API_KEY", secret)
+    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
+    cfg_dict = {
+        "llm": {"api_key": secret, "model": "gpt-4o", "fallback_api_key": ""},
+        "embedding": {"api_key": secret, "hf_token": ""},  # embedding 回退用 LLM_API_KEY
+        "web": {"auth_password": ""},
+        # 平台凭证来自磁盘（用户既有配置），非 env 注入 → 写回保留
+        "platforms": [{"id": "feishu", "adapter": {"app_secret": "fs-real-keep"}}],
+    }
+    disk = {
+        "llm": {"api_key": "***", "model": "gpt-4o", "fallback_api_key": ""},
+        "embedding": {"api_key": "", "hf_token": ""},
+        "web": {"auth_password": ""},
+        "platforms": [{"id": "feishu", "adapter": {"app_secret": "***"}}],
+    }
+    _revert_env_masked_secrets_to_disk(cfg_dict, disk)
+    assert cfg_dict["llm"]["api_key"] == "***"            # env 明文 → 磁盘占位符
+    assert cfg_dict["embedding"]["api_key"] == ""          # env 回退明文 → 磁盘空
+    assert cfg_dict["platforms"][0]["adapter"]["app_secret"] == "fs-real-keep"  # 保留
+
+
+def test_revert_user_real_secret_preserved(monkeypatch):
+    """用户经 UI 显式填入的真实新密钥应保留，不丢设置（配置安全红线）。"""
+    from web.routers.config import _revert_env_masked_secrets_to_disk
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    cfg_dict = {"llm": {"api_key": "sk-user-real-new", "model": "gpt-4o"}}
+    disk = {"llm": {"api_key": "***", "model": "gpt-4o"}}
+    _revert_env_masked_secrets_to_disk(cfg_dict, disk)
+    assert cfg_dict["llm"]["api_key"] == "sk-user-real-new"
+
+
+def test_revert_masked_string_to_disk_original(monkeypatch):
+    """前端未改密钥、回传 mask 串（sk-a****）时，写回应还原为磁盘原值，避免半泄露。"""
+    from web.routers.config import _revert_env_masked_secrets_to_disk
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    cfg_dict = {"llm": {"api_key": "sk-a****", "model": "gpt-4o"}}
+    disk = {"llm": {"api_key": "***", "model": "gpt-4o"}}
+    _revert_env_masked_secrets_to_disk(cfg_dict, disk)
+    assert cfg_dict["llm"]["api_key"] == "***"

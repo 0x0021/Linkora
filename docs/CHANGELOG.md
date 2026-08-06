@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-08-06 — 缺陷修复（配置回写/历史清理/日志脱敏/路径可重定位）
+
+> 聚焦真实缺陷扫描结果的修复轮，按严重度排序：**110 项配置相关测试 + 53 项 management/purge 测试全绿**。
+
+### 配置安全（HIGH）
+- **fix(config)**: `update_config` / `update_system_prompt` 写回磁盘前，先把「`.env` 注入的明文密钥」与「`****` 掩码格式字符串」还原为磁盘原始值（新增 `_collect_env_secret_values` / `_MASKED_RE` / `_load_disk_config_raw` / `_revert_env_masked_secrets_to_disk`），杜绝 `load_config` 经 `_apply_env_overrides` 注入的明文密钥被原样落盘到 `config.yaml`。用户**显式新设**的真实密钥仍保留（回归测试 `test_revert_*` 三例守护）。
+
+### 历史清理（MEDIUM）
+- **fix(purge)**: `scripts/purge_polluted_history.py` 原硬编码主库 `data/linkora.db`，但真实消息存于按账号隔离的会话库 `data/conversations/{platform}__{hash}.db`，导致主库 0 命中、脏数据永不清理。改为遍历主库 + 全部会话库，删消息时同步维护 `conversations.message_count`、清空 `conversation_summaries`，并调用 `src.memory.image_cleanup.purge_orphan_images` 清理孤儿图片；缺 `messages` 表的库安全跳过；默认 dry-run，需 `--apply` 才真正执行。
+
+### 恢复默认配置（MEDIUM）
+- **fix(config)**: `restore_default_config` 原用空 `AppConfig()` 整体覆盖，会清空全部用户设置。改为「出厂骨架 `_deep_merge` 当前配置」，仅补全缺失结构、保留全部现有设置，并兜底原配置。
+
+### 日志脱敏（LOW）
+- **fix(poller_strategy)**: `_mask_oid` 统一把 `openDingTalkId` 脱敏为「首尾各 2 位 + `***`」（与 `primary._oid_display` 同格式），修复两处 debug 日志明文打印对方 `openDingTalkId` 的隐私泄漏。
+
+### 路径可重定位（LOW）
+- **fix(management)**: `src/tools/management.py` 三处硬编码 `"config.yaml"`（view/update 回退读取、`update` 落盘）统一改为 `paths.get_config_path()`，尊重打包态/数据目录重定位，不再依赖 CWD 恰好是项目根。
+
+---
+
 ## 2026-08-06 — 代码质量深度优化（T1-T8）
 
 > 本轮针对复杂度、导入顺序、类型安全进行系统性重构，**217 测试通过**，ruff/pyright 门禁全绿。

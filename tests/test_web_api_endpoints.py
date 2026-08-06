@@ -355,6 +355,58 @@ class TestConfigDefault:
         assert resp.status_code == 200
         assert resp.json().get("success") is True or "config" in resp.json()
 
+    def test_restore_default_keeps_existing_config(self, tmp_config, tmp_db):
+        """恢复默认不应丢弃用户既有配置（多平台凭证 / 自定义 llm / storage）。
+
+        回归护栏：原实现用近乎空的 AppConfig(web=...) 直接 model_dump 覆盖写回，
+        会清空 platforms、llm.*、storage.path 等全部用户自定义项。修复后改为
+        深合并（出厂默认作基底 + 当前配置覆盖），用户设置必须全部保留。
+        """
+        import yaml
+        from pathlib import Path
+        from fastapi.testclient import TestClient
+        from web.api import app
+        # 用户既有配置（顶层稳定字段 + 一个平台块），验证「恢复默认」不把它们清空
+        user_cfg = {
+            "platforms": [{"id": "feishu", "adapter": {"app_id": "cli-user", "app_secret": "fs-user-secret"}}],
+            "llm": {"api_key": "***", "model": "gpt-4o-custom", "base_url": "https://user.example.com/v1"},
+            "storage": {"path": "/data/user-store"},
+            "dws": {"cli_path": "/usr/local/bin/dws"},
+            "web": {"auth_enabled": False},
+        }
+        Path(tmp_config).write_text(yaml.dump(user_cfg, allow_unicode=True), encoding="utf-8")
+        client = TestClient(app)
+        resp = client.post("/api/config/default")
+        assert resp.status_code == 200
+        raw = Path(tmp_config).read_text(encoding="utf-8")
+        written = yaml.safe_load(raw)
+        # 用户既有配置应被保留，而非被空壳默认值覆盖清空
+        assert written["llm"]["base_url"] == "https://user.example.com/v1"
+        assert written["llm"]["model"] == "gpt-4o-custom"
+        assert written["storage"]["path"] == "/data/user-store"
+        assert written["dws"]["cli_path"] == "/usr/local/bin/dws"
+
+    def test_deep_merge_preserves_platforms_list(self):
+        """_deep_merge 对 list 整体覆盖（不逐元素合并），用户 platforms 必须完整保留。
+
+        restore_default_config 依赖此语义：以出厂默认作基底、当前配置覆盖，
+        多平台凭证（feishu/wecom app_secret 等）才不会在「恢复默认」时被清空。
+        """
+        from web.routers.config import _deep_merge
+        base = {"platforms": [], "llm": {"model": "default"}}
+        override = {
+            "platforms": [
+                {"id": "feishu", "adapter": {"app_secret": "fs-secret"}},
+                {"id": "wecom", "adapter": {"corp_secret": "wc-secret"}},
+            ],
+            "llm": {"model": "gpt-4o-custom", "base_url": "https://u/v1"},
+        }
+        merged = _deep_merge(base, override)
+        assert len(merged["platforms"]) == 2
+        assert merged["platforms"][0]["adapter"]["app_secret"] == "fs-secret"
+        assert merged["platforms"][1]["adapter"]["corp_secret"] == "wc-secret"
+        assert merged["llm"]["base_url"] == "https://u/v1"
+
 
 # ============ /api/config/export ============
 

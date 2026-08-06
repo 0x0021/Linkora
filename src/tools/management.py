@@ -5,6 +5,7 @@ import psutil
 import time
 
 from src.config import load_config
+from src.paths import get_config_path
 from src.dws_adapter import DwsAdapter
 from src.tools.base import BaseTool
 from src.memory.sqlite_store import SQLiteStore
@@ -82,7 +83,7 @@ class SystemStatusTool(BaseTool):
         cfg = self.config
         if cfg is None:
             try:
-                cfg = load_config("config.yaml")
+                cfg = load_config(get_config_path())
             except Exception as e:
                 logger.debug("load_config failed: %s", e)
                 cfg = None
@@ -381,7 +382,7 @@ class ConfigManageTool(BaseTool):
         action = args.get("action", "view")
 
         try:
-            config = load_config("config.yaml")
+            config = load_config(get_config_path())
 
             if action == "view":
                 section = args.get("section")
@@ -416,7 +417,7 @@ class ConfigManageTool(BaseTool):
 
                 import yaml
 
-                config_path = "config.yaml"
+                config_path = get_config_path()
                 with open(config_path, "r", encoding="utf-8") as f:
                     config_dict = yaml.safe_load(f)
 

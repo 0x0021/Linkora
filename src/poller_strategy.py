@@ -17,6 +17,16 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
+
+def _mask_oid(oid: str) -> str:
+    """脱敏 openDingTalkId / userId 等敏感标识：仅保留首尾各 2 位（参考 primary._oid_display）。
+
+    避免敏感标识明文落日志（CWE-532）。
+    """
+    if not oid:
+        return ""
+    return f"{oid[:2]}***{oid[-2:]}" if len(oid) > 4 else "***"
+
 # 注：早期版本的"单聊已读不回复"闸门已移除——它依赖 DWS 未读接口判断，
 # 而 bot 回复后该会话会移出未读列表、对方追问又不回填，导致漏回消息（"为什么不回复我"）。
 # 现改为对每条新消息都正常回复（行为见 poll_once / discovery 主流程）。
@@ -575,7 +585,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     peer_oid_from_msgs = candidate_oid
                     break
             if peer_oid_from_msgs:
-                logger.debug("[轮询器] 正在更新 %s 的对方信息：openDingTalkId=%s", open_id, peer_oid_from_msgs)
+                logger.debug("[轮询器] 正在更新 %s 的对方信息：openDingTalkId=%s", _mask_oid(open_id), _mask_oid(peer_oid_from_msgs))
                 self.store._conversation_repo.upsert_conversation(
                     open_id, title, "single",
                     peer_open_dingtalk_id=peer_oid_from_msgs
@@ -699,7 +709,7 @@ class PollerStrategyMixin(PollerMixinBase):
             peer_id = conv_messages[0].sender_id
             peer_name = conv_messages[0].sender_name
             if peer_id and (not peer.get("open_dingtalk_id") and not peer.get("user_id")):
-                logger.debug("[轮询器] 从消息中更新对方信息：%s → %s", open_id, peer_id)
+                logger.debug("[轮询器] 从消息中更新对方信息：%s → %s", _mask_oid(open_id), _mask_oid(peer_id))
                 self.store._conversation_repo.upsert_conversation(
                     open_id, peer_name or title, "single",
                     peer_open_dingtalk_id=peer_id,

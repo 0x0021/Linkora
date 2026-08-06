@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -485,18 +486,20 @@ async def restore_default_config():
         backup_path = _api.CONFIG_PATH + ".bak"
         if Path(_api.CONFIG_PATH).exists():
             shutil.copy2(_api.CONFIG_PATH, backup_path)
-        default_config = AppConfig(web={"auth_enabled": True, "auth_password": "please-change-me"})
+        # 出厂默认骨架（仅 web 段最小设定），其余段为 AppConfig 默认值
+        default_skeleton = AppConfig(web={"auth_enabled": True, "auth_password": "please-change-me"}).model_dump()
+        merged = default_skeleton
         try:
             current = _api.load_config(_api.CONFIG_PATH)
-            default_config.embedding.enabled = current.embedding.enabled
-            default_config.embedding.provider = current.embedding.provider
-            default_config.skills.ai_intent_generation_enabled = current.skills.ai_intent_generation_enabled
-            if current.tools.rate_limit:
-                default_config.tools.rate_limit = current.tools.rate_limit
-        except Exception:
-            pass
-        _api._write_config(default_config.model_dump())
-        return {"success": True, "message": f"已恢复默认配置（原配置备份为 {backup_path}；已保留 embedding/skills 已开启的核心开关与限频）"}
+            # 深合并：以出厂默认作基底，用当前磁盘配置（用户全部既有设置）覆盖，
+            # 既补齐缺失结构，又不丢弃任何用户参数（多平台凭证、自定义 llm/storage 等均保留）。
+            merged = _deep_merge(default_skeleton, current.model_dump())
+        except Exception as e:
+            logger.warning("[config] 读取当前配置失败，按纯出厂默认骨架恢复: %s", e)
+        # 写回前：还原被 env 注入的明文密钥为磁盘原值，避免明文落盘/泄露
+        _revert_env_masked_secrets_to_disk(merged, _load_disk_config_raw())
+        _api._write_config(merged)
+        return {"success": True, "message": f"已恢复默认配置骨架（原配置备份为 {backup_path}；已保留你的全部现有设置，仅补齐全默认结构）"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -588,7 +591,10 @@ async def update_config(update: ConfigUpdate):
 
         # ---- Validation & save ----
         _validate_update_config(update)
-        wresult = _api._write_config(cfg.model_dump(),
+        cfg_dict = cfg.model_dump()
+        # 写回前：把被 env 明文/mask 污染的 secret 还原为磁盘原值，避免明文落盘
+        _revert_env_masked_secrets_to_disk(cfg_dict, _load_disk_config_raw())
+        wresult = _api._write_config(cfg_dict,
                            changed_keys={"llm", "rag", "poller", "memory", "skills", "embedding"})
         try:
             from src.shared_state import get_config_reload_callback
@@ -690,7 +696,10 @@ async def update_system_prompt(update: SystemPromptUpdate):
     try:
         config = _api.load_config(_api.CONFIG_PATH)
         config.llm.system_prompt = update.system_prompt
-        _api._write_config(config.model_dump())
+        cfg_dict = config.model_dump()
+        # 写回前：即便只改提示词，load_config 仍注入了 env 明文密钥，需还原为磁盘原值
+        _revert_env_masked_secrets_to_disk(cfg_dict, _load_disk_config_raw())
+        _api._write_config(cfg_dict)
         return {"success": True, "message": "系统提示词更新成功"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -741,6 +750,71 @@ def _restore_secrets(imported, current):
             cur = current[i] if isinstance(current, list) and i < len(current) else None
             if isinstance(v, (dict, list)):
                 _restore_secrets(v, cur if isinstance(cur, (dict, list)) else {})
+
+
+def _collect_env_secret_values() -> set[str]:
+    """收集 .env 中会被 _apply_env_overrides 注入 config 的明文密钥值集合。"""
+    env = os.environ
+    vals: set[str] = set()
+    for key in ("LLM_API_KEY", "LLM_FALLBACK_API_KEY",
+                "LLM_SECONDARY_FALLBACK_API_KEY", "EMBEDDING_API_KEY"):
+        v = env.get(key)
+        if v:
+            vals.add(v)
+    return vals
+
+
+# 前端 GET 配置时把密钥 mask 成「前 4 位 + ****」（如 sk-a****），用户未改时
+# 会原样回传。该模式需识别并还原为磁盘原值，避免把半泄露串写回磁盘/备份。
+_MASKED_RE = re.compile(r"^.{4}\*{4}$")
+
+
+def _load_disk_config_raw() -> dict:
+    """读取磁盘 config.yaml 原始内容（不走 load_config，避免混入 env 明文注入）。
+
+    作为 secret 字段的「还原基准」：写回时把被 env/mask 污染的密钥还原为磁盘
+    现有值（通常是占位符或空），确保 config.yaml 与备份不含明文密钥。
+    """
+    p = Path(_api.CONFIG_PATH)
+    if not p.exists():
+        return {}
+    try:
+        import yaml
+        with open(p, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        return data if isinstance(data, dict) else {}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[config] 读取磁盘配置基准失败(best-effort): %s", e)
+        return {}
+
+
+def _revert_env_masked_secrets_to_disk(cfg_dict: dict, disk: dict) -> None:
+    """写回前就地修正：把被 env 明文或前端 mask 串污染的 secret 字段还原为磁盘原值。
+
+    - 来自 .env 的明文（_apply_env_overrides 注入）或与前端 mask 串一致 → 还原为
+      disk 对应原值（占位符/空），杜绝明文落盘/半泄露。
+    - 用户经 UI 显式填入的真实新密钥（既非 env 明文、也非 mask 串）→ 保留，
+      不丢用户主动设置（遵守配置安全红线）。
+    """
+    env_vals = _collect_env_secret_values()
+
+    def walk(cnode: Any, dnode: Any) -> None:
+        if isinstance(cnode, dict):
+            for k, v in list(cnode.items()):
+                d = dnode.get(k) if isinstance(dnode, dict) else None
+                if _is_secret_key(k) and isinstance(v, str) and v:
+                    if v in env_vals or _MASKED_RE.match(v):
+                        # 还原为磁盘原值（忠实，哪怕是历史占位符/空）；无基准则置空
+                        cnode[k] = d if d is not None else ""
+                elif isinstance(v, (dict, list)):
+                    walk(v, d if isinstance(d, (dict, list)) else {})
+        elif isinstance(cnode, list):
+            for i, v in enumerate(cnode):
+                d = dnode[i] if isinstance(dnode, list) and i < len(dnode) else None
+                if isinstance(v, (dict, list)):
+                    walk(v, d if isinstance(d, (dict, list)) else {})
+
+    walk(cfg_dict, disk)
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

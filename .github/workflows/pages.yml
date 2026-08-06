@@ -1,0 +1,46 @@
+name: Pages Build & Deployment
+
+on:
+  push:
+    branches: [main]
+  # 允许手动触发
+  workflow_dispatch:
+
+# 最小权限：仅需要写 pages 部署
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只保留一个实例运行，取消之前的队列
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload docs artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -49,7 +49,11 @@
 - **perf(web)**: 合并在语义上等价于现有多 `<script>` 共享全局作用域（已审计确认无顶层同名 `const/let/class` 冲突，`DOMAIN` 等均在 IIFE 内）；逐文件剥离顶层 `'use strict'` 统一 sloppy，避免严格模式污染；esbuild 仅压缩不重命名顶层函数/var，故 `window.switchPage` 桥接与内联 `onclick` 处理器不受影响。
 - **refactor(web)**: `api.py` 新增 `_read_bundle_manifest()` 读取 `dist/manifest.json` 注入 `bundle_css_v`/`bundle_js_v`；模板 `index.html` 加 `{% if bundle_*_v %}` 分支——有 manifest 走单 bundle，缺失则自动回退逐文件加载（兼容未构建的开发态），`drafts.js` module 始终保留。
 - **test(web)**: 新增 `scripts/smoke_bundle.mjs`（jsdom 求值打包产物，断言 `escapeHtml`/`api`/`store`/`switchPage` 等关键全局符号已挂载、无重复声明错误）；`ci.yml` 的 `frontend` job 增加 `build:frontend` + `smoke_bundle` 步骤，将构建链路纳入门禁。
-- **chore**: `.gitignore` 放行 `web/static/dist/`（根 `dist/` 仍忽略）；`package.json` 加 `esbuild` devDep 与 `build:frontend` 脚本。
+    - **chore**: `.gitignore` 放行 `web/static/dist/`（根 `dist/` 仍忽略）；`package.json` 加 `esbuild` devDep 与 `build:frontend` 脚本。
+
+### 前端性能实测（Lighthouse）与 defer 落地
+- **perf(web)**: 给合并后的单 JS bundle 补 `defer`——脚本在 `DOMContentLoaded` 前按文档顺序执行，bootstrap(3425 立即) 先于它、drafts.js(module 默认 defer, 3472) 后于它，全局桥接（`window.api`/`window.switchPage`）不受影响，且不阻塞 HTML 解析。此前评估「收益可忽略」已被本轮实测佐证（本地 Lighthouse 性能已满分），但补齐规范、对未来脚本前置更 robust，且零功能风险。
+- **perf(web)**: 用 Playwright + Lighthouse 对构建后首页做真实性能审计（本地 localhost，未做网络限速）：**性能 100 / 可访问性 91 / 最佳实践 96**；FCP 0.1s、LCP 0.2s、TBT 0ms、CLS 0、SI 0.5s；首屏总请求 **14**（JS 4 / CSS 3，含 bootstrap vendor 与字体）。较合并前审计基线「首屏 ~70 请求（40+ CSS + 30+ JS 逐文件）」大幅下降，证明 esbuild 合并已彻底消除请求数瓶颈（详见 `docs/frontend-perf-audit.md`）。
 
 ---
 

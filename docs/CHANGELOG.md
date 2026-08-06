@@ -85,6 +85,11 @@
 - **fix(web)**: 删除 `web/api.py::_read_bundle_manifest()` 内冗余的局部 `from pathlib import Path`（模块顶层已导入且 `Path(CONFIG_PATH)` 在用），消除 ruff `F401` 触发 `lint` job 失败（该导入在本函数内未被引用，非重导出陷阱，安全移除）。
 - **ci(frontend)**: `ci.yml` 的 `actions/setup-node` 由 `@v4` 升 `@v7`，消除「Node.js 20 runtime 弃用、被强制跑在 Node 24」的 workflow 告警（与既有 `checkout`/`upload-artifact@v7` 一致）；`node-version: "22"` 与 `cache: npm` 保持不变。
 
+### Pages 构建失败修复（移除冲突 workflow / 静态化部署）
+- **fix(pages)**: 根因是「双部署路径互相打架」——GitHub Pages 源已是 `branch: main /docs`（分支部署，push 自动发布 `docs/`），但仓库里又多了一个自定义 `.github/workflows/pages.yml`（`actions/deploy-pages@v4` 从 `docs/` 打包 artifact 部署）。它与 GitHub 自动的 `pages-build-deployment`（`@v5`，历史曾从仓库根目录打包）抢同一个 `github-pages` 环境，且都用了 `concurrency: group: pages` 互相 `cancel-in-progress`，导致部署卡在 `deployment_queued` 直到超时失败（根目录打包把整个仓库含 `data/` 两千多文件打进 artifact 是主因）。
+- **fix(pages)**: 删除冗余的 `.github/workflows/pages.yml`——分支部署已自带发布能力，该 workflow 纯属冲突源；删除后唯一部署路径就是 GitHub 在 push 到 main 时自动对 `docs/` 的分支部署，不再有并发 cancel / 根目录巨型 artifact。
+- **fix(pages)**: `.nojekyll` 从仓库根目录移到 `docs/.nojekyll`——对「从 `/docs` 分支部署」而言，只有 `docs/` 内的 `.nojekyll` 才生效（根目录的无效），此前加在根目录等于没禁用 Jekyll。`docs/_config.yml` 已声明「静态文件直接托管，无需 Jekyll 渲染」，故 `docs/.nojekyll` 让 `docs/` 以纯静态方式发布（不跑 Jekyll、不踩 Liquid、不超时），`docs/index.html` 作为站点首页。
+
 ---
 
 ## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一

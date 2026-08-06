@@ -765,8 +765,6 @@ def _read_bundle_manifest() -> dict:
     """
     import json
 
-    from pathlib import Path
-
     manifest = get_static_dir() / "dist" / "manifest.json"
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))

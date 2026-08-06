@@ -55,6 +55,10 @@
 - **perf(web)**: 给合并后的单 JS bundle 补 `defer`——脚本在 `DOMContentLoaded` 前按文档顺序执行，bootstrap(3425 立即) 先于它、drafts.js(module 默认 defer, 3472) 后于它，全局桥接（`window.api`/`window.switchPage`）不受影响，且不阻塞 HTML 解析。此前评估「收益可忽略」已被本轮实测佐证（本地 Lighthouse 性能已满分），但补齐规范、对未来脚本前置更 robust，且零功能风险。
 - **perf(web)**: 用 Playwright + Lighthouse 对构建后首页做真实性能审计（本地 localhost，未做网络限速）：**性能 100 / 可访问性 91 / 最佳实践 96**；FCP 0.1s、LCP 0.2s、TBT 0ms、CLS 0、SI 0.5s；首屏总请求 **14**（JS 4 / CSS 3，含 bootstrap vendor 与字体）。较合并前审计基线「首屏 ~70 请求（40+ CSS + 30+ JS 逐文件）」大幅下降，证明 esbuild 合并已彻底消除请求数瓶颈（详见 `docs/frontend-perf-audit.md`）。
 
+### CI 报错清理（lint F401 / Node20 弃用告警）
+- **fix(web)**: 删除 `web/api.py::_read_bundle_manifest()` 内冗余的局部 `from pathlib import Path`（模块顶层已导入且 `Path(CONFIG_PATH)` 在用），消除 ruff `F401` 触发 `lint` job 失败（该导入在本函数内未被引用，非重导出陷阱，安全移除）。
+- **ci(frontend)**: `ci.yml` 的 `actions/setup-node` 由 `@v4` 升 `@v7`，消除「Node.js 20 runtime 弃用、被强制跑在 Node 24」的 workflow 告警（与既有 `checkout`/`upload-artifact@v7` 一致）；`node-version: "22"` 与 `cache: npm` 保持不变。
+
 ---
 
 ## 2026-08-05 — 安全清零 / 类型收敛(F9) / UI 重做 / CI 版本统一

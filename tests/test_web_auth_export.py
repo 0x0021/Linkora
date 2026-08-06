@@ -147,6 +147,58 @@ def test_import_config_restores_redacted_secrets(monkeypatch):
     assert written["dws"]["cli_path"] == "dws"
 
 
+def test_import_config_preserves_unmentioned_sections(monkeypatch):
+    """导入仅含部分段的配置时，未提及的段/参数须完整保留（防静默丢参数）。"""
+    import os
+    import tempfile
+    from web.routers import config as config_router
+
+    # 当前磁盘配置：含 rules / tools / platforms / web 等完整定制
+    current = {
+        "web": {"auth_enabled": True, "auth_username": "admin",
+                "auth_password": "real_pw", "host": "127.0.0.1", "port": 8080},
+        "rules": {"blacklist": {"users": ["alice", "bob"]}},
+        "tools": {"available": ["search", "remind", "weather"]},
+        "platforms": [{"id": "dingtalk", "adapter": {"cli_path": "/usr/bin/dws"}}],
+        "llm": {"api_key": "sk-real-current", "model": "gpt-4o"},
+        "dws": {"cli_path": "dws", "profile": "default"},
+        "storage": {"path": "data/store.db"},
+    }
+    # 导入文件：仅改 llm.model + dws.profile，且故意不含 rules/tools/platforms/web
+    payload = {
+        "dws": {"cli_path": "dws", "profile": "prod", "dry_run": False, "retries": 3, "timeout": 30},
+        "llm": {"api_key": "sk-real-current", "provider": "openai", "model": "gpt-4o-mini"},
+        "storage": {"path": "data/store.db"},
+    }
+    yaml_text = yaml.safe_dump(payload, allow_unicode=True)
+
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(current, f, allow_unicode=True)
+
+    class _FakeFile:
+        async def read(self):
+            return yaml_text.encode("utf-8")
+
+    with patch("web.api.CONFIG_PATH", tmp_path), \
+         patch("src.shared_state.get_config_reload_callback", return_value=None):
+        _run(config_router.import_config(_FakeFile()))
+
+    written = yaml.safe_load(open(tmp_path, encoding="utf-8"))
+    os.unlink(tmp_path)
+    # 导入中出现的 key 已覆盖
+    assert written["llm"]["model"] == "gpt-4o-mini"
+    assert written["dws"]["profile"] == "prod"
+    # 未提及的段完整保留（关键：不得静默丢弃）
+    assert written["rules"]["blacklist"]["users"] == ["alice", "bob"]
+    assert written["tools"]["available"] == ["search", "remind", "weather"]
+    assert written["web"]["host"] == "127.0.0.1"
+    assert written["web"]["port"] == 8080
+    assert written["platforms"][0]["id"] == "dingtalk"
+
+
 # ---------- 中间件鉴权策略 ----------
 
 def _fake_config(auth_enabled, username="", password=""):

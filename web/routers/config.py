@@ -655,6 +655,22 @@ def _restore_secrets(imported, current):
                 _restore_secrets(v, cur if isinstance(cur, (dict, list)) else {})
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """深合并：以 base 为基底，用 override 中出现的所有 key 覆盖；dict 递归合并，
+    list / 标量整体替换（不逐元素合并，避免数组语义歧义）。返回新 dict，不修改入参。
+
+    用于 import_config：导入文件只覆盖其声明的段/参数，其余全部保留，杜绝
+    「导入不完整配置 → 静默丢弃其它段参数」的删参数类缺陷。
+    """
+    result = dict(base)
+    for k, v in override.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
 @router.get("/api/config/export")
 async def export_config():
     """导出当前配置文件为 YAML（密钥字段脱敏）。"""
@@ -678,7 +694,11 @@ async def export_config():
 
 @router.post("/api/config/import")
 async def import_config(file: UploadFile = File(...)):
-    """导入配置文件并热重载。"""
+    """导入配置文件并热重载。
+
+    合并语义（防删参数）：以「磁盘现有全量配置」为基底，仅用导入文件中出现的
+    段/参数覆盖，其余全部保留。导入不完整配置不再静默丢弃其它段。
+    """
     try:
         content = await file.read()
         text = content.decode("utf-8")
@@ -694,28 +714,38 @@ async def import_config(file: UploadFile = File(...)):
             if key not in imported_data:
                 raise HTTPException(status_code=400, detail=f"配置文件缺少必需字段: {key}")
 
-        # 用 AppConfig 校验导入数据的完整性与类型，校验通过才写入
-        from src.config import AppConfig
-        try:
-            AppConfig(**imported_data)
-        except Exception as val_err:
-            raise HTTPException(status_code=400, detail=f"配置数据校验失败：{val_err}") from val_err
-
-        # 还原脱敏哨兵：仅从「磁盘文件原本就有的明文值」还原，
-        # 不使用经环境变量注入的真实密钥（避免把只存于 .env 的密钥落盘成 config.yaml 明文）。
+        # 读取磁盘现有全量配置，作为合并基底（读不到则以空基底，仅以导入文件写盘）
         try:
             def _read_current():
                 with open(_api.CONFIG_PATH, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f) or {}
             current = await run_in_threadpool(_read_current)
+        except Exception as read_err:
+            logger.warning("读取现有配置失败，将仅以导入文件写盘: %s", read_err)
+            current = {}
+
+        # 还原脱敏哨兵：仅从「磁盘文件原本就有的明文值」还原，
+        # 不使用经环境变量注入的真实密钥（避免把只存于 .env 的密钥落盘成 config.yaml 明文）。
+        try:
             _restore_secrets(imported_data, current)
         except Exception as restore_err:
             logger.warning("导入配置时还原脱敏密钥失败（将保留文件中的值）: %s", restore_err)
 
+        # 合并：以「当前全量配置」为基底，仅用导入文件中出现的 key 覆盖，
+        # 其余段与参数全部保留——避免导入不完整配置时静默丢弃其它参数（删参数类缺陷）。
+        merged = _deep_merge(current, imported_data)
+
+        # 用 AppConfig 校验合并结果的完整性与类型，校验通过才写入
+        from src.config import AppConfig
+        try:
+            AppConfig(**merged)
+        except Exception as val_err:
+            raise HTTPException(status_code=400, detail=f"配置数据校验失败：{val_err}") from val_err
+
         # 写入配置文件：复用 _write_config 原子写 + 自动备份，
         # 避免非原子写（断电/磁盘满）损坏 config.yaml 导致 bot 起不来。
         # run_in_threadpool 包裹同步文件写，避免阻塞异步事件循环（F17）。
-        await run_in_threadpool(_api._write_config, imported_data)
+        await run_in_threadpool(_api._write_config, merged)
 
         # 触发配置热重载
         try:

@@ -276,6 +276,15 @@ def _start_dev_watcher(pid_file: str) -> None:
     logger.info("[DEV] 文件监听已启动，监视: %s", ", ".join(watch_paths))
 
 def main(root: str | None = None):
+    # 启动钩子：配置文件每日滚动备份（当天已备份 / 无变化则跳过，详见 src/config_backup.py）。
+    # 用 try/except 包裹，备份失败绝不中断应用启动。
+    try:
+        from src.config_backup import maybe_backup
+
+        maybe_backup()
+    except Exception as _e:  # noqa: BLE001
+        logger.warning("[config-backup] 启动备份失败（已忽略）：%s", _e)
+
     # 延迟导入：LinkoraEngine 定义在 core.py，core 继承本 mixin，模块级导入会循环依赖
     from .core import LinkoraEngine
     from src.paths import (

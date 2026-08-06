@@ -825,6 +825,15 @@ def run_web(port: int = 8000, host: str | None = None):
     import uvicorn
     import logging
 
+    # 启动钩子：配置文件每日滚动备份（当天已备份 / 无变化则跳过，详见 src/config_backup.py）。
+    # 与 lifecycle.main 共用同一逻辑；去重保证每天至多一份，备份失败绝不中断启动。
+    try:
+        from src.config_backup import maybe_backup
+
+        maybe_backup()
+    except Exception as _e:  # noqa: BLE001
+        logger.warning("[config-backup] 启动备份失败（已忽略）：%s", _e)
+
     # 安全默认：仅监听本机回环。若需从其他设备访问，应经反代并在其上加认证，
     # 或显式传 host="0.0.0.0"（不推荐公网直曝）。优先级：显式参数 > 环境变量 > config.yaml。
     if host is None:

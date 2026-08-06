@@ -1,8 +1,12 @@
 name: Pages Build & Deployment
 
+# 仅手动触发 + PR merge，避免与 GitHub 自动触发的 pages-build-deployment 冲突
 on:
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/pages.yml'
+      - 'docs/**'
   # 允许手动触发
   workflow_dispatch:
 

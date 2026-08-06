@@ -1,16 +1,15 @@
-# GitHub Pages 站点配置（部署源：仓库 main 分支 /docs 目录）
-#
-# 首页：docs/index.html —— 无 front matter 的独立静态页，Jekyll 原样拷贝，不套主题。
-#       它同时承载落地页与完整文档索引（26 篇），是文档入口的单一真源。
-#       ⚠️ 不要再新增 docs/index.md：Jekyll 会把它渲染成同名 index.html 与静态首页抢
-#       同一输出路径，静态文件优先，index.md 会静默失效（历史上已踩过一次）。
-#
-# 其余 .md 文档：由 GitHub Pages 白名单内的 cayman 主题渲染，
-#       输出路径为同名 .html（如 configuration.md → configuration.html）。
+# GitHub Pages 站点配置（静态文件直接托管，无需 Jekyll 渲染）
 title: Linkora · 灵桥
 description: 把 AI 分身接进钉钉、飞书和企业微信 —— 读得懂公司文档，会自己动手办事。
-theme: jekyll-theme-cayman
 
-# 关闭相对链接插件可能造成的构建噪音
+# 禁用 Jekyll 处理（纯静态模式）
+skip_config_check: true
 exclude:
   - "*.mermaid"
+  - "audit/**/*"
+  - ".git"
+  - "*.yaml"
+  - "*.yml"
+  
+# 指定输出目录
+destination: _site

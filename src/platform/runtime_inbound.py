@@ -81,6 +81,11 @@ class InboundMixin(EngineMixinBase):
         if getattr(self, "current_user_id", ""):
             sender_ids.append(self.current_user_id)
         if not sender_ids:
+            if not getattr(self, "_no_owner_identity_warned", False):
+                self._no_owner_identity_warned = True
+                logger.warning(
+                    "[门控] 当前账号未解析到人工身份(current_open_dingtalk_id/current_user_id 为空)，"
+                    "接管检测失效，可能漏拦 AI 穿插——请检查账号身份解析")
             return False
         return self.store._conversation_repo.has_user_message_from(message.chat_id, ts, sender_ids)
     def _is_owner_present(self, message: Message) -> bool:
@@ -106,6 +111,11 @@ class InboundMixin(EngineMixinBase):
         if getattr(self, "current_user_id", ""):
             sender_ids.append(self.current_user_id)
         if not sender_ids:
+            if not getattr(self, "_no_owner_identity_warned", False):
+                self._no_owner_identity_warned = True
+                logger.warning(
+                    "[门控] 当前账号未解析到人工身份(current_open_dingtalk_id/current_user_id 为空)，"
+                    "在场检测失效，可能漏拦 AI 穿插——请检查账号身份解析")
             return False
         since = (datetime.now() - timedelta(seconds=cooldown)).isoformat()
         try:
@@ -115,6 +125,88 @@ class InboundMixin(EngineMixinBase):
         except Exception as e:  # 查询异常时保守放行（不静默），避免 DB 抖动误杀正常回复
             logger.warning("[真人在场] 查询失败，保守放行回复: %s", e)
             return False
+
+    def _should_reply_now(self, message: Message) -> bool:
+        """发送前最后一刻的权威裁决：此刻是否允许 AI 自动回复。
+
+        入站门控（_handle_message_with_rid）只在消息到达时判一次，而 LLM 生成耗
+        时数秒~数十秒，人工完全可能在该窗口内回复或在场——若只在入站判，bot 会抢先
+        发出、穿插真人对话。故在 _send_reply 真正发送前必须再判一次。
+
+        返回 True = 允许发送；任一闸门返回“不回复”即整体放弃发送。
+        """
+        # 1) 自己发的消息（入站已判过，发送前再保险一次）
+        if self._is_message_from_self(message):
+            logger.info("[门控] 发送前复核：消息来自自身，放弃发送")
+            return False
+        # 2) 人工已在对方消息之后手动回复（接管）——发送前再判，关闭生成期竞态
+        if self._has_user_taken_over(message):
+            logger.info("[门控] 发送前复核：人工已接管（消息后已手动回复），放弃发送")
+            return False
+        # 3) 真人在场（human-in-the-loop）——发送前再判，避免穿插
+        if self._is_owner_present(message):
+            logger.info("[门控] 发送前复核：真人当前在场，放弃发送")
+            return False
+        # 4) 已读闸门（DWS）：会话被 DWS 判定为“已读(无未读)”才抑制。
+        #    新到的未读消息会让会话重新进入未读列表 → 不抑制（照常回复），
+        #    从而规避“漏回追问”旧事故。仅当 DWS 未读状态失真时才可能漏回，
+        #    可用 config.poller.suppress_when_owner_read=false 关闭。
+        if getattr(self.config.poller, "suppress_when_owner_read", False) \
+                and self._owner_conversation_is_read(message):
+            logger.info("[门控] 发送前复核：DWS 判定会话已读，放弃发送")
+            return False
+        return True
+
+    def _owner_conversation_is_read(self, message: Message) -> bool:
+        """DWS 已读闸门：本会话当前是否被 DWS 判定为“已读(无未读)”。
+
+        通过 chat_message_list_unread_conversations 取未读会话集合，若本会话不在其中
+        （或无未读计数）即视为 owner 已读全部消息。结果按会话缓存（TTL 30s）避免热路径
+        频繁调 DWS。异常时保守返回 False（不抑制，照常回复），避免 DWS 抖动误杀正常回复。
+        """
+        try:
+            unread_ids = self._unread_conversation_ids()
+        except Exception as e:
+            logger.warning("[已读闸门] 查询未读会话失败，保守放行回复: %s", e)
+            return False
+        cid = message.chat_id or ""
+        # 未知（DWS 结构异常）时不抑制：让人工/正常回复照常进行
+        if getattr(self, "_unread_conv_unknown", False):
+            return False
+        return cid != "" and cid not in unread_ids
+
+    def _unread_conversation_ids(self) -> set[str]:
+        """取 DWS 未读会话 ID 集合（openConversationId），带 30s TTL 缓存。"""
+        now = time.time()
+        # 每次进入先清「未知」哨兵；仅当本次查询结构异常才重新置位，
+        # 避免上一轮的未知状态污染后续成功的真实查询/缓存命中。
+        setattr(self, "_unread_conv_unknown", False)
+        cache = getattr(self, "_unread_conv_cache", None)
+        if cache is not None and (now - cache[1]) < 30:
+            return cache[0]
+        try:
+            convs = self.dws.chat_message_list_unread_conversations(
+                getattr(self.config.poller, "unread_conversation_count", 20))
+        except Exception:
+            # 查询失败：不让缓存被空结果污染，保留旧缓存（若有）
+            if cache is not None:
+                return cache[0]
+            raise
+        # 防御：DWS 返回的未读结构异常（非 list）时，无法判定会话已读，保守放行（不抑制）。
+        # 注意：此处返回空集合会被上层视为「全部已读」而抑制回复，方向错误——
+        # 故用哨兵标记，让 _owner_conversation_is_read 据此判定「不抑制」。
+        if not isinstance(convs, list):
+            logger.warning("[已读闸门] 未读会话接口返回非 list 结构，保守放行回复")
+            setattr(self, "_unread_conv_unknown", True)
+            return set()
+        ids: set[str] = set()
+        for c in (convs or []):
+            if isinstance(c, dict):
+                cid = c.get("openConversationId") or c.get("chat_id") or ""
+                if cid:
+                    ids.add(cid)
+        self._unread_conv_cache = (ids, now)
+        return ids
     def _is_message_from_self(self, message: Message) -> bool:
         """安全网：判断消息是否是自己发出的，防止漏过 poller 的自我过滤导致 AI 回复自己。
 
@@ -122,25 +214,29 @@ class InboundMixin(EngineMixinBase):
         极端情况（openDingTalkId 未解析成功、sender 字段为空等）下 poller
         可能漏判，此处基于 main 进程自身的用户标识再做一次确认。
         """
+        # 防御性取值：发送前复核（_should_reply_now）也会调用本方法，消息对象可能
+        # 来自非标准构造（如测试桩），缺字段时按“非自身”处理，不抛异常。
+        sender_id = getattr(message, "sender_id", "") or ""
+        sender_name = getattr(message, "sender_name", "") or ""
+        raw = getattr(message, "raw", None) or {}
         # 匹配 sender_id：openDingTalkId 或 userId
-        if message.sender_id:
+        if sender_id:
             oid = getattr(self, "current_open_dingtalk_id", "")
             uid = getattr(self, "current_user_id", "")
-            if (oid and message.sender_id == oid) or (uid and message.sender_id == uid):
+            if (oid and sender_id == oid) or (uid and sender_id == uid):
                 return True
         # 匹配 sender_name（strip 后比较，兼容首尾空格）
         # 注意：此匹配为弱兜底，若群内有同名用户可能导致误过滤。
         # sender_id 匹配已覆盖主体场景，name 匹配仅作为辅助手段。
         user_name = getattr(self, "current_user_name", "")
-        if message.sender_name and user_name:
-            if message.sender_name.strip() == user_name.strip():
+        if sender_name and user_name:
+            if sender_name.strip() == user_name.strip():
                 logger.warning(
                     "检测到同名用户 %s，sender_id 匹配优先，name 匹配仅作弱兜底",
-                    message.sender_name,
+                    sender_name,
                 )
                 return True
         # 兜底：raw 消息里的 senderOpenDingTalkId / senderId
-        raw = message.raw or {}
         raw_sid = raw.get("senderOpenDingTalkId") or raw.get("senderId") or ""
         if raw_sid:
             oid = getattr(self, "current_open_dingtalk_id", "")

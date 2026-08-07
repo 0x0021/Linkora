@@ -147,6 +147,12 @@ class PollerConfig(BaseModel):
     # 发送消息时是否携带 AI 标记（dws --ai-tag，在铉铉中显示“由AI发送”标签）。
     # True=携带（默认，合规透明）；False=不携带，消息与本人手发无区别。
     ai_tag_enabled: bool = True
+    # === 已读闸门（human-in-the-loop 补充，重接 DWS 已读信号）===
+    # 若 DWS 判定本会话“已读(无未读)”，则抑制 AI 自动回复（人工已看/已处理）。
+    # 新到的未读消息会让会话重新进入未读列表 → 不抑制（照常回复），以此规避历史
+    # 事故“bot 回复后会话移出未读、对方追问又不回填导致漏回(为什么不回复我)”。
+    # 仅当所在环境 DWS 未读状态失真、出现漏回时，设 False 关闭本闸门。
+    suppress_when_owner_read: bool = True
     first_run_ignore_older_than_minutes: int = 10  # 首次运行/重启后忽略超过N分钟的老消息（0=不忽略）
     # 会话黑名单（不遍历）容错：群聊权限错误需连续失败达到该次数才加入黑名单，
     # 避免一次瞬时抖动（token 刷新间隙 / CLI 偶发 / 限流被钉钉报成 AUTH_PERMISSION_DENIED）

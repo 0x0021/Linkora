@@ -313,6 +313,16 @@ class ReplyDispatchMixin(EngineMixinBase):
 
         reply_uuid = str(uuid.uuid4())
 
+        # === 发送前最后一刻门控复核 ===
+        # 入站已判过一次（_handle_message_with_rid），但 LLM 生成耗时长，人工可能
+        # 在此期间回复/在场。此处再判，杜绝穿插真人对话（核心门控修复）。
+        # 不通过则标记已处理并放弃发送，避免该消息被反复轮询重试而刷屏。
+        if not self._should_reply_now(message):
+            logger.info("[门控] 发送前复核未通过，标记已处理并放弃发送（来自 %s）",
+                        message.sender_name)
+            self._mark_inbound_processed(message)
+            return False
+
         self._mark_read_before_reply(message)
 
         # AI 标记（--ai-tag）由 DwsAdapter.ai_tag_default 统一控制（来自 config.poller.ai_tag_enabled）

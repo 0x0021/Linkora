@@ -190,7 +190,7 @@ class InboundMixin(EngineMixinBase):
         now = time.time()
         # 每次进入先清「未知」哨兵；仅当本次查询结构异常才重新置位，
         # 避免上一轮的未知状态污染后续成功的真实查询/缓存命中。
-        setattr(self, "_unread_conv_unknown", False)
+        self._unread_conv_unknown = False
         cache = getattr(self, "_unread_conv_cache", None)
         if cache is not None and (now - cache[1]) < 30:
             return cache[0]
@@ -207,7 +207,7 @@ class InboundMixin(EngineMixinBase):
         # 故用哨兵标记，让 _owner_conversation_is_read 据此判定「不抑制」。
         if not isinstance(convs, list):
             logger.warning("[已读闸门] 未读会话接口返回非 list 结构，保守放行回复")
-            setattr(self, "_unread_conv_unknown", True)
+            self._unread_conv_unknown = True
             return set()
         ids: set[str] = set()
         for c in (convs or []):

@@ -15,6 +15,7 @@
 - **fix(docs)**: 修复 `body` 未应用 `--bg`/`--text` token 导致暗黑模式未真正渲染、整页呈浏览器默认白色的 bug；深色模式现在为默认首屏体验。
 - **refactor(docs)**: 重写 `docs/assets/site.css` 视觉系统，从「高对比繁杂商业风」收敛为「深色优先、干净高级」：更克制的 aurora/网格、更精致的卡片层级与留白、light 模式同步精致化而非简单反色。
 - **feat(docs)**: 主题切换改为分段按钮（浅色 / 深色 / 跟随系统），提升可发现性；默认主题改为 `dark`，首次访问直接呈现品牌深色主视觉。
+- **style(platform)**: 消除 `src/platform/runtime_inbound.py` 已读闸门哨兵 `_unread_conv_unknown` 赋值的 ruff `B010`（`setattr` 常量属性名）告警，改为普通属性赋值；行为不变。
 
 ## 2026-08-07 — Pages 部署迁移到自定义 GitHub Actions 工作流
 

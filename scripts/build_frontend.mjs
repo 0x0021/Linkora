@@ -13,10 +13,10 @@
 //
 // 运行：npm run build:frontend  （需在项目根目录执行）
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, watch } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -135,27 +135,64 @@ function hashOf(s) {
   return createHash('sha256').update(s).digest('hex').slice(0, 12);
 }
 
-// ---- 清理旧 bundle.* 产物 ----
-if (existsSync(OUT)) {
-  for (const f of readdirSync(OUT)) {
-    if (f.startsWith('bundle.')) unlinkSync(join(OUT, f));
+// ---- 单次构建：清理旧 bundle → 合并压缩 → 写 manifest ----
+function build() {
+  if (existsSync(OUT)) {
+    for (const f of readdirSync(OUT)) {
+      if (f.startsWith('bundle.')) unlinkSync(join(OUT, f));
+    }
+  } else {
+    mkdirSync(OUT, { recursive: true });
   }
-} else {
-  mkdirSync(OUT, { recursive: true });
+
+  const cssMin = minify(concat(CSS_ORDER, '\n'), 'css');
+  const cssName = `bundle.${hashOf(cssMin)}.css`;
+  writeFileSync(join(OUT, cssName), cssMin);
+
+  const jsMin = minify(concat(JS_ORDER, '\n;\n'), 'js');
+  const jsName = `bundle.${hashOf(jsMin)}.js`;
+  writeFileSync(join(OUT, jsName), jsMin);
+
+  const manifest = { css: cssName, js: jsName };
+  writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2));
+
+  console.log(
+    `[build] 完成：CSS ${CSS_ORDER.length} 文件 → ${cssName} (${cssMin.length} B)；` +
+      `JS ${JS_ORDER.length} 文件 → ${jsName} (${jsMin.length} B)`
+  );
 }
 
-const cssMin = minify(concat(CSS_ORDER, '\n'), 'css');
-const cssName = `bundle.${hashOf(cssMin)}.css`;
-writeFileSync(join(OUT, cssName), cssMin);
-
-const jsMin = minify(concat(JS_ORDER, '\n;\n'), 'js');
-const jsName = `bundle.${hashOf(jsMin)}.js`;
-writeFileSync(join(OUT, jsName), jsMin);
-
-const manifest = { css: cssName, js: jsName };
-writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2));
-
-console.log(
-  `[build] 完成：CSS ${CSS_ORDER.length} 文件 → ${cssName} (${cssMin.length} B)；` +
-    `JS ${JS_ORDER.length} 文件 → ${jsName} (${jsMin.length} B)`
-);
+const WATCH = process.argv.includes('--watch');
+if (WATCH) {
+  // 监听模式：监视 web/static 下任意 css/js 源码变更，防抖后自动重建 dist，
+  // 让你或我本地改动前端后无需手动跑构建即可拿到最新编译产物（api.py 读 manifest 注入版本）。
+  console.log('[build] 监听模式：监视 web/static 变动，自动重新编译前端…  (Ctrl+C 退出)');
+  let timer = null;
+  const trigger = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      try {
+        build();
+      } catch (e) {
+        console.error('[build] 重建失败：', e.message);
+      }
+    }, 120);
+  };
+  try {
+    watch(
+      STATIC,
+      { recursive: true },
+      (_event, filename) => {
+        if (!filename) return;
+        if (filename.startsWith('dist' + sep)) return; // 忽略产物自身写入
+        if (!/\.(css|js)$/.test(filename)) return;
+        trigger();
+      }
+    );
+  } catch (e) {
+    console.error('[build] 无法启动监听（当前平台不支持 recursive watch）：', e.message);
+    process.exit(1);
+  }
+} else {
+  build();
+}

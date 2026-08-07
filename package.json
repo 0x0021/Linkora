@@ -10,6 +10,7 @@
   "scripts": {
     "test:frontend": "vitest run",
     "test:frontend:watch": "vitest",
-    "build:frontend": "node scripts/build_frontend.mjs"
+    "build:frontend": "node scripts/build_frontend.mjs",
+    "build:frontend:watch": "node scripts/build_frontend.mjs --watch"
   }
 }

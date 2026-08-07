@@ -649,22 +649,21 @@
 }
 
 /* --- 第二层：次级指标卡（auto-fit，兼容 JS 动态追加的第 5 张） ---
-   结构：icon 顶居中 → value 中部居中放大 → label 底部居中
-   解决原左右结构因数字位数不同造成的"内部不对齐"视觉错位 */
+   结构：icon 左 / value + label 右，横向紧凑，降低整体高度，保留品牌渐变条 hover 高亮 */
 #panel-overview .stats-grid.ov-subs {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 0.65rem;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.7rem;
     margin: 0;
 }
 #panel-overview .stat-card {
     position: relative;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    text-align: center;
-    gap: 0.35rem;
-    padding: 0.85rem 0.7rem 0.7rem;
+    text-align: left;
+    gap: 0.65rem;
+    padding: 0.55rem 0.8rem;
     min-width: 0;
     box-sizing: border-box;
     background: var(--bg-surface);
@@ -679,7 +678,7 @@
 [data-theme="dark"] #panel-overview .stat-card {
     background: rgba(255, 255, 255, 0.025);
 }
-/* 覆盖 theme.css 的 6 色顶条：改为 hover 才亮的左侧渐变条 */
+/* 左侧品牌渐变条，hover 亮起 */
 #panel-overview .stat-card::before {
     content: '';
     position: absolute;
@@ -694,41 +693,41 @@
     transition: opacity 0.24s ease;
 }
 #panel-overview .stat-card:hover {
-    transform: translateY(-3px);
+    transform: translateY(-2px);
     border-color: rgba(37, 99, 235, 0.28);
-    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.09);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
 }
 [data-theme="dark"] #panel-overview .stat-card:hover {
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
 }
 #panel-overview .stat-card:hover::before { opacity: 1; }
 
 #panel-overview .stat-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    font-size: 0.85rem;
-    background: var(--brand-primary-light);
-    color: var(--brand-primary);
-    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background 0.24s ease;
-    margin-bottom: 0.1rem;
+    font-size: 0.88rem;
+    /* 背景/颜色继承 theme.css 的 6 色区分，不覆盖 */
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 #panel-overview .stat-card:hover .stat-icon {
     transform: scale(1.1) rotate(-5deg);
-    background: rgba(37, 99, 235, 0.15);
 }
 #panel-overview .stat-info {
-    /* 兼容层：原左右结构里的 .stat-info 容器，如果卡片未升级到此结构时使用 */
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.08rem;
 }
 #panel-overview .stat-value {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 800;
-    line-height: 1.05;
+    line-height: 1.1;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
@@ -737,16 +736,35 @@
     text-overflow: ellipsis;
     min-width: 0;
     max-width: 100%;
-    margin-top: 0.05rem;
 }
 #panel-overview .stat-label {
-    margin-top: 0;
     font-size: 0.7rem;
     color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     letter-spacing: 0.01em;
+}
+
+@media (max-width: 640px) {
+    #panel-overview .stats-grid.ov-subs {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+    #panel-overview .stat-card {
+        padding: 0.5rem 0.65rem;
+        gap: 0.5rem;
+    }
+    #panel-overview .stat-icon {
+        width: 30px;
+        height: 30px;
+        font-size: 0.8rem;
+    }
+    #panel-overview .stat-value {
+        font-size: 1.1rem;
+    }
+    #panel-overview .stat-label {
+        font-size: 0.65rem;
+    }
 }
 
 /* --- 第三层：运行状态胶囊流 --- */

@@ -270,27 +270,35 @@
                                     </div>
                                 </div>
 
-                                <!-- 次级指标：上下结构（icon 顶 / value 中 / label 底），解决左右结构数字位数差异造成的视觉不齐 -->
+                                <!-- 次级指标：横向紧凑结构（icon 左 / value + label 右），降低整体高度，保留呼吸感 -->
                                 <div class="stats-grid ov-subs" id="stats-grid">
-                                    <div class="stat-card stat-card-v" id="stat-card-keywords">
+                                    <div class="stat-card" id="stat-card-keywords">
                                         <div class="stat-icon"><i class="fa-solid fa-key"></i></div>
-                                        <div class="stat-value" id="stat-keywords"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                        <div class="stat-label">关键词规则</div>
+                                        <div class="stat-info">
+                                            <div class="stat-value" id="stat-keywords"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                            <div class="stat-label">关键词规则</div>
+                                        </div>
                                     </div>
-                                    <div class="stat-card stat-card-v" id="stat-card-kb-docs">
+                                    <div class="stat-card" id="stat-card-kb-docs">
                                         <div class="stat-icon"><i class="fa-solid fa-book"></i></div>
-                                        <div class="stat-value" id="stat-kb-docs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                        <div class="stat-label">知识库文档</div>
+                                        <div class="stat-info">
+                                            <div class="stat-value" id="stat-kb-docs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                            <div class="stat-label">知识库文档</div>
+                                        </div>
                                     </div>
-                                    <div class="stat-card stat-card-v" id="stat-card-ddocs" role="button" tabindex="0" onclick="showDingtalkImportModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showDingtalkImportModal();}" style="cursor:pointer">
+                                    <div class="stat-card" id="stat-card-ddocs" role="button" tabindex="0" onclick="showDingtalkImportModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showDingtalkImportModal();}" style="cursor:pointer">
                                         <div class="stat-icon"><i class="fa-solid fa-file-lines"></i></div>
-                                        <div class="stat-value" id="stat-ddocs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                        <div class="stat-label">钉钉文档</div>
+                                        <div class="stat-info">
+                                            <div class="stat-value" id="stat-ddocs"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                            <div class="stat-label">钉钉文档</div>
+                                        </div>
                                     </div>
-                                    <div class="stat-card stat-card-v" id="stat-card-memories">
+                                    <div class="stat-card" id="stat-card-memories">
                                         <div class="stat-icon"><i class="fa-solid fa-brain"></i></div>
-                                        <div class="stat-value" id="stat-memories"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
-                                        <div class="stat-label">长期记忆</div>
+                                        <div class="stat-info">
+                                            <div class="stat-value" id="stat-memories"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
+                                            <div class="stat-label">长期记忆</div>
+                                        </div>
                                     </div>
                                 </div>
 

@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-08-07 — 文档对齐（docs 与实际代码一致化）
+
+- **docs(tools)**: 重写 `docs/tools.md`——内置工具数 27→38（补齐 AI 听记 list/get_minutes、钉钉知识库 wiki_space/wiki_node 共 4 个、OA 审批查询 approval_* 共 7 个）；速率限制整表以 `config.yaml.example` 为准（send_message 30 / create_todo 20 / web_search 50 / get_weather 30 / transfer_approval 10 等），纠正原先 128/512 等错误数值。
+- **docs(architecture)**: Python 版本 3.11+→3.14+（仅 3.14 系列）；路由模块 30→29、端点 150+→153；架构图内置工具数 27→38。
+- **docs(design)**: 翻新核心模块表——`src/intent.py`→`src/intent/`、`src/config.py(1030行)`→`src/config_models.py`+`src/config.py` 兼容重导出层、`src/dws_adapter.py`→`src/dws_adapter/`；删除不存在的 `src/auth_monitor.py`（认证在 `auth_org.py`）；poller 补充分拆现状；§9 工具清单改为指向 `tools.md`（消除双份漂移）；删除 `processed_msg_ids` 表条目（实际为进程内内存缓存）；Python 3.13+→3.14+。
+- **docs(deployment)**: Python 版本 3.9+→3.14+；构建命令 `./build.sh`→`./docker/build.sh`。
+- **docs(web-api)**: 端点 150→153；删除 `processed_msg_ids` 表；`/api/intents` 示例 `tools_count` 27→38。
+- **docs(faq)**: `send_message` 速率限制示例 128→30 次/小时。
+- **docs(configuration)**: `tools` 分组补 `kb_search_enabled` 参数。
+- **docs(memory)**: 删除 `processed_msg_ids` 表条目；移除 `memory.retrieval` 下错误的 `top_k: 5`（实际属 `embedding.top_k`）。
+- **docs(frontend_module_map)**: 工具统计端点 `/api/tool-stats`→实际 `/api/metrics/tools`。
+- **docs(intent-model)**: `src/intent.py`→`src/intent/`；`main.py` 注入点改为 `src/platform/`。
+- **docs(DEV_GUIDE)**: Python 版本 3.12+→3.14+。
+- **docs(BINARY_PACKAGING_PLAN)**: 构建环境 / Docker 基础镜像 / CI `python-version` 的 Python 3.13 统一改为 3.14（与 `pyproject.toml` 及 CI 矩阵一致）。
+
 ## 2026-08-07 — 文档站（Pages）商业级重设计
 
 - **feat(docs)**: 重写 `docs/index.html` 落地页，从原 Apple 极简 PPT 吸附风（信息架构偏平）升级为商业产品级水准。设计语言统一为品牌渐变 **indigo→cyan**（沿用 `public/index.html` 管理台既立品牌色），深色为基底 + aurora 光晕 + 玻璃拟态 + 细网格背景。

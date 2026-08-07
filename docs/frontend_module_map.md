@@ -55,7 +55,7 @@
 | 路由质量 | `/api/routing-quality/{stats,aggregate}` | routetrace | ChartCard / DataTable |
 | 延迟 / 来源 / 技能 | `/api/llm-metrics` | metrics | ChartCard |
 | 消息分析 | `/api/stats/messages` | 消息中心 | ChartCard |
-| 工具 | `/api/tool-stats` `/api/tools-chain` | tools | DataTable / KpiCard |
+| 工具 | `/api/metrics/tools` `/api/tools-chain` | tools | DataTable / KpiCard |
 
 **已消除的重叠组**
 - G（KPI 手写四套）→ cost-quality 已用 `KpiCard`；dashboard/persona/metrics 也已接入 `KpiCard`（P4 ✅，见下方待办表）。

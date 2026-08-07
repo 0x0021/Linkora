@@ -89,7 +89,7 @@
 
 | 平台 | 能否用「你本机开的 Linux 容器」编译出真二进制？ | 正确做法 |
 |---|---|---|
-| **Linux** | ✅ 能，且最干净 | 在 `python:3.13-slim` 容器内 `pip install` + `pyinstaller`，挂载卷取回 `dist/linkora`。可复现、依赖钉版、不污染本机。 |
+| **Linux** | ✅ 能，且最干净 | 在 `python:3.14-slim` 容器内 `pip install` + `pyinstaller`，挂载卷取回 `dist/linkora`。可复现、依赖钉版、不污染本机。 |
 | **macOS** | ❌ 不能 | macOS 二进制需 macOS 本体 + Apple 工具链（clang/codesign），Linux 容器跑不出 Mach-O，且 Apple 许可禁止在非 Apple 硬件跑 macOS。直接在你 Mac 上原生构建（或 mac CI runner）。容器对此无帮助。 |
 | **Windows** | ❌ 不能 | Windows `.exe` 需 Windows 环境。Linux 容器无法产出真 exe；Wine+PyInstaller 对 torch 这种大 native 依赖极不稳定，不推荐。需 Windows VM（Parallels/UTM/云）或 GH Actions `windows-2022` runner。 |
 
@@ -102,7 +102,7 @@
 
 已在仓库内置可复用的容器构建配置，直接解决 Linux 二进制：
 
-- `Dockerfile.build` —— 基于 `python:3.13-slim`，装 `libgomp1`（torch OpenMP）+ `tesseract-ocr`（pytesseract），钉版装依赖后跑 `pyinstaller linkora.spec`。
+- `Dockerfile.build` —— 基于 `python:3.14-slim`，装 `libgomp1`（torch OpenMP）+ `tesseract-ocr`（pytesseract），钉版装依赖后跑 `pyinstaller linkora.spec`。
 - `scripts/docker-build-linux.sh` —— 一条命令：`docker build` → 起一次性容器 → `docker cp` 取回 `dist/linkora`。
 - `.dockerignore` —— 排除 `.venv`/`node_modules`/`data`/`dist` 等，避免把本地污染带进镜像。
 
@@ -114,7 +114,7 @@ bash scripts/docker-build-linux.sh
 
 > 前提：`linkora.spec` 在 P1 阶段生成；`requirements.txt` 需先钉版（见 §11）。容器只解决 Linux，mac/win 仍按 §3.1 走原生/CI。
 
-- 无论本地容器还是 CI runner，都用 **Python 3.13** 干净环境建 venv，`pip install -r requirements.txt`（Profile A）或 `requirements-slim.txt`（Profile B）。
+- 无论本地容器还是 CI runner，都用 **Python 3.14** 干净环境建 venv，`pip install -r requirements.txt`（Profile A）或 `requirements-slim.txt`（Profile B）。
 - 产物用 `actions/upload-artifact` + 一个 release 工作流（`softprops/action-gh-release`）按 tag 发布。
 - **签名/公证**：
   - **macOS**：必须 `codesign --force --deep --sign -`（ad-hoc）至少让 Gatekeeper 不硬拦；有 Developer ID 时做真签名 + `notarytool` 公证避免「无法验证开发者」。
@@ -284,7 +284,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.13" }
+        with: { python-version: "3.14" }
       - run: python -m venv v && v/bin/pip install -r requirements.txt pyinstaller
         shell: bash
       - run: v/bin/pyinstaller linkora.spec --clean --noconfirm
@@ -323,7 +323,7 @@ jobs:
 | 冷启动慢（onefile 解压 1–3s） | 体感卡 | 换 `--onedir` 或多文件；或 Nuitka |
 | torch 在二进制内 OpenMP/线程数异常 | 性能/崩溃 | 冻结后显式设 `OMP_NUM_THREADS`；测试期观测 CPU 占用 |
 | 模型权重体积（~1.3GB）未随包 | 首跑需用户放模型 | 文档明确；或提供「首次运行自动下载」开关（需联网） |
-| 跨大版本 Python 行为差异 | 诡异 bug | CI 固定 3.13，与本地一致 |
+| 跨大版本 Python 行为差异 | 诡异 bug | CI 固定 3.14，与本地一致 |
 
 ---
 

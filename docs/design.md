@@ -25,17 +25,17 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                 消息采集层（Polling Layer）                │
-│  poller.py → DWS拉取 → 去重 → 合并窗口 → 回复冷却        │
+│  poller*.py → DWS拉取 → 去重 → 合并窗口 → 回复冷却        │
 ├─────────────────────────────────────────────────────────┤
 │                 规则引擎层（Rule Layer）                   │
 │  rule_engine.py → 黑白名单 → 意图分类 → 关键词规则         │
 ├─────────────────────────────────────────────────────────┤
 │                 LLM 智能层（Agent Layer）                 │
 │  llm/agent.py → smart/all/keyword 路由 → Tool Selection  │
-│                  intent.py → 处置层 + 行动层意图           │
+│                  intent/ → 处置层 + 行动层意图           │
 ├─────────────────────────────────────────────────────────┤
 │                 工具执行层（Tool Layer）                   │
-│  tools/*（27 个工具）→ dws_adapter.py → DWS CLI           │
+│  tools/*（38 个工具）→ dws_adapter/ → DWS CLI           │
 └─────────────────────────────────────────────────────────┘
                             │
                ┌────────────┼────────────┐
@@ -52,10 +52,9 @@
 
 | 模块 | 职责 |
 |---|---|
-| `src/poller.py`（约 266 行） | 消息轮询/去重/合并窗口/回复冷却/跨组织跳过/持久化黑名单/单聊"已读不回复"闸门 |
+| `src/poller.py`（+ `poller_core_*.py` / `poller_strategy.py`） | 消息轮询/去重/合并窗口/回复冷却/跨组织跳过/持久化黑名单/单聊"已读不回复"闸门（拆分至多文件） |
 | `src/poller_core_parse.py` | 入站消息解析（含 OA 审批卡片、DING 消息、系统通知） |
-| `src/dws_adapter.py` | 钉钉 DWS CLI 封装，统一超时/重试/JSON解析，API 熔断器 |
-| `src/auth_monitor.py` | DWS 登录态检测与自动续期 |
+| `src/dws_adapter/`（包） | 钉钉 DWS CLI 封装，统一超时/重试/JSON解析，API 熔断器（登录态检测与续期在 `auth_org.py`） |
 
 **poller.py 核心机制：**
 - **消息去重**：`msg_id` 经进程内 LRU 缓存 + SQLite `dedup_messages` 表双重去重
@@ -70,7 +69,7 @@
 | 模块 | 职责 |
 |---|---|
 | `src/rule_engine.py`（约 407 行） | 黑白名单（人/群、支持正则）/关键词规则匹配/意图分类委托 |
-| `src/intent.py`（约 890 行） | 意图分类体系：处置层判定（business/social 子型）+ 行动层意图匹配 |
+| `src/intent/`（包） | 意图分类体系：处置层判定（business/social 子型）+ 行动层意图匹配 |
 
 **规则优先级（从高到低）：**
 
@@ -90,7 +89,7 @@
 | `src/llm/agent.py`（约 1162 行） | LLM Agent：路由模式解析/工具选择/执行循环/回复生成 |
 | `src/llm/client.py` | OpenAI 兼容 LLM 客户端（主备双模型自动切换） |
 | `src/llm/summary_scheduler.py`（约 186 行） | 后台异步摘要调度器（H2-A：单 daemon 线程 + 队列 + CAS 写回） |
-| `src/intent.py`（约 890 行） | 意图分类体系（处置层+行动层），供路由与决策追踪使用 |
+| `src/intent/`（包） | 意图分类体系（处置层+行动层），供路由与决策追踪使用 |
 | `src/decision_tracker.py`（约 189 行） | 决策追踪器：进程内 deque + SQLite 双写 |
 
 **Agent 执行循环：**
@@ -107,7 +106,7 @@ while 未生成最终文本 且 未达最大轮次:
 | 模块 | 职责 |
 |---|---|
 | `src/tools/base.py` (192行) | `BaseTool` 抽象基类 / `ToolRouter` 路由注册 / `RateLimiter` 限流 |
-| `src/tools/` (27 个工具) | 具体工具实现，见下文工具清单 |
+| `src/tools/` (38 个工具) | 具体工具实现，见 [tools.md](tools.md) |
 
 ### 3.5 基础设施层
 
@@ -117,7 +116,7 @@ while 未生成最终文本 且 未达最大轮次:
 | `src/memory/embedding.py` | BGE 中文向量模型 |
 | `src/memory/vector_index.py` | FAISS 向量索引 |
 | `src/memory/reranker.py` | 向量+关键词混合重排序 |
-| `src/config.py`（约 1030 行） | Pydantic 配置模型 |
+| `src/config_models.py`（Pydantic 模型）/ `src/config.py`（兼容重导出层） | 配置模型与加载入口 |
 | `src/models.py` | Message 等数据类 |
 | `src/db_backup.py`（约 282 行） | SQLite 自动备份 |
 | `src/doc_sync_scheduler.py`（约 260 行） | 钉钉文档定时同步（检测内容变化，自动重新导入知识库） |
@@ -188,7 +187,6 @@ while 未生成最终文本 且 未达最大轮次:
 | `conversation_summaries` | 对话摘要压缩归档（chat_id / summary / covered_count / generation / created_at） |
 | `memories` | 长期记忆（sender_id / content / source / vector BLOB / access_count） |
 | `dedup_messages` | 消息去重缓存（msg_id 唯一索引） |
-| `processed_msg_ids` | 已处理消息 ID（与 dedup 配合） |
 | `tool_execution_logs` | 工具调用日志（tool_name / input / output / success / duration_ms） |
 | `kb_documents` | 知识库文档（title / source / format / content / created_at） |
 | `kb_chunks` | 知识库分块（document_id / content / vector BLOB / chunk_index） |
@@ -246,7 +244,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_created ON decisions(created_at);
 
 ## 7. 意图分类体系
 
-> 实现：`src/intent.py`（`IntentCategory` / `IntentRegistry` / `TOOL_ACTION_MAP`）
+> 实现：`src/intent/`（包；`IntentCategory` 在 `types.py`，`IntentRegistry` / `TOOL_ACTION_MAP` 在 `registry.py`）
 
 ### 设计原则
 
@@ -337,41 +335,15 @@ CREATE INDEX IF NOT EXISTS idx_decisions_created ON decisions(created_at);
 
 ---
 
-## 9. 工具清单（完整 27 个）
+## 9. 工具清单
 
-| # | 工具名 | 中文名 | 用途 | 速率限制(/小时) |
-|---|---|---|---|---|
-| 1 | `send_message` | 发送消息 | 向指定会话发送消息 | 128 |
-| 2 | `search_contact` | 搜索联系人 | 通讯录按姓名/拼音搜索 | - |
-| 3 | `get_calendar_events` | 查询日程事件 | 查今天/指定时间日程 | - |
-| 4 | `create_todo` | 创建待办 | 创建钉钉待办任务 | 512 |
-| 5 | `search_doc` | 搜索钉钉文档 | 搜索钉钉文档库 | - |
-| 6 | `get_doc_content` | 读取文档内容 | 读取文档正文 | - |
-| 7 | `kb_search` | 知识库检索 | RAG 检索私有知识库 | - |
-| 8 | `recall_memory` | 召回长期记忆 | 拉取与话题相关的历史记忆 | - |
-| 9 | `save_memory` | 写入长期记忆 | 持久化重要信息 | - |
-| 10 | `web_search` | 联网搜索 | 调用外部搜索引擎 | 512 |
-| 11 | `get_weather` | 查询天气 | 查指定城市天气 | 512 |
-| 12 | `system_status` | 检查系统状态 | CPU/内存/服务健康 | - |
-| 13 | `message_stats` | 消息统计 | 查消息/工具调用统计 | - |
-| 14 | `keyword_rules` | 关键词规则管理 | 增删改关键词规则 | - |
-| 15 | `config_manage` | 配置管理 | 读写运行时配置 | - |
-| 16 | `transfer_approval` | 审批转交 | 将指定审批任务转交给其他审批人（钉钉） | - |
-| 17 | `get_attendance` | 查询考勤 | 查个人考勤记录 | - |
-| 18 | `send_ding` | 发送DING | 通过 DING 功能提醒他人 | - |
-| 19 | `get_unread` | 查询未读消息 | 汇总未读会话与消息摘要 | - |
-| 20 | `get_conversation_info` | 查询会话信息 | 查会话详情与成员 | - |
-| 21 | `search_messages` | 搜索消息记录 | 按关键词搜索历史消息 | - |
-| 22 | `upload_image` | 上传图片 | 上传本地图片/媒体到钉钉 | - |
-| 25 | `get_my_profile` | 查询个人信息 | 查姓名/工号/部门/组织 | - |
-| 26 | `list_orgs` | 列出组织 | 列出已登录的组织列表 | - |
-| 27 | `get_current_org` | 当前组织 | 查询当前活跃组织信息 | - |
+完整工具清单（38 个）及各工具速率限制已统一维护在 [tools.md](tools.md)，以 `src/tools/registry.py` 的 `BUILTIN_TOOL_MANIFEST` 为单一真源，避免与代码漂移。
 
 ---
 
 ## 10. DWS 适配器
 
-`src/dws_adapter.py` — 封装所有 `dws` 命令调用，统一超时/重试/日志/JSON 解析。
+`src/dws_adapter/`（包）— 封装所有 `dws` 命令调用，统一超时/重试/日志/JSON 解析。
 
 **核心接口：**
 - `chat_message_send()` / `chat_message_list_unread_conversations()` / `chat_message_list_direct()` / `chat_message_list()`
@@ -409,7 +381,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_created ON decisions(created_at);
 
 | 类别 | 选型 |
 |---|---|
-| 语言 | Python 3.13+（推荐 3.13/3.14） |
+| 语言 | Python 3.14+（仅 3.14 系列） |
 | 钉钉接口 | dws CLI (v1.0.46+) |
 | LLM | OpenAI 兼容 API（支持第三方代理/Ollama），主备双模型 |
 | 存储 | SQLite（本地单文件，15+ 张表，各平台独立数据库） |

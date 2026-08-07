@@ -11,7 +11,6 @@
 | `conversation_summaries` | 对话摘要压缩归档（CAS 代际写回） |
 | `memories` | 长期记忆（按 `sender_id` 隔离） |
 | `dedup_messages` | 消息去重缓存 |
-| `processed_msg_ids` | 已处理消息 ID |
 | `tool_execution_logs` | 工具调用日志 |
 | `kb_documents` / `kb_chunks` | 知识库文档与分块 |
 | `keyword_rules` | 关键词规则 |
@@ -78,5 +77,4 @@ memory:
     min_similarity_threshold: 0.9
   retrieval:
     min_similarity: 0.6
-    top_k: 5
 ```

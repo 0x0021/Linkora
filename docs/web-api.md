@@ -1,6 +1,6 @@
 # Web API 概览
 
-`web/api.py` 提供约 150 个端点（含 29 个路由模块），均为 HTTP JSON 接口。默认端口 8080，可通过 `config.web.port` 调整。
+`web/api.py` 提供 153 个端点（含 29 个路由模块），均为 HTTP JSON 接口。默认端口 8080，可通过 `config.web.port` 调整。
 
 ## 认证
 
@@ -54,7 +54,6 @@ Authorization: Basic base64(username:password)
 | `kb_documents` / `kb_chunks` | 知识库文档与分块 |
 | `keyword_rules` | 关键词规则 |
 | `config` | 配置中心持久化 |
-| `processed_msg_ids` | 已处理消息 ID 去重 |
 | `decisions` | 决策追踪记录（意图/动作/路由模式/路由工具/回复预览） |
 | `feedback` | 反馈记录（message_id / rating / correction / note） |
 | `style_profiles` | 风格人格画像（profile_json / updated_at，id=1 单例） |
@@ -116,7 +115,7 @@ Authorization: Basic base64(username:password)
   "tool_action_map": {"web_search": ["action.query"]},
   "meta": {
     "routing_mode": "smart",
-    "tools_count": 27,
+    "tools_count": 38,
     "routing_mode_desc": "按意图关键词精准暴露相关工具；无明确意图时回退全量（不漏工具）"
   }
 }

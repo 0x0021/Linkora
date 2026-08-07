@@ -8,7 +8,7 @@
 
 检查：
 1. DWS 是否登录：`dws auth status`
-2. 工具速率限制：`send_message` 默认 128 次/小时，可在 `tools.rate_limit` 调整
+2. 工具速率限制：`send_message` 默认 30 次/小时，可在 `tools.rate_limit` 调整
 3. 发送对象是否在黑名单：`rules.blacklist`
 4. 组织是否开启了 CLI 数据访问权限：联系组织管理员
 

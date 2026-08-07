@@ -15,7 +15,7 @@
 | `embedding` | `enabled` / `provider` / `model` / `top_k` / `base_url` / `api_key` / `hf_token` / `offline` | BGE 向量模型（local / openai 两种 provider） |
 | `memory.cleanup` / `memory.retrieval` / `memory.conversation_summary` | `max_age_days` / `min_similarity_*` / `max_messages_per_conversation` / `summary_interval_hours` / `summary_ratio` | 记忆清理 / 检索 / 对话摘要压缩 |
 | `rules` | `enabled` / `blacklist` / `whitelist` / `keywords` / `stop_words` / `keyword_denylist` / `intent_filter` / `regex_timeout_seconds` | 规则引擎 + 意图过滤（跳过无业务价值消息）+ ReDoS 防护 |
-| `tools` | `enabled` / `available` / `rate_limit` / `allow_skill_tools` / `expose_all_tools` / `tool_routing_mode` / `semantic_routing` / `semantic_tool_threshold` / `block_outbound_to_third_party` | 工具白名单、速率限制与按需暴露（smart/all/keyword）；`block_outbound_to_third_party`（默认 true）硬拦截 AI 主动联系第三方 |
+| `tools` | `enabled` / `available` / `rate_limit` / `allow_skill_tools` / `expose_all_tools` / `kb_search_enabled` / `tool_routing_mode` / `semantic_routing` / `semantic_tool_threshold` / `block_outbound_to_third_party` | 工具白名单、速率限制与按需暴露（smart/all/keyword）；`kb_search_enabled`（默认 true）控制是否注册 RAG 检索工具 `kb_search`；`block_outbound_to_third_party`（默认 true）硬拦截 AI 主动联系第三方 |
 | `rag` | `chunk_size` / `chunk_overlap` | 知识库分块（默认 500 / 50）；检索走向量 0.6 + BM25 0.4 混合重排序 |
 | `skills` | `enabled` / `auto_activate` / `semantic_routing` / `combo_enabled` / `combo_gap` / `hot_reload` / `ai_intent_generation_enabled` | 技能引擎：自动激活 / 语义路由 / 组合激活 / 热加载 |
 | `safety` | `default_fallback` / `media_fallback_text` / `sensitive_words` | 兜底与敏感词 |

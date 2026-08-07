@@ -4,7 +4,7 @@
 
 ### 前置依赖
 
-- Python 3.9+（推荐 3.13 / 3.14；当前开发环境 3.14）
+- Python 3.14+（仅 3.14 系列；当前开发环境 3.14.6）
 - dws CLI（钉钉官方命令行工具，`dws auth login` 完成认证）
 - macOS / Windows / Linux
 
@@ -131,7 +131,7 @@ python scripts/prelogin_multiple_orgs.py
 ### 构建镜像
 
 ```bash
-./build.sh
+./docker/build.sh
 # 或
 docker build -t linkora:latest .
 ```

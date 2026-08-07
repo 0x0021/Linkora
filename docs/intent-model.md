@@ -1,6 +1,6 @@
 # 抽象意图分类体系（Intent Taxonomy）
 
-> 代码实现：`src/intent.py`（`IntentCategory` / `IntentRegistry` / `TOOL_ACTION_MAP`）
+> 代码实现：`src/intent/`（`IntentCategory` / `IntentRegistry` / `TOOL_ACTION_MAP`）
 > 运行时观测：`GET /api/intents`（返回完整分类体系 + 工具映射）
 
 ## 设计原则
@@ -46,7 +46,7 @@
 
 ## 工具 → 抽象行动意图映射（中心化）
 
-> `TOOL_ACTION_MAP`（`src/intent.py`）是新增/调整工具时的唯一改动点。
+> `TOOL_ACTION_MAP`（`src/intent/`）是新增/调整工具时的唯一改动点。
 
 | 工具 | 服务意图 |
 |------|----------|
@@ -115,11 +115,11 @@ tracker.record(...)
          └─ 支持按 sender/intent/action 多维度筛选
 ```
 
-- **进程级单例** `tracker`，在 `main.py` 中通过 `tracker.set_sqlite_store(store)` 注入存储后端
+- **进程级单例** `tracker`，在 `src/platform/` 中通过 `tracker.set_sqlite_store(store)` 注入存储后端
 - `record()` 方法同时写入内存队列和 SQLite，持久化写入失败不阻塞主流程
 - `recent(n)` 方法从内存读取，供首页卡片近实时展示
 
-### 三类决策记录点（main.py）
+### 三类决策记录点（src/platform/）
 
 | 场景 | action | 携带信息 |
 |---|---|---|

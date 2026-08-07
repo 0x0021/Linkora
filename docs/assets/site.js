@@ -10,19 +10,10 @@
   var root = document.documentElement;
   var STORE = "linkora-theme";
 
-  /* ---- 图标 ---- */
-  var ICON = {
-    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>',
-    moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/></svg>',
-    system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
-  };
-
-  var ORDER = ["light", "dark", "system"];
-
   function currentPref() {
     var p = null;
     try { p = localStorage.getItem(STORE); } catch (e) {}
-    if (p !== "light" && p !== "dark" && p !== "system") p = "system";
+    if (p !== "light" && p !== "dark" && p !== "system") p = "dark";
     return p;
   }
 
@@ -37,26 +28,27 @@
 
   function syncToggle() {
     var pref = currentPref();
-    var tg = document.getElementById("themeToggle");
-    if (!tg) return;
-    tg.setAttribute("data-state", pref);
-    var thumb = tg.querySelector(".theme-toggle__thumb");
-    if (thumb) thumb.innerHTML = ICON[pref] || ICON.system;
+    var seg = document.getElementById("themeSeg");
+    if (!seg) return;
+    seg.querySelectorAll("button").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-value") === pref ? "true" : "false");
+    });
   }
 
   /* ---- 初始化主题（首帧已防闪，这里再同步一次） ---- */
   applyTheme(currentPref());
   syncToggle();
 
-  /* ---- 主题切换：三态循环 ---- */
-  var tg = document.getElementById("themeToggle");
-  if (tg) {
-    tg.addEventListener("click", function () {
-      var cur = currentPref();
-      var next = ORDER[(ORDER.indexOf(cur) + 1) % ORDER.length];
-      try { localStorage.setItem(STORE, next); } catch (e) {}
-      applyTheme(next);
-      syncToggle();
+  /* ---- 主题切换：分段按钮 ---- */
+  var seg = document.getElementById("themeSeg");
+  if (seg) {
+    seg.querySelectorAll("button").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var next = btn.getAttribute("data-value");
+        try { localStorage.setItem(STORE, next); } catch (e) {}
+        applyTheme(next);
+        syncToggle();
+      });
     });
   }
 

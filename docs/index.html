@@ -17,7 +17,7 @@
   (function () {
     var p = null;
     try { p = localStorage.getItem("linkora-theme"); } catch (e) {}
-    if (p !== "light" && p !== "dark" && p !== "system") p = "system";
+    if (p !== "light" && p !== "dark" && p !== "system") p = "dark";
     var dark = p === "dark" ||
       (p === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     var r = document.documentElement;
@@ -48,13 +48,17 @@
     </div>
     <div class="nav__actions">
       <a class="btn btn--ghost" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub</a>
-      <button class="theme-toggle" id="themeToggle" data-state="system" aria-label="切换主题（浅色 / 深色 / 跟随系统）" title="切换主题">
-        <span class="theme-toggle__icons">
+      <div class="theme-seg" id="themeSeg" role="group" aria-label="切换主题">
+        <button data-value="light" aria-label="浅色模式" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>
+        </button>
+        <button data-value="dark" aria-label="深色模式" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/></svg>
-        </span>
-        <span class="theme-toggle__thumb"></span>
-      </button>
+        </button>
+        <button data-value="system" aria-label="跟随系统" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </button>
+      </div>
       <a class="btn btn--primary" href="#start">快速开始</a>
       <button class="burger" id="burger" aria-label="打开菜单"><span></span></button>
     </div>

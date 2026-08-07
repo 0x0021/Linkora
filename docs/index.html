@@ -1,807 +1,441 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light" data-pref="system">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Linkora · 灵桥 — 你的 AI 分身，已经就位</title>
-<meta name="description" content="Linkora（灵桥）将 AI 分身接入钉钉、飞书与企业微信。它通读公司文档，能自己动手办事，也懂得何时该请真人接手。" />
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
-<meta property="og:title" content="Linkora · 灵桥" />
-<meta property="og:description" content="你的 AI 分身，已经就位。" />
+<title>灵桥 Linkora · 多平台 AI 智能连接中枢</title>
+<meta name="description" content="灵桥（Linkora）把企业级 AI 分身接进钉钉、飞书、企业微信：读得懂公司文档、会调用工具办事、更懂得何时把对话交还真人。" />
+<meta name="theme-color" content="#05070d" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#fbfcff" media="(prefers-color-scheme: light)" />
+<meta property="og:title" content="灵桥 Linkora · 多平台 AI 智能连接中枢" />
+<meta property="og:description" content="把 AI 分身接进钉钉、飞书、企业微信——读得懂公司文档，会自己动手办事，也懂得何时该请真人接手。" />
 <meta property="og:type" content="website" />
 <link rel="canonical" href="https://0x0021.github.io/Linkora/" />
 
+<!-- 首帧前定主题，避免深色模式白屏闪烁 -->
 <script>
-  /* 主题在首帧前落定，避免深色模式白屏闪烁 */
   (function () {
     var p = null;
-    try { p = localStorage.getItem('linkora-theme'); } catch (e) {}
-    if (p !== 'light' && p !== 'dark' && p !== 'system') p = 'system';
-    var dark = p === 'dark' || (p === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    try { p = localStorage.getItem("linkora-theme"); } catch (e) {}
+    if (p !== "light" && p !== "dark" && p !== "system") p = "system";
+    var dark = p === "dark" ||
+      (p === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     var r = document.documentElement;
-    r.setAttribute('data-theme', dark ? 'dark' : 'light');
-    r.setAttribute('data-pref', p);
+    r.setAttribute("data-theme", dark ? "dark" : "light");
+    r.setAttribute("data-pref", p);
   })();
 </script>
 
-<style>
-/* ============================================================
-   Linkora — Apple 式极简 · 整页吸附滚动（PPT 式）
-   一屏一叙事单元 · 原生 CSS Scroll Snap · 不劫持滚轮
-   ============================================================ */
-
-:root {
-  --bg:            #ffffff;
-  --bg-alt:        #f5f5f7;
-  --bg-elev:       #ffffff;
-  --text:          #1d1d1f;
-  --text-2:        #6e6e73;
-  --text-3:        #86868b;
-  --hair:          #d2d2d7;
-  --hair-soft:     rgba(0,0,0,.07);
-  --accent:        #0071e3;
-  --accent-hover:  #0077ed;
-  --link:          #0066cc;
-  --nav-bg:        rgba(255,255,255,.72);
-  --seg-bg:        rgba(0,0,0,.05);
-  --seg-thumb:     #ffffff;
-  --seg-shadow:    0 1px 3px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04);
-  --code-bg:       #f5f5f7;
-  --dot:           rgba(0,0,0,.22);
-  --shadow-card:   0 2px 12px rgba(0,0,0,.05);
-  --shadow-lift:   0 12px 32px rgba(0,0,0,.10);
-
-  --maxw: 980px;
-  --maxw-wide: 1180px;
-  --nav-h: 48px;
-  --ease: cubic-bezier(.28,.11,.32,1);
-  --ease-out: cubic-bezier(.16,1,.3,1);
-}
-
-[data-theme="dark"] {
-  --bg:            #000000;
-  --bg-alt:        #101010;
-  --bg-elev:       #1d1d1f;
-  --text:          #f5f5f7;
-  --text-2:        #a1a1a6;
-  --text-3:        #86868b;
-  --hair:          #38383a;
-  --hair-soft:     rgba(255,255,255,.09);
-  --accent:        #0071e3;
-  --accent-hover:  #0077ed;
-  --link:          #2997ff;
-  --nav-bg:        rgba(0,0,0,.72);
-  --seg-bg:        rgba(255,255,255,.10);
-  --seg-thumb:     #48484a;
-  --seg-shadow:    0 1px 3px rgba(0,0,0,.4);
-  --code-bg:       #1d1d1f;
-  --dot:           rgba(255,255,255,.26);
-  --shadow-card:   0 2px 12px rgba(0,0,0,.5);
-  --shadow-lift:   0 12px 32px rgba(0,0,0,.6);
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-/* ---- 整页吸附滚动核心 ----
-   proximity（不是 mandatory）：每屏是「首选落脚点」而非强制停靠。
-   配合 scroll-snap-stop: always + JS 键盘翻页，仍保持 PPT 的逐屏感，
-   又规避 mandatory + subpixel 在 1px 边界上的截图撕裂。 */
-html {
-  scroll-snap-type: y proximity;
-  scroll-behavior: smooth;
-  height: 100%;
-  -webkit-text-size-adjust: 100%;
-  scrollbar-width: none;
-}
-html::-webkit-scrollbar { width: 0; height: 0; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-               "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.47059;
-  letter-spacing: -.022em;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transition: background-color .4s var(--ease), color .4s var(--ease);
-  overflow-x: hidden;
-}
-
-/* 每一屏：proximity snap，wheel 事件由 JS 接管做 PPT 式逐屏推进 */
-.panel {
-  min-height: 100dvh;
-  scroll-snap-align: start;
-  scroll-snap-stop: normal;
-  display: flex; flex-direction: column;
-  padding: calc(var(--nav-h) + 14px) 0 26px;
-  position: relative;
-  background: var(--bg);
-  transition: background-color .4s var(--ease);
-}
-.panel.alt { background: var(--bg-alt); }
-
-/* 主区：单一子元素垂直居中；内层用 stack 包成整体，避免多子元素的 subpixel 折叠缝 */
-.panel-main { flex: 1; min-height: 0; display: flex; align-items: center; }
-.panel-main > .stack { width: 100%; }
-
-.wrap  { width: 100%; max-width: var(--maxw);      margin: 0 auto; padding: 0 22px; }
-.wrap-w{ width: 100%; max-width: var(--maxw-wide); margin: 0 auto; padding: 0 22px; }
-
-::selection { background: rgba(0,113,227,.22); }
-
-/* ---------------- 导航 ---------------- */
-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-  height: var(--nav-h);
-  background: var(--nav-bg);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: .5px solid var(--hair);
-  transition: background-color .4s var(--ease), border-color .4s var(--ease);
-}
-.nav-in { height: 100%; display: flex; align-items: center; gap: 16px; }
-.brand {
-  font-size: 15px; font-weight: 600; letter-spacing: -.01em;
-  color: var(--text); text-decoration: none; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 8px;
-}
-.brand .glyph { width: 18px; height: 18px; flex: none; }
-.brand .glyph path { stroke: var(--text); stroke-width: 1.6; fill: none; stroke-linecap: round; }
-.brand small { font-weight: 400; color: var(--text-3); letter-spacing: 0; }
-
-.nav-links { display: flex; align-items: center; gap: 2px; margin-left: auto; }
-.nav-links a {
-  font-size: 12px; color: var(--text); opacity: .82; text-decoration: none;
-  padding: 6px 11px; border-radius: 6px; white-space: nowrap;
-  transition: opacity .25s var(--ease), background-color .25s var(--ease);
-}
-.nav-links a:hover { opacity: 1; background: var(--hair-soft); }
-
-.seg {
-  display: inline-flex; position: relative; margin-left: 10px;
-  background: var(--seg-bg); border-radius: 980px; padding: 2px;
-  transition: background-color .4s var(--ease);
-}
-.seg button {
-  position: relative; z-index: 1; border: 0; background: none; cursor: pointer;
-  width: 30px; height: 24px; border-radius: 980px;
-  display: grid; place-items: center; color: var(--text-2);
-  transition: color .3s var(--ease); -webkit-tap-highlight-color: transparent;
-}
-.seg button[aria-checked="true"] { color: var(--text); }
-.seg button svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.seg .thumb {
-  position: absolute; top: 2px; left: 2px; width: 30px; height: 24px;
-  border-radius: 980px; background: var(--seg-thumb); box-shadow: var(--seg-shadow);
-  transition: transform .38s var(--ease), background-color .4s var(--ease);
-}
-
-/* ---------------- 右侧分页指示器 ----------------
-   关键：必须显式 reset 通用 nav 选择器带来的 left:0/right:0，
-   否则 pager 会被撑成全屏宽，0.5px 的底边就是一条贯穿页面的细线。 */
-.pager {
-  position: fixed; left: auto; right: 20px; top: 50%; transform: translateY(-50%);
-  z-index: 9998; display: flex; flex-direction: column; gap: 11px;
-  width: 22px; height: auto;          /* 内容自适应 */
-  background: transparent; border: 0;  /* 不再继承顶部 nav 的底边与背景 */
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-  padding: 0; margin: 0;
-}
-.pager button {
-  width: 8px; height: 8px; padding: 0; border: 0; cursor: pointer;
-  border-radius: 980px; background: var(--dot);
-  transition: height .4s var(--ease-out), background-color .35s var(--ease), opacity .3s var(--ease);
-  -webkit-tap-highlight-color: transparent; opacity: .75;
-}
-.pager button:hover { opacity: 1; }
-.pager button[aria-current="true"] { height: 22px; background: var(--text); opacity: 1; }
-
-/* 首屏下滑提示 */
-.hint {
-  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  color: var(--text-3); font-size: 11px; letter-spacing: .04em;
-  animation: bob 2.6s var(--ease) infinite; pointer-events: none;
-}
-.hint svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-@keyframes bob { 0%,100% { transform: translate(-50%, 0);   opacity: .8 }
-                 50%     { transform: translate(-50%, 5px); opacity: .4 } }
-
-/* ---------------- 排版比例（随视口高度缩放，保证一屏放得下） ---------------- */
-.eyebrow { font-size: clamp(14px, 1.9vmin, 17px); font-weight: 600; color: var(--accent); letter-spacing: -.01em; margin-bottom: 8px; }
-h1 {
-  font-size: clamp(34px, 7.6vmin, 78px); line-height: 1.06; font-weight: 600;
-  letter-spacing: -.015em; margin: 0 auto 16px;
-}
-.lede {
-  font-size: clamp(16px, 2.5vmin, 24px); line-height: 1.36; font-weight: 400;
-  color: var(--text-2); letter-spacing: -.012em; max-width: 640px; margin: 0 auto;
-}
-h2 { font-size: clamp(27px, 5vmin, 48px); line-height: 1.09; font-weight: 600; letter-spacing: -.015em; }
-.sec-head { text-align: center; max-width: 720px; margin: 0 auto clamp(24px, 4.4vmin, 52px); }
-.sec-head p {
-  margin-top: 12px; font-size: clamp(15px, 2.1vmin, 21px); line-height: 1.4;
-  color: var(--text-2); letter-spacing: -.01em;
-}
-
-.center { text-align: center; }
-
-/* 按钮 */
-.cta-row { display: flex; gap: 26px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: clamp(18px, 3vmin, 30px); }
-.btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: clamp(15px, 1.9vmin, 17px); font-weight: 400; letter-spacing: -.01em;
-  padding: .65em 1.35em; border-radius: 980px; text-decoration: none;
-  border: 1px solid transparent; cursor: pointer;
-  transition: background-color .25s var(--ease), transform .35s var(--ease-out),
-              border-color .25s var(--ease), color .25s var(--ease);
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-secondary { border-color: var(--accent); color: var(--link); }
-.btn-secondary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
-.tlink {
-  font-size: clamp(15px, 1.9vmin, 17px); color: var(--link); text-decoration: none;
-  letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 3px;
-}
-.tlink:hover { text-decoration: underline; }
-.tlink .chev { transition: transform .3s var(--ease-out); display: inline-block; }
-.tlink:hover .chev { transform: translateX(3px); }
-
-/* ---------------- 第 1 屏：会话示意 ---------------- */
-.device {
-  margin: clamp(24px, 4.6vmin, 52px) auto 0; max-width: 540px;
-  background: var(--bg-elev); border: .5px solid var(--hair); border-radius: 18px;
-  box-shadow: var(--shadow-lift); overflow: hidden; text-align: left;
-  transition: background-color .4s var(--ease), border-color .4s var(--ease);
-}
-.device-bar { height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: .5px solid var(--hair); }
-.device-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--hair); display: block; }
-.device-bar span { margin-left: 6px; font-size: 11.5px; color: var(--text-3); letter-spacing: 0; }
-.device-body { padding: 17px 16px 19px; display: flex; flex-direction: column; gap: 10px; }
-.bubble {
-  max-width: 82%; padding: 9px 13px; border-radius: 15px;
-  font-size: clamp(13px, 1.6vmin, 14.5px); line-height: 1.5; letter-spacing: -.008em;
-  opacity: 0; transform: translateY(10px); animation: bubbleIn .6s var(--ease-out) forwards;
-}
-.bubble.them { background: var(--bg-alt); color: var(--text); align-self: flex-start; border-bottom-left-radius: 5px; }
-.bubble.ai   { background: var(--accent); color: #fff;      align-self: flex-end;   border-bottom-right-radius: 5px; }
-.bubble.meta {
-  align-self: flex-end; background: none; padding: 0 2px; max-width: 100%;
-  font-size: 11.5px; color: var(--text-3); letter-spacing: 0;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.bubble.meta .tag { border: .5px solid var(--hair); border-radius: 5px; padding: 1px 6px; }
-.bubble:nth-child(1) { animation-delay: .3s }
-.bubble:nth-child(2) { animation-delay: .85s }
-.bubble:nth-child(3) { animation-delay: 1.2s }
-@keyframes bubbleIn { to { opacity: 1; transform: none; } }
-
-/* ---------------- 平台三联 ---------------- */
-.tri { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.plat {
-  background: var(--bg); border: .5px solid var(--hair); border-radius: 18px;
-  padding: clamp(22px, 3.6vmin, 36px) 24px; text-align: center;
-  transition: transform .4s var(--ease-out), box-shadow .4s var(--ease),
-              background-color .4s var(--ease), border-color .4s var(--ease);
-}
-.plat:hover { transform: translateY(-4px); box-shadow: var(--shadow-card); }
-.plat .dot { width: 8px; height: 8px; border-radius: 50%; margin: 0 auto clamp(10px, 1.8vmin, 16px); }
-.plat .name { font-size: clamp(18px, 2.4vmin, 21px); font-weight: 600; letter-spacing: -.012em; }
-.plat .en   { font-size: 12.5px; color: var(--text-3); margin-top: 3px; letter-spacing: 0; }
-.plat .desc { font-size: clamp(13.5px, 1.7vmin, 15px); color: var(--text-2); margin-top: 11px; line-height: 1.45; }
-.plat.dt .dot { background: #3a8dff; }
-.plat.fs .dot { background: #00d6b9; }
-.plat.wc .dot { background: #2ecc71; }
-
-/* ---------------- 能力 3×2 ---------------- */
-.feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.feat .cell {
-  background: var(--bg); border: .5px solid var(--hair);
-  border-radius: 14px;
-  padding: clamp(18px, 2.6vmin, 26px) clamp(16px, 2.2vmin, 24px);
-  transition: transform .4s var(--ease-out), box-shadow .4s var(--ease),
-              background-color .4s var(--ease), border-color .4s var(--ease);
-}
-.feat .cell:hover { transform: translateY(-4px); box-shadow: var(--shadow-card); }
-.feat h3 { font-size: clamp(17px, 2.4vmin, 22px); font-weight: 600; letter-spacing: -.014em; line-height: 1.2; margin-bottom: 8px; }
-.feat p  { font-size: clamp(13.5px, 1.75vmin, 15.5px); line-height: 1.48; color: var(--text-2); letter-spacing: -.008em; }
-.feat .more { margin-top: 12px; display: inline-block; font-size: clamp(13px, 1.6vmin, 14.5px); }
-
-/* ---------------- 数字 ---------------- */
-.nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; text-align: center; }
-.num .v { font-size: clamp(38px, 7.4vmin, 68px); font-weight: 600; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
-.num .k { margin-top: 10px; font-size: clamp(13.5px, 1.8vmin, 16px); color: var(--text-2); letter-spacing: -.008em; }
-
-/* ---------------- 开始使用 ---------------- */
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: clamp(18px, 3vmin, 28px); }
-.step .n {
-  width: 25px; height: 25px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--text); color: var(--bg); font-size: 12.5px; font-weight: 600;
-  margin-bottom: 12px; letter-spacing: 0;
-  transition: background-color .4s var(--ease), color .4s var(--ease);
-}
-.step h4 { font-size: clamp(16px, 2.1vmin, 19px); font-weight: 600; letter-spacing: -.012em; margin-bottom: 5px; }
-.step p  { font-size: clamp(13.5px, 1.7vmin, 15px); color: var(--text-2); line-height: 1.5; }
-pre {
-  background: var(--code-bg); border: .5px solid var(--hair); border-radius: 14px;
-  padding: clamp(16px, 2.4vmin, 22px) clamp(18px, 2.6vmin, 24px); overflow-x: auto;
-  transition: background-color .4s var(--ease), border-color .4s var(--ease);
-}
-code {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: clamp(11.5px, 1.5vmin, 13.5px); line-height: 1.8; color: var(--text); letter-spacing: 0;
-}
-code .c { color: var(--text-3); }
-
-/* ---------------- 文档索引（4 组 = 4 列，一屏放下 26 篇） ---------------- */
-.doc-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px; align-items: start; }
-.doc-col > h3 {
-  font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--text-3); padding-bottom: 9px; margin-bottom: 4px; border-bottom: .5px solid var(--hair);
-}
-.doc {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  text-decoration: none; color: var(--text); border-radius: 7px;
-  padding: clamp(6px, 1.1vmin, 9px) 8px clamp(6px, 1.1vmin, 9px) 3px;
-  border-bottom: .5px solid var(--hair-soft);
-  transition: background-color .25s var(--ease), padding-left .3s var(--ease-out);
-}
-.doc:hover { background: var(--bg-alt); padding-left: 9px; }
-.panel.alt .doc:hover { background: var(--bg); }
-.doc .t { font-size: clamp(13px, 1.65vmin, 14.5px); font-weight: 450; letter-spacing: -.011em; }
-.doc .arw { color: var(--text-3); font-size: 13px; transition: transform .3s var(--ease-out), color .3s var(--ease); }
-.doc:hover .arw { transform: translateX(3px); color: var(--link); }
-
-/* ---------------- 末屏（结尾 + 页脚同屏） ---------------- */
-.panel.last { justify-content: space-between; padding-bottom: 0; }
-.finale { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; }
-.finale h2 { margin-bottom: 12px; }
-.finale p { font-size: clamp(15px, 2vmin, 19px); color: var(--text-2); max-width: 520px; margin: 0 auto; line-height: 1.45; }
-
-footer { border-top: .5px solid var(--hair); padding: clamp(22px, 3.4vmin, 34px) 0 clamp(18px, 2.6vmin, 26px); font-size: 12px; color: var(--text-3); }
-.foot-cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; padding-bottom: 18px; }
-.foot-cols h5 { font-size: 11.5px; font-weight: 600; color: var(--text); margin-bottom: 8px; letter-spacing: -.005em; }
-.foot-cols a { display: block; color: var(--text-3); text-decoration: none; padding: 3px 0; letter-spacing: -.005em; }
-.foot-cols a:hover { color: var(--text); text-decoration: underline; }
-.foot-legal { border-top: .5px solid var(--hair); padding-top: 14px; display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; line-height: 1.6; }
-
-/* ---------------- 进屏动画：当前屏才播放（仅改 opacity，不提升合成层，避免 snap 撕裂） ---------------- */
-.rv { opacity: 0; transition: opacity .75s var(--ease); }
-.panel.active .rv { opacity: 1; }
-.panel.active .rv:nth-child(1) { transition-delay: .05s }
-.panel.active .rv:nth-child(2) { transition-delay: .12s }
-.panel.active .rv:nth-child(3) { transition-delay: .19s }
-.panel.active .rv:nth-child(4) { transition-delay: .26s }
-
-:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; border-radius: 6px; }
-
-/* ---------------- 响应式与降级 ---------------- */
-@media (max-width: 1000px) {
-  .doc-cols { grid-template-columns: repeat(2, 1fr); }
-  .feat { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 860px) {
-  /* 窄屏：内容放不进一屏，关闭吸附，回归自由滚动 */
-  html { scroll-snap-type: none; scroll-padding-top: var(--nav-h); }
-  .panel { min-height: auto; padding: 66px 0 56px; scroll-snap-align: none; }
-  .panel.last { padding-bottom: 0; }
-  .pager, .hint { display: none; }
-  .tri, .steps, .feat, .doc-cols { grid-template-columns: 1fr; }
-  .nums { grid-template-columns: repeat(2, 1fr); gap: 30px 16px; }
-  .foot-cols { grid-template-columns: repeat(2, 1fr); }
-  .rv { opacity: 1; transform: none; }
-}
-@media (max-height: 620px) and (min-width: 861px) {
-  /* 矮视口：同样放弃强制吸附，避免内容被裁 */
-  html { scroll-snap-type: none; }
-  .panel { min-height: auto; padding: 72px 0 48px; }
-  .pager, .hint { display: none; }
-  .rv { opacity: 1; transform: none; }
-}
-@media (max-width: 620px) {
-  .nav-links a { display: none; }
-  .nav-links a.keep { display: inline-flex; }
-  .cta-row { gap: 18px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-snap-type: none; scroll-behavior: auto; }
-  *, *::before, *::after {
-    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
-    transition-duration: .01ms !important;
-  }
-  .rv, .bubble { opacity: 1; transform: none; }
-  .hint { display: none; }
-}
-</style>
+<link rel="stylesheet" href="./assets/site.css" />
 </head>
-<body>
+<body id="top">
 
-<nav>
-  <div class="wrap-w nav-in">
+<!-- ============ 导航 ============ -->
+<nav class="nav">
+  <div class="nav__inner">
     <a class="brand" href="#top">
-      <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 5.8 18.2a4 4 0 0 1-5.3-5.9l3.8-3.8M14.5 9.5l3.7-3.7a4 4 0 0 1 5.3 5.9l-3.8 3.8M8.8 15.2l6.4-6.4"/></svg>
-      Linkora <small>灵桥</small>
+      <span class="brand__mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#06121f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16 L12 5 L20 16"/><path d="M3 16.5h18"/><circle cx="8" cy="11" r="1.1" fill="#06121f" stroke="none"/><circle cx="12" cy="5" r="1.4" fill="#06121f" stroke="none"/><circle cx="16" cy="11" r="1.1" fill="#06121f" stroke="none"/></svg>
+      </span>
+      <span class="brand__name"><b>灵桥</b>&nbsp;<span>Linkora</span></span>
     </a>
-    <div class="nav-links">
-      <a href="#platforms">概览</a>
-      <a href="#features">能力</a>
-      <a href="#start">开始使用</a>
-      <a href="#docs" class="keep">文档</a>
-      <a href="https://github.com/0x0021/Linkora" class="keep">开源</a>
-
-      <div class="seg" role="radiogroup" aria-label="外观">
-        <div class="thumb" id="thumb"></div>
-        <button role="radio" data-theme-set="light" aria-checked="false" aria-label="浅色">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>
-        </button>
-        <button role="radio" data-theme-set="dark" aria-checked="false" aria-label="深色">
-          <svg viewBox="0 0 24 24"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1Z"/></svg>
-        </button>
-        <button role="radio" data-theme-set="system" aria-checked="true" aria-label="跟随系统">
-          <svg viewBox="0 0 24 24"><rect x="2.8" y="4.2" width="18.4" height="12.4" rx="2"/><path d="M8.5 20.2h7"/></svg>
-        </button>
-      </div>
+    <div class="nav__links">
+      <a href="#features">核心能力</a>
+      <a href="#how">工作原理</a>
+      <a href="#platforms">多平台</a>
+      <a href="#gate">人工接管</a>
+      <a href="#docs">文档</a>
+    </div>
+    <div class="nav__actions">
+      <a class="btn btn--ghost" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub</a>
+      <button class="theme-toggle" id="themeToggle" data-state="system" aria-label="切换主题（浅色 / 深色 / 跟随系统）" title="切换主题">
+        <span class="theme-toggle__icons">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/></svg>
+        </span>
+        <span class="theme-toggle__thumb"></span>
+      </button>
+      <a class="btn btn--primary" href="#start">快速开始</a>
+      <button class="burger" id="burger" aria-label="打开菜单"><span></span></button>
     </div>
   </div>
 </nav>
 
-<nav class="pager" id="pager" aria-label="分页导航"></nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#features">核心能力</a>
+  <a href="#how">工作原理</a>
+  <a href="#platforms">多平台</a>
+  <a href="#gate">人工接管</a>
+  <a href="#docs">文档</a>
+  <a class="btn btn--primary" href="#start">快速开始</a>
+</div>
 
-<!-- ============ 1 · Hero ============ -->
-<section class="panel" id="top" data-label="开篇">
-  <div class="wrap panel-main">
-    <div class="stack">
+<!-- ============ Hero ============ -->
+<header class="hero">
+  <div class="hero__bg"></div>
+  <div class="hero__grid"></div>
+  <canvas class="hero__canvas" id="heroCanvas"></canvas>
+
+  <div class="container hero__inner">
+    <div class="hero__copy">
+      <span class="hero__badge"><span class="tag">v0.2.0</span> 新增：人工接管双重校验</span>
+      <h1 class="hero__title">让 AI 分身，<br /><span class="grad">驻进你每天的群聊</span></h1>
+      <p class="hero__sub">灵桥把企业级 AI 助手挂到 <b>钉钉、飞书、企业微信</b>。它读得懂公司文档、会自己调用工具办事，更懂得<b>什么时候该把对话交还给真人</b>——绝不抢话、绝不重复回复。</p>
+      <div class="hero__cta">
+        <a class="btn btn--primary btn--lg btn--magnetic" href="#start">
+          免费部署
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn--glass btn--lg" href="#how">看它怎么工作</a>
+      </div>
+      <div class="hero__meta">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Python ≥ 3.14</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> 数据物理隔离</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> 私有化部署</span>
+      </div>
+    </div>
+
+    <div class="hero__demo-wrap reveal">
+      <div class="demo">
+        <div class="demo__bar">
+          <span class="demo__dots"><i></i><i></i><i></i></span>
+          <span class="demo__title">吴锦明 · 单聊</span>
+          <span class="demo__pill">AI 在线</span>
+        </div>
+        <div class="demo__body">
+          <div class="msg msg--user">
+            <div class="msg__avatar">吴</div>
+            <div><div class="msg__bubble">帮我查下上个月的考勤异常</div><div class="msg__meta">09:38</div></div>
+          </div>
+          <div class="msg msg--bot">
+            <div class="msg__avatar">灵</div>
+            <div><div class="msg__bubble">已检索考勤系统，发现 3 条异常记录，需要我整理成表吗？</div><div class="msg__meta">09:38 · 灵桥 AI</div></div>
+          </div>
+          <div class="msg msg--human">
+            <div class="msg__avatar">人</div>
+            <div><div class="msg__bubble">不用，我自己回他了</div><div class="msg__meta">09:39 · 真人</div></div>
+          </div>
+          <div class="gate-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
+            检测到人工已回复 · 已读闸门触发 · AI 不再补刀
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 指标 ============ -->
+<div class="container">
+  <div class="stats reveal">
+    <div class="stat"><div class="stat__num" data-count="38">0</div><div class="stat__label">内置工具</div></div>
+    <div class="stat"><div class="stat__num" data-count="39">0</div><div class="stat__label">意图分类</div></div>
+    <div class="stat"><div class="stat__num" data-count="3">0</div><div class="stat__label">接入平台</div></div>
+    <div class="stat"><div class="stat__num" data-count="15">0</div><div class="stat__label">管理台页面</div></div>
+  </div>
+</div>
+
+<!-- ============ 核心能力 ============ -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section__head reveal">
+      <span class="eyebrow">核心能力</span>
+      <h2 class="section__title">一个分身，办成企业里的事</h2>
+      <p class="section__sub">不是只会聊天的机器人。灵桥把知识、工具、规则与真人协作编织进同一次对话。</p>
+    </div>
+    <div class="features">
+      <div class="feature-card reveal" data-delay="1">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
+        <h3 class="feature-card__title">企业知识 RAG</h3>
+        <p class="feature-card__desc">通读公司文档与历史会话，向量检索命中即注入上下文，回答有出处、可引用。</p>
+      </div>
+      <div class="feature-card reveal" data-delay="2">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></div>
+        <h3 class="feature-card__title">工具调用 · 38 个</h3>
+        <p class="feature-card__desc">单一真源的 Tool Calling 清单：查考勤、建待办、发通知、搜消息……真的动手办事，而非只给建议。</p>
+      </div>
+      <div class="feature-card reveal" data-delay="3">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 11 16M16 7.5 13 16"/></svg></div>
+        <h3 class="feature-card__title">规则 / 意图引擎</h3>
+        <p class="feature-card__desc">39 类意图分流，规则命中直接走确定性路径，LLM 只处理该它处理的模糊部分。</p>
+      </div>
+      <div class="feature-card reveal" data-delay="1">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3 class="feature-card__title">人工接管与审核</h3>
+        <p class="feature-card__desc">写操作需确认、敏感动作可审批。双重校验门控确保真人沟通期间 AI 绝不穿插。</p>
+      </div>
+      <div class="feature-card reveal" data-delay="2">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h8"/></svg></div>
+        <h3 class="feature-card__title">Web 管理台</h3>
+        <p class="feature-card__desc">15 个页面、150+ 端点。会话、知识库、工具、审批全在浏览器里可查、可调、可观测。</p>
+      </div>
+      <div class="feature-card reveal" data-delay="3">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+        <h3 class="feature-card__title">多平台物理隔离</h3>
+        <p class="feature-card__desc">钉钉 / 飞书 / 企微各自独立数据库、独立轮询器，数据不串台，可按平台独立启停。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 工作原理 ============ -->
+<section class="section" id="how" style="background: var(--bg-2);">
+  <div class="container">
+    <div class="section__head reveal">
+      <span class="eyebrow">工作原理</span>
+      <h2 class="section__title">一条消息的完整旅程</h2>
+      <p class="section__sub">从消息进来到回复发回，每一步都可观测、可干预。全过程在 Web 管理台留痕。</p>
+    </div>
+    <div class="pipeline reveal">
+      <div class="node">
+        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <span class="node__step">01</span>
+        <div class="node__title">消息到达</div>
+        <div class="node__desc">IM 平台轮询拉取，按账号隔离入库</div>
+      </div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 11 16M16 7.5 13 16"/></svg></div>
+        <span class="node__step">02</span>
+        <div class="node__title">规则 / 意图分流</div>
+        <div class="node__desc">命中规则走确定性路径，否则进 LLM</div>
+      </div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
+        <span class="node__step">03</span>
+        <div class="node__title">RAG / 工具</div>
+        <div class="node__desc">检索知识库、调用工具补齐事实</div>
+      </div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a4 4 0 0 0-4 4 4 4 0 0 0-1 7.9V17h10v-2.1A4 4 0 0 0 16 7a4 4 0 0 0-4-4z"/><path d="M9 21h6"/></svg></div>
+        <span class="node__step">04</span>
+        <div class="node__title">LLM 生成</div>
+        <div class="node__desc">门控前置过滤后进入生成，省 Token</div>
+      </div>
+      <div class="flow-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="node">
+        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg></div>
+        <span class="node__step">05</span>
+        <div class="node__title">原路发回</div>
+        <div class="node__desc">发送前复核兜底，回 IM 同一会话</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 多平台 ============ -->
+<section class="section" id="platforms">
+  <div class="container">
+    <div class="section__head reveal">
+      <span class="eyebrow">多平台</span>
+      <h2 class="section__title">同一个大脑，三套 IM 外壳</h2>
+      <p class="section__sub">钉钉、飞书、企业微信分别适配、独立数据库、独立轮询器——数据物理隔离，互不影响。</p>
+    </div>
+    <div class="platforms">
+      <div class="platform-card platform-card--dingtalk reveal" data-delay="1">
+        <div class="platform-card__logo">钉</div>
+        <div class="platform-card__name">钉钉</div>
+        <p class="platform-card__desc">深度适配钉钉机器人 / 工作通知，支持单聊、群聊与审批流。</p>
+        <span class="platform-card__tag">独立数据库</span>
+      </div>
+      <div class="platform-card platform-card--feishu reveal" data-delay="2">
+        <div class="platform-card__logo">飞</div>
+        <div class="platform-card__name">飞书</div>
+        <p class="platform-card__desc">对接飞书机器人能力与通讯录，知识检索与工具调用原生打通。</p>
+        <span class="platform-card__tag">独立数据库</span>
+      </div>
+      <div class="platform-card platform-card--wecom reveal" data-delay="3">
+        <div class="platform-card__logo">微</div>
+        <div class="platform-card__name">企业微信</div>
+        <p class="platform-card__desc">企业微信应用消息收发，适配内部协作场景与私有部署。</p>
+        <span class="platform-card__tag">独立数据库</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 人工接管 / 门控 ============ -->
+<section class="section" id="gate" style="background: var(--bg-2);">
+  <div class="container">
+    <div class="gate reveal">
       <div>
-        <p class="eyebrow rv">Linkora 灵桥</p>
-        <h1 class="rv">你的 AI 分身，<br />已经就位。</h1>
-        <p class="lede rv">它就在你每日所用的群里待命。通读公司文档，能自己动手办事，也懂得何时该请真人接手。</p>
-        <div class="cta-row rv">
-          <a class="btn btn-primary" href="#start">立即体验</a>
-          <a class="tlink" href="#features">了解 Linkora <span class="chev">›</span></a>
+        <span class="eyebrow">人工接管 · 门控双重校验</span>
+        <h2 class="section__title" style="text-align:left;">人工沟通时，<br />bot 绝不插嘴</h2>
+        <p class="section__sub" style="text-align:left;">这是灵桥和「会抢话的机器人」最大的区别。两层门控确保真人介入的对话里，AI 不再重复回复、不再浪费 Token。</p>
+        <div class="gate__list">
+          <div class="gate__item">
+            <span class="gate__check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <div><b>前置过滤</b>：进入 LLM 前先判消息是否已读 / 已回复，命中即跳过生成，省下整段 Token。</div>
+          </div>
+          <div class="gate__item">
+            <span class="gate__check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <div><b>发送前复核</b>：真正投递前再判一次，兜住「生成期间人工状态变化」的竞态。</div>
+          </div>
+          <div class="gate__item">
+            <span class="gate__check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            <div><b>已读 / 接管识别</b>：接回 DWS 已读信号 + 人工接管标志，保守策略不漏回追问。</div>
+          </div>
         </div>
       </div>
-
-      <div class="device rv" aria-label="群聊中的对话示意">
-        <div class="device-bar"><i></i><i></i><i></i><span>产品支持群 · 14 人</span></div>
-        <div class="device-body">
-          <div class="bubble them">上季度的退款政策改了吗？客户在问。</div>
-          <div class="bubble ai">改了。7 天内无理由，超过 7 天走人工审批。我把新版条款发群里了。</div>
-          <div class="bubble meta"><span class="tag">依据 3 份文档</span><span class="tag">耗时 1.2 秒</span></div>
+      <div class="demo">
+        <div class="demo__bar">
+          <span class="demo__dots"><i></i><i></i><i></i></span>
+          <span class="demo__title">真实日志回放</span>
+          <span class="demo__pill">门控生效</span>
         </div>
-      </div>
-    </div>
-  </div>
-  <div class="hint"><span>向下滚动</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
-</section>
-
-<!-- ============ 2 · 平台 ============ -->
-<section class="panel alt" id="platforms" data-label="三端接入">
-  <div class="wrap-w panel-main">
-    <div class="stack">
-      <div class="sec-head rv">
-        <h2>一套配置，三端贯通。</h2>
-        <p>钉钉、飞书、企业微信，共用同一副大脑。数据各归其位，彼此互不可见。</p>
-      </div>
-      <div class="tri rv">
-        <div class="plat dt"><div class="dot"></div><div class="name">钉钉</div><div class="en">DingTalk</div><div class="desc">单聊、群聊、审批、考勤、日程，皆可接入。</div></div>
-        <div class="plat fs"><div class="dot"></div><div class="name">飞书</div><div class="en">Feishu / Lark</div><div class="desc">文档与多维表格直连，知识库随之自动更新。</div></div>
-        <div class="plat wc"><div class="dot"></div><div class="name">企业微信</div><div class="en">WeCom</div><div class="desc">对内对外同一套逻辑，也能随时单独停用。</div></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 3 · 能力 ============ -->
-<section class="panel" id="features" data-label="核心能力">
-  <div class="wrap-w panel-main">
-    <div class="stack">
-      <div class="sec-head rv">
-        <h2>不止于自动回复。</h2>
-        <p>会查、会做、会记、也会留痕。该出手时出手，该让位时让位。</p>
-      </div>
-      <div class="feat rv">
-        <div class="cell">
-          <h3>它通读过你们所有的文档。</h3>
-          <p>PDF、Word、PPT、网页，乃至截图中的文字，它都能识别。你一开口，它先翻查资料再作答；没有十足把握时，绝不出言妄断。</p>
-          <a class="tlink more" href="rag.html">了解知识库 <span class="chev">›</span></a>
-        </div>
-        <div class="cell">
-          <h3>说完就办。</h3>
-          <p>查天气、订日程、提待办、走审批、拉考勤、整理纪要。38 件事，它自己动手。</p>
-          <a class="tlink more" href="tools.html">查看工具清单 <span class="chev">›</span></a>
-        </div>
-        <div class="cell">
-          <h3>上次说过的，它记得。</h3>
-          <p>跨会话记住每个人的偏好和上下文，越用越顺手。记忆按人隔离，久了自动归档。</p>
-          <a class="tlink more" href="memory.html">了解长期记忆 <span class="chev">›</span></a>
-        </div>
-        <div class="cell">
-          <h3>懂得分寸。</h3>
-          <p>同事正在回复时，它便不再插话；高频问题走关键词，毫秒级响应，不浪费一次调用。</p>
-          <a class="tlink more" href="intent-model.html">了解意图与路由 <span class="chev">›</span></a>
-        </div>
-        <div class="cell">
-          <h3>每一句话，都有迹可循。</h3>
-          <p>为什么这么回、翻了哪份文档、花了多少钱，管理台一目了然。回复也能先审后发。</p>
-          <a class="tlink more" href="web-api.html">了解管理台 <span class="chev">›</span></a>
-        </div>
-        <div class="cell">
-          <h3>数据留在自己的机器上。</h3>
-          <p>本地跑模型，本地存数据。密钥不进库，三个平台物理隔开。开源、可审计。</p>
-          <a class="tlink more" href="architecture.html">了解架构 <span class="chev">›</span></a>
+        <div class="demo__body">
+          <div class="msg msg--user">
+            <div class="msg__avatar">吴</div>
+            <div><div class="msg__bubble">刚刚你点击什么的？</div><div class="msg__meta">09:39</div></div>
+          </div>
+          <div class="msg msg--bot">
+            <div class="msg__avatar">灵</div>
+            <div><div class="msg__bubble">我没有点击什么，只是让你发截图……稍等，我连过去看看。</div><div class="msg__meta">09:39 · 灵桥 AI 生成中</div></div>
+          </div>
+          <div class="msg msg--human">
+            <div class="msg__avatar">人</div>
+            <div><div class="msg__bubble">（真人已在回复）</div><div class="msg__meta">09:39 · 真人接管</div></div>
+          </div>
+          <div class="gate-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
+            发送前复核未通过 · 已标记处理 · 不重复发送
+          </div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 4 · 数字 ============ -->
-<section class="panel alt" data-label="规模">
-  <div class="wrap panel-main">
-    <div class="stack">
-      <div class="sec-head rv">
-        <h2>这些数字，皆有实测为证。</h2>
-      </div>
-      <div class="nums rv">
-        <div class="num"><div class="v">3</div><div class="k">平台统一接入</div></div>
-        <div class="num"><div class="v">38</div><div class="k">内置工具</div></div>
-        <div class="num"><div class="v">39</div><div class="k">意图分类</div></div>
-        <div class="num"><div class="v">150+</div><div class="k">管理台接口</div></div>
+<!-- ============ 快速开始 ============ -->
+<section class="section" id="start">
+  <div class="container container--narrow">
+    <div class="section__head reveal">
+      <span class="eyebrow">快速开始</span>
+      <h2 class="section__title">十分钟，接起你的第一个 AI 分身</h2>
+      <p class="section__sub">克隆仓库、填好配置、一条命令拉起。数据全部留在你自己的机器或内网。</p>
+    </div>
+    <div class="feature-card reveal" style="padding: 26px;">
+      <pre style="font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.9; color: var(--text); overflow-x: auto; white-space: pre;"><code># 1. 获取代码
+git clone https://github.com/0x0021/Linkora.git
+cd Linkora
+
+# 2. 安装依赖（Python ≥ 3.14）
+python -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -r requirements.lock
+
+# 3. 配置平台凭证
+cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
+
+# 4. 启动
+python main.py</code></pre>
+      <div style="margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap;">
+        <a class="btn btn--primary" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">查看仓库</a>
+        <a class="btn btn--glass" href="./configuration.html">配置指南</a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 5 · 开始使用 ============ -->
-<section class="panel" id="start" data-label="开始使用">
-  <div class="wrap panel-main">
-    <div class="stack">
-      <div class="sec-head rv">
-        <h2>三步，即可上线。</h2>
-        <p>无需购买服务，也无需交出数据。一台属于你自己的机器，足矣。</p>
-      </div>
-      <div class="steps rv">
-        <div class="step"><div class="n">1</div><h4>装好</h4><p>克隆仓库，建立虚拟环境，安装依赖。</p></div>
-        <div class="step"><div class="n">2</div><h4>填好</h4><p>复制配置模板，填入模型密钥与平台命令行路径。</p></div>
-        <div class="step"><div class="n">3</div><h4>跑起来</h4><p>一条命令启动服务，打开管理台即可见它运转。</p></div>
-      </div>
-      <pre class="rv"><code><span class="c"># 1 · 装好</span>
-git clone https://github.com/0x0021/Linkora.git &amp;&amp; cd Linkora
-python3 -m venv .venv &amp;&amp; source .venv/bin/activate &amp;&amp; pip install -r requirements.txt
+<!-- ============ 文档矩阵 ============ -->
+<section class="section" id="docs" style="background: var(--bg-2);">
+  <div class="container">
+    <div class="section__head reveal">
+      <span class="eyebrow">文档</span>
+      <h2 class="section__title">把每一个细节都讲清楚</h2>
+      <p class="section__sub">架构、配置、工具、API、部署——开发者需要的信息都在这里。</p>
+    </div>
+    <div class="docs-grid">
+      <a class="doc-card reveal" data-delay="1" href="./architecture.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+        <div><div class="doc-card__title">系统架构</div><div class="doc-card__desc">消息流、模块边界与多账号隔离设计。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="2" href="./configuration.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.5-1.2-2-3.4-1.8.7a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.6A7.6 7.6 0 0 0 7 6.1l-1.8-.7-2 3.4 1.5 1.2a7.8 7.8 0 0 0 0 3L3.7 14.5l2 3.4 1.8-.7a7.6 7.6 0 0 0 2.6 1.5L10 21h4l.5-2.6a7.6 7.6 0 0 0 2.6-1.5l1.8.7 2-3.4z"/></svg></span>
+        <div><div class="doc-card__title">配置速查</div><div class="doc-card__desc">三平台凭证、门控开关与全部参数。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="3" href="./tools.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></span>
+        <div><div class="doc-card__title">工具清单</div><div class="doc-card__desc">38 个内置工具的参数与调用示例。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="1" href="./web-api.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>
+        <div><div class="doc-card__title">Web API</div><div class="doc-card__desc">管理台 150+ 端点与鉴权说明。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="2" href="./deployment.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
+        <div><div class="doc-card__title">部署指南</div><div class="doc-card__desc">Docker Compose 与生产环境建议。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="3" href="./faq.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg></span>
+        <div><div class="doc-card__title">常见问题</div><div class="doc-card__desc">接入、权限与排障高频问答。</div></div>
+      </a>
+    </div>
+  </div>
+</section>
 
-<span class="c"># 2 · 填好（至少填 llm.api_key 与平台 cli_path）</span>
-cp config.yaml.example config.yaml &amp;&amp; dws auth login
-
-<span class="c"># 3 · 跑起来 → http://localhost:8080</span>
-.venv/bin/python scripts/run_linkora.py</code></pre>
-      <div class="cta-row rv">
-        <a class="btn btn-secondary" href="deployment.html">看部署指南</a>
-        <a class="tlink" href="faq.html">遇到问题？<span class="chev">›</span></a>
+<!-- ============ CTA ============ -->
+<section class="section">
+  <div class="container">
+    <div class="cta reveal">
+      <h2 class="cta__title">把 AI 分身，接进你的团队</h2>
+      <p class="cta__sub">开源、可私有化、数据物理隔离。让灵桥替你接住那些琐碎重复的对话，把时间还给真正要紧的事。</p>
+      <div class="cta__actions">
+        <a class="btn btn--primary btn--lg btn--magnetic" href="#start">立即部署</a>
+        <a class="btn btn--glass btn--lg" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">在 GitHub 上加星</a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 6 · 文档 ============ -->
-<section class="panel alt" id="docs" data-label="文档">
-  <div class="wrap-w panel-main">
-    <div class="stack">
-      <div class="sec-head rv">
-        <h2>欲深入了解，尽在于此。</h2>
-        <p>从初次部署到读懂每一层设计，26 篇文档，随取随阅。</p>
+<!-- ============ 页脚 ============ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__about">
+        <a class="brand" href="#top">
+          <span class="brand__mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#06121f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16 L12 5 L20 16"/><path d="M3 16.5h18"/><circle cx="8" cy="11" r="1.1" fill="#06121f" stroke="none"/><circle cx="12" cy="5" r="1.4" fill="#06121f" stroke="none"/><circle cx="16" cy="11" r="1.1" fill="#06121f" stroke="none"/></svg>
+          </span>
+          <span class="brand__name"><b>灵桥</b>&nbsp;<span>Linkora</span></span>
+        </a>
+        <p>多平台 AI 智能连接中枢。统一接入钉钉 / 飞书 / 企业微信，融合 RAG、规则引擎与 LLM——连接企业智能，桥接无限可能。</p>
       </div>
-
-      <div class="doc-cols rv">
-        <div class="doc-col">
-          <h3>上手与使用</h3>
-          <a class="doc" href="deployment.html"><span class="t">部署指南</span><span class="arw">›</span></a>
-          <a class="doc" href="DEPLOY.html"><span class="t">进阶部署</span><span class="arw">›</span></a>
-          <a class="doc" href="configuration.html"><span class="t">配置参考</span><span class="arw">›</span></a>
-          <a class="doc" href="DEV_GUIDE.html"><span class="t">开发指南</span><span class="arw">›</span></a>
-          <a class="doc" href="faq.html"><span class="t">常见问题</span><span class="arw">›</span></a>
-        </div>
-
-        <div class="doc-col">
-          <h3>理解系统</h3>
-          <a class="doc" href="architecture.html"><span class="t">架构设计</span><span class="arw">›</span></a>
-          <a class="doc" href="system_design.html"><span class="t">系统设计</span><span class="arw">›</span></a>
-          <a class="doc" href="design.html"><span class="t">设计总览</span><span class="arw">›</span></a>
-          <a class="doc" href="rag.html"><span class="t">RAG 知识库</span><span class="arw">›</span></a>
-          <a class="doc" href="memory.html"><span class="t">长期记忆</span><span class="arw">›</span></a>
-          <a class="doc" href="intent-model.html"><span class="t">意图分类</span><span class="arw">›</span></a>
-          <a class="doc" href="tools.html"><span class="t">工具清单</span><span class="arw">›</span></a>
-          <a class="doc" href="web-api.html"><span class="t">Web API</span><span class="arw">›</span></a>
-          <a class="doc" href="frontend_module_map.html"><span class="t">前端模块地图</span><span class="arw">›</span></a>
-        </div>
-
-        <div class="doc-col">
-          <h3>演进与规划</h3>
-          <a class="doc" href="CHANGELOG.html"><span class="t">变更日志</span><span class="arw">›</span></a>
-          <a class="doc" href="phase0_hardening_design.html"><span class="t">阶段加固设计</span><span class="arw">›</span></a>
-          <a class="doc" href="phase2_citation_confidence_design.html"><span class="t">引用与置信度</span><span class="arw">›</span></a>
-          <a class="doc" href="cost_quality_dashboard_design.html"><span class="t">成本质量看板</span><span class="arw">›</span></a>
-          <a class="doc" href="tools_optimization_roadmap.html"><span class="t">工具优化路线</span><span class="arw">›</span></a>
-          <a class="doc" href="main_refactor_design.html"><span class="t">入口重构设计</span><span class="arw">›</span></a>
-          <a class="doc" href="BINARY_PACKAGING_PLAN.html"><span class="t">二进制打包方案</span><span class="arw">›</span></a>
-        </div>
-
-        <div class="doc-col">
-          <h3>审计与记录</h3>
-          <a class="doc" href="audit/project_audit_2026-07-14.html"><span class="t">项目审计</span><span class="arw">›</span></a>
-          <a class="doc" href="audit/DOC_AUDIT_2026-07-30.html"><span class="t">文档审计</span><span class="arw">›</span></a>
-          <a class="doc" href="audit/multi-platform-audit-report.html"><span class="t">多平台审计</span><span class="arw">›</span></a>
-          <a class="doc" href="audit/intent-audit-20260726.html"><span class="t">意图审计</span><span class="arw">›</span></a>
-          <a class="doc" href="audit/memory-classifier-audit-20260726.html"><span class="t">记忆分类审计</span><span class="arw">›</span></a>
-        </div>
+      <div class="footer__col">
+        <h4>产品</h4>
+        <a href="#features">核心能力</a>
+        <a href="#how">工作原理</a>
+        <a href="#platforms">多平台</a>
+        <a href="#gate">人工接管</a>
+      </div>
+      <div class="footer__col">
+        <h4>文档</h4>
+        <a href="./architecture.html">系统架构</a>
+        <a href="./configuration.html">配置指南</a>
+        <a href="./tools.html">工具清单</a>
+        <a href="./web-api.html">Web API</a>
+      </div>
+      <div class="footer__col">
+        <h4>社区</h4>
+        <a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/0x0021/Linkora/releases" target="_blank" rel="noopener">发行版本</a>
+        <a href="./faq.html">常见问题</a>
+        <a href="./CHANGELOG.html">更新日志</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 灵桥 Linkora · 基于 GPL-3.0 开源</span>
+      <div class="footer__badges">
+        <span class="footer__badge">Python ≥ 3.14</span>
+        <span class="footer__badge">FastAPI</span>
+        <span class="footer__badge">Docker</span>
+        <span class="footer__badge">RAG</span>
       </div>
     </div>
   </div>
-</section>
+</footer>
 
-<!-- ============ 7 · 结尾 + 页脚 ============ -->
-<section class="panel last" data-label="开源">
-  <div class="finale">
-    <div class="wrap rv">
-      <h2>开源，自由可塑。</h2>
-      <p>基于 GPL-3.0 协议发布。你可自由使用、修改，也欢迎一同将它打磨得更好。</p>
-      <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/0x0021/Linkora">在 GitHub 上查看</a>
-        <a class="tlink" href="https://github.com/sponsors/0x0021">支持这个项目 <span class="chev">›</span></a>
-      </div>
-    </div>
-  </div>
-
-  <footer>
-    <div class="wrap-w">
-      <div class="foot-cols">
-        <div>
-          <h5>开始</h5>
-          <a href="deployment.html">部署指南</a>
-          <a href="configuration.html">配置参考</a>
-          <a href="faq.html">常见问题</a>
-        </div>
-        <div>
-          <h5>了解</h5>
-          <a href="architecture.html">架构设计</a>
-          <a href="rag.html">知识库</a>
-          <a href="tools.html">工具清单</a>
-        </div>
-        <div>
-          <h5>开发</h5>
-          <a href="DEV_GUIDE.html">开发指南</a>
-          <a href="web-api.html">Web API</a>
-          <a href="CHANGELOG.html">变更日志</a>
-        </div>
-        <div>
-          <h5>项目</h5>
-          <a href="https://github.com/0x0021/Linkora">GitHub</a>
-          <a href="https://github.com/0x0021/Linkora/blob/main/SECURITY.md">安全政策</a>
-          <a href="https://github.com/sponsors/0x0021">赞助</a>
-        </div>
-      </div>
-      <div class="foot-legal">
-        <span>Copyright © 2026 Linkora · 灵桥，基于 GPL-3.0 协议开源发布。</span>
-        <span>使用时请遵守所在组织各办公平台的开放平台规范与权限要求。</span>
-      </div>
-    </div>
-  </footer>
-</section>
-
-<script>
-(function () {
-  var root = document.documentElement;
-
-  /* ---------- 主题：light / dark / system ---------- */
-  var mq    = window.matchMedia('(prefers-color-scheme: dark)');
-  var btns  = Array.prototype.slice.call(document.querySelectorAll('[data-theme-set]'));
-  var thumb = document.getElementById('thumb');
-  var order = ['light', 'dark', 'system'];
-
-  function paint(pref) {
-    var dark = pref === 'dark' || (pref === 'system' && mq.matches);
-    root.setAttribute('data-theme', dark ? 'dark' : 'light');
-    root.setAttribute('data-pref', pref);
-    btns.forEach(function (b) { b.setAttribute('aria-checked', String(b.dataset.themeSet === pref)); });
-    thumb.style.transform = 'translateX(' + order.indexOf(pref) * 30 + 'px)';
-  }
-  var saved = 'system';
-  try { saved = localStorage.getItem('linkora-theme') || 'system'; } catch (e) {}
-  if (order.indexOf(saved) === -1) saved = 'system';
-  paint(saved);
-  btns.forEach(function (b) {
-    b.addEventListener('click', function () {
-      var v = b.dataset.themeSet;
-      try { localStorage.setItem('linkora-theme', v); } catch (e) {}
-      paint(v);
-    });
-  });
-  var onSys = function () { if (root.getAttribute('data-pref') === 'system') paint('system'); };
-  mq.addEventListener ? mq.addEventListener('change', onSys) : mq.addListener(onSys);
-
-  /* ---------- 分页指示器 + 当前屏高亮 ---------- */
-  var panels = Array.prototype.slice.call(document.querySelectorAll('.panel'));
-  var pager  = document.getElementById('pager');
-
-  panels.forEach(function (p, i) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('aria-label', '第 ' + (i + 1) + ' 屏：' + (p.dataset.label || ''));
-    b.setAttribute('aria-current', 'false');
-    b.addEventListener('click', function () {
-      p.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-    pager.appendChild(b);
-  });
-  var dots = Array.prototype.slice.call(pager.children);
-
-  function setActive(idx) {
-    panels.forEach(function (p, i) { p.classList.toggle('active', i === idx); });
-    dots.forEach(function (d, i) { d.setAttribute('aria-current', String(i === idx)); });
-  }
-
-  if ('IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) setActive(panels.indexOf(e.target));
-      });
-    }, { threshold: 0.55 });
-    panels.forEach(function (p) { io.observe(p); });
-  } else {
-    panels.forEach(function (p) { p.classList.add('active'); });
-  }
-  setActive(0);
-
-  /* ---------- 滚轮 + 键盘 PPT 式逐屏推进（proximity 模式不强制吸附，由 JS 接管 wheel） ---------- */
-  var wheelLockUntil = 0, WHEEL_COOLDOWN = 820;
-  var accumDelta = 0, ACCUM_THRESHOLD = 32;
-
-  function currentIndex() {
-    var mid = window.innerHeight / 2, best = 0, bestD = Infinity;
-    panels.forEach(function (p, i) {
-      var r = p.getBoundingClientRect();
-      var d = Math.abs(r.top + r.height / 2 - mid);
-      if (d < bestD) { bestD = d; best = i; }
-    });
-    return best;
-  }
-  function goTo(idx) {
-    idx = Math.max(0, Math.min(panels.length - 1, idx));
-    wheelLockUntil = Date.now() + WHEEL_COOLDOWN;
-    accumDelta = 0;
-    panels[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  window.addEventListener('wheel', function (e) {
-    if (Date.now() < wheelLockUntil) { e.preventDefault(); return; }
-    accumDelta += e.deltaY;
-    if (Math.abs(accumDelta) < ACCUM_THRESHOLD) return;
-    var dir = accumDelta > 0 ? 1 : -1;
-    accumDelta = 0;
-    e.preventDefault();
-    goTo(currentIndex() + dir);
-  }, { passive: false });
-
-  document.addEventListener('keydown', function (e) {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    var t = e.target;
-    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-
-    var step = 0;
-    if (e.key === 'PageDown' || e.key === 'ArrowDown' || e.key === ' ') step = 1;
-    else if (e.key === 'PageUp' || e.key === 'ArrowUp') step = -1;
-    else if (e.key === 'Home') { goTo(0); e.preventDefault(); return; }
-    else if (e.key === 'End')  { goTo(panels.length - 1); e.preventDefault(); return; }
-    else return;
-
-    e.preventDefault();
-    goTo(currentIndex() + step);
-  }, { passive: false });
-
-  /* 触控板 / 惯性滚动：保留浏览器原生行为（连续滚动更顺） */
-})();
-</script>
+<script src="./assets/site.js"></script>
 </body>
 </html>

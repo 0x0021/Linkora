@@ -126,34 +126,44 @@ class InboundMixin(EngineMixinBase):
             logger.warning("[真人在场] 查询失败，保守放行回复: %s", e)
             return False
 
-    def _should_reply_now(self, message: Message) -> bool:
-        """发送前最后一刻的权威裁决：此刻是否允许 AI 自动回复。
+    def _reply_gate_reason(self, message: Message) -> "str | None":
+        """返回当前应抑制 AI 自动回复的闸门原因；无闸门命中返回 None。
 
-        入站门控（_handle_message_with_rid）只在消息到达时判一次，而 LLM 生成耗
-        时数秒~数十秒，人工完全可能在该窗口内回复或在场——若只在入站判，bot 会抢先
-        发出、穿插真人对话。故在 _send_reply 真正发送前必须再判一次。
-
-        返回 True = 允许发送；任一闸门返回“不回复”即整体放弃发送。
+        供「前置过滤」与「发送前复核」两道校验共用，保证逻辑完全一致：
+          - 前置过滤（_handle_message_with_rid，进入 LLM 前）：命中即跳过 LLM，省 Token；
+          - 发送前复核（_should_reply_now，_send_reply 投递前）：并发兜底，
+            处理期间状态变化（人工回复/在场）仍能被拦截。
+        优先级短路：来自自身 → 人工已接管 → 真人在场 → DWS 已读。
         """
-        # 1) 自己发的消息（入站已判过，发送前再保险一次）
+        # 1) 自己发的消息
         if self._is_message_from_self(message):
-            logger.info("[门控] 发送前复核：消息来自自身，放弃发送")
-            return False
-        # 2) 人工已在对方消息之后手动回复（接管）——发送前再判，关闭生成期竞态
+            return "消息来自自身"
+        # 2) 人工已在对方消息之后手动回复（接管）——关闭生成期竞态的关键
         if self._has_user_taken_over(message):
-            logger.info("[门控] 发送前复核：人工已接管（消息后已手动回复），放弃发送")
-            return False
-        # 3) 真人在场（human-in-the-loop）——发送前再判，避免穿插
+            return "人工已接管（消息后已手动回复）"
+        # 3) 真人在场（human-in-the-loop）——避免穿插真人对话
         if self._is_owner_present(message):
-            logger.info("[门控] 发送前复核：真人当前在场，放弃发送")
-            return False
+            return "真人当前在场"
         # 4) 已读闸门（DWS）：会话被 DWS 判定为“已读(无未读)”才抑制。
         #    新到的未读消息会让会话重新进入未读列表 → 不抑制（照常回复），
         #    从而规避“漏回追问”旧事故。仅当 DWS 未读状态失真时才可能漏回，
         #    可用 config.poller.suppress_when_owner_read=false 关闭。
         if getattr(self.config.poller, "suppress_when_owner_read", False) \
                 and self._owner_conversation_is_read(message):
-            logger.info("[门控] 发送前复核：DWS 判定会话已读，放弃发送")
+            return "DWS 判定会话已读"
+        return None
+
+    def _should_reply_now(self, message: Message) -> bool:
+        """发送前最后一刻的权威裁决（后置兜底）：此刻是否允许 AI 自动回复。
+
+        前置过滤（_handle_message_with_rid 进入 LLM 前）已先省一轮 Token；
+        此处为并发兜底——LLM 生成耗数秒~数十秒，人工完全可能在该窗口内回复/在场，
+        故在 _send_reply 真正发送前必须再判一次（_reply_gate_reason 共用同套闸门）。
+        返回 True = 允许发送；任一闸门返回“不回复”即整体放弃发送。
+        """
+        reason = self._reply_gate_reason(message)
+        if reason is not None:
+            logger.info("[门控] 发送前复核：%s，放弃发送", reason)
             return False
         return True
 
@@ -483,6 +493,18 @@ class InboundMixin(EngineMixinBase):
 
             result = self.rule_engine.check(message)
             if self._apply_rule_result(message, result):
+                return
+
+            # === 前置过滤（双重校验·第一道）：进入 LLM 前再判一次门控 ===
+            # 共用 _reply_gate_reason 与发送前复核完全相同的闸门（自身/接管/在场/已读）。
+            # 命中即直接返回、不调 LLM，避免无效 Token 消耗；并标记入站已处理，
+            # 避免轮询反复重试刷屏。发送前复核(_should_reply_now)保留为并发兜底，
+            # 防止 LLM 生成期间人工状态变化导致重复回复。
+            _gate_reason = self._reply_gate_reason(message)
+            if _gate_reason is not None:
+                logger.info("[门控] 前置过滤命中：%s，跳过 LLM 处理（来自 %s）",
+                            _gate_reason, message.sender_name)
+                self._mark_inbound_processed(message)
                 return
 
             logger.info("没有规则匹配，调用LLM代理...")

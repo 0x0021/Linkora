@@ -613,7 +613,17 @@ ul { list-style: none; }
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-height: 420px;
+  overflow-y: auto;
 }
+
+.demo__body::-webkit-scrollbar { width: 6px; }
+.demo__body::-webkit-scrollbar-track { background: transparent; }
+.demo__body::-webkit-scrollbar-thumb {
+  background: var(--hair-strong);
+  border-radius: 999px;
+}
+.demo__body::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
 .msg {
   display: flex;

@@ -16,6 +16,7 @@
 - **refactor(docs)**: 重写 `docs/assets/site.css` 视觉系统，从「高对比繁杂商业风」收敛为「深色优先、干净高级」：更克制的 aurora/网格、更精致的卡片层级与留白、light 模式同步精致化而非简单反色。
 - **feat(docs)**: 主题切换改为分段按钮（浅色 / 深色 / 跟随系统），提升可发现性；默认主题改为 `dark`，首次访问直接呈现品牌深色主视觉。
 - **style(platform)**: 消除 `src/platform/runtime_inbound.py` 已读闸门哨兵 `_unread_conv_unknown` 赋值的 ruff `B010`（`setattr` 常量属性名）告警，改为普通属性赋值；行为不变。
+- **feat(frontend)**: `scripts/build_frontend.mjs` 新增 `--watch` 监听模式（Node 内置 `fs.watch` 递归监视 `web/static`，防抖 120ms 自动重建 `web/static/dist`）；`package.json` 增加 `build:frontend:watch` 脚本。前端源码（`web/static/css`、`web/static/js`）变动后本地自动出编译产物，免手动构建即可调试。
 
 ## 2026-08-07 — Pages 部署迁移到自定义 GitHub Actions 工作流
 

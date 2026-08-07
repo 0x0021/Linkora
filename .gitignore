@@ -112,3 +112,6 @@ Desktop.ini
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Agent 本地记录（非项目产物）
+.agnes/

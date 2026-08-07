@@ -15,7 +15,8 @@ from main import LinkoraEngine
 
 def _msg(**kw):
     base = dict(msg_id="m1", chat_id="C1", chat_name="测试", sender_id="U1",
-               sender_name="人", content="hi", msg_type="text", chat_type="single", raw={})
+               sender_name="人", content="hi", msg_type="text", chat_type="single",
+               timestamp=None, raw={})
     base.update(kw)
     return SimpleNamespace(**base)
 

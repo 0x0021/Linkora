@@ -5,6 +5,59 @@
 
 ---
 
+## 2026-08-07 — 会话门控重设计（发送前复核 + 已读闸门）与 CI 依赖安装加速
+
+> 现象：**人工正在沟通、消息已读的会话里，机器人仍插话自动回复**。
+> 排查后定位为「两层门控之间存在生成期竞态」+「已读信号在历史重构中被摘除且无替代」。
+> 本轮做门控重设计并重接 DWS 已读信号；**38 项门控相关测试 + 84 项相关回归全绿，pyright 维持基线 94**。
+
+### 门控失效根因（排查结论）
+
+| 编号 | 根因 | 证据 |
+| --- | --- | --- |
+| R1 | 「已读则不回」闸门 `reply_single_only_when_unread` 在历史重构中被整体移除，**无任何替代** | `config_models.py` / `poller_strategy.py` / `poller_core_discovery.py` 三处相关代码已删净 |
+| R2 | **门控只在消息入站时判一次**，`_send_reply` 只复查已读回执/退避/限流/冷却，不复查「真人在场 / 人工接管」 | LLM 生成耗时 5~30s，人工在此窗口内回复 → bot 仍抢先发出（**本次主因**） |
+| R3 | `owner_present_cooldown_seconds` 为固定 600s 窗口，粒度粗 | 长会话中易误判 |
+| R4 | `_has_user_taken_over` 是「比手速」的被动检测（bot 5s 轮询 vs 人工打字） | 代码注释自认此局限 |
+| R5 | `current_open_dingtalk_id` / `current_user_id` 为空时，接管与在场检测**静默返回 False**（等于门控整体失效） | 身份解析失败时无任何告警 |
+
+### 发送前最后一刻复核（核心修复，HIGH）
+- **fix(gate)**: 新增 `InboundMixin._should_reply_now(message)` 作为**发送前的权威裁决**，并在 `ReplyDispatchMixin._send_reply` 真正投递前调用；不通过则 `_mark_inbound_processed` 后 `return False`（标记已处理，避免该消息被轮询反复重试刷屏）。这直接关闭 R2 的生成期竞态——**LLM 生成期间人工已回复的，bot 不再补刀**。
+- 裁决按优先级短路：`消息来自自身` → `人工已接管` → `真人在场` → `DWS 判定已读`，任一命中即放弃发送，并各自打 `[门控] 发送前复核：…` 日志便于事后追责。
+- 已确认所有回复路径都汇聚于 `_handle_message_with_rid` → `_send_reply`，不存在绕过该复核的第二出口。
+
+### 重接 DWS 已读闸门（MEDIUM）
+- **feat(gate)**: 新增 `_owner_conversation_is_read` / `_unread_conversation_ids`，基于 DWS `chat_message_list_unread_conversations` 判断「本会话是否已无未读」。**保守语义**：只有会话不在未读列表中才判为已读并抑制回复；对方一旦有新消息，会话会重新回到未读列表 → 照常回复，以此规避历史事故「bot 回复后会话移出未读、对方追问再不回填导致漏回」。
+- 未读集合带 **30s TTL 缓存**，避免热路径高频调用 DWS；查询异常时保守放行（不抑制）并保留旧缓存，防止 DWS 抖动误杀正常回复。
+- **feat(config)**: 新增 `poller.suppress_when_owner_read`（默认 `true`），同步写入 `config.yaml.example`；若所在环境 DWS 未读状态失真、出现漏回，可置 `false` 单独关闭该闸门。
+
+### 身份解析失败的 fail-safe 暴露（LOW）
+- **fix(gate)**: `_has_user_taken_over` / `_is_owner_present` 在 `current_open_dingtalk_id`、`current_user_id` 均为空时，改为**打一次性 WARNING** 再返回 False（R5）。此前是彻底静默，门控整体失效却毫无痕迹，属于典型的「安静失败」。
+- **fix(gate)**: `_is_message_from_self` 改为防御性取值（`getattr` 兜底 `sender_id`/`sender_name`/`raw`），因发送前复核会以更宽松的消息对象调用它，缺字段时按「非自身」处理而不是抛异常。
+
+### 测试
+- **test(reply_gate_sendtime)**: 新增 `tests/test_reply_gate_sendtime.py`（11 例），覆盖 `_should_reply_now` 各闸门组合、`_owner_conversation_is_read` 三态（不在未读列表=已读 / 在未读列表=未读 / 查询异常=保守放行），以及两条**行为级**用例：门控在发送前失败时 `_send_reply` 返回 False、`_mark_inbound_processed` 被调用且 `_dispatch_reply_send` **未**被调用；门控通过时正常发送。
+- **chore(types)**: `engine_mixins_base.py` 补 `_should_reply_now` / `_owner_conversation_is_read` / `_unread_conversation_ids` 抽象桩，使跨 mixin 调用不产生新的 pyright `reportAttributeAccessIssue`（类型基线维持 94）。
+
+### CI 依赖安装加速
+- **ci(ci)**: `test` 与 `type-check` 两个作业的依赖安装由 `pip install -r requirements.lock` 改为 **`uv pip install --system`**，并用 `astral-sh/setup-uv@v9.0.0` 的 `enable-cache` 缓存。此前 `setup-python` 的 `cache: pip` 只缓存 pip 的**下载目录**，每次仍需重新解析+解包安装；uv 缓存的是已解包产物，命中后整段依赖安装从 ~1-2min 降到 ~10-30s。
+- 显式设置 `cache-dependency-glob: requirements.lock`（setup-uv 默认 glob 只匹配 `*requirements*.txt`，不含本项目的 `.lock` 后缀），并按作业设 `cache-suffix` 隔离缓存。
+- action 版本**钉全版本号**（与 ruff/pyright 同策略）：setup-uv 自 v8 起不再发布 `v8`/`v9` 这类浮动大版本别名标签，写 `@v9` 会解析失败。
+- `pip-audit` 安装同步改用 uv。`lint` 作业只装单个 ruff wheel，收益有限，保持 pip 不动。
+
+### 门控规则速查（当前设计）
+
+| 优先级 | 闸门 | 触发条件 | 判定点 |
+| --- | --- | --- | --- |
+| 0 | 自身消息过滤 | sender 为本账号 | 入站 + 发送前 |
+| 1 | 回复冷却 / 退避 / 限流 | 见 `runtime_reply_guard` | 入站 + 发送前 |
+| 2 | 去重 `_has_replied_after` | 该消息之后 bot 已回过 | 入站 |
+| 3 | 人工接管 `_has_user_taken_over` | 该消息之后本人已手动回复 | 入站 + **发送前（新增）** |
+| 4 | 真人在场 `_is_owner_present` | 冷却窗口内本人有发言 | 入站 + **发送前（新增）** |
+| 5 | DWS 已读闸门（新增） | 会话不在 DWS 未读列表中 | **发送前** |
+
+---
+
 ## 2026-08-07 — 业务逻辑查缺补漏（账号隔离/会话清理/配置模板/死代码）
 
 > 继 8/6 缺陷修复轮后，继续梳理业务主流程（消息入站→意图识别→工具调度→回复→持久化），

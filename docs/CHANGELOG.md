@@ -54,7 +54,14 @@
 | 2 | 去重 `_has_replied_after` | 该消息之后 bot 已回过 | 入站 |
 | 3 | 人工接管 `_has_user_taken_over` | 该消息之后本人已手动回复 | 入站 + **发送前（新增）** |
 | 4 | 真人在场 `_is_owner_present` | 冷却窗口内本人有发言 | 入站 + **发送前（新增）** |
-| 5 | DWS 已读闸门（新增） | 会话不在 DWS 未读列表中 | **发送前** |
+| 5 | DWS 已读闸门（新增） | 会话不在 DWS 未读列表中 | 入站(前置过滤) + 发送前 |
+
+### 双重校验·前置过滤（08-07 续）
+- **enhance(gate)**: 将门控判定抽为共用方法 `InboundMixin._reply_gate_reason(message)`，返回当前应抑制回复的闸门原因（自身/接管/在场/已读）或 `None`；`_should_reply_now`（发送前复核）与新增的**前置过滤**共用同一套逻辑，保证两道校验语义绝对一致，杜绝「两处逻辑漂移」。
+- **enhance(gate)**: 在 `_handle_message_with_rid` **进入 LLM 之前**新增前置过滤——命中 `_reply_gate_reason` 任一闸门即 `return`、**不调 LLM**、并 `_mark_inbound_processed` 标记已处理，避免无效 Token 消耗。这正是用户日志中「先吃 7704 token、发送前才被已读闸门拦下」的反面：会话在入站时已读 → 直接跳过 LLM。
+- 形成 **「前置过滤（省 Token）+ 发送前复核（并发兜底）」双重校验**：前置过滤抓「到达时已是已读/已回复」的常态；发送前复核抓「LLM 生成期间人工状态变化」的竞态。二者共用 `_reply_gate_reason`，任一命中都放弃发送。
+- 新增 `tests/test_reply_gate_sendtime.py` 的 `_PrefilterHost` 行为级用例：门控命中时 `_process_llm_reply` **未**被调用、`_mark_inbound_processed` 被调用一次；门控放行时正常进入 LLM。并补全 `_reply_gate_reason` 六态单测。
+- **config**: 按用户授权，将 `suppress_when_owner_read: true` **新增写入 live `config.yaml`** 三个平台 poller 段（dingtalk/feishu/wecom）——此前仅改了 `config.yaml.example`。旧的死键 `reply_single_only_when_unread` 未删除（遵循「删除参数需人工确认」红线）。
 
 ---
 

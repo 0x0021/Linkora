@@ -92,6 +92,33 @@ def test_available_covered_by_tool_action_map():
     assert TOOL_ACTION_MAP, "TOOL_ACTION_MAP 不应为空"
 
 
+def test_example_config_has_no_unknown_tool_entries():
+    """config.yaml.example（用户照抄的模板）不得含任何非 manifest 的幽灵工具。
+
+    2026-08-07 事故：审批工具收敛时删除了 get_my_approvals / get_approval_detail
+    的实现类，却漏改 config.yaml.example 的 tools.available 与 rate_limit，
+    导致照 example 新建配置会启动报「无对应工具」警告。CI 漂移测试此前只校验
+    默认/live 值、不校验 example，故漏网。此处补齐。
+    """
+    example_path = Path("config.yaml.example")
+    if not example_path.exists():
+        pytest.skip("config.yaml.example 不存在，跳过")
+    cfg = load_config(str(example_path))
+    manifest = _manifest_tool_names()
+    available = set(cfg.tools.available)
+    unknown = available - manifest
+    assert not unknown, (
+        f"config.yaml.example 的 tools.available 含未知工具名（无对应实现类）: {sorted(unknown)}"
+    )
+    rate_limit_keys = set(getattr(cfg.tools, "rate_limit", {}) or {})
+    unknown_rl = rate_limit_keys - manifest
+    assert not unknown_rl, (
+        f"config.yaml.example 的 tools.rate_limit 含未知工具名: {sorted(unknown_rl)}"
+    )
+    # example 的 available 也必须全部在 TOOL_ACTION_MAP 有映射（否则启动崩溃）
+    validate_tool_action_coverage(cfg.tools.available)
+
+
 def test_tool_router_refuses_unlisted_tool():
     """负向验证：白名单缺漏的工具会被 execute 拒绝（证实『列表不全→工具失效』链路）。"""
 

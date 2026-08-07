@@ -151,11 +151,14 @@ class ConversationRepo:
         self._cc(platform).commit()
 
     def delete_conversation(self, chat_id: str, platform: str = "") -> None:
-        """删除会话（遇权限错误时调用，避免反复重试）。"""
-        cur = self._cc(platform).cursor()
-        cur.execute("DELETE FROM conversations WHERE chat_id = ?", (chat_id,))
-        self._cc(platform).commit()
-        logger.info("[SQLiteStore] 已删除会话 %s", chat_id)
+        """删除单个会话（遇权限错误时调用，避免反复重试）。
+
+        与 :meth:`delete_conversations` 一致：级联清理 messages /
+        conversation_summaries / dedup_messages，并清理关联的本地图片
+        （``purge_orphan_images``），避免留下孤儿行与磁盘图片累积。
+        直接复用批量实现，保证两路径行为一致。
+        """
+        self.delete_conversations([chat_id], platform)
 
     def delete_conversations(self, chat_ids: list[str], platform: str = "") -> int:
         """批量删除会话（含其消息 / 摘要 / 去重记录）。返回实际删除的会话数。

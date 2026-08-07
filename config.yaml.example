@@ -447,8 +447,6 @@ tools:
     - get_my_profile                               # 获取我的资料
     - list_orgs                                    # 列出组织
     - get_current_org                              # 获取当前组织
-    - get_my_approvals                             # 获取我的审批
-    - get_approval_detail                          # 获取审批详情
     - transfer_approval                            # 转交审批任务（原审批人离职等场景，仅钉钉）
     - get_attendance                               # 获取考勤
     - send_ding                                    # 发送钉（DING）
@@ -468,11 +466,9 @@ tools:
     - approval_list_executed                       # 查询我已处理的审批（仅钉钉）
   rate_limit:                                      # 工具速率限制（防止滥用，单位：每小时）
     create_todo: { per_hour: 20 }
-    get_approval_detail: { per_hour: 30 }
     get_attendance: { per_hour: 20 }
     get_conversation_info: { per_hour: 60 }
     get_current_org: { per_hour: 30 }
-    get_my_approvals: { per_hour: 30 }
     transfer_approval: { per_hour: 10 }
     get_my_profile: { per_hour: 30 }
     get_unread: { per_hour: 60 }

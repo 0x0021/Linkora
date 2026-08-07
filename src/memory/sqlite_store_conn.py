@@ -119,6 +119,12 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             cached = self._conv_conns.get((tid, platform))
             if cached is not None and cached[0] == path:
                 return cached[1]
+            # 同线程同平台换账号导致物理路径变化：先关闭旧连接，避免 fd/WAL 句柄泄漏
+            if cached is not None:
+                try:
+                    cached[1].close()
+                except Exception as _close_err:  # noqa: BLE001
+                    logger.debug("[账号隔离] 关闭旧会话连接失败: %s", _close_err)
             existed = os.path.exists(path)
             c = sqlite3.connect(path)
             c.row_factory = sqlite3.Row

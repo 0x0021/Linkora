@@ -32,7 +32,10 @@ _CLI_FALLBACKS = {
     "feishu": ["lark-cli", "/opt/homebrew/bin/lark-cli"],
     "dingtalk": [
         "dws",
-        "/Users/user/.workbuddy/binaries/node/cli-connector-packages/bin/dws",
+        # 允许通过环境变量覆盖 dws 二进制位置（部署到非开发者机器时），
+        # 不再硬编码任何本机绝对路径，避免「which 找不到 + 路径不存在」时
+        # 钉钉账号恒解析为 dingtalk:unknown、per-account 隔离被破坏。
+        os.environ.get("DWS_BIN", ""),
     ],
     "wecom": ["wecom-cli", "/opt/homebrew/bin/wecom-cli"],
 }
@@ -47,6 +50,8 @@ _CACHE: dict[str, str] = {}
 
 def _find_cli(platform: str) -> Optional[str]:
     for cand in _CLI_FALLBACKS.get(platform, []):
+        if not cand:
+            continue
         if os.path.sep in cand or cand.startswith("~"):
             path = os.path.expanduser(cand)
             if os.path.exists(path) and os.access(path, os.X_OK):

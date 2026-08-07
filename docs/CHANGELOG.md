@@ -5,6 +5,31 @@
 
 ---
 
+## 2026-08-07 — 业务逻辑查缺补漏（账号隔离/会话清理/配置模板/死代码）
+
+> 继 8/6 缺陷修复轮后，继续梳理业务主流程（消息入站→意图识别→工具调度→回复→持久化），
+> 核实并修复 5 处真实缺陷/坏味道；**179 项相关回归测试全绿**。
+
+### 账号隔离与可移植性（MEDIUM）
+- **fix(account_identity)**: `_CLI_FALLBACKS["dingtalk"]` 原硬编码开发者机器绝对路径 `…/bin/dws`；非开发者机器若 `dws` 不在 PATH，该路径不存在 → `_find_cli` 返回 None → 钉钉账号恒解析为 `dingtalk:unknown` → **所有钉钉账号共用一个命名空间，per-account 隔离被破坏**。改为去掉绝对路径、保留 `which` 发现，并支持 `DWS_BIN` 环境变量兜底；`_find_cli` 跳过空候选。
+
+### 会话库清理（LOW，休眠缺陷）
+- **fix(conversation_repo)**: 单删 `delete_conversation` 原只删 `conversations` 行，漏 messages/conversation_summaries/dedup_messages 与本地图片，违背项目「删消息须连带删图」铁律（其唯一生产调用方 `poller_core_access` 已注释停用，故当前休眠，但重新启用即漏孤儿数据）。改为直接复用 `delete_conversations` 的级联清理逻辑，保证两路径行为一致。
+
+### 资源泄漏（LOW）
+- **fix(sqlite_store_conn)**: `conv_conn` 同线程同平台换账号时，直接覆盖 `(tid, platform)` 旧连接、从不 `close()`，导致 fd/WAL 句柄泄漏（与 `_CACHE` 永不过期耦合，极少触发）。覆盖前先关闭旧连接。
+
+### 配置模板幽灵工具（LOW）
+- **fix(config)**: `config.yaml.example` 的 `tools.available` 与 `rate_limit` 残留 2 个已移除工具 `get_my_approvals` / `get_approval_detail`（无实现类，CI 漂移测试此前只校验默认/live 值不校验 example 而漏网）。已从 example 移除，避免照模板新建配置时启动报「无对应工具」警告。
+
+### 死代码清理（INFO）
+- **refactor(poller)**: `_dispatch_one` 的 `finally` 中 `if msg.raw.get("merged"):` / `else:` 两分支体完全相同，删除无意义的 `merged` 分支，统一标记已处理。
+
+### 测试加固
+- **test(tool_whitelist_drift)**: 新增 `test_example_config_has_no_unknown_tool_entries`，校验 `config.yaml.example` 的 `tools.available` / `rate_limit` 不含非 manifest 幽灵条目且全部在 `TOOL_ACTION_MAP` 有映射，把"审批工具收敛漏改 example"类缺陷纳入 CI 拦截。
+
+---
+
 ## 2026-08-06 — 缺陷修复（配置回写/历史清理/日志脱敏/路径可重定位）
 
 > 聚焦真实缺陷扫描结果的修复轮，按严重度排序：**110 项配置相关测试 + 53 项 management/purge 测试全绿**。

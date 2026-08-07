@@ -199,13 +199,8 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         except Exception as e:
             logger.error("处理 %s 出错：%s", msg.msg_id, e, exc_info=True)
         finally:
-            if handler_ok:
-                if msg.raw.get("merged"):
-                    if msg.msg_id:
-                        self._mark_msg_processed(msg.msg_id, msg.chat_id, msg=msg)
-                else:
-                    if msg.msg_id:
-                        self._mark_msg_processed(msg.msg_id, msg.chat_id, msg=msg)
+            if handler_ok and msg.msg_id:
+                self._mark_msg_processed(msg.msg_id, msg.chat_id, msg=msg)
             # 落库无条件执行（与原 run_loop 一致）：handler 失败也保留消息原文
             self.store._message_repo.save_message(msg, "user")
 

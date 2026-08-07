@@ -13,6 +13,10 @@
 - 约束遵守：全程规避 Jekyll/Liquid 语法（{% raw %}`{{`/`{%`{% endraw %}）以免 Pages 构建失败；保留 `docs/` 既有 `.md` 并互链；未新增 `docs/index.md`（避免与静态首页抢路径）。
 - **fix(docs)**: 修复文档中残留 Jekyll/Liquid 模板字面量导致的 Pages 构建失败。
 
+## 2026-08-07 — Pages 部署迁移到自定义 GitHub Actions 工作流
+
+- **ci(pages)**: 新增 `.github/workflows/deploy-pages.yml`，将 Pages 部署从「分支部署（GitHub 默认 `pages-build-deployment` 工作流，内部使用 `checkout@v4` / `upload-artifact@v4`，触发 `Node.js 20 is deprecated` 告警）」改为「GitHub Actions 部署」。改用 `checkout@v7` / `configure-pages@v6` / `jekyll-build-pages@v1.0.13` / `upload-pages-artifact@v5` / `deploy-pages@v5`，消除该弃用告警。仓库 Pages `build_type` 由 `legacy` 切到 `workflow`。
+
 ## v0.2.0 (2026-08-07)
 
 > 距 v0.1.0（2026-08-04）以来的累计发布：会话门控重设计、业务逻辑查缺补漏、多项缺陷修复与质量优化、CI 加速。

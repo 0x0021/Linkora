@@ -10,7 +10,8 @@
 - **feat(docs)**: 重写 `docs/index.html` 落地页，从原 Apple 极简 PPT 吸附风（信息架构偏平）升级为商业产品级水准。设计语言统一为品牌渐变 **indigo→cyan**（沿用 `public/index.html` 管理台既立品牌色），深色为基底 + aurora 光晕 + 玻璃拟态 + 细网格背景。
 - 新增 `docs/assets/site.css`（设计系统：双主题 tokens、玻璃组件、aurora/网格背景、滚动进场与微交互动画、完整响应式）与 `docs/assets/site.js`（主题三态切换 light/dark/system 首帧防闪、IntersectionObserver 滚动进场 stagger、磁性按钮、导航玻璃态、移动菜单、数字计数、轻量 canvas 粒子背景——尊重 `prefers-reduced-motion` 与页面可见性）。
 - 信息架构：玻璃导航+主题切换 → Hero（渐变标题+对话流 mock）→ 指标条（38 工具/39 意图/3 平台/15 页）→ 核心能力网格 → 工作原理管道图 → 多平台物理隔离 → 人工接管门控演示（把「双重校验」做成产品卖点）→ 快速开始 → 文档矩阵 → CTA → 页脚。
-- 约束遵守：全程规避 Jekyll/Liquid 语法（`{{`/`{%`）以免 Pages 构建失败；保留 `docs/` 既有 `.md` 并互链；未新增 `docs/index.md`（避免与静态首页抢路径）。
+- 约束遵守：全程规避 Jekyll/Liquid 语法（{% raw %}`{{`/`{%`{% endraw %}）以免 Pages 构建失败；保留 `docs/` 既有 `.md` 并互链；未新增 `docs/index.md`（避免与静态首页抢路径）。
+- **fix(docs)**: 修复文档中残留 Jekyll/Liquid 模板字面量导致的 Pages 构建失败。
 
 ## v0.2.0 (2026-08-07)
 

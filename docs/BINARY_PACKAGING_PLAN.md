@@ -265,6 +265,7 @@ linkora --mode worker              # 服务 unit: linkora-worker
 
 ## 7. CI/CD 流水线草图（GitHub Actions）
 
+{% raw %}
 ```yaml
 name: build-binaries
 on:
@@ -294,6 +295,7 @@ jobs:
         with:
           files: dist/linkora*
 ```
+{% endraw %}
 
 ---
 

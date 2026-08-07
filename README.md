@@ -12,10 +12,6 @@
 
 <br>
 
-<img src="docs/banner.png" alt="灵桥 Linkora — 多平台 AI 智能连接中枢" width="720">
-
-<br>
-
 [快速开始](#快速开始) · [核心能力](#核心能力) · [配置](#配置速查) · [项目结构](#项目结构) · [贡献指南](#贡献指南) · [文档索引](#文档索引)
 · [安全政策](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md)
 

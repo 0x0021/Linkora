@@ -19,6 +19,7 @@
 - **docs(intent-model)**: `src/intent.py`→`src/intent/`；`main.py` 注入点改为 `src/platform/`。
 - **docs(DEV_GUIDE)**: Python 版本 3.12+→3.14+。
 - **docs(BINARY_PACKAGING_PLAN)**: 构建环境 / Docker 基础镜像 / CI `python-version` 的 Python 3.13 统一改为 3.14（与 `pyproject.toml` 及 CI 矩阵一致）。
+- **docs(readme)**: 移除 `README.md` 顶部对 `docs/banner.png` 的图片引用（该资源已缺失、GitHub raw 返回 404），保留 badges 与导航之间单一 `<br>` 分隔。
 
 ## 2026-08-07 — 文档站（Pages）商业级重设计
 

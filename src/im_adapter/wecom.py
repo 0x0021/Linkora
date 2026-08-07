@@ -33,6 +33,7 @@ import base64
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -132,6 +133,10 @@ class WecomCliAdapter(BaseIMAdapter):
         cli_path = self._resolve_cli_path(cli_path)
         super().__init__(cli_path=cli_path, timeout=timeout, retries=retries,
                          dry_run=dry_run, profile=profile)
+        # 授权过期（850003）友好日志与降噪状态
+        self._auth_expired_active = False
+        self._auth_expired_log_ts = 0.0
+        self._aibot_id_cache: str | None = None
 
     # ------------------------------------------------------------------
     # 引擎覆写：JSON-RPC 信封解析
@@ -252,7 +257,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 if isinstance(sub, str) and sub:
                     msg = sub
         except Exception as e:
-            logger.warning("[resilience] 解析异常，使用兜底: %s", e)
+            logger.debug("[resilience] 解析异常，使用兜底: %s", e)
             pass
         low = msg.lower()
         if code in _PERMISSION_CODES or any(k in low for k in _PERMISSION_HINTS):
@@ -260,6 +265,90 @@ class WecomCliAdapter(BaseIMAdapter):
         if code in _RETRYABLE_CODES or any(k in low for k in _RETRYABLE_HINTS):
             return self._retryable_error_class()
         return self._base_error_class()
+
+    # ------------------------------------------------------------------
+    # 授权过期（850003）友好日志与降噪
+    # ------------------------------------------------------------------
+    AUTH_EXPIRED_ERRCODES = frozenset({850003})
+    AUTH_LOG_INTERVAL_SECONDS = 600  # 授权过期提醒最小间隔：10 分钟内只报一次，避免轮询刷屏
+
+    _AUTH_URL_TPL = (
+        "https://work.weixin.qq.com/ai/aiHelper/authorizationPage"
+        "?str_aibotid={aibot_id}&type=6&from=chat&forceInnerBrowser=1"
+    )
+
+    def _extract_aibot_id(self, text: str) -> str | None:
+        """从企微错误文本或本地 ``auth show`` 解析机器人 ID（aibot_id）。"""
+        if text:
+            m = re.search(r"str_aibotid=([A-Za-z0-9_-]+)", text)
+            if m:
+                return m.group(1)
+            m = re.search(r"机器人\s*id[：:]\s*([A-Za-z0-9_-]+)", text, re.IGNORECASE)
+            if m:
+                return m.group(1)
+        # 兜底：调 wecom-cli auth show（结果缓存一次，避免反复 subprocess）
+        if self._aibot_id_cache is None:
+            try:
+                out = subprocess.run(
+                    [self.cli_path, "auth", "show"],
+                    capture_output=True, text=True, timeout=10,
+                    encoding="utf-8", env=self._no_browser_env,
+                )
+                obj = json.loads((out.stdout or "").strip())
+                self._aibot_id_cache = obj.get("id") or ""
+            except Exception as e:  # noqa: BLE001
+                logger.debug("提取 aibot_id 失败: %s", e)
+                self._aibot_id_cache = ""
+        return self._aibot_id_cache or None
+
+    def _is_auth_expired_error(self, exc: Exception) -> bool:
+        """判定异常是否为企微「消息」能力授权过期（850003）。"""
+        text = str(exc)
+        m = re.search(r"errcode[\"'\s:]+([0-9]+)", text)
+        if m and int(m.group(1)) in self.AUTH_EXPIRED_ERRCODES:
+            return True
+        low = text.lower()
+        if "authorization expired" in low:
+            return True
+        if ("授权" in text or "authorization" in low) and ("消息" in text or "message" in low):
+            return True
+        return False
+
+    def _auth_expired_message(self, exc: Exception) -> str:
+        aibot_id = self._extract_aibot_id(str(exc))
+        url = self._AUTH_URL_TPL.format(aibot_id=aibot_id) if aibot_id else ""
+        lines = [
+            "企业微信机器人「消息」能力授权已过期（errcode 850003），机器人暂时无法读取/接收消息。",
+            "原因：企业微信「智能机器人」的「消息」权限到期，需创建者重新授权。",
+            "解决办法（二选一）：",
+            "  1) 在企业微信内置浏览器打开下方授权链接完成授权；",
+            "  2) 前往「工作台 → 智能机器人」找到对应机器人，重授权「消息」权限。",
+        ]
+        if url:
+            lines.append(f"授权链接：{url}")
+        if aibot_id:
+            lines.append(f"机器人 ID：{aibot_id}")
+        lines.append("授权后无需重启本服务，下一轮轮询将自动恢复。")
+        return "\n".join(lines)
+
+    def _maybe_log_auth_expired(self, exc: Exception) -> bool:
+        """若异常为授权过期，按降噪间隔打印一条人话提醒，返回 True；否则 False。"""
+        if not self._is_auth_expired_error(exc):
+            return False
+        now = time.time()
+        if self._auth_expired_active and (now - self._auth_expired_log_ts) < self.AUTH_LOG_INTERVAL_SECONDS:
+            return True  # 降噪：未到再次提醒间隔，仅抑制，不重复打印
+        logger.warning("⚠️ %s", self._auth_expired_message(exc))
+        self._auth_expired_active = True
+        self._auth_expired_log_ts = now
+        return True
+
+    def _maybe_log_auth_recovered(self) -> None:
+        """若之前处于授权过期状态，打印一条恢复提醒并重置。"""
+        if self._auth_expired_active:
+            logger.info("✅ 企业微信机器人「消息」权限已恢复，消息拉取恢复正常。")
+            self._auth_expired_active = False
+            self._auth_expired_log_ts = 0.0
 
     # ------------------------------------------------------------------
     # 认证 / 组织
@@ -358,7 +447,7 @@ class WecomCliAdapter(BaseIMAdapter):
                     "title": u.get("position") or u.get("title") or "",
                 }
         except Exception as e:
-            logger.warning("[resilience] 解析异常，使用兜底: %s", e)
+            logger.debug("[resilience] 解析异常，使用兜底: %s", e)
             pass
         user_id = os.environ.get("USER", "")
         return {"user_id": user_id, "name": user_id, "title": ""} if user_id else {}
@@ -370,6 +459,8 @@ class WecomCliAdapter(BaseIMAdapter):
         try:
             resp = self.run(["contact", "get_userlist"], force_no_dry_run=True)
         except Exception as e:  # noqa: BLE001
+            if self._maybe_log_auth_expired(e):
+                return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
             return []
         users = resp.get("userlist") or [] if isinstance(resp, dict) else []
@@ -430,10 +521,13 @@ class WecomCliAdapter(BaseIMAdapter):
                 force_no_dry_run=True,
             )
         except Exception as e:  # noqa: BLE001
+            if self._maybe_log_auth_expired(e):
+                return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
             return []
         chats = resp.get("chats") or [] if isinstance(resp, dict) else []
         # 归一化：补 openConversationId / singleChat，供 poller 未读通道识别会话
+        self._maybe_log_auth_recovered()
         return [self._normalize_chat(c) for c in chats[:count]]
 
     def chat_message_list_direct(self, user_id: str = "",
@@ -453,6 +547,8 @@ class WecomCliAdapter(BaseIMAdapter):
                 force_no_dry_run=True,
             )
         except Exception as e:  # noqa: BLE001
+            if self._maybe_log_auth_expired(e):
+                return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
             return []
         msgs = resp.get("messages") or [] if isinstance(resp, dict) else []
@@ -478,6 +574,8 @@ class WecomCliAdapter(BaseIMAdapter):
                 force_no_dry_run=True,
             )
         except Exception as e:  # noqa: BLE001
+            if self._maybe_log_auth_expired(e):
+                return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
             return []
         msgs = resp.get("messages") or [] if isinstance(resp, dict) else []
@@ -543,6 +641,8 @@ class WecomCliAdapter(BaseIMAdapter):
                 force_no_dry_run=True,
             )
         except Exception as e:  # noqa: BLE001
+            if self._maybe_log_auth_expired(e):
+                return {"conversationMessagesList": []}
             logger.warning("[resilience] chat_message_list_all 拉取会话列表异常: %s", e, exc_info=True)
             cl = {}
         chats = cl.get("chats") or [] if isinstance(cl, dict) else []
@@ -562,6 +662,8 @@ class WecomCliAdapter(BaseIMAdapter):
                     force_no_dry_run=True,
                 )
             except Exception as e:  # noqa: BLE001
+                if self._maybe_log_auth_expired(e):
+                    continue
                 logger.warning("[resilience] chat_message_list_all 拉取会话 %s 消息异常: %s", chatid, e, exc_info=True)
                 continue
             msgs = mr.get("messages") or [] if isinstance(mr, dict) else []
@@ -573,6 +675,7 @@ class WecomCliAdapter(BaseIMAdapter):
                     "messages": normalized,
                     "singleChat": chat_type == 1,
                 })
+        self._maybe_log_auth_recovered()
         return {"conversationMessagesList": conv_list}
 
     # ------------------------------------------------------------------

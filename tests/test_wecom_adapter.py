@@ -390,5 +390,87 @@ class TestContactGetSelf(unittest.TestCase):
         self.assertEqual(info.get("title"), "后端工程师")
 
 
+class TestAuthExpiredLogging(unittest.TestCase):
+    """850003 授权过期：人话提醒日志 + 降噪（轮询不刷屏）+ 恢复通知。"""
+
+    def _exc_text(self, errcode=850003, errmsg="authorization expired", aibot_id="aibTESTID"):
+        return json.dumps({
+            "errcode": errcode, "errmsg": errmsg,
+            "help_message": f"当前机器人「消息」使用权限已过期\n机器人 id：{aibot_id}",
+        })
+
+    def test_is_auth_expired_true_on_850003(self):
+        a = WecomCliAdapter()
+        self.assertTrue(a._is_auth_expired_error(IMAdapterError(self._exc_text())))
+
+    def test_is_auth_expired_false_on_other_code(self):
+        a = WecomCliAdapter()
+        self.assertFalse(a._is_auth_expired_error(
+            IMAdapterError(self._exc_text(errcode=850017, errmsg="invalid media"))))
+
+    def test_is_auth_expired_true_on_keyword(self):
+        a = WecomCliAdapter()
+        self.assertTrue(a._is_auth_expired_error(
+            IMAdapterError("authorization expired, please re-auth message")))
+
+    def test_message_contains_aibot_id_and_url(self):
+        a = WecomCliAdapter()
+        a._aibot_id_cache = "aibTESTID"  # 跳过 subprocess 兜底
+        msg = a._auth_expired_message(IMAdapterError(self._exc_text()))
+        self.assertIn("aibTESTID", msg)
+        self.assertIn("str_aibotid=aibTESTID", msg)
+        self.assertIn("850003", msg)
+        self.assertIn("无需重启", msg)
+
+    def test_dedup_only_logs_once_within_interval(self):
+        fake_clock = {"t": 1000.0}
+        a = WecomCliAdapter()
+        a._aibot_id_cache = "aibTESTID"
+        with patch("src.im_adapter.wecom.time.time", side_effect=lambda: fake_clock["t"]), \
+                self.assertLogs("src.im_adapter.wecom", level="WARNING") as logs:
+            self.assertTrue(a._maybe_log_auth_expired(IMAdapterError(self._exc_text())))
+            self.assertTrue(a._maybe_log_auth_expired(IMAdapterError(self._exc_text())))
+        warns = [m for m in logs.output if "850003" in m]
+        self.assertEqual(len(warns), 1, f"间隔内应仅 1 条友好警告，实际: {logs.output}")
+
+    def test_dedup_logs_again_after_interval(self):
+        fake_clock = {"t": 2000.0}
+        a = WecomCliAdapter()
+        a._aibot_id_cache = "aibTESTID"
+        with patch("src.im_adapter.wecom.time.time", side_effect=lambda: fake_clock["t"]), \
+                self.assertLogs("src.im_adapter.wecom", level="WARNING") as logs1:
+            a._maybe_log_auth_expired(IMAdapterError(self._exc_text()))
+        fake_clock["t"] += 700  # 超过 AUTH_LOG_INTERVAL_SECONDS (600)
+        with patch("src.im_adapter.wecom.time.time", side_effect=lambda: fake_clock["t"]), \
+                self.assertLogs("src.im_adapter.wecom", level="WARNING") as logs2:
+            a._maybe_log_auth_expired(IMAdapterError(self._exc_text()))
+        self.assertEqual(len([m for m in logs1.output if "850003" in m]), 1)
+        self.assertEqual(len([m for m in logs2.output if "850003" in m]), 1)
+
+    def test_recovered_logs_once_and_resets(self):
+        a = WecomCliAdapter()
+        a._aibot_id_cache = "aibTESTID"
+        a._auth_expired_active = True
+        with self.assertLogs("src.im_adapter.wecom", level="INFO") as logs:
+            a._maybe_log_auth_recovered()
+            a._maybe_log_auth_recovered()  # 已重置，不应再打
+        recs = [m for m in logs.output if "已恢复" in m]
+        self.assertEqual(len(recs), 1)
+        self.assertFalse(a._auth_expired_active)
+
+    def test_unread_list_logs_friendly_on_850003(self):
+        """端到端：拉列表遇 850003 时打印人话日志（非堆栈），且返回空。"""
+        cap = _RunCapture(_fake(_env(self._exc_text())))
+        a = WecomCliAdapter()
+        a._aibot_id_cache = "aibTESTID"
+        with patch("src.im_adapter.wecom.subprocess.run", cap), \
+                self.assertLogs("src.im_adapter.wecom", level="WARNING") as logs:
+            res = a.chat_message_list_unread_conversations(count=10)
+        self.assertEqual(res, [])
+        self.assertTrue(any("850003" in m for m in logs.output))
+        # 不应出现技术堆栈 warning（[resilience] 行）
+        self.assertFalse(any("[resilience]" in m for m in logs.output))
+
+
 if __name__ == "__main__":
     unittest.main()

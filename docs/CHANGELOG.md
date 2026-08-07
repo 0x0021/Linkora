@@ -17,6 +17,7 @@
 - **feat(docs)**: 主题切换改为分段按钮（浅色 / 深色 / 跟随系统），提升可发现性；默认主题改为 `dark`，首次访问直接呈现品牌深色主视觉。
 - **style(platform)**: 消除 `src/platform/runtime_inbound.py` 已读闸门哨兵 `_unread_conv_unknown` 赋值的 ruff `B010`（`setattr` 常量属性名）告警，改为普通属性赋值；行为不变。
 - **feat(frontend)**: `scripts/build_frontend.mjs` 新增 `--watch` 监听模式（Node 内置 `fs.watch` 递归监视 `web/static`，防抖 120ms 自动重建 `web/static/dist`）；`package.json` 增加 `build:frontend:watch` 脚本。前端源码（`web/static/css`、`web/static/js`）变动后本地自动出编译产物，免手动构建即可调试。
+- **fix(wecom)**: 企业微信 `850003`「消息」能力授权过期，原仅打印技术栈报错（`authorization expired ... e=850003`）且每轮询刷屏；改为实例级人话提醒日志（含机器人 ID、授权链接与「无需重启、下一轮轮询自动恢复」说明），并按 10 分钟最小间隔降噪（轮询高频场景不再刷屏）；授权恢复后打印一条「已恢复」日志。配套单测 `TestAuthExpiredLogging`（判定 / 消息构造 / 降噪间隔 / 恢复通知 / 端到端）覆盖。
 
 ## 2026-08-07 — Pages 部署迁移到自定义 GitHub Actions 工作流
 

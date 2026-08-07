@@ -523,10 +523,18 @@ ul { list-style: none; }
   color: var(--text-2);
   line-height: 1.72;
   max-width: 520px;
-  margin-bottom: 34px;
+  margin-bottom: 14px;
 }
 
 .hero__sub b { color: var(--text); font-weight: 650; }
+
+.hero__desc {
+  font-size: clamp(14px, 1.9vw, 16.5px);
+  color: var(--text-3);
+  line-height: 1.74;
+  max-width: 540px;
+  margin-bottom: 34px;
+}
 
 .hero__cta {
   display: flex;

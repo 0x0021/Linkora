@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import functools
 from datetime import datetime
 from pathlib import Path
 import subprocess
@@ -18,8 +19,13 @@ from web.dependencies import logger, get_current_platform, get_app_instance
 from web.errors import SAFE_OPERATION_FAILED
 
 
+@functools.lru_cache(maxsize=1)
 def _get_git_info() -> dict:
-    """获取当前运行代码的 Git 版本信息（运行时采集，不依赖打包）。"""
+    """获取当前运行代码的 Git 版本信息（运行时采集，不依赖打包）。
+
+    lru_cache(maxsize=1)：版本号在进程生命周期内固定，避免每次 /api/status
+    都 fork 子进程跑 git（H1-2026-08-08：消除事件循环内的 subprocess 阻塞）。
+    """
     cwd = Path(_api.CONFIG_PATH).parent
     try:
         commit = (
@@ -50,6 +56,49 @@ def _get_git_info() -> dict:
 router = APIRouter()
 
 
+def _resolve_user_name() -> str:
+    """解析当前登录用户显示名（可能调用 DWS CLI，须离开事件循环执行）。
+
+    H1-2026-08-08：原实现直接在 async 视图里调用 dws._get_current_profile_local()
+    / dws.contact_user_get_self()（subprocess CLI），阻塞事件循环。改为由调用方
+    经 run_in_threadpool 在 worker 线程执行本函数。
+    """
+    user_name = "N/A"
+    try:
+        platform = get_current_platform()
+        inst = get_app_instance()
+        if inst and hasattr(inst, "platforms") and platform in inst.platforms:
+            adapter = inst.platforms[platform].dws
+            if adapter:
+                try:
+                    if hasattr(adapter, '_get_current_profile_local'):
+                        profile = adapter._get_current_profile_local()
+                        if profile and profile.get("userName"):
+                            user_name = profile.get("userName", "N/A")
+                    if user_name == "N/A" and hasattr(adapter, 'contact_user_get_self'):
+                        user = adapter.contact_user_get_self()
+                        if user:
+                            user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "") or \
+                                        user.get("name", "N/A")
+                except Exception:
+                    pass
+        else:
+            dws = _api.get_dws()
+            profile = dws._get_current_profile_local()
+            if profile and profile.get("userName"):
+                user_name = profile.get("userName", "N/A")
+            else:
+                user = dws.contact_user_get_self()
+                user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "N/A")
+    except Exception as e:
+        err_str = str(e)
+        if "TOKEN_VERIFIED_FAILED" in err_str or "Token 验证失败" in err_str:
+            user_name = "个人用户"
+        else:
+            user_name = "N/A"
+    return user_name
+
+
 @router.get("/api/status")
 async def status():
     # 配置缺失时抛 503（放在 try 外：HTTPException 是 Exception 子类，
@@ -73,39 +122,8 @@ async def status():
         (msg_count, conv_count, mem_count, kw_count, kb_count, dd_count,
          dl_count) = await run_in_threadpool(_db_counts)
 
-        user_name = "N/A"
-        try:
-            platform = get_current_platform()
-            inst = get_app_instance()
-            if inst and hasattr(inst, "platforms") and platform in inst.platforms:
-                adapter = inst.platforms[platform].dws
-                if adapter:
-                    try:
-                        if hasattr(adapter, '_get_current_profile_local'):
-                            profile = adapter._get_current_profile_local()
-                            if profile and profile.get("userName"):
-                                user_name = profile.get("userName", "N/A")
-                        if user_name == "N/A" and hasattr(adapter, 'contact_user_get_self'):
-                            user = adapter.contact_user_get_self()
-                            if user:
-                                user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "") or \
-                                            user.get("name", "N/A")
-                    except Exception:
-                        pass
-            else:
-                dws = _api.get_dws()
-                profile = dws._get_current_profile_local()
-                if profile and profile.get("userName"):
-                    user_name = profile.get("userName", "N/A")
-                else:
-                    user = dws.contact_user_get_self()
-                    user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "N/A")
-        except Exception as e:
-            err_str = str(e)
-            if "TOKEN_VERIFIED_FAILED" in err_str or "Token 验证失败" in err_str:
-                user_name = "个人用户"
-            else:
-                user_name = "N/A"
+        # H1-2026-08-08：DWS 身份解析涉及 subprocess CLI，移出事件循环到 worker 线程
+        user_name = await run_in_threadpool(_resolve_user_name)
 
         # 平台级健康状态（轻量，不额外调用 CLI）
         platforms_status: dict = {}
@@ -135,7 +153,7 @@ async def status():
 
         return {
             "status": "running",
-            "version": _get_git_info(),
+            "version": await run_in_threadpool(_get_git_info),
             "config": {
                 "dry_run": config.dws.dry_run,
                 "poll_interval": config.poller.interval_seconds,

@@ -132,7 +132,20 @@ class PollerStrategyMixin(PollerMixinBase):
             logger.warning("[resilience] silent exception in _feishu_correct_chat_type", exc_info=True)
 
         try:
-            info = self.dws.chat_conversation_info(conv_id)
+            # H3-2026-08-08：单轮内按 conv_id 缓存 chat_conversation_info 结果，
+            # 避免 _build_group_list_all_cache（遍历所有群）/ _fetch_conversation_messages
+            # 对同一会话重复发起 subprocess CLI 调用。用哨兵区分"未缓存"与"缓存到 None"。
+            cache = getattr(self, "_feishu_conv_info_cache", None)
+            if cache is None:
+                cache = {}
+                self._feishu_conv_info_cache = cache
+            _miss = object()
+            cached = cache.get(conv_id, _miss)
+            if cached is _miss:
+                info = self.dws.chat_conversation_info(conv_id)
+                cache[conv_id] = info
+            else:
+                info = cached
         except Exception as e:
             logger.debug(
                 "[轮询器] 飞书 chat_type 纠错: 无法获取 %s 会话信息: %s",
@@ -783,6 +796,8 @@ class PollerStrategyMixin(PollerMixinBase):
         """
         new_messages = []
         self._last_poll_at = datetime.now()
+        # H3-2026-08-08：清空上一轮的飞书会话信息缓存，使本轮按 conv_id 共享一次 CLI 结果
+        self._feishu_conv_info_cache = {}
         logger.debug("[轮询器] poll_once() 已启动")
 
         # 每 N 轮用 list-top（安全、不弹窗）对账一次黑名单，自动解除已恢复访问的会话

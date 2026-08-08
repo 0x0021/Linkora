@@ -27,6 +27,80 @@ from web.dependencies import logger, get_current_platform, get_app_instance
 router = APIRouter()
 
 
+def _resolve_current_user() -> tuple[str, str]:
+    """解析当前登录用户的 id / name（可能调用 DWS CLI，须离开事件循环执行）。
+
+    H1-2026-08-08：原实现直接在 async 视图里调用 dws._get_current_profile_local()
+    / dws.contact_user_get_self()（subprocess CLI），阻塞事件循环。改为由调用方
+    经 run_in_threadpool 在 worker 线程执行本函数。返回 (current_user_id, current_user_name)。
+    """
+    current_user_id = ""
+    current_user_name = ""
+    try:
+        platform = get_current_platform()
+        inst = get_app_instance()
+        if inst and hasattr(inst, "platforms") and platform in inst.platforms:
+            adapter = inst.platforms[platform].dws
+            if adapter:
+                try:
+                    if hasattr(adapter, '_get_current_profile_local'):
+                        profile = adapter._get_current_profile_local()
+                        if profile:
+                            # ★ P-1 修复：补全 current_user_id 提取（同时兼容 openDingTalkId/userid/staffId 三种字段名）
+                            current_user_id = (
+                                profile.get("openDingTalkId", "")
+                                or profile.get("userid", "")
+                                or profile.get("staffId", "")
+                                or profile.get("userId", "")
+                            )
+                            if not current_user_name:
+                                current_user_name = profile.get("userName", "")
+                    if (not current_user_id or not current_user_name) and hasattr(adapter, 'contact_user_get_self'):
+                        user = adapter.contact_user_get_self()
+                        if user:
+                            # 兜底：拉 contact_user_get_self 返回的 orgEmployeeModel
+                            emp = user.get("orgEmployeeModel", {}) or {}
+                            if not current_user_id:
+                                current_user_id = (
+                                    user.get("openDingTalkId", "")
+                                    or emp.get("userid", "")
+                                    or emp.get("staffId", "")
+                                    or ""
+                                )
+                            if not current_user_name:
+                                current_user_name = emp.get("orgUserName", "") or user.get("name", "")
+                except Exception:
+                    pass
+        else:
+            dws = _api.get_dws()
+            profile = dws._get_current_profile_local()
+            if profile:
+                current_user_id = (
+                    profile.get("openDingTalkId", "")
+                    or profile.get("userid", "")
+                    or profile.get("staffId", "")
+                    or profile.get("userId", "")
+                )
+                if not current_user_name:
+                    current_user_name = profile.get("userName", "")
+            if not current_user_id or not current_user_name:
+                user = dws.contact_user_get_self()
+                if user:
+                    emp = user.get("orgEmployeeModel", {}) or {}
+                    if not current_user_id:
+                        current_user_id = (
+                            user.get("openDingTalkId", "")
+                            or emp.get("userid", "")
+                            or emp.get("staffId", "")
+                            or ""
+                        )
+                    if not current_user_name:
+                        current_user_name = emp.get("orgUserName", "") or user.get("name", "")
+    except Exception:
+        pass
+    return current_user_id, current_user_name
+
+
 @router.get("/api/conversations")
 async def conversations(limit: int = 50):
     try:
@@ -61,70 +135,8 @@ async def messages(chat_id: str = "", limit: int = 50):
     try:
         limit = max(1, min(limit, 500))
 
-        current_user_id = ""
-        current_user_name = ""
-        try:
-            platform = get_current_platform()
-            inst = get_app_instance()
-            if inst and hasattr(inst, "platforms") and platform in inst.platforms:
-                adapter = inst.platforms[platform].dws
-                if adapter:
-                    try:
-                        if hasattr(adapter, '_get_current_profile_local'):
-                            profile = adapter._get_current_profile_local()
-                            if profile:
-                                # ★ P-1 修复：补全 current_user_id 提取（同时兼容 openDingTalkId/userid/staffId 三种字段名）
-                                current_user_id = (
-                                    profile.get("openDingTalkId", "")
-                                    or profile.get("userid", "")
-                                    or profile.get("staffId", "")
-                                    or profile.get("userId", "")
-                                )
-                                if not current_user_name:
-                                    current_user_name = profile.get("userName", "")
-                        if (not current_user_id or not current_user_name) and hasattr(adapter, 'contact_user_get_self'):
-                            user = adapter.contact_user_get_self()
-                            if user:
-                                # 兜底：拉 contact_user_get_self 返回的 orgEmployeeModel
-                                emp = user.get("orgEmployeeModel", {}) or {}
-                                if not current_user_id:
-                                    current_user_id = (
-                                        user.get("openDingTalkId", "")
-                                        or emp.get("userid", "")
-                                        or emp.get("staffId", "")
-                                        or ""
-                                    )
-                                if not current_user_name:
-                                    current_user_name = emp.get("orgUserName", "") or user.get("name", "")
-                    except Exception:
-                        pass
-            else:
-                dws = _api.get_dws()
-                profile = dws._get_current_profile_local()
-                if profile:
-                    current_user_id = (
-                        profile.get("openDingTalkId", "")
-                        or profile.get("userid", "")
-                        or profile.get("staffId", "")
-                        or profile.get("userId", "")
-                    )
-                    if not current_user_name:
-                        current_user_name = profile.get("userName", "")
-                if not current_user_id or not current_user_name:
-                    user = dws.contact_user_get_self()
-                    if user:
-                        emp = user.get("orgEmployeeModel", {}) or {}
-                        if not current_user_id:
-                            current_user_id = (
-                                user.get("openDingTalkId", "")
-                                or emp.get("userid", "")
-                                or emp.get("staffId", "")
-                                or ""
-                            )
-                        if not current_user_name:
-                            current_user_name = emp.get("orgUserName", "") or user.get("name", "")
-        except Exception:
-            pass
+        # H1-2026-08-08：DWS 身份解析涉及 subprocess CLI，移出事件循环到 worker 线程
+        current_user_id, current_user_name = await run_in_threadpool(_resolve_current_user)
 
         # 标准化（strip 兼容前后空格差异）
         current_user_id = (current_user_id or "").strip()

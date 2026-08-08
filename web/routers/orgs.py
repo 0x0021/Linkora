@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from web.dependencies import get_app_instance
 
@@ -21,7 +22,8 @@ async def get_orgs():
         poller = app_instance.poller if app_instance and hasattr(app_instance, "poller") else None
         if poller is None:
             raise HTTPException(status_code=503, detail="轮询器未启动")
-        orgs = poller.dws.list_orgs()
+        # H1-2026-08-08：list_orgs() 是 subprocess CLI 调用，移出事件循环到 worker 线程
+        orgs = await run_in_threadpool(poller.dws.list_orgs)
         current = poller.current_org if hasattr(poller, "current_org") else poller.dws.get_current_org()
         target = getattr(poller, "target_org_corp_id", "") or ""
         skipped = len(poller._inaccessible_conversations)

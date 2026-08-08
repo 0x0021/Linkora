@@ -18,6 +18,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# H4-2026-08-08：记忆召回/去重先按 created_at 倒序截断到最近一批候选，再在内存算余弦，
+# 避免记忆量很大时全表 fetchall + 逐行 cosine 拖慢热路径。记忆表通常很小，cap 内行为不变；
+# 超大表退化为"近期优先"（符合个人记忆场景）。idx_memories_created 已覆盖 ORDER BY。
+_MEMORY_CANDIDATE_CAP = 500
+
 
 class MemoryRepo:
     """Repository extracted from SQLiteStore for memory operations."""
@@ -38,8 +43,9 @@ class MemoryRepo:
             # 满足「个人记忆是我和对方私有的，绝不能出现在第三方」。
             cur.execute(
                 "SELECT id, content, source, chat_id, sender_id, sender_name, embedding, created_at, scope "
-                "FROM memories WHERE (scope = 'public') OR (sender_id = ? AND (scope = 'personal' OR scope IS NULL))",
-                (sender_id,),
+                "FROM memories WHERE (scope = 'public') OR (sender_id = ? AND (scope = 'personal' OR scope IS NULL)) "
+                "ORDER BY created_at DESC LIMIT ?",
+                (sender_id, _MEMORY_CANDIDATE_CAP),
             )
         else:
             # 安全兜底：缺少 sender_id（异常/系统消息/未来新调用方）时，
@@ -47,7 +53,9 @@ class MemoryRepo:
             # 误召回他人私聊记忆，造成隐私泄露。chat_id 不足以解锁个人记忆。
             cur.execute(
                 "SELECT id, content, source, chat_id, sender_id, sender_name, embedding, created_at, scope "
-                "FROM memories WHERE scope = 'public'"
+                "FROM memories WHERE scope = 'public' "
+                "ORDER BY created_at DESC LIMIT ?",
+                (_MEMORY_CANDIDATE_CAP,),
             )
 
         rows = cur.fetchall()
@@ -269,14 +277,17 @@ class MemoryRepo:
                 if query_emb:
                     if scope == "public":
                         cur.execute(
-                            "SELECT embedding FROM memories WHERE scope = 'public' AND embedding IS NOT NULL AND embedding != ''"
+                            "SELECT embedding FROM memories WHERE scope = 'public' AND embedding IS NOT NULL AND embedding != '' "
+                            "ORDER BY created_at DESC LIMIT ?",
+                            (_MEMORY_CANDIDATE_CAP,),
                         )
                     else:
                         cur.execute(
                             "SELECT embedding FROM memories WHERE "
                             "((sender_id = ? AND (scope = 'personal' OR scope IS NULL)) OR scope = 'public') "
-                            "AND embedding IS NOT NULL AND embedding != ''",
-                            (sender_id,),
+                            "AND embedding IS NOT NULL AND embedding != '' "
+                            "ORDER BY created_at DESC LIMIT ?",
+                            (sender_id, _MEMORY_CANDIDATE_CAP),
                         )
                     for row in cur.fetchall():
                         try:

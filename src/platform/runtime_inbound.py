@@ -126,7 +126,9 @@ class InboundMixin(EngineMixinBase):
             logger.warning("[真人在场] 查询失败，保守放行回复: %s", e)
             return False
 
-    def _reply_gate_reason(self, message: Message) -> "str | None":
+    def _reply_gate_reason(self, message: Message,
+                           taken_over: "bool | None" = None,
+                           owner_present: "bool | None" = None) -> "str | None":
         """返回当前应抑制 AI 自动回复的闸门原因；无闸门命中返回 None。
 
         供「前置过滤」与「发送前复核」两道校验共用，保证逻辑完全一致：
@@ -134,15 +136,20 @@ class InboundMixin(EngineMixinBase):
           - 发送前复核（_should_reply_now，_send_reply 投递前）：并发兜底，
             处理期间状态变化（人工回复/在场）仍能被拦截。
         优先级短路：来自自身 → 人工已接管 → 真人在场 → DWS 已读。
+
+        Args:
+            taken_over / owner_present: 可选，由前置过滤一次性计算后传入，避免对
+                has_user_message_from 重复查库（H2-2026-08-08）。发送前复核不传参
+                → 实时重算，保留生成期竞态保护（绝不跨 pre-LLM / send-time 复用旧值）。
         """
         # 1) 自己发的消息
         if self._is_message_from_self(message):
             return "消息来自自身"
         # 2) 人工已在对方消息之后手动回复（接管）——关闭生成期竞态的关键
-        if self._has_user_taken_over(message):
+        if (self._has_user_taken_over(message) if taken_over is None else taken_over):
             return "人工已接管（消息后已手动回复）"
         # 3) 真人在场（human-in-the-loop）——避免穿插真人对话
-        if self._is_owner_present(message):
+        if (self._is_owner_present(message) if owner_present is None else owner_present):
             return "真人当前在场"
         # 4) 已读闸门（DWS）：会话被 DWS 判定为“已读(无未读)”才抑制。
         #    新到的未读消息会让会话重新进入未读列表 → 不抑制（照常回复），
@@ -467,15 +474,19 @@ class InboundMixin(EngineMixinBase):
                             message.sender_name)
                 return
 
+            # === 门控前置：一次性算出接管/在场（H2-2026-08-08 避免重复查库），后续复用 ===
+            taken_over = self._has_user_taken_over(message)
+            owner_present = self._is_owner_present(message)
+
             # === 检查：用户是否已手动接管会话（在入站消息之后自己手动回复了对方） ===
-            if self._has_user_taken_over(message):
+            if taken_over:
                 logger.info("[用户接管] %s 已手动回复 %s，跳过 AI 回复",
                             self.current_user_name, message.sender_name)
                 return
 
             # === 检查：真人是否正参与该会话（human-in-the-loop 防穿插） ===
             # 区别于上面的被动接管：只要窗口内有真人消息即抑制 AI，真人离场超时后 AI 接管。
-            if self._is_owner_present(message):
+            if owner_present:
                 logger.info("[真人在场] %s 最近在会话 %s 活跃，AI 暂不出声",
                             self.current_user_name, message.chat_name or message.chat_id[:20])
                 return
@@ -500,7 +511,8 @@ class InboundMixin(EngineMixinBase):
             # 命中即直接返回、不调 LLM，避免无效 Token 消耗；并标记入站已处理，
             # 避免轮询反复重试刷屏。发送前复核(_should_reply_now)保留为并发兜底，
             # 防止 LLM 生成期间人工状态变化导致重复回复。
-            _gate_reason = self._reply_gate_reason(message)
+            _gate_reason = self._reply_gate_reason(
+                message, taken_over=taken_over, owner_present=owner_present)
             if _gate_reason is not None:
                 logger.info("[门控] 前置过滤命中：%s，跳过 LLM 处理（来自 %s）",
                             _gate_reason, message.sender_name)

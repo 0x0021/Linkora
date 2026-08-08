@@ -56,6 +56,11 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             set_current_platform(platform_id)
         self._running = False
         self._last_poll_time: dict[str, datetime] = {}
+        # H3-2026-08-08：飞书 chat_conversation_info（subprocess CLI）每轮按会话去重缓存。
+        # _feishu_correct_chat_type 在 _build_group_list_all_cache（遍历所有群）与
+        # _fetch_conversation_messages 中都会调用，无缓存时每个群每轮都打一次 CLI。
+        # 本字典按 conv_id 缓存单轮结果，poll_once 开头清空，避免跨轮无限增长。
+        self._feishu_conv_info_cache: dict = {}
         # 跨轮次消息去重：记录已经 handle_message 处理过的 msg_id
         # 使用 OrderedDict 实现 LRU 容量淘汰（TTL 由 sqlite_store 的 cleanup_processed_msgs 负责）
         self._processed_msg_ids: OrderedDict[str, bool] = OrderedDict()

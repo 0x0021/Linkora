@@ -7,8 +7,8 @@
 
 ## 2026-08-08 — 全面审计修复（P0/P1/P2）
 
-> 项目完整性/一致性审查后的修复轮，覆盖依赖声明、Web 安全、启动超时、CI 门禁与测试盲区。
-> **全量回归 3367 通过（2 skipped / 2 xfailed），pyright 基线维持 94，ruff 全绿**。
+> 项目完整性/一致性审查后的修复轮，覆盖依赖声明、Web 安全、启动超时、CI 门禁与测试盲区；本轮追加性能优化（H1–H4）。
+> **全量回归 3384 通过（2 skipped / 2 xfailed），pyright 基线维持 94，ruff 全绿**。
 
 ### 依赖与构建（HIGH）
 - **fix(deps)**: `web/routers/kb.py` / `src/tools/parse_document.py` / `src/memory/sqlite_store.py` 实读 `bs4` 但 requirements/pyproject/lock 全缺，导致「从 URL 导入知识库」直接 500。补 `beautifulsoup4==4.15.0`（requirements.txt + pyproject.toml 文档解析段）并重生成 `requirements.lock` / `uv.lock`。
@@ -36,6 +36,16 @@
 
 ### 测试加固（P2-3）
 - **test(platform)**: 新增 `tests/test_timeout_guard.py`（7 例）覆盖 `run_with_timeout` 成功/超时非阻塞/直接断言 `shutdown(wait=False, cancel_futures=True)` 契约/异常降级，及两处调用点超时行为；`tests/test_web_routers_dead_letters.py`（3 例）覆盖批量重放异常脱敏。填补 `primary.py` / `runtime_setup.py` / `dead_letters.py` 测试盲区。
+
+### 性能优化（H1–H4）
+
+> 仅优化、不改外部行为。逐条按「用户可感知卡顿 → 平台轮询延迟 → 核心热路径」排序落地，均附行为保持测试。
+
+- **perf(web)**: `web/routers/status.py`、`web/routers/conversations.py`、`web/routers/orgs.py` 中原本直接在 async 视图里调用的阻塞操作（DWS CLI 身份解析 `_get_current_profile_local` / `contact_user_get_self`、subprocess `git` 版本采集、飞书/钉钉 `list_orgs`）统一经 `run_in_threadpool` 移出事件循环，避免单请求阻塞整个 asyncio 事件循环（H1）。`status._get_git_info` 加 `functools.lru_cache(maxsize=1)`，版本号进程内固定、免重复 fork 子进程。
+- **perf(gate)**: `src/platform/runtime_inbound.py` 消息热路径门控（前置过滤 + 发送前复核）原先每消息对 `has_user_message_from` 重复查库 4 次（`_has_user_taken_over` / `_is_owner_present` 各算两遍）。改为前置过滤一次性算出 `taken_over` / `owner_present` 并透传给 `_reply_gate_reason`（新增可选形参），重复查询减半；发送前复核 `_should_reply_now` 不传参 → 实时重算，保留生成期竞态保护（绝不跨 pre-LLM / send-time 复用旧值）（H2）。
+- **perf(poller)**: `src/poller_strategy.py::_feishu_correct_chat_type` 每群每轮都调 `dws.chat_conversation_info`（subprocess CLI），在 `_build_group_list_all_cache`（遍历所有群）与 `_fetch_conversation_messages` 中被重复触发。新增按 `conv_id` 的每轮内存缓存（`Poller.__init__` 加 `_feishu_conv_info_cache`，`poll_once` 开头清空），同一会话单轮只打一次 CLI（H3）。
+- **perf(memory)**: `src/memory/memory_repo.py::recall_memory` 与 `check_memory_duplicate` 原先对 `memories` 全表 `fetchall` + 逐行 `json.loads` + `cosine_similarity` + Python 排序，记忆量大时拖慢召回/去重热路径。新增按 `created_at` 倒序的候选上限 `_MEMORY_CANDIDATE_CAP=500`（模块常量，配 `idx_memories_created` 索引），先截断到最近一批候选再算相似度；记忆表通常很小，cap 内行为完全不变，超大表退化为「近期优先」（符合个人记忆场景）（H4）。
+- **test(perf)**: 新增 `tests/test_perf_fixes_2026_08_08.py`（17 例）覆盖四类优化——H1（用户/版本解析 helper 与三个端点断言值正确、git 信息 lru_cache）、H2（`_reply_gate_reason` 传入标志后不再重复查库、缺省仍各算一次）、H3（同 conv_id 单轮 CLI 仅 1 次、跨 conv_id 再打、poll 轮清空缓存）、H4（recall/去重 SQL 含 `ORDER BY created_at DESC LIMIT ?` 且上限参数正确、小表召回 top_k 排序正确）。
 
 ## 2026-08-07
 

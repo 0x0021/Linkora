@@ -23,12 +23,81 @@ from urllib.parse import urlparse, urlunparse
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response
+from starlette.concurrency import run_in_threadpool
+from PIL import Image
 
 import web.api as _api
 from src.paths import data_path, get_skill_icons_dir
 from web.security import resolve_safe_ip  # SSRF 防护：白名单 host 仍可能 DNS 重绑定到内网，需钉公网 IP
 
 router = APIRouter()
+
+# ── 图片缩略图 / WebP（F-H3）────────────────────────────────────────────
+# OCR 原图常为数 MB 的 PNG，而前端容器仅 320px，直接原图直出浪费带宽。
+# 新增可选查询参数：
+#   ?w=<width>   目标最大宽度(px)，等比缩放，不放大；
+#   ?fmt=webp|jpeg|png  显式输出格式（缺省按 Accept 协商，浏览器通常 image/webp）。
+# 缩略图落盘缓存于 <image_temp_dir>/.thumbs/<rel>__w<w>.<ext>，按原图 mtime 判定新鲜度；
+# 删除原图时由 purge_orphan_images 一并清理，避免磁盘泄漏。
+_THUMB_DIRNAME = ".thumbs"
+_THUMB_MAX_WIDTH = 2000  # 缩略图宽度上限，防滥用
+_THUMB_EXT_BY_FMT = {"webp": "webp", "jpeg": "jpg", "jpg": "jpg", "png": "png"}
+_THUMB_MEDIA_BY_FMT = {
+    "webp": "image/webp",
+    "jpeg": "image/jpeg",
+    "jpg": "image/jpeg",
+    "png": "image/png",
+}
+
+
+def _thumb_path(base: Path, rel: str, width: int, fmt: str | None) -> Path:
+    """计算缩略图缓存路径：<base>/.thumbs/<rel>__w<width>.<ext>。"""
+    ext = _THUMB_EXT_BY_FMT.get((fmt or "webp").lower(), "webp")
+    candidate = (base / _THUMB_DIRNAME / rel).with_name(
+        (base / _THUMB_DIRNAME / rel).name + f"__w{width}.{ext}"
+    )
+    return candidate
+
+
+def _make_thumb(orig: Path, thumb: Path, width: int, fmt: str | None, accept_webp: bool):
+    """生成缩略图（阻塞，须在线程池执行）。
+
+    返回 (serve_path, media_type)。无需缩放时（width>=原宽且格式未变）直接回原图路径；
+    任何异常回退到原图，保证服务不中断。
+    """
+    try:
+        with Image.open(orig) as im:
+            orig_fmt = (im.format or "PNG").lower()
+            out_fmt = (fmt or ("webp" if accept_webp else orig_fmt)).lower()
+            if out_fmt == "jpg":
+                out_fmt = "jpeg"
+            orig_w, _ = im.size
+            # 不放大；且格式与原图一致 → 直接服务原图
+            if width >= orig_w and out_fmt == orig_fmt:
+                return (str(orig), _THUMB_MEDIA_BY_FMT.get(orig_fmt, "image/png"))
+            # 色彩/透明处理：webp/png 保留 alpha；jpeg 合成白底
+            if out_fmt == "jpeg":
+                rgba = im.convert("RGBA")
+                bg = Image.new("RGB", rgba.size, (255, 255, 255))
+                bg.paste(rgba, mask=rgba.split()[-1])
+                im = bg
+            else:
+                im = im.convert("RGBA" if out_fmt in ("webp", "png") else "RGB")
+            if width < orig_w:
+                ratio = width / float(orig_w)
+                im = im.resize((width, max(1, int(im.size[1] * ratio))), Image.Resampling.LANCZOS)
+            thumb.parent.mkdir(parents=True, exist_ok=True)
+            if out_fmt == "webp":
+                im.save(thumb, "WEBP", quality=80, method=4)
+            elif out_fmt == "jpeg":
+                im.save(thumb, "JPEG", quality=82, optimize=True)
+            else:
+                im.save(thumb, "PNG", optimize=True)
+            return (str(thumb), _THUMB_MEDIA_BY_FMT[out_fmt])
+    except Exception:
+        # 不支持的格式/损坏文件 → 回退原图直出
+        ext = orig.suffix.lstrip(".").lower()
+        return (str(orig), _THUMB_MEDIA_BY_FMT.get(ext, "image/png"))
 
 
 # 签名密钥持久化到磁盘：避免每次服务重启都重新随机生成，
@@ -102,12 +171,23 @@ async def issue_image_token(response: Response):
 
 
 @router.get("/api/image/{path:path}")
-async def serve_image(path: str, it: Optional[str] = None, request: Request = None):  # type: ignore[reportArgumentType]
+async def serve_image(
+    path: str,
+    it: Optional[str] = None,
+    w: Optional[int] = None,
+    fmt: Optional[str] = None,
+    request: Request = None,  # type: ignore[reportArgumentType]
+):
     """提供持久化 OCR 图片（签名 token 校验，嵌套子目录如 张三/ocr_xxx.png）。
 
     鉴权优先级：Cookie(img_token) > ?it= 查询参数（兼容旧前端）。
     图片地址不再随 token 变化 → 可稳定缓存；FileResponse 自带 ETag/Last-Modified
     支持 304 协商，重复访问几乎零字节。
+
+    F-H3 可选参数：
+      ?w=<width>   缩略图目标宽度(px)，等比不放大；
+      ?fmt=webp|jpeg|png  显式输出格式（缺省按 Accept 协商，浏览器通常 image/webp）。
+    两者皆缺 → 原图直出（灯箱放大 / 向后兼容 / 既有测试）。
     """
     token = (request.cookies.get("img_token") if request is not None else None) or it
     if not _verify_image_token(token):
@@ -123,9 +203,44 @@ async def serve_image(path: str, it: Optional[str] = None, request: Request = No
             raise HTTPException(status_code=403, detail="Forbidden")
         if not full.exists() or not full.is_file():
             raise HTTPException(status_code=404, detail="Not found")
-        # 私有资源：按 token TTL 缓存，文件内容随路径唯一 → 可安全复用。
+
+        # ── F-H3 缩略图 / WebP ──
+        width = None
+        if w is not None and w > 0:
+            width = min(int(w), _THUMB_MAX_WIDTH)
+        out_fmt: str | None = None
+        if fmt and fmt.lower() in _THUMB_EXT_BY_FMT:
+            out_fmt = fmt.lower()
+        if width is None and out_fmt is None:
+            # 无缩略图请求 → 原图直出（灯箱/向后兼容/既有测试）
+            return FileResponse(
+                str(full),
+                headers={"Cache-Control": "private, max-age=300"},
+            )
+
+        # 内容协商：客户端 Accept 含 image/webp 则优先 webp
+        accept_webp = False
+        if request is not None:
+            hdrs = getattr(request, "headers", None)
+            if hdrs is not None:
+                try:
+                    accept_webp = "image/webp" in (hdrs.get("accept", "") or "")
+                except TypeError:
+                    accept_webp = False
+
+        thumb = _thumb_path(base, path, width or 0, out_fmt or ("webp" if accept_webp else "png"))
+        # 新鲜度：原图更新则重建
+        if not (thumb.exists() and thumb.stat().st_mtime >= full.stat().st_mtime):
+            serve_path, media = await run_in_threadpool(
+                _make_thumb, full, thumb, width or 999999, out_fmt, accept_webp
+            )
+        else:
+            ext = thumb.suffix.lstrip(".").lower()
+            media = _THUMB_MEDIA_BY_FMT.get(ext, "image/png")
+            serve_path = str(thumb)
         return FileResponse(
-            str(full),
+            serve_path,
+            media_type=media,
             headers={"Cache-Control": "private, max-age=300"},
         )
     except HTTPException:

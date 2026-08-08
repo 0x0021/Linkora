@@ -14,6 +14,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# 缩略图缓存目录名（须与 web/routers/image.py::_THUMB_DIRNAME 保持一致）。
+# F-H3 生成的缩略图存于 <tmp_images>/.thumbs/<rel>__w<w>.<ext>，删除原图时一并清理。
+_THUMB_DIRNAME = ".thumbs"
+
 
 def purge_orphan_images(db_path: str, rel_paths: list[str]) -> int:
     """删除相对 ``data/tmp_images`` 的孤儿图片文件，返回成功删除的文件数。
@@ -25,6 +29,7 @@ def purge_orphan_images(db_path: str, rel_paths: list[str]) -> int:
     if not rel_paths:
         return 0
     base = (Path(db_path).resolve().parent / "tmp_images").resolve()
+    thumbs_root = (base / _THUMB_DIRNAME).resolve()
     removed = 0
     for rel in rel_paths:
         if not rel:
@@ -39,4 +44,15 @@ def purge_orphan_images(db_path: str, rel_paths: list[str]) -> int:
                 removed += 1
         except OSError as _exc:
             logger.debug("清理孤儿图片失败（已忽略）: %s | %s", rel, _exc)
+        # 连带清理 F-H3 缩略图：<thumbs_root>/<rel>__w<w>.<ext>
+        try:
+            tpath = (thumbs_root / rel).resolve()
+            if tpath != thumbs_root and thumbs_root in tpath.parents:
+                for f in tpath.parent.glob(tpath.name + "__*"):
+                    fp = f.resolve()
+                    if fp != thumbs_root and thumbs_root in fp.parents and fp.is_file():
+                        fp.unlink()
+                        removed += 1
+        except OSError as _exc:
+            logger.debug("清理缩略图失败（已忽略）: %s | %s", rel, _exc)
     return removed

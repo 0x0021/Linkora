@@ -83,7 +83,14 @@
 - **perf(web,css)**: 新增 `scripts/gen_fa_subset.py`——扫描 `web/static` + `web/templates` 全部 `fa-*` token（跳过 `fontawesome/` 自身与 `dist/`、`build/` 产物，避免把被裁 CSS 的图标名又收回来），按规则裁剪 `all.min.css`：保留 solid/regular 双 `@font-face`（含 FontAwesome 5/4 兼容面，字节极小）+ 仅 72 个在用图标 `.fa-NAME{--fa:...}` + 仅用到的 base utility（如 `fa-spin` spinner）+ 仅用到的 `@keyframes`，丢弃 brands `@font-face` 与全部未用图标/工具类/动画。产出 `web/static/fontawesome/fa-subset.min.css` = 33042B（**-63%，省 ~57KB/请求**），校验 72 个在用图标**零缺失**。
 - **perf(web,html)**: `index.html` 的 FontAwesome `<link>` 由 `all.min.css` 切到 `fa-subset.min.css`；删除上一轮「solid-only」废弃子集 `solid-subset.min.css`（仅含 solid 字型、`fa-regular` 会缺字，前提有误）。
 
-- **defer(前端)**: 以下 HIGH 项本轮**未做**，列为下轮独立迭代——F-H3 图片缩略图 + WebP（需服务端 Pillow 压缩 + 落盘 + 内容协商 + 前端 srcset，工作量大但收益高）。
+### 前端性能优化（F-H3 图片缩略图 + WebP）
+
+> OCR 原图常为数 MB 的 PNG（曾观测 11MB），而前端容器仅 320px，原图直出严重浪费带宽。服务端按 `?w=` 按需生成缩略图、按 `Accept`/显式 `?fmt=` 输出 WebP，前端 `srcset` 配合 1x/2x；灯箱仍看原图。
+
+- **perf(web)**: `web/routers/image.py::serve_image` 新增可选查询参数 `?w=<width>`（目标最大宽度，等比不放大，上限 2000px 防滥用）+ `?fmt=webp|jpeg|png`（缺省按 `Accept` 协商，浏览器通常 image/webp）；Pillow 阻塞操作经 `run_in_threadpool` 移出事件循环。**无 `w`/`fmt` → 原图直出路径完全不变** → 灯箱放大/向后兼容/既有测试零破坏。路径穿越护栏保留（仍 403）。
+- **perf(web,cache)**: 缩略图落盘缓存于 `<image_temp_dir>/.thumbs/<rel>__w<w>.<ext>`，按原图 mtime 判定新鲜度，重复访问走缓存/304；`src/memory/image_cleanup.py::purge_orphan_images` 删除原图时**连带清理 `.thumbs` 变体**（保持磁盘泄漏防护约定不变）。
+- **perf(web,js)**: `messages.js` 两处对话图 + 卡片图改为请求 `?w=&fmt=webp` 缩略图，加 `srcset`(1x/2x retina)+`sizes`，灯箱(`onclick`)打开原图(`/api/image/<rel>` 无 `w`)保留放大能力；重建 bundle `bundle.8cf1a86195eb.js`（CSS 哈希不变 `c7a77f28d3df`）。
+- **test(web)**: 新增 `tests/test_image_thumbnail.py`（8 例）覆盖 `_make_thumb` 缩放/WebP/不放大/JPEG 压平 alpha、`serve_image` 集成（`w`+`fmt`→WebP 变小、内容协商 PNG、无参→原图、路径穿越仍 403、缩略图落盘）、`purge_orphan_images` 清理 `.thumbs`。pyright=94=基线。
 
 ## 2026-08-07
 

@@ -128,8 +128,11 @@ function _renderCardBody(body, imagePathMap) {
     const renderImg = (key) => {
         const rel = imagePathMap && imagePathMap[key];
         if (rel) {
-            const fullUrl = '/api/image/' + rel;
-            return `<img src="${escapeHtml(imgTokUrl(fullUrl))}" class="msg-card-img" alt="卡片图片" loading="lazy" decoding="async" onclick="openImageLightbox(this.src)">`;
+            const base = '/api/image/' + rel;
+            const t1 = base + '?w=200&fmt=webp';
+            const t2 = base + '?w=400&fmt=webp';
+            // F-H3：卡片缩略图走 WebP(?w=&fmt=webp)+srcset(1x/2x)，灯箱打开原图(base)
+            return `<img src="${escapeHtml(t1)}" srcset="${escapeHtml(t1)} 200w, ${escapeHtml(t2)} 400w" sizes="200px" class="msg-card-img" alt="卡片图片" loading="lazy" decoding="async" onclick="openImageLightbox('${escapeHtml(base)}')">`;
         }
         return imgPlaceholder;
     };
@@ -463,7 +466,11 @@ async function renderThread(chatId, conversations) {
             // 图片部分
             if (imgUrl) {
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
-                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(imgTokUrl(imgUrl))}" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox(this.src)"/></div>`;
+                // F-H3：对话图走 WebP 缩略图(?w=320/640&fmt=webp)+srcset，灯箱打开原图(imgUrl)
+                const imgBase = imgUrl;
+                const c1 = imgBase + '?w=320&fmt=webp';
+                const c2 = imgBase + '?w=640&fmt=webp';
+                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(c1)}" srcset="${escapeHtml(c1)} 320w, ${escapeHtml(c2)} 640w" sizes="320px" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox('${escapeHtml(imgBase)}')"/></div>`;
             } else {
                 // 无 image_url 时用优雅占位提示（后端 OCR 可能未回写 path）
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
@@ -479,7 +486,11 @@ async function renderThread(chatId, conversations) {
             const isImageMsg = !!(m.image_url);
             if (isImageMsg) {
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
-                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(imgTokUrl(m.image_url))}" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox(this.src)"/></div>`;
+                // F-H3：对话图走 WebP 缩略图(?w=320/640&fmt=webp)+srcset，灯箱打开原图(m.image_url)
+                const imgBase2 = m.image_url;
+                const c1b = imgBase2 + '?w=320&fmt=webp';
+                const c2b = imgBase2 + '?w=640&fmt=webp';
+                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(c1b)}" srcset="${escapeHtml(c1b)} 320w, ${escapeHtml(c2b)} 640w" sizes="320px" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox('${escapeHtml(imgBase2)}')"/></div>`;
             } else if (m.msg_type === 'image') {
                 // image 类型但没有 image_url 的兜底
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';

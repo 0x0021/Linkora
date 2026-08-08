@@ -47,6 +47,21 @@
 - **perf(memory)**: `src/memory/memory_repo.py::recall_memory` 与 `check_memory_duplicate` 原先对 `memories` 全表 `fetchall` + 逐行 `json.loads` + `cosine_similarity` + Python 排序，记忆量大时拖慢召回/去重热路径。新增按 `created_at` 倒序的候选上限 `_MEMORY_CANDIDATE_CAP=500`（模块常量，配 `idx_memories_created` 索引），先截断到最近一批候选再算相似度；记忆表通常很小，cap 内行为完全不变，超大表退化为「近期优先」（符合个人记忆场景）（H4）。
 - **test(perf)**: 新增 `tests/test_perf_fixes_2026_08_08.py`（17 例）覆盖四类优化——H1（用户/版本解析 helper 与三个端点断言值正确、git 信息 lru_cache）、H2（`_reply_gate_reason` 传入标志后不再重复查库、缺省仍各算一次）、H3（同 conv_id 单轮 CLI 仅 1 次、跨 conv_id 再打、poll 轮清空缓存）、H4（recall/去重 SQL 含 `ORDER BY created_at DESC LIMIT ?` 且上限参数正确、小表召回 top_k 排序正确）。
 
+### 前端性能优化（F-H1/F-H2/F-H4/F-H5）与缺陷修复
+
+> 依据 2026-08-08 前端性能审查报告的高 ROI 项落地；另修 RAG 记忆页滚动条 bug 与类型检查漂移。
+> **全量回归 3390 通过（2 skipped / 2 xfailed；1 例 `test_web_search_utils::test_queries_cross_backend_merging` 为 SearXNG 联网依赖、与本轮改动无关、环境性失败）**。
+
+- **fix(web,css)**: RAG「AI 记忆管理」页列表无法滚动、标题栏多出多余滚动条。根因：`#rag-tab-memory` 缺省走全局 `.panel-body{overflow:auto}`，且 `.panel` 无 `flex:1;min-height:0` 无法填满 tab 高度 → 外层 `.section-tab-content` 接管滚动（视觉上即「标题栏带滚动条」），`.table-wrap` 自身无独立纵向滚动。对齐已验证的 `#rag-tab-documents` 修复：`.panel` 填高、`panel-body` 改 `overflow:hidden`、`.table-wrap` 独占 `overflow-y:auto`，filters/rules 固定不压缩（`web/static/css/pages/rag.css`）。
+- **perf(web,cache)**: `web/api.py::VersionedStaticFiles` 缓存判定修正——生产态 `dist/` 内容哈希单 bundle（哈希在文件名、URL 无 `?v=`）原先误落入 `else` 分支被设 `no-cache` 且**删除 ETag/Last-Modified**，导致连 304 都走不了、比开发态更差。改为「`?v=` 或路径含 `dist/` 或匹配 `bundle.<hex>.`」→ `immutable`；其余未版本化资源（vendor/fontawesome）保留 ETag/Last-Modified 走 `no-cache`，允许 304 协商（F-H1）。
+- **perf(web)**: 全链路 `GZipMiddleware(minimum_size=1024)`（`web/api.py`），HTML/JSON API/静态 bundle 一并压缩，首屏文本体积约降 75–86%（F-H2）。
+- **perf(web,image)**: `/api/image/` 鉴权由 URL 拼 `?it=` token 改为后端下发 **HttpOnly Cookie(img_token)**（`web/routers/image.py::issue_image_token` 设 Cookie、`serve_image` 优先读 Cookie 兼容 `?it=` 回退）；前端 `imgTokUrl` 不再把 token/platform 拼进 URL，图片地址稳定 → 浏览器可长期缓存、消除每 4 分钟 token 轮换引发的整屏图片重下；`serve_image` 补 `Cache-Control: private, max-age=300`（FileResponse 自带 ETag 支持 304）（F-H4）。
+- **perf(web,search)**: 死信/草稿/日志三个搜索框 `oninput` 直接触发整页服务端重载（但过滤本就是客户端），中文 IME 下 8–10 次/键击 = 8–10 次全量请求。套 `debounce(300)`（`index.html` 改用 `debouncedLoadDeadLettersPage`/`debouncedLoadDraftsPage`，`logs.js` oninput 包 `debounce`），请求收敛到输入停顿后一次（F-H5）。
+- **fix(web,type)**: `web/routers/conversations.py:193` H1 重构时误删 `platform = get_current_platform()` 赋值，导致 `backfill_missing_image_path(..., platform)` 引用未定义 `platform` → pyright 95 > 基线 94。改为 `get_current_platform()` 直接调用，CI 类型检查恢复 94（与基线持平）。
+- **fix(web,type)**: F-H4 将 `serve_image` 签名加 `request: Request = None` 以承载 Cookie 鉴权，但 `None` 不能赋给非 Optional 的 `Request` 类型 → pyright 比基线多 1（95）。保留 FastAPI 标准写法（`request: Request` 由框架注入、`= None` 仅用于非请求上下文直调），补 `# type: ignore[reportArgumentType]` 压住该误报，pyright 回到 94 基线；`Optional[Request]` 会令 FastAPI 在路由注册时把 `Request|None` 当 Pydantic 字段建模而抛 `FastAPIError`，故不可取。
+- **test(frontend)**: 新增 `tests/test_frontend_perf_fixes_2026_08_08.py`（7 例）覆盖 F-H1（`dist/` 哈希 bundle→immutable、vendor 未版本化→`no-cache` 且保留 ETag/Last-Modified、带 `?v=`→immutable）与 F-H4（token 下发 HttpOnly Cookie、Cookie 优先 + `?it=` 回退、成功响应带 `private` 缓存头、缺 token→401）。
+- **defer(前端)**: 以下 HIGH 项本轮**未做**，列为下轮独立迭代——F-H3 图片缩略图 + WebP（需服务端 Pillow 压缩 + 落盘 + 内容协商 + 前端 srcset，工作量大但收益高）、F-H6 仪表盘轮询合并/SSE（改四条独立流为单通道 + 增量游标，改动面大）、F-H7 Chart.js 按需加载（`new Chart` 实际分散在 messages/dashboard/intent/metrics×5/cost_quality×3 共 11 处，非集中于 `chartCard.js`，需逐页异步化门面，回归风险高）、F-H8 FontAwesome 子集（审查时「无 brands/regular 用法」前提**有误**——`fa-regular` 在 persona/simulate/routetrace/index 多处使用，`solid-subset` 仅含 solid 字型，直接切换会致 regular 图标缺字，需重做双字重子集）。
+
 ## 2026-08-07
 
 - **docs(tools)**: 重写 `docs/tools.md`——内置工具数 27→38（补齐 AI 听记 list/get_minutes、钉钉知识库 wiki_space/wiki_node 共 4 个、OA 审批查询 approval_* 共 7 个）；速率限制整表以 `config.yaml.example` 为准（send_message 30 / create_todo 20 / web_search 50 / get_weather 30 / transfer_approval 10 等），纠正原先 128/512 等错误数值。

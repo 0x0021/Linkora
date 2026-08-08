@@ -1957,7 +1957,7 @@
                         </div>
                         <div class="page-header-actions">
                             <div class="search-box">
-                                <input type="text" class="form-control" id="dlq-search" placeholder="搜索死信..." oninput="loadDeadLettersPage()">
+                                <input type="text" class="form-control" id="dlq-search" placeholder="搜索死信..." oninput="debouncedLoadDeadLettersPage()">
                             </div>
                             <span id="dlq-stats" class="dlq-stats-badge"><i class="fa-solid fa-list-ul" style="font-size:11px;opacity:.5;"></i> 共 <span class="count">0</span> 条</span>
                             <button class="btn btn-sm btn-outline-secondary" onclick="loadDeadLettersPage()" style="margin-left:8px;">
@@ -2070,7 +2070,7 @@
                             </div>
                         </div>
                         <div class="search-box" style="padding: 0 0 var(--space-md);">
-                            <input type="text" class="form-control" id="draft-search" placeholder="搜索草稿..." oninput="loadDraftsPage()">
+                            <input type="text" class="form-control" id="draft-search" placeholder="搜索草稿..." oninput="debouncedLoadDraftsPage()">
                         </div>
                         <div id="drafts-content">
                             <div class="empty-state"><i class="fa-solid fa-spinner fa-spin loading-icon"></i><p class="loading-text">加载中…</p></div>

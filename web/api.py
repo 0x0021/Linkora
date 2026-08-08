@@ -5,6 +5,7 @@ import hmac
 import ipaddress
 import logging
 import os
+import re
 import threading
 import time
 import warnings
@@ -20,6 +21,7 @@ warnings.filterwarnings("ignore", message=".*pkg_resources.*")
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from web.errors import SAFE_INTERNAL_ERROR
 
 from src.config import load_config
@@ -113,6 +115,10 @@ logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 
 app = FastAPI(title="灵桥 (Linkora) 管理后台", version="2.0")
 
+# 全链路 gzip 压缩：HTML / JSON API / 静态 bundle 一并压缩（首屏文本体积约降 75–86%）。
+# minimum_size=1024 跳过极小响应（如 304/空体），避免无谓的压缩开销。
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 
 # F29：每个 Web 请求分配独立 request_id 并贯穿日志（Web→Runtime 链路可见）；
 # 同时回写 X-Request-Id 响应头，便于前端/网关侧关联。
@@ -172,23 +178,32 @@ _BASE_DIR = get_static_dir().parent  # = web/ 目录（开发态仓库根 / 冻�
 
 # 自定义 StaticFiles：版本感知缓存
 # index.html 通过 ?v=<文件mtime> 引用所有 CSS/JS，故带 ?v= 的资源可长缓存(immutable)，
-# 靠 mtime 版本号自动失效；不带 ?v= 的资源保持 no-cache，避免意外长期缓存旧文件。
+# 靠 mtime 版本号自动失效。生产态走 dist/ 内容哈希单 bundle（哈希在文件名、URL 无 ?v=），
+# 同样按文件名判 immutable。其余未版本化资源（vendor / fontawesome 等）保留 ETag/Last-Modified
+# 走 no-cache，允许 304 协商，避免重复完整下载。
+# ⚠️ 历史坑：早期实现对所有「不带 ?v=」资源删除 ETag/Last-Modified，导致连 304 都走不了，
+# 生产态反而比开发态更差。修正后未版本化资源仅 no-cache（保留验证器）。
+_HASH_BUNDLE_RE = re.compile(r"bundle\.[0-9a-f]{8,}\.(?:js|css)$")
+
+
 class VersionedStaticFiles(StaticFiles):
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
         if not hasattr(response, "headers"):
             return response
         qs = scope.get("query_string", b"").decode("latin-1")
-        if "v=" in qs:
-            # 版本化资源：长缓存，浏览器不再重复下载（除 ?v 变化外）
+        is_immutable = (
+            "v=" in qs
+            or "/dist/" in path
+            or _HASH_BUNDLE_RE.search(path) is not None
+        )
+        if is_immutable:
+            # 版本化 / 内容哈希资源：长缓存，浏览器不再重复下载（除 hash/?v 变化外）
             response.headers["Cache-Control"] = "public, max-age=86400, immutable"
         else:
-            # 未版本化：每次验证，删除 ETag/Last-Modified 防止 304 复用旧文件
-            response.headers["Cache-Control"] = "no-cache, max-age=0"
-            if "etag" in response.headers:
-                del response.headers["etag"]
-            if "last-modified" in response.headers:
-                del response.headers["last-modified"]
+            # 未版本化：每次校验，但保留 ETag/Last-Modified 允许 304 协商，
+            # 避免重复完整下载（原先误删验证器导致连 304 都走不了）。
+            response.headers["Cache-Control"] = "no-cache"
         # 清理原 NoCache 遗留的禁用缓存头（MutableHeaders 大小写不敏感）
         for _h in ("pragma", "expires"):
             if _h in response.headers:

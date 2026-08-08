@@ -21,7 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse, urlunparse
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 
 import web.api as _api
@@ -82,15 +82,35 @@ def _verify_image_token(token: Optional[str]) -> bool:
 
 
 @router.get("/api/image-token")
-async def issue_image_token():
-    """领取图片访问 token（需 Basic Auth）。前端缓存后拼到图片 URL。"""
-    return {"token": _make_image_token(), "ttl": _IMG_TOKEN_TTL}
+async def issue_image_token(response: Response):
+    """领取图片访问 token（需 Basic Auth）。
+
+    除返回 JSON 兼容旧前端外，同时下发 HttpOnly Cookie(img_token)。
+    新版前端改由 Cookie 携带鉴权、图片 URL 不再含 token，从而保证图片地址
+    稳定、浏览器可长期缓存，避免每轮 token 轮换引发整屏图片重复下载。
+    """
+    token = _make_image_token()
+    response.set_cookie(
+        "img_token",
+        token,
+        max_age=_IMG_TOKEN_TTL,
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+    return {"token": token, "ttl": _IMG_TOKEN_TTL}
 
 
 @router.get("/api/image/{path:path}")
-async def serve_image(path: str, it: Optional[str] = None):
-    """提供持久化 OCR 图片（签名 token 校验，嵌套子目录如 张三/ocr_xxx.png）。"""
-    if not _verify_image_token(it):
+async def serve_image(path: str, it: Optional[str] = None, request: Request = None):  # type: ignore[reportArgumentType]
+    """提供持久化 OCR 图片（签名 token 校验，嵌套子目录如 张三/ocr_xxx.png）。
+
+    鉴权优先级：Cookie(img_token) > ?it= 查询参数（兼容旧前端）。
+    图片地址不再随 token 变化 → 可稳定缓存；FileResponse 自带 ETag/Last-Modified
+    支持 304 协商，重复访问几乎零字节。
+    """
+    token = (request.cookies.get("img_token") if request is not None else None) or it
+    if not _verify_image_token(token):
         raise HTTPException(status_code=401, detail="Invalid or expired image token")
     try:
         cfg = _api._get_cfg()
@@ -103,7 +123,11 @@ async def serve_image(path: str, it: Optional[str] = None):
             raise HTTPException(status_code=403, detail="Forbidden")
         if not full.exists() or not full.is_file():
             raise HTTPException(status_code=404, detail="Not found")
-        return FileResponse(str(full))
+        # 私有资源：按 token TTL 缓存，文件内容随路径唯一 → 可安全复用。
+        return FileResponse(
+            str(full),
+            headers={"Cache-Control": "private, max-age=300"},
+        )
     except HTTPException:
         raise
     except Exception as e:

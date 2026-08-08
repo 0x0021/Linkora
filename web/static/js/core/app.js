@@ -19,14 +19,10 @@ async function refreshImageToken() {
     } catch (e) { /* 保留旧 token，下次轮询再试 */ }
 }
 function imgTokUrl(url) {
-    if (!url || url.indexOf('/api/image/') === -1) return url;
-    const p = (window.store && typeof window.store.getPlatform === 'function')
-        ? window.store.getPlatform() : 'dingtalk';
-    let u = url;
-    const sep1 = u.indexOf('?') === -1 ? '?' : '&';
-    u = u + sep1 + 'platform=' + encodeURIComponent(p);
-    const sep2 = u.indexOf('?') === -1 ? '?' : '&';
-    return u + sep2 + 'it=' + encodeURIComponent(_imgTok.v);
+    // 图片鉴权改由后端下发的 HttpOnly Cookie(img_token) 携带；URL 不再含 token/platform，
+    // 地址保持稳定 → 浏览器可长期缓存，杜绝每轮 token 轮换引发的整屏图片重复下载。
+    // refreshImageToken 仅周期性刷新该 Cookie（见下方 setInterval），不再改写任何 URL/DOM。
+    return url;
 }
 // 启动即拉取，并每 4 分钟刷新（token TTL 5 分钟）。登出后不再请求，避免持续 401。
 refreshImageToken();
@@ -806,6 +802,11 @@ window.debouncedLoadKbDocs = debounce(loadKbDocs, 300);
 window.debouncedLoadMessages = debounce(loadMessages, 300);
 window.debouncedRefreshDingtalkImportList = debounce(refreshDingtalkImportList, 300);
 window.debouncedFilterThread = debounce(filterThread, 300);
+// 死信/草稿搜索框：过滤本就是客户端（_dlqFilterItems/_draftFilterItems），
+// 但 oninput 直接触发整页服务端重载 → 中文 IME 下 8–10 次/键击 = 8–10 次全量请求。
+// 套 debounce(300) 把请求收敛到输入停顿后一次（过滤仍由 load 内客户端逻辑完成）。
+window.debouncedLoadDeadLettersPage = debounce(loadDeadLettersPage, 300);
+window.debouncedLoadDraftsPage = debounce(loadDraftsPage, 300);
 
 // ===== 全局模态框行为：Esc 关闭 + 背景点击关闭 + 焦点管理 + 无障碍 =====
 (function () {

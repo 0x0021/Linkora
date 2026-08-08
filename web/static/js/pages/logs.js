@@ -169,12 +169,14 @@ function loadLogsPage() {
     }
     const search = document.getElementById('logs-search');
     if (search) {
-        search.oninput = () => {
+        // 日志过滤本就是客户端（_logsApplyFilters），但 oninput 直接触发整页服务端重载；
+        // 套 debounce(300) 把中文 IME 下 8–10 次/键击收敛为停顿后一次请求。
+        search.oninput = debounce(() => {
             _logsLastId = 0;
             const s = document.getElementById('logs-stream');
             if (s) s.innerHTML = '';
             pollLogsPage();
-        };
+        }, 300);
     }
     const auditOnly = document.getElementById('logs-audit-only');
     if (auditOnly) {

@@ -470,3 +470,39 @@
 #rag-tab-documents #kb-pagination {
     flex-shrink: 0;
 }
+
+/* ==========================================
+   修复：记忆管理页「列表无法滚动 + 标题栏多出滚动条」
+   根因：与文档管理页同源——#rag-tab-memory 缺省走全局
+   .panel-body{overflow:auto}，导致整个面板体（含标题区下方）整体
+   滚动、表格自身无独立纵向滚动；且 .panel 无 flex:1/min-height:0，
+   无法填满 tab 高度而被内容撑高，外层 .section-tab-content 的
+   overflow-y:auto 被迫接管滚动（视觉上即「标题栏带了滚动条」）。
+   对齐 #rag-tab-documents 的已验证修复：面板体改 overflow:hidden，
+   .table-wrap 独占纵向滚动，filters/rules 固定不压缩。
+   ========================================== */
+
+#rag-tab-memory > .panel {
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 0;
+}
+
+#rag-tab-memory .panel-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#rag-tab-memory .memory-filters,
+#rag-tab-memory .memory-rules {
+    flex-shrink: 0;
+}
+
+#rag-tab-memory .table-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}

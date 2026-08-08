@@ -69,7 +69,14 @@
 - **fix(web,type)**: `web/routers/conversations.py:193` H1 重构时误删 `platform = get_current_platform()` 赋值，导致 `backfill_missing_image_path(..., platform)` 引用未定义 `platform` → pyright 95 > 基线 94。改为 `get_current_platform()` 直接调用，CI 类型检查恢复 94（与基线持平）。
 - **fix(web,type)**: F-H4 将 `serve_image` 签名加 `request: Request = None` 以承载 Cookie 鉴权，但 `None` 不能赋给非 Optional 的 `Request` 类型 → pyright 比基线多 1（95）。保留 FastAPI 标准写法（`request: Request` 由框架注入、`= None` 仅用于非请求上下文直调），补 `# type: ignore[reportArgumentType]` 压住该误报，pyright 回到 94 基线；`Optional[Request]` 会令 FastAPI 在路由注册时把 `Request|None` 当 Pydantic 字段建模而抛 `FastAPIError`，故不可取。
 - **test(frontend)**: 新增 `tests/test_frontend_perf_fixes_2026_08_08.py`（7 例）覆盖 F-H1（`dist/` 哈希 bundle→immutable、vendor 未版本化→`no-cache` 且保留 ETag/Last-Modified、带 `?v=`→immutable）与 F-H4（token 下发 HttpOnly Cookie、Cookie 优先 + `?it=` 回退、成功响应带 `private` 缓存头、缺 token→401）。
-- **defer(前端)**: 以下 HIGH 项本轮**未做**，列为下轮独立迭代——F-H3 图片缩略图 + WebP（需服务端 Pillow 压缩 + 落盘 + 内容协商 + 前端 srcset，工作量大但收益高）、F-H6 仪表盘轮询合并/SSE（改四条独立流为单通道 + 增量游标，改动面大）、F-H7 Chart.js 按需加载（`new Chart` 实际分散在 messages/dashboard/intent/metrics×5/cost_quality×3 共 11 处，非集中于 `chartCard.js`，需逐页异步化门面，回归风险高）、F-H8 FontAwesome 子集（审查时「无 brands/regular 用法」前提**有误**——`fa-regular` 在 persona/simulate/routetrace/index 多处使用，`solid-subset` 仅含 solid 字型，直接切换会致 regular 图标缺字，需重做双字重子集）。
+### 前端性能优化（F-H7 Chart.js 按需懒加载）
+
+> Chart.js(`/static/vendor/chart.umd.min.js`, ~205KB) 原先在 `index.html` 用 `<script defer>` 直接拉，每页首屏都下载，无图表页面（日志/设置/草稿）也跟着付带宽。
+
+- **perf(web,js)**: 新增 `core/util.js::loadChart()`——首次调用动态注入 `<script src="/static/vendor/chart.umd.min.js">`，`Promise` 缓存，`window.Chart` 就绪后 resolve；重复进入不再重复下载。`index.html` 删除该 eager `<script defer>` 标签。
+- **refactor(web,js)**: 11 处 `new Chart` 渲染函数（dashboard/messages/intent 各 1、metrics 5、cost_quality 3）改为 `async` 并在 `new Chart` 前 `await window.loadChart()`，且把加载置于 canvas 空态早退之后——仅在确有图表时才拉 Chart.js。各函数均 fire-and-forget，调用方不依赖同步返回值，回归风险可控。
+
+- **defer(前端)**: 以下 HIGH 项本轮**未做**，列为下轮独立迭代——F-H3 图片缩略图 + WebP（需服务端 Pillow 压缩 + 落盘 + 内容协商 + 前端 srcset，工作量大但收益高）、F-H8 FontAwesome 子集（审查时「无 brands/regular 用法」前提**有误**——`fa-regular` 在 persona/simulate/routetrace/index 多处使用，`solid-subset` 仅含 solid 字型，直接切换会致 regular 图标缺字，需重做双字重子集）。
 
 ## 2026-08-07
 

@@ -876,9 +876,10 @@ function _msgRenderWordCloud(words) {
     });
 }
 
-function _msgRenderMessageTrendChart(trend) {
+async function _msgRenderMessageTrendChart(trend) {
     const ctx = document.getElementById('msg-chart-trend');
     if (!ctx) return;
+    await window.loadChart();
     const skeleton = document.getElementById('msg-chart-trend-skeleton');
     // 空数据：显示空态，隐藏骨架屏
     if (!trend || trend.length === 0) {

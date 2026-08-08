@@ -52,7 +52,8 @@
     <!-- 微交互与动效体系 -->
     <link rel="stylesheet" href="/static/css/motion.css?v={{ motion_v }}">
     {% endif %}
-    <script defer src="/static/vendor/chart.umd.min.js"></script>
+    {# F-H7：Chart.js(~205KB) 改为按需懒加载，首个含图表页面才动态注入，
+       见 core/util.js::loadChart() 与各图表渲染函数顶部 await window.loadChart() #}
     <script>
       (function () {
         try {

@@ -80,9 +80,10 @@ function renderHeroSparkline(trend) {
     wrap.classList.remove('is-loading');
 }
 
-function renderMessageTrendChart(trend) {
+async function renderMessageTrendChart(trend) {
     const ctx = document.getElementById('chart-message-trend');
     if (!ctx) return;
+    await window.loadChart();
     const ct = chartTheme();
     const skeleton = document.getElementById('chart-message-trend-skeleton');
     if (_messageTrendChart) {

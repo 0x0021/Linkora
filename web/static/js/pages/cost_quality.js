@@ -58,13 +58,14 @@ function cqChartsEmpty() {
 }
 
 // 置信度分布柱状图（10 桶 0~1）
-function cqRenderConfidenceChart(hist) {
+async function cqRenderConfidenceChart(hist) {
     const id = "chart-cq-confidence";
     const wrap = document.getElementById("wrap-" + id);
     if (!wrap) return;
     if (!hist || hist.length === 0) { ChartCard.showEmpty(wrap, "暂无置信度数据"); return; }
     const ctx = ChartCard.ensureCanvas(wrap, id);
     if (!ctx) return;
+    await window.loadChart();
     const ct = chartTheme();
     ChartCard.destroy(id);
     const labels = hist.map(h => h.bucket);
@@ -91,7 +92,7 @@ function cqRenderConfidenceChart(hist) {
 }
 
 // 质量率环形图（转人工 / RAG命中 / 引文页脚 / 反馈有用）
-function cqRenderQualityChart(t) {
+async function cqRenderQualityChart(t) {
     const id = "chart-cq-quality";
     const wrap = document.getElementById("wrap-" + id);
     if (!wrap) return;
@@ -109,6 +110,7 @@ function cqRenderQualityChart(t) {
     }
     const ctx = ChartCard.ensureCanvas(wrap, id);
     if (!ctx) return;
+    await window.loadChart();
     const palette = ["#f59e0b", "#16a34a", "#8b5cf6", "#ec4899"];
     const chart = new Chart(ctx.canvas, {
         type: "doughnut",
@@ -130,7 +132,7 @@ function cqRenderQualityChart(t) {
 }
 
 // 每日成本趋势折线图
-function cqRenderTrend(series) {
+async function cqRenderTrend(series) {
     const id = "chart-cq-trend";
     const wrap = document.getElementById("wrap-" + id);
     if (!wrap) return;
@@ -139,6 +141,7 @@ function cqRenderTrend(series) {
     if (!series || series.length === 0) { ChartCard.showEmpty(wrap, "暂无趋势数据"); return; }
     const ctx = ChartCard.ensureCanvas(wrap, id);
     if (!ctx) return;
+    await window.loadChart();
     const labels = series.map(s => s.date);
     const costData = series.map(s => s.cost_cny || 0);
     const handoffData = series.map(s => (s.handoff_rate || 0) * 100);

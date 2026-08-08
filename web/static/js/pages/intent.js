@@ -421,7 +421,8 @@ function renderDecisionsPagination(data) {
 // 跨函数复用的图表实例（全局声明，避免隐式全局依赖 sloppy-mode）
 let toolCallsChart = null;
 
-function renderToolCallsChart(canvas, tools) {
+async function renderToolCallsChart(canvas, tools) {
+    await window.loadChart();
     if (toolCallsChart) {
         toolCallsChart.destroy();
     }

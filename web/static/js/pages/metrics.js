@@ -103,9 +103,10 @@ function renderMetricsKPI(data) {
 }
 
 // 延迟分布柱状图
-function renderLatencyChart(data) {
+async function renderLatencyChart(data) {
     const ctx = document.getElementById("chart-metrics-latency");
     if (!ctx) return;
+    await window.loadChart();
     const ct = chartTheme();
     if (_latencyChart) _latencyChart.destroy();
 
@@ -168,7 +169,7 @@ function renderLatencyChart(data) {
 }
 
 // 技能命中分布（横向柱状图 Top 10）
-function renderSkillChart(data) {
+async function renderSkillChart(data) {
     const wrap = document.getElementById("chart-metrics-skill")?.parentElement;
     if (!wrap) return;
     const ct = chartTheme();
@@ -185,6 +186,7 @@ function renderSkillChart(data) {
         wrap.innerHTML = '<canvas id="chart-metrics-skill"></canvas>';
         canvas = wrap.querySelector("canvas");
     }
+    await window.loadChart();
 
     const labels = entries.map(e => e[0]);
     const values = entries.map(e => e[1]);
@@ -223,7 +225,7 @@ function renderSkillChart(data) {
 }
 
 // 路由来源分布（环形图）
-function renderSourceChart(data) {
+async function renderSourceChart(data) {
     const wrap = document.getElementById("chart-metrics-source")?.parentElement;
     if (!wrap) return;
     const ct = chartTheme();
@@ -239,6 +241,7 @@ function renderSourceChart(data) {
         wrap.innerHTML = '<canvas id="chart-metrics-source"></canvas>';
         canvas = wrap.querySelector("canvas");
     }
+    await window.loadChart();
 
     const labels = entries.map(e => e[0]);
     const values = entries.map(e => e[1]);
@@ -337,9 +340,10 @@ function filterMetricsTable() {
 window.filterMetricsTable = filterMetricsTable;
 
 // Token 消耗柱状图
-function renderTokenChart(data) {
+async function renderTokenChart(data) {
     const ctx = document.getElementById("chart-metrics-tokens");
     if (!ctx) return;
+    await window.loadChart();
     const ct = chartTheme();
     if (_tokenChart) _tokenChart.destroy();
 
@@ -566,6 +570,7 @@ async function renderTokenTrendChart() {
     var labels = hourly.map(function (h) { return h.hour.substring(11, 16); });
     var tokenData = hourly.map(function (h) { return h.total_tokens || 0; });
 
+    await window.loadChart();
     const ctx = ChartCard.ensureCanvas(wrap, id);
     if (!ctx) return;
     _tokenTrendChart = new Chart(ctx.canvas, {

@@ -30,16 +30,21 @@ class MemoryUpdate(BaseModel):
 
 
 @router.get("/api/memories")
-async def memories(limit: int = 200, object_type: str = "all",
+async def memories(limit: int = 200, offset: int = 0, object_type: str = "all",
                    sender: str = "", keyword: str = "", scope: str = "all"):
     try:
         def _work():
             store = get_store()
             limit_ = max(1, min(limit, 500))
+            offset_ = max(0, int(offset))
             memories_list = store._memory_repo.get_memories_filtered(
                 object_type=object_type, sender=sender, keyword=keyword,
-                limit=limit_, scope=scope)
-            return {"memories": memories_list}
+                limit=limit_, offset=offset_, scope=scope)
+            total = store._memory_repo.count_memories_filtered(
+                object_type=object_type, sender=sender, keyword=keyword,
+                scope=scope)
+            return {"memories": memories_list, "total": total,
+                    "limit": limit_, "offset": offset_}
         return await run_in_threadpool(_work)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

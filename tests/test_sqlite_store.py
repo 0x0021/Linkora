@@ -547,6 +547,21 @@ class TestMemoryFilter:
         assert len(res) == 1
         assert "架构" in res[0]["content"]
 
+    def test_pagination_offset_and_count(self, tmp_db_path):
+        """分页：offset 切片正确、两页不重叠且覆盖全部，count 返回总数。"""
+        store = _make_store(tmp_db_path)
+        self._seed(store)
+        assert store._memory_repo.count_memories_filtered() == 4
+        first = store._memory_repo.get_memories_filtered(limit=2, offset=0)
+        second = store._memory_repo.get_memories_filtered(limit=2, offset=2)
+        assert len(first) == 2 and len(second) == 2
+        all_ids = {m["id"] for m in first + second}
+        assert len(all_ids) == 4  # 两页不重叠且覆盖全部
+        # 越界 offset 返回空列表
+        assert store._memory_repo.get_memories_filtered(limit=2, offset=100) == []
+        # 带筛选条件的计数：person（single 会话）共 2 条（张三、王五）
+        assert store._memory_repo.count_memories_filtered(object_type="person") == 2
+
     def test_facets(self, tmp_db_path):
         """facets 返回类型计数与去重的人列表（不含空 sender）。"""
         store = _make_store(tmp_db_path)

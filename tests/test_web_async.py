@@ -247,6 +247,7 @@ class TestWrappedRoutesSmoke:
 
         store._memory_repo.get_memories_filtered.return_value = [
             {"id": 1, "content": "x"}]
+        store._memory_repo.count_memories_filtered.return_value = 1
 
         app = FastAPI()
         app.include_router(router)
@@ -254,7 +255,8 @@ class TestWrappedRoutesSmoke:
             resp = TestClient(app).get("/api/memories")
 
         assert resp.status_code == 200
-        assert resp.json() == {"memories": [{"id": 1, "content": "x"}]}
+        assert resp.json() == {"memories": [{"id": 1, "content": "x"}],
+                               "total": 1, "limit": 200, "offset": 0}
 
     def test_kb_stats_shape_unchanged(self, store):
         from web.routers.kb import router

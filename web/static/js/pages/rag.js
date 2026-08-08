@@ -1254,6 +1254,9 @@ let memoryFilters = { scope: 'all', object_type: 'all', sender: '', keyword: '' 
 let _memoryFilterInitialized = false;
 let _memoryModalMode = 'add';   // 'add' | 'edit'
 let _memoryModalEditId = null;
+let _memoryPage = 1;            // 记忆列表当前页码（1 基）
+let _memoryTotal = 0;           // 当前筛选条件下记忆总数（分页用）
+const _MEMORY_PAGE_SIZE = 20;   // 单页条数
 
 async function initMemoryFilters() {
     if (!_memoryFilterInitialized) {
@@ -1284,6 +1287,7 @@ function applyMemoryFilters() {
     memoryFilters.object_type = typeSel ? typeSel.value : 'all';
     memoryFilters.sender = senderSel ? senderSel.value : '';
     memoryFilters.keyword = kwInput ? kwInput.value.trim() : '';
+    _memoryPage = 1;
     loadMemoryList();
 }
 
@@ -1297,6 +1301,7 @@ function resetMemoryFilters() {
     if (typeSel) typeSel.value = 'all';
     if (senderSel) senderSel.value = '';
     if (kwInput) kwInput.value = '';
+    _memoryPage = 1;
     loadMemoryList();
 }
 
@@ -1342,59 +1347,126 @@ async function loadClassifySpec() {
 
 async function loadMemoryList() {
     const tbody = document.getElementById('memory-tbody');
+    const pager = document.getElementById('memory-pager');
     if (!tbody) return;
+    if (pager) pager.innerHTML = '';
     tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">加载中…</td></tr>';
     try {
-    const data = await api.getMemories({
-        limit: 200,
-        scope: memoryFilters.scope,
-        object_type: memoryFilters.object_type,
-        sender: memoryFilters.sender,
-        keyword: memoryFilters.keyword,
-    });
-    if (!data || !data.memories || data.memories.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">暂无记忆数据</td></tr>';
-        return;
-    }
-    tbody.innerHTML = data.memories.map(m => {
-        const content = escapeHtml(m.content || '').substring(0, 200);
-        const source = escapeHtml(m.source || '-');
-        const chatId = escapeHtml((m.chat_id || '').substring(0, 12));
-        const createdAt = escapeHtml(m.created_at || '-');
-        const objType = m.object_type || 'other';
-        let objName = m.sender_name || m.chat_name || '';
-        if (!objName || objType === 'other') {
-            objName = '其他';
+        const limit = _MEMORY_PAGE_SIZE;
+        const offset = (_memoryPage - 1) * limit;
+        const data = await api.getMemories({
+            limit: limit,
+            offset: offset,
+            scope: memoryFilters.scope,
+            object_type: memoryFilters.object_type,
+            sender: memoryFilters.sender,
+            keyword: memoryFilters.keyword,
+        });
+        if (!data || !data.memories) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">加载失败，请稍后重试</td></tr>';
+            return;
         }
-        const objClass = objType === 'person' ? 'tag-blue' : objType === 'group' ? 'tag-green' : 'tag-gray';
-        const objTag = `<span class="tag ${objClass}">${escapeHtml(objName)}</span>`;
-        // 范围（个人 / 公共）清晰区分：公共琥珀色徽章 + 行左侧强调条
-        const scope = m.scope || 'personal';
-        const scopeLabel = scope === 'public' ? '公共' : '个人';
-        const scopeClass = scope === 'public' ? 'tag-amber' : 'tag-blue';
-        const scopeTag = `<span class="tag ${scopeClass}">${scopeLabel}</span>`;
-        const rowClass = scope === 'public' ? 'memory-row-public' : '';
-        return `<tr class="${rowClass}" data-id="${m.id}">
-            <td>${m.id}</td>
-            <td class="memory-content-cell" title="${escapeHtml(m.content || '')}">${content}${(m.content||'').length > 200 ? '…' : ''}</td>
-            <td>${scopeTag}</td>
-            <td><span class="tag tag-gray">${source}</span></td>
-            <td>${objTag}</td>
-            <td>${chatId}</td>
-            <td>${createdAt}</td>
-            <td>
-                <div class="action-btns">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="editMemory(${m.id})" title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteMemoryConfirm(${m.id})" title="删除"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
-        </tr>`;
-    }).join('');
+        _memoryTotal = (typeof data.total === 'number') ? data.total : data.memories.length;
+        // 当前页无数据但总数>0（如删除末页唯一项后）：回退到第 1 页重载
+        if (data.memories.length === 0) {
+            if (_memoryTotal > 0 && _memoryPage > 1) {
+                _memoryPage = 1;
+                return loadMemoryList();
+            }
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">暂无记忆数据</td></tr>';
+            if (pager) pager.innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = data.memories.map(m => {
+            const content = escapeHtml(m.content || '').substring(0, 200);
+            const source = escapeHtml(m.source || '-');
+            const chatId = escapeHtml((m.chat_id || '').substring(0, 12));
+            const createdAt = escapeHtml(m.created_at || '-');
+            const objType = m.object_type || 'other';
+            let objName = m.sender_name || m.chat_name || '';
+            if (!objName || objType === 'other') {
+                objName = '其他';
+            }
+            const objClass = objType === 'person' ? 'tag-blue' : objType === 'group' ? 'tag-green' : 'tag-gray';
+            const objTag = `<span class="tag ${objClass}">${escapeHtml(objName)}</span>`;
+            // 范围（个人 / 公共）清晰区分：公共琥珀色徽章 + 行左侧强调条
+            const scope = m.scope || 'personal';
+            const scopeLabel = scope === 'public' ? '公共' : '个人';
+            const scopeClass = scope === 'public' ? 'tag-amber' : 'tag-blue';
+            const scopeTag = `<span class="tag ${scopeClass}">${scopeLabel}</span>`;
+            const rowClass = scope === 'public' ? 'memory-row-public' : '';
+            return `<tr class="${rowClass}" data-id="${m.id}">
+                <td>${m.id}</td>
+                <td class="memory-content-cell" title="${escapeHtml(m.content || '')}">${content}${(m.content||'').length > 200 ? '…' : ''}</td>
+                <td>${scopeTag}</td>
+                <td><span class="tag tag-gray">${source}</span></td>
+                <td>${objTag}</td>
+                <td>${chatId}</td>
+                <td>${createdAt}</td>
+                <td>
+                    <div class="action-btns">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="editMemory(${m.id})" title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteMemoryConfirm(${m.id})" title="删除"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+        if (pager) renderMemoryPager(_memoryTotal, limit, offset);
     } catch (e) {
         console.error('loadMemoryList failed:', e);
         tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">加载失败，请稍后重试</td></tr>';
     }
 }
+
+function renderMemoryPager(total, limit, offset) {
+    const pager = document.getElementById('memory-pager');
+    if (!pager) return;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const cur = Math.floor(offset / limit) + 1;
+    if (totalPages <= 1) {
+        pager.innerHTML = total > 0
+            ? `<div class="marketplace-pager"><span class="mk-pager-info">共 ${total} 条</span></div>`
+            : '';
+        return;
+    }
+    const prevDisabled = cur <= 1 ? ' disabled' : '';
+    const nextDisabled = cur >= totalPages ? ' disabled' : '';
+    const pagerBtn = (html, target, opts = {}) => {
+        const disabled = opts.disabled ? ' disabled' : '';
+        const cls = opts.active ? ' active' : '';
+        return `<button class="mk-pager-btn${cls}"${disabled} onclick="goMemoryPage(${target})">${html}</button>`;
+    };
+    const start = Math.max(1, cur - 2);
+    const end = Math.min(totalPages, cur + 2);
+    let nums = '';
+    if (start > 1) {
+        nums += pagerBtn('1', 1, { active: cur === 1 });
+        if (start > 2) nums += `<span class="mk-pager-ellipsis">…</span>`;
+    }
+    for (let i = start; i <= end; i++) {
+        nums += pagerBtn(String(i), i, { active: i === cur });
+    }
+    if (end < totalPages) {
+        if (end < totalPages - 1) nums += `<span class="mk-pager-ellipsis">…</span>`;
+        nums += pagerBtn(String(totalPages), totalPages, { active: cur === totalPages });
+    }
+    pager.innerHTML = `<div class="marketplace-pager">` +
+        `<span class="mk-pager-info">共 ${total} 条</span>` +
+        `<button class="mk-pager-btn"${prevDisabled} onclick="goMemoryPage(${cur - 1})" aria-label="上一页"><i class="fa-solid fa-chevron-left"></i></button>` +
+        nums +
+        `<button class="mk-pager-btn"${nextDisabled} onclick="goMemoryPage(${cur + 1})" aria-label="下一页"><i class="fa-solid fa-chevron-right"></i></button>` +
+        `<span class="mk-pager-info">第 ${cur} / ${totalPages} 页</span>` +
+        `</div>`;
+}
+
+function goMemoryPage(page) {
+    const totalPages = Math.max(1, Math.ceil(_memoryTotal / _MEMORY_PAGE_SIZE));
+    const p = Math.max(1, Math.min(page, totalPages));
+    if (p === _memoryPage) return;
+    _memoryPage = p;
+    loadMemoryList();
+}
+window.goMemoryPage = goMemoryPage;
 
 // ============ 记忆新增 / 编辑 模态框 ============
 const MEMORY_SCOPE_HINTS = {

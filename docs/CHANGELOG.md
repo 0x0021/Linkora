@@ -92,6 +92,14 @@
 - **perf(web,js)**: `messages.js` 两处对话图 + 卡片图改为请求 `?w=&fmt=webp` 缩略图，加 `srcset`(1x/2x retina)+`sizes`，灯箱(`onclick`)打开原图(`/api/image/<rel>` 无 `w`)保留放大能力；重建 bundle `bundle.8cf1a86195eb.js`（CSS 哈希不变 `c7a77f28d3df`）。
 - **test(web)**: 新增 `tests/test_image_thumbnail.py`（8 例）覆盖 `_make_thumb` 缩放/WebP/不放大/JPEG 压平 alpha、`serve_image` 集成（`w`+`fmt`→WebP 变小、内容协商 PNG、无参→原图、路径穿越仍 403、缩略图落盘）、`purge_orphan_images` 清理 `.thumbs`。pyright=94=基线。
 
+### 前端性能优化（记忆列表分页）
+
+> 记忆量大时原列表一次拉取 `limit=200` 全量渲染、无翻页；新增后端 offset 分页 + total 计数 + 前端分页条。
+
+- **perf(web)**: `web/routers/memories.py::memories` 新增 `offset:int=0` 入参，调用新增的 `src/memory/memory_repo.py::count_memories_filtered`（复用抽取出的 `_build_memories_where` 公共 WHERE 子句，与 `get_memories_filtered` 同源避免漂移），返回 `{memories, total, limit, offset}`。`get_memories_filtered` 增加 `offset` 形参并改 `LIMIT ? OFFSET ?`，默认 0 向后兼容（既有调用方/测试不受影响）。
+- **perf(web,js)**: `api.js::getMemories` 转发 `offset`；`rag.js::loadMemoryList` 维护 `_memoryPage`/`_MEMORY_PAGE_SIZE=20` 状态，按页请求并渲染 `#memory-pager` 分页条（复用 `.marketplace-pager` 样式：首页/上一页/页码窗口/下一页/末页 + `共 N 条 · 第 X/Y 页`）；筛选/重置回到第 1 页，末页删空自动回退首屏。重建 bundle `bundle.1726717f676c.js`（CSS 哈希不变 `c7a77f28d3df`）。
+- **test(web)**: `test_web_async.py::test_memories_list_shape_unchanged` 同步新响应结构（mock `count_memories_filtered`）；`test_sqlite_store.py` 新增 `test_pagination_offset_and_count` 验证 offset 切片/两页不重叠/越界空/`count` 按筛选计数。`test_web_api_endpoints.py::TestMemories` 9 例全过（仅取 `memories` 字段）。pyright=94=基线。
+
 ## 2026-08-07
 
 - **docs(tools)**: 重写 `docs/tools.md`——内置工具数 27→38（补齐 AI 听记 list/get_minutes、钉钉知识库 wiki_space/wiki_node 共 4 个、OA 审批查询 approval_* 共 7 个）；速率限制整表以 `config.yaml.example` 为准（send_message 30 / create_todo 20 / web_search 50 / get_weather 30 / transfer_approval 10 等），纠正原先 128/512 等错误数值。

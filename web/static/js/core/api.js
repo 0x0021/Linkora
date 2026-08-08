@@ -265,6 +265,7 @@ class ApiClient {
     async getMemories(params = {}) {
         const qs = new URLSearchParams();
         if (params.limit) qs.set('limit', params.limit);
+        if (typeof params.offset === 'number' && params.offset > 0) qs.set('offset', params.offset);
         if (params.object_type && params.object_type !== 'all') qs.set('object_type', params.object_type);
         if (params.sender) qs.set('sender', params.sender);
         if (params.keyword) qs.set('keyword', params.keyword);

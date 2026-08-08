@@ -109,25 +109,13 @@ class MemoryRepo:
         rows = cur.fetchall()
         return [dict(row) for row in rows]
 
-    def get_memories_filtered(self, object_type: str = "all", sender: str = "",
-                             keyword: str = "", chat_id: str = "", limit: int = 200,
-                             scope: str = "all") -> list[dict]:
-        """按对象类型/具体人/关键词/范围(scope)筛选记忆。
+    def _build_memories_where(self, object_type: str, sender: str, keyword: str,
+                              chat_id: str, scope: str) -> tuple[str, list]:
+        """构造记忆筛选的 WHERE 子句与前缀参数。
 
-        object_type 通过 chat_id LEFT JOIN conversations 的 chat_type 动态推断：
-        - single -> person（人/单聊）
-        - group  -> group（群）
-        - 其它/无会话 -> other（手动添加或其它类型消息）
-        无需为 memories 表新增列，历史数据即生即效。
-
-        scope: 'all'（全部）/ 'public'（公共记忆）/ 'personal'（个人记忆，含未标注的历史数据）。
+        返回 (where_sql, params)：where_sql 含前导 " WHERE "，无筛选时为空串。
+        范围(scope)语义：public=显式公共；personal=个人(含历史未标注 NULL)。
         """
-        cur = self.store.conn.cursor()
-        sql = (
-            "SELECT m.*, c.chat_type AS conv_chat_type, c.chat_name AS conv_chat_name "
-            "FROM memories m "
-            "LEFT JOIN conversations c ON m.chat_id = c.chat_id"
-        )
         where = []
         params: list = []
         if scope and scope != "all":
@@ -151,11 +139,34 @@ class MemoryRepo:
         if chat_id:
             where.append("m.chat_id = ?")
             params.append(chat_id)
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY m.created_at DESC LIMIT ?"
-        params.append(limit)
-        cur.execute(sql, params)
+        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+        return where_sql, params
+
+    def get_memories_filtered(self, object_type: str = "all", sender: str = "",
+                             keyword: str = "", chat_id: str = "", limit: int = 200,
+                             offset: int = 0, scope: str = "all") -> list[dict]:
+        """按对象类型/具体人/关键词/范围(scope)筛选记忆（支持分页 offset）。
+
+        object_type 通过 chat_id LEFT JOIN conversations 的 chat_type 动态推断：
+        - single -> person（人/单聊）
+        - group  -> group（群）
+        - 其它/无会话 -> other（手动添加或其它类型消息）
+        无需为 memories 表新增列，历史数据即生即效。
+
+        scope: 'all'（全部）/ 'public'（公共记忆）/ 'personal'（个人记忆，含未标注的历史数据）。
+        offset: 跳过的记录数，用于分页；limit: 单页上限。
+        """
+        cur = self.store.conn.cursor()
+        where_sql, params = self._build_memories_where(
+            object_type, sender, keyword, chat_id, scope)
+        sql = (
+            "SELECT m.*, c.chat_type AS conv_chat_type, c.chat_name AS conv_chat_name "
+            "FROM memories m "
+            "LEFT JOIN conversations c ON m.chat_id = c.chat_id"
+            + where_sql +
+            " ORDER BY m.created_at DESC LIMIT ? OFFSET ?"
+        )
+        cur.execute(sql, params + [limit, max(0, int(offset))])
         rows = cur.fetchall()
         result = []
         for row in rows:
@@ -173,6 +184,24 @@ class MemoryRepo:
             d.pop("conv_chat_name", None)
             result.append(d)
         return result
+
+    def count_memories_filtered(self, object_type: str = "all", sender: str = "",
+                                keyword: str = "", chat_id: str = "",
+                                scope: str = "all") -> int:
+        """返回与筛选条件匹配的记忆总数，用于分页 total。"""
+        cur = self.store.conn.cursor()
+        where_sql, params = self._build_memories_where(
+            object_type, sender, keyword, chat_id, scope)
+        sql = (
+            "SELECT COUNT(*) AS cnt FROM memories m "
+            "LEFT JOIN conversations c ON m.chat_id = c.chat_id"
+            + where_sql
+        )
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        if not row:
+            return 0
+        return int(row["cnt"] or 0)
 
     def get_memory_facets(self) -> dict:
         """返回记忆筛选所需的 facets：对象类型计数 + 范围(scope)计数 + 去重的人列表。"""

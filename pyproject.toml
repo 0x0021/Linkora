@@ -43,6 +43,7 @@ dependencies = [
     "regex==2026.7.19",
     "rapidocr-onnxruntime==1.2.3",
     # ---- 文档解析 ----
+    "beautifulsoup4==4.15.0",
     "pdfplumber==0.11.10",
     "pymupdf==1.28.0",
     "python-pptx==1.0.2",

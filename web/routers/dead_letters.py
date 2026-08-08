@@ -12,6 +12,7 @@ from datetime import datetime
 
 from src.memory.draft_repo import DraftRepo
 from web.dependencies import get_app_instance, get_store, get_current_platform, logger, run_sync
+from web.errors import safe_detail
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -69,7 +70,9 @@ async def batch_replay_dead_letters():
                     detail.append({"id": dl_id, "status": "failed", "error": result.get("error", "")})
             except Exception as e:
                 fail_count += 1
-                detail.append({"id": dl_id, "status": "failed", "error": str(e)[:200]})
+                # 【P1-2026-08-08】不再把异常文本回传响应体（绕过全局 5xx 脱敏），
+                # 改用 safe_detail 返回常量文案，复用 web/errors.py 的脱敏 helper。
+                detail.append({"id": dl_id, "status": "failed", "error": safe_detail(e)})
         return detail, success_count, fail_count
 
     # 重放本身含 DB + LLM + 网络调用，逐条同步执行会长时间阻塞事件循环，整体放线程池。

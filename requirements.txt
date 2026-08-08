@@ -29,6 +29,10 @@ regex==2026.7.19
 rapidocr-onnxruntime==1.2.3
 
 # ---- 文档解析 ----
+# beautifulsoup4：HTML 正文抽取。URL 入库（web/routers/kb.py）、文档解析器
+# （src/tools/parse_document.py）与历史消息清洗（src/memory/sqlite_store.py）均依赖，
+# 缺失会让「从 URL 导入知识库」直接 500。
+beautifulsoup4==4.15.0
 pdfplumber==0.11.10
 pymupdf==1.28.0
 python-pptx==1.0.2

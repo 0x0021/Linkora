@@ -1,5 +1,6 @@
 from __future__ import annotations
 from .engine_mixins_base import EngineMixinBase
+from ._timeout import run_with_timeout
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
@@ -20,6 +21,11 @@ REPLY_SEND_RATE_LIMIT_BACKOFF_DEFAULT = 60.0
 # 而非 IMAdapterRateLimitError，故需文本兜底才能识别流控）。
 _RATE_LIMIT_HINTS = ("rate limit", "ratelimit", "429", "rate_limit",
                      "频控", "too many requests", "throttl", "quota exceeded")
+
+# 【P0-2026-08-08】提取 openDingTalkId 的总超时秒数（每次 CLI 调用另限时 10s）。
+# 由 _resolve_own_open_dingtalk_id 内的超时保护使用（run_with_timeout）；提为模块级
+# 常量便于测试注入小超时，避免直接等满 60s。
+OPEN_DINGTALK_ID_RESOLVE_TIMEOUT = 60
 
 
 
@@ -389,8 +395,6 @@ class SetupMixin(EngineMixinBase):
         contact_user_get_self 不返回 openDingTalkId，只能从消息记录中反推。
         每次 CLI 调用限时 10s，总超时 60s，超时后返回 None 不阻塞启动。
         """
-        import concurrent.futures
-
         def _do_resolve():
             try:
                 import datetime
@@ -432,16 +436,17 @@ class SetupMixin(EngineMixinBase):
                 logger.warning("[初始化] 提取 openDingTalkId 失败: %s", e)
                 return None
 
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_do_resolve)
-                return future.result(timeout=60)
-        except concurrent.futures.TimeoutError:
-            logger.warning("[初始化] _resolve_own_open_dingtalk_id 总超时（60s），降级跳过，自我检测可能不准确")
+        # 【P0-2026-08-08】同 primary.py：用共享原语 run_with_timeout 做超时保护，
+        # 显式 executor + shutdown(wait=False, cancel_futures=True)，超时/异常后
+        # 立即返回，不阻塞启动（避免 `with` 块里 shutdown(wait=True) 让超时保护失效）。
+        result, timed_out, raised = run_with_timeout(
+            _do_resolve, timeout=OPEN_DINGTALK_ID_RESOLVE_TIMEOUT, thread_name="resolve-oid")
+        if timed_out or raised:
+            logger.warning(
+                "[初始化] _resolve_own_open_dingtalk_id 超时/异常，降级跳过，"
+                "自我检测可能不准确")
             return None
-        except Exception as e:
-            logger.warning("[初始化] _resolve_own_open_dingtalk_id 执行异常: %s", e)
-            return None
+        return result
     def _filter_sensitive_words(self, text: str) -> str | None:
         words = self.config.safety.sensitive_words
         if not words:

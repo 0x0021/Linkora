@@ -5,7 +5,39 @@
 
 ---
 
-## 2026-08-07 — 文档对齐（docs 与实际代码一致化）
+## 2026-08-08 — 全面审计修复（P0/P1/P2）
+
+> 项目完整性/一致性审查后的修复轮，覆盖依赖声明、Web 安全、启动超时、CI 门禁与测试盲区。
+> **全量回归 3367 通过（2 skipped / 2 xfailed），pyright 基线维持 94，ruff 全绿**。
+
+### 依赖与构建（HIGH）
+- **fix(deps)**: `web/routers/kb.py` / `src/tools/parse_document.py` / `src/memory/sqlite_store.py` 实读 `bs4` 但 requirements/pyproject/lock 全缺，导致「从 URL 导入知识库」直接 500。补 `beautifulsoup4==4.15.0`（requirements.txt + pyproject.toml 文档解析段）并重生成 `requirements.lock` / `uv.lock`。
+- **fix(deps)**: `scripts/lock_deps.sh` 的 `PY_FLOOR="3.12"` 与 pyproject `requires-python>=3.14` 不一致，本地重生成锁后 CI 变红 → 改为 `3.14`。
+
+### 配置与安全（MEDIUM/HIGH）
+- **docs(env)**: `.env.example` 移除个人绝对路径；补 `HF_TOKEN` 与 `LLM_SECONDARY_FALLBACK_API_KEY/BASE_URL/MODEL`（代码实读但模板缺席）。
+- **fix(web)**: `GET /api/config` 脱敏遗漏 `llm.secondary_fallback_api_key`（仅 `_SECRET_KEYS` 有、GET 侧漏 → 明文回传）；补 `_mask` 并注释「新增 llm.*_api_key 须同步两处」。
+- **fix(web)**: `web/dependencies.py` `datetime.utcnow()` → `datetime.now(timezone.utc)` 消 3.12+ 弃用告警；新增 `_BG_TASKS` 强引用池 + `_spawn_bg()`，后台 task 不再被 GC 丢弃。
+- **fix(web)**: `web/routers/image.py` 同样 `_BG_TASKS` + `_spawn_bg`，防图标下载 task 被 GC 致 `safe_name` 永久卡 `_downloading`（永远走 SVG 兜底）。
+- **fix(config)**: `main.py` 补全 `__all__`（原仅 10 个，导致其余 32 再导出被 ruff 判 F401；CI lint 不含根 main.py 故长期不可见），现 52 符号全可解析。
+
+### 启动健壮性（P0）
+- **fix(platform)**: `primary._init_primary_components`（SQLiteStore 初始化）与 `runtime_setup._resolve_own_open_dingtalk_id`（oid 解析）的 `future.result(timeout=N)` 超时保护在 `with ThreadPoolExecutor` 的 `shutdown(wait=True)` 下形同虚设（已复现：超时分支触发但主线程仍卡到 worker 结束）。抽出共享原语 `src/platform/_timeout.py::run_with_timeout`（显式 executor + `shutdown(wait=False, cancel_futures=True)`），两处改用它；超时/异常不再阻塞启动。超时常量提为模块级 `_DB_INIT_TIMEOUT=30` / `OPEN_DINGTALK_ID_RESOLVE_TIMEOUT=60` 便于测试注入。
+- **fix(wecom)**: `src/im_adapter/wecom.py` `run()` 在 `subprocess.run` 后补 `returncode` 判定，镜像 base.py（非 0 → `_classify_error`；负数信号 → `_shutdown_error_class()`），CLI 崩溃不再被当「成功无数据」。
+
+### 业务与配置收敛（P1/P2）
+- **refactor(intent)**: `src/intent/registry.py` 移除 `TOOL_ACTION_MAP` 中已删除实现类的孤儿映射 `get_my_approvals` / `get_approval_detail`（40=38+2，仅 registry 引用）。
+- **fix(web)**: `web/routers/dead_letters.py` 批量重放单条异常改回 `safe_detail(e)` 常量文案，不再 `str(e)[:200]` 把异常内部文本（路径/密钥/堆栈）回传响应体，复用 `web/errors.py` 脱敏 helper。
+- **ci(deps)**: `.gitlab-ci.yml` 由 `py39`+`py313` 双矩阵收敛为单一 `test:py314` / `python:3.14-slim`（原两版本均不满足 `>=3.14`）；`scripts/check_deps.py::check_environments` 新增扫描 `.gitlab-ci.yml` 与 `scripts/lock_deps.sh` 的 Python 下限，依赖门禁不再盲。
+- **docs(config)**: `config.yaml.example` 补全 feishu/wecom 完整注释块（`enabled: false` + `adapter.cli_path`），照启用为 copy-edit，CI 安全。
+
+### 文档规范
+- **docs(changelog)**: 合并 `2026-08-07` 同日 4 个重复 `## ` 小节为单一日期下的 `### ` 子节；`## v0.2.0 (2026-08-07)` 发布块从原中段位置移回日组末尾（`---` 分隔符前），恢复「一日期一 `##`、release 独立 `## vX`」规范。
+
+### 测试加固（P2-3）
+- **test(platform)**: 新增 `tests/test_timeout_guard.py`（7 例）覆盖 `run_with_timeout` 成功/超时非阻塞/直接断言 `shutdown(wait=False, cancel_futures=True)` 契约/异常降级，及两处调用点超时行为；`tests/test_web_routers_dead_letters.py`（3 例）覆盖批量重放异常脱敏。填补 `primary.py` / `runtime_setup.py` / `dead_letters.py` 测试盲区。
+
+## 2026-08-07
 
 - **docs(tools)**: 重写 `docs/tools.md`——内置工具数 27→38（补齐 AI 听记 list/get_minutes、钉钉知识库 wiki_space/wiki_node 共 4 个、OA 审批查询 approval_* 共 7 个）；速率限制整表以 `config.yaml.example` 为准（send_message 30 / create_todo 20 / web_search 50 / get_weather 30 / transfer_approval 10 等），纠正原先 128/512 等错误数值。
 - **docs(architecture)**: Python 版本 3.11+→3.14+（仅 3.14 系列）；路由模块 30→29、端点 150+→153；架构图内置工具数 27→38。
@@ -21,7 +53,7 @@
 - **docs(BINARY_PACKAGING_PLAN)**: 构建环境 / Docker 基础镜像 / CI `python-version` 的 Python 3.13 统一改为 3.14（与 `pyproject.toml` 及 CI 矩阵一致）。
 - **docs(readme)**: 移除 `README.md` 顶部对 `docs/banner.png` 的图片引用（该资源已缺失、GitHub raw 返回 404），保留 badges 与导航之间单一 `<br>` 分隔。
 
-## 2026-08-07 — 文档站（Pages）商业级重设计
+### 文档站（Pages）商业级重设计
 
 - **feat(docs)**: 重写 `docs/index.html` 落地页，从原 Apple 极简 PPT 吸附风（信息架构偏平）升级为商业产品级水准。设计语言统一为品牌渐变 **indigo→cyan**（沿用 `public/index.html` 管理台既立品牌色），深色为基底 + aurora 光晕 + 玻璃拟态 + 细网格背景。
 - 新增 `docs/assets/site.css`（设计系统：双主题 tokens、玻璃组件、aurora/网格背景、滚动进场与微交互动画、完整响应式）与 `docs/assets/site.js`（主题三态切换 light/dark/system 首帧防闪、IntersectionObserver 滚动进场 stagger、磁性按钮、导航玻璃态、移动菜单、数字计数、轻量 canvas 粒子背景——尊重 `prefers-reduced-motion` 与页面可见性）。
@@ -39,28 +71,11 @@
 - **style(docs)**: 精简 Hero 聊天 mockup 的 AI 回复气泡（长步骤改为一行核心信息），并优化布局：`.msg` 气泡 `max-width` 92%→88%、`line-height` 1.6、加微阴影；bot 气泡左侧加品牌色边；`.demo__body` `max-height` 420px→380px 更紧凑。
 - **docs(docs)**: Hero 主文案重写为更口语化、人性化的表达：标题「让 AI 分身，接管你的日常沟通」；新增一行平台覆盖提示「群聊、私聊都在线 · 钉钉、飞书、企业微信全覆盖」；正文改为「灵桥把 AI 分身带到团队每天使用的沟通平台。它能理解企业知识、调用工具完成工作，并与真人无缝协作，让沟通和业务持续运转。」（新增 `.hero__desc` 段落样式，信息与视觉层次更清晰）。
 
-## 2026-08-07 — Pages 部署迁移到自定义 GitHub Actions 工作流
+### Pages 部署迁移到自定义 GitHub Actions 工作流
 
 - **ci(pages)**: 新增 `.github/workflows/deploy-pages.yml`，将 Pages 部署从「分支部署（GitHub 默认 `pages-build-deployment` 工作流，内部使用 `checkout@v4` / `upload-artifact@v4`，触发 `Node.js 20 is deprecated` 告警）」改为「GitHub Actions 部署」。改用 `checkout@v7` / `configure-pages@v6` / `jekyll-build-pages@v1.0.13` / `upload-pages-artifact@v5` / `deploy-pages@v5`，消除该弃用告警。仓库 Pages `build_type` 由 `legacy` 切到 `workflow`。
 
-## v0.2.0 (2026-08-07)
-
-> 距 v0.1.0（2026-08-04）以来的累计发布：会话门控重设计、业务逻辑查缺补漏、多项缺陷修复与质量优化、CI 加速。
-
-### 核心亮点
-- **会话门控双重校验（破「人工沟通中 bot 仍插话」）**：抽出共用门控裁决 `_reply_gate_reason`，在「进入 LLM 前（前置过滤，省 Token）」与「发送前（并发兜底）」两道关卡接线，任一命中即放弃自动回复；重接 DWS 已读闸门（保守语义，规避历史漏回事故），身份解析失败改为告警暴露而非静默失效。
-- **业务逻辑查缺补漏**：修复账号隔离（硬编码绝对路径导致钉钉账号共用命名空间）、会话库级联清理漏图、SQLite 连接泄漏、配置模板幽灵工具等 5 处真实缺陷。
-- **缺陷修复轮**：配置回写密钥落盘泄漏、历史清理错库、恢复默认配置误清空、日志明文脱敏、路径可重定位等多个真实缺陷。
-- **CI 加速**：依赖安装改用 `uv` 缓存，热路径由 ~1-2min 降至 ~10-30s；新增 `workflow_dispatch` 手动触发，绕过偶发的 push 事件丢失。
-
-### 质量门禁
-- 全量回归 **3300+ 通过**；pyright 类型基线维持 **94**（零新增）；gitleaks 每次提交均通过。
-
-### 升级注意
-- 新增配置项 `poller.suppress_when_owner_read`（默认 `true`），无需改动既有配置；若所在环境 DWS 未读状态失真导致漏回，可置 `false`。
-- 无破坏性变更（breaking change）。
-
-## 2026-08-07 — 会话门控重设计（发送前复核 + 已读闸门）与 CI 依赖安装加速
+### 会话门控重设计（发送前复核 + 已读闸门）与 CI 依赖安装加速
 
 > 现象：**人工正在沟通、消息已读的会话里，机器人仍插话自动回复**。
 > 排查后定位为「两层门控之间存在生成期竞态」+「已读信号在历史重构中被摘除且无替代」。
@@ -120,7 +135,7 @@
 
 ---
 
-## 2026-08-07 — 业务逻辑查缺补漏（账号隔离/会话清理/配置模板/死代码）
+### 业务逻辑查缺补漏（账号隔离/会话清理/配置模板/死代码）
 
 > 继 8/6 缺陷修复轮后，继续梳理业务主流程（消息入站→意图识别→工具调度→回复→持久化），
 > 核实并修复 5 处真实缺陷/坏味道；**179 项相关回归测试全绿**。
@@ -142,6 +157,23 @@
 
 ### 测试加固
 - **test(tool_whitelist_drift)**: 新增 `test_example_config_has_no_unknown_tool_entries`，校验 `config.yaml.example` 的 `tools.available` / `rate_limit` 不含非 manifest 幽灵条目且全部在 `TOOL_ACTION_MAP` 有映射，把"审批工具收敛漏改 example"类缺陷纳入 CI 拦截。
+
+## v0.2.0 (2026-08-07)
+
+> 距 v0.1.0（2026-08-04）以来的累计发布：会话门控重设计、业务逻辑查缺补漏、多项缺陷修复与质量优化、CI 加速。
+
+### 核心亮点
+- **会话门控双重校验（破「人工沟通中 bot 仍插话」）**：抽出共用门控裁决 `_reply_gate_reason`，在「进入 LLM 前（前置过滤，省 Token）」与「发送前（并发兜底）」两道关卡接线，任一命中即放弃自动回复；重接 DWS 已读闸门（保守语义，规避历史漏回事故），身份解析失败改为告警暴露而非静默失效。
+- **业务逻辑查缺补漏**：修复账号隔离（硬编码绝对路径导致钉钉账号共用命名空间）、会话库级联清理漏图、SQLite 连接泄漏、配置模板幽灵工具等 5 处真实缺陷。
+- **缺陷修复轮**：配置回写密钥落盘泄漏、历史清理错库、恢复默认配置误清空、日志明文脱敏、路径可重定位等多个真实缺陷。
+- **CI 加速**：依赖安装改用 `uv` 缓存，热路径由 ~1-2min 降至 ~10-30s；新增 `workflow_dispatch` 手动触发，绕过偶发的 push 事件丢失。
+
+### 质量门禁
+- 全量回归 **3300+ 通过**；pyright 类型基线维持 **94**（零新增）；gitleaks 每次提交均通过。
+
+### 升级注意
+- 新增配置项 `poller.suppress_when_owner_read`（默认 `true`），无需改动既有配置；若所在环境 DWS 未读状态失真导致漏回，可置 `false`。
+- 无破坏性变更（breaking change）。
 
 ---
 

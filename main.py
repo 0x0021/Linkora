@@ -54,17 +54,73 @@ import threading as threading
 import time as time
 import uuid as uuid
 
+# 本模块是**兼容门面**：上面每一个 import 都是有意的对外再导出，而非"没用到的
+# 导入"。__all__ 此前只列了 10 个，导致其余 32 个再导出被 ruff 判为 F401；
+# 又因 CI 的 lint 范围是 `src tests web scripts`（不含根目录 main.py），这批告警
+# 长期不可见。此处把全部再导出符号显式登记，既表达意图，也让 main.py 可被纳入
+# lint 范围而不产生噪声。新增再导出时请同步追加到本列表。
 __all__ = [
+    # ── 核心类 / 函数 ──
     "LinkoraEngine",
     "PlatformContext",
     "BackgroundLLMThrottle",
     "extract_card_title",
     "_active_platform_ctx",
     "main",
+    # ── 配置 / 存储 ──
     "load_config",
-    "tracker",
+    "DEFAULT_STORAGE_PATH",
+    "DatabaseBackup",
+    "DatabaseBackupCoordinator",
     "SQLiteStore",
+    "get_store",
+    "EmbeddingClient",
+    # ── 调度 / 同步 ──
+    "SummaryScheduler",
+    "DocSyncScheduler",
+    # ── 平台适配器 ──
+    "DwsAdapter",
+    "FeishuCliAdapter",
+    "WecomCliAdapter",
+    # ── LLM ──
+    "LLMAgent",
+    "LLMClient",
+    "seconds_since_rate_limit",
+    "LLMProcessingError",
+    "LLMRateLimitExhaustedError",
+    # ── 消息 / 轮询 / 规则 ──
     "Message",
+    "MessagePoller",
+    "RuleEngine",
+    # ── 意图 / 工具 / 技能 ──
+    "validate_tool_action_coverage",
+    "default_registry",
+    "ToolRouter",
+    "KBSearchTool",
+    "bind_kb_search_embedding",
+    "register_builtin_tools",
+    "SkillManager",
+    "SkillTool",
+    # ── 运行期状态 / 可观测性 ──
+    "tracker",
+    "set_app_instance",
+    "set_config",
+    "set_config_reload_callback",
+    "setup_logger",
+    "request_id_scope",
+    "get_request_id",
+    "install_log_filter",
+    # ── stdlib 再导出（测试通过 main.<module> 路径 monkeypatch）──
+    "logging",
+    "os",
+    "re",
+    "shutil",
+    "signal",
+    "sys",
+    "tempfile",
+    "threading",
+    "time",
+    "uuid",
 ]
 
 if __name__ == "__main__":

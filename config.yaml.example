@@ -105,6 +105,9 @@ platforms:
       profile: ''                                   # DWS 登录 profile（多账号场景；默认空=默认账号）
       retries: 2                                    # DWS 命令重试次数
       timeout: 30                                   # DWS 命令超时（秒）
+  # ── 飞书 / 企业微信：可选平台，默认关闭 ──
+  # 启用步骤：① 安装对应 CLI（lark-cli / wecom-cli）；② 取消下方注释；③ 把 enabled 改为 true。
+  # poller / storage / adapter 字段含义与上方 dingtalk 完全一致（钉钉段已逐行注释）。
   # - id: feishu
   #   display_name: 飞书
   #   enabled: false
@@ -112,11 +115,64 @@ platforms:
   #   storage:
   #     type: sqlite
   #     path: ./data/feishu-ai.db
+  #     backup_enabled: true
+  #     backup_dir: ./data/backups
+  #     backup_interval_hours: 24
+  #     backup_max_count: 7
+  #     backup_on_start: true
+  #     decisions_retention_days: 14
+  #     messages_retention_days: 90
+  #     doc_sync_interval_hours: 1
   #   poller:
   #     interval_seconds: 10
+  #     unread_conversation_count: 50
+  #     messages_per_conversation: 16
+  #     merge_window_seconds: 5
+  #     history_window: 6
+  #     history_days: 3
+  #     history_session_gap_minutes: 360
+  #     max_processed_msg_ids: 500
+  #     first_run_ignore_older_than_minutes: 5
+  #     reply_cooldown_seconds: 10
+  #     owner_present_cooldown_seconds: 600
+  #     suppress_when_owner_read: true
+  #     mark_read_after_process: true
+  #     max_dispatch_per_cycle: 30
+  #     max_concurrent_replies: 4
+  #     reply_concurrency_timeout_seconds: 30
+  #     list_all_time_window_minutes: 30
+  #     list_all_first_run_minutes: 5
+  #     list_all_full_scan_interval_minutes: 60
+  #     list_all_empty_alert_rounds: 6
+  #     empty_poll_protection_minutes: 5
+  #     list_all_max_pages: 50
+  #     list_all_max_window_days: 14
+  #     skip_msg_types:
+  #       - system
+  #       - app
+  #       - file
+  #       - call
+  #       - voice
+  #       - video
+  #       - read_receipt
+  #     graceful_fallback_msg_types: []
+  #     skip_notification_patterns: []
+  #     skip_notification_sender_ids: []
+  #     image_ocr_enabled: true
+  #     image_temp_dir: ./data/tmp_images
+  #     target_org_corp_id: ''
+  #     blacklist_min_consecutive_failures: 3
+  #     blacklist_reconcile_every: 10
+  #     reconcile_probe_batch_size: 5
+  #     top_convs_cache_ttl_seconds: 120
+  #     min_conversation_poll_interval_seconds: 60
+  #     ai_tag_enabled: true
   #   adapter:
   #     cli_path: lark-cli                          # 已安装的飞书 CLI（lark-cli v1.0.72+）
   #     dry_run: false
+  #     profile: ''
+  #     retries: 2
+  #     timeout: 30
   # - id: wecom
   #   display_name: 企业微信
   #   enabled: false
@@ -124,11 +180,64 @@ platforms:
   #   storage:
   #     type: sqlite
   #     path: ./data/wecom-ai.db
+  #     backup_enabled: true
+  #     backup_dir: ./data/backups
+  #     backup_interval_hours: 24
+  #     backup_max_count: 7
+  #     backup_on_start: true
+  #     decisions_retention_days: 14
+  #     messages_retention_days: 90
+  #     doc_sync_interval_hours: 1
   #   poller:
   #     interval_seconds: 10
+  #     unread_conversation_count: 50
+  #     messages_per_conversation: 16
+  #     merge_window_seconds: 5
+  #     history_window: 6
+  #     history_days: 3
+  #     history_session_gap_minutes: 360
+  #     max_processed_msg_ids: 500
+  #     first_run_ignore_older_than_minutes: 5
+  #     reply_cooldown_seconds: 10
+  #     owner_present_cooldown_seconds: 600
+  #     suppress_when_owner_read: true
+  #     mark_read_after_process: true
+  #     max_dispatch_per_cycle: 30
+  #     max_concurrent_replies: 4
+  #     reply_concurrency_timeout_seconds: 30
+  #     list_all_time_window_minutes: 30
+  #     list_all_first_run_minutes: 5
+  #     list_all_full_scan_interval_minutes: 60
+  #     list_all_empty_alert_rounds: 6
+  #     empty_poll_protection_minutes: 5
+  #     list_all_max_pages: 50
+  #     list_all_max_window_days: 14
+  #     skip_msg_types:
+  #       - system
+  #       - app
+  #       - file
+  #       - call
+  #       - voice
+  #       - video
+  #       - read_receipt
+  #     graceful_fallback_msg_types: []
+  #     skip_notification_patterns: []
+  #     skip_notification_sender_ids: []
+  #     image_ocr_enabled: true
+  #     image_temp_dir: ./data/tmp_images
+  #     target_org_corp_id: ''
+  #     blacklist_min_consecutive_failures: 3
+  #     blacklist_reconcile_every: 10
+  #     reconcile_probe_batch_size: 5
+  #     top_convs_cache_ttl_seconds: 120
+  #     min_conversation_poll_interval_seconds: 60
+  #     ai_tag_enabled: true
   #   adapter:
   #     cli_path: wecom-cli                         # 已安装的企业微信 CLI（wecom-cli v0.1.9+）
   #     dry_run: false
+  #     profile: ''
+  #     retries: 2
+  #     timeout: 30
 
 # ============================================================
 # ① DWS 适配器配置（钉钉 CLI 接口）—— legacy 兼容段（config_manage 读取）

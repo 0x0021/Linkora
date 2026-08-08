@@ -210,6 +210,20 @@ def _slug_color(slug: str) -> str:
 # 正在下载中的 safe_name 集合，防止并发重复下载
 _downloading: set[str] = set()
 
+# 后台任务强引用池。事件循环只持有 task 的弱引用，裸 create_task 的返回值若不
+# 保存，任务可能在完成前被 GC（CPython 官方文档明示）。对图标下载而言后果是
+# _download_and_release 的 finally 不执行 → safe_name 永远留在 _downloading，
+# 该图标此后永久卡在 SVG 兜底、不再重试。故统一经 _spawn_bg 持有引用。
+_BG_TASKS: set[_asyncio.Task] = set()
+
+
+def _spawn_bg(coro) -> _asyncio.Task:
+    """派发后台任务并持有强引用，完成后自动移除。"""
+    task = _asyncio.create_task(coro)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
 
 @router.get("/api/skill-icons/{slug}")
 async def serve_skill_icon(slug: str):
@@ -233,7 +247,7 @@ async def serve_skill_icon(slug: str):
     raw_url = _lazy_resolve_icon_url(slug, safe)
     if raw_url and safe not in _downloading:
         _downloading.add(safe)
-        _asyncio.create_task(_download_and_release(slug, raw_url, safe))
+        _spawn_bg(_download_and_release(slug, raw_url, safe))
 
     # 返回 SVG 兜底图标（首字母 + 哈希色）
     initial = next((c.upper() for c in slug if c.isalnum()), "S")
@@ -274,7 +288,7 @@ def _lazy_resolve_icon_url(slug: str, safe: str) -> str | None:
     # （不阻塞当前请求，后台填充后后续请求可命中）
     from web.dependencies import _ICON_URL_MAP
     if not _ICON_URL_MAP:
-        _asyncio.create_task(_lazy_fill_icon_url_map())
+        _spawn_bg(_lazy_fill_icon_url_map())
 
     return None
 

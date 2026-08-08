@@ -22,7 +22,11 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 # requires-python 下限，与 pyproject.toml 的 requires-python 保持一致。
-PY_FLOOR="3.12"
+# 【务必与 pyproject.toml 同步】此前钉在 3.12 而 pyproject 已升到 >=3.14，
+# 导致 `uv pip compile --python-version 3.12` 按 3.12 解析闭包，选出的是兼容
+# 3.12 的旧版本（如 tokenizers 回退 0.22.2、rapidocr 回退 1.2.3），与 CI 实际
+# 使用的 3.14.6 解析结果不一致 —— 这正是「本地重生成锁文件后 CI 变红」的根因。
+PY_FLOOR="3.14"
 
 echo "==> 生成 requirements.lock（requirements.txt 的完整传递闭包）"
 uv pip compile requirements.txt \

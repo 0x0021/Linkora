@@ -166,6 +166,21 @@ class WecomCliAdapter(BaseIMAdapter):
                     timeout=timeout, encoding="utf-8",
                     env=self._no_browser_env,
                 )
+                # 【P0-2026-08-08】不再忽略 CLI 退出码：此前只取 stdout 并直接解析，
+                # CLI 崩溃（段错误 / 二进制缺失 / 子进程异常终止）被当成「成功无数据」，
+                # 表现为企微消息静默丢失。此处对齐 base.py 通用引擎的 returncode 处理。
+                if result.returncode != 0:
+                    stderr = (result.stderr or "").strip() or (result.stdout or "").strip()
+                    if result.returncode < 0:
+                        # 负数退出码 = 子进程被信号杀死（如关机阶段 Ctrl+C 把企微 CLI
+                        # 一并终止），属正常关机而非真实故障，降级为 debug 且不重试。
+                        sig = -result.returncode
+                        logger.debug("%s 子进程被信号 %d 终止（可能处于关机阶段）: %s",
+                                     self.cli_path, sig, stderr)
+                        raise self._shutdown_error_class()(
+                            f"{self.cli_path} terminated by signal {sig}: {stderr}")
+                    error_class = self._classify_error(stderr)
+                    raise error_class(f"{self.cli_path} exit {result.returncode}: {stderr}")
                 output = (result.stdout or "").strip()
                 return self._parse_output(output)
             except subprocess.TimeoutExpired:

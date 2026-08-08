@@ -174,6 +174,29 @@ def check_environments(rep: Report, floor: tuple[int, int], strict: bool) -> Non
             else:
                 rep.ok(f"{name} 基础镜像 python:{v} 满足 >={fl}")
 
+    # GitLab CI 基础镜像（image: python:X.Y-slim）
+    gl = ROOT / ".gitlab-ci.yml"
+    if gl.exists():
+        for m in re.finditer(r"image:\s*python:(\d+\.\d+)", gl.read_text(encoding="utf-8")):
+            found_any = True
+            v = m.group(1)
+            if tuple(int(x) for x in v.split(".")) < floor:
+                report(f".gitlab-ci.yml 基础镜像 python:{v} 低于依赖要求的 >={fl}，该 job 装依赖必失败")
+            else:
+                rep.ok(f".gitlab-ci.yml 基础镜像 python:{v} 满足 >={fl}")
+
+    # lock_deps.sh 的 PY_FLOOR（本地重生成锁时解析依赖用的 Python 版本下限）
+    lds = ROOT / "scripts/lock_deps.sh"
+    if lds.exists():
+        m = re.search(r'PY_FLOOR="(\d+)\.(\d+)"', lds.read_text(encoding="utf-8"))
+        if m:
+            found_any = True
+            v = f"{m.group(1)}.{m.group(2)}"
+            if tuple(int(x) for x in v.split(".")) < floor:
+                report(f"scripts/lock_deps.sh PY_FLOOR={v} 低于依赖要求的 >={fl}，本地重生成锁会解析出旧版本（CI 会红）")
+            else:
+                rep.ok(f"scripts/lock_deps.sh PY_FLOOR={v} 满足 >={fl}")
+
     if not found_any:
         rep.warn("未找到可校验的 CI / Dockerfile Python 版本声明")
 

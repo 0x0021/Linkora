@@ -1,5 +1,5 @@
 # 灵桥 (Linkora) CI — GitLab 流水线
-# 与 .github/workflows/ci.yml 保持等价：lint + test(py39/py313) + 覆盖率 + 漏洞扫描
+# 与 .github/workflows/ci.yml 保持等价：lint + test(py3.14) + 覆盖率 + 漏洞扫描
 
 stages:
   - lint
@@ -31,7 +31,7 @@ cache:
 # ============================================================================
 lint:
   stage: lint
-  image: python:3.13-slim
+  image: python:3.14-slim
   timeout: 10m
   before_script:
     - python -m pip install --upgrade pip
@@ -59,7 +59,7 @@ PY
   allow_failure: true
 
 # ============================================================================
-# Test Matrix (Python 3.9 / 3.13)
+# Test (Python 3.14)
 # ============================================================================
 .test_base:
   stage: test
@@ -78,10 +78,7 @@ PY
       - coverage.xml
     expire_in: 30 days
 
-test:py39:
+# 项目仅支持 3.14 系列（requires-python>=3.14），单矩阵与 GitHub CI 对齐
+test:py314:
   extends: .test_base
-  image: python:3.9-slim
-
-test:py313:
-  extends: .test_base
-  image: python:3.13-slim
+  image: python:3.14-slim

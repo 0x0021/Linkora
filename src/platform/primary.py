@@ -1,5 +1,6 @@
 from __future__ import annotations
 from .engine_mixins_base import EngineMixinBase
+from ._timeout import run_with_timeout
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 import logging
@@ -11,6 +12,11 @@ if TYPE_CHECKING:
     from src.im_adapter.base_adapter import BaseIMAdapter
 
 logger = logging.getLogger(__name__)
+
+# 【P0-2026-08-08】SQLite connect + integrity_check + schema 迁移超时秒数。
+# 由 _init_primary_components 内的超时保护使用（run_with_timeout）；提为模块级常量
+# 便于测试注入小超时，避免直接等满 30s。
+_DB_INIT_TIMEOUT = 30
 
 
 class PrimaryMixin(EngineMixinBase):
@@ -87,8 +93,6 @@ class PrimaryMixin(EngineMixinBase):
         其 store/dws 同时作为 self.store/self.dws 属性的默认解析目标，保证所有既
         有单平台代码路径（规则引擎、工具、LLM、轮询器）在零改动下继续工作。
         """
-        import concurrent.futures
-
         logger.info("[启动] _init_primary_components: 开始初始化主平台组件")
 
         # ── Step 1: 加载平台配置 ──
@@ -117,8 +121,6 @@ class PrimaryMixin(EngineMixinBase):
         store = get_store(self.config.storage.path)
         primary.store = store
 
-        _DB_INIT_TIMEOUT = 30  # SQLite connect + integrity_check + schema 迁移超时秒数
-
         def _db_init():
             store.init_db()
             store.set_decisions_retention_days(
@@ -126,27 +128,21 @@ class PrimaryMixin(EngineMixinBase):
             )
             return True
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1,
-                                                   thread_name_prefix="db-init") as executor:
-            future = executor.submit(_db_init)
-            try:
-                future.result(timeout=_DB_INIT_TIMEOUT)
-                logger.info("[启动] Step 3/6 完成: SQLiteStore 初始化成功")
-            except concurrent.futures.TimeoutError:
-                logger.error(
-                    "[启动] Step 3/6 超时: SQLiteStore 初始化超过 %ds，"
-                    "跳过（后续首次访问 conn 时将 lazy-init 重试）",
-                    _DB_INIT_TIMEOUT,
-                )
-                # 【CRITICAL】Worker 线程在 conn 属性中已将 _schema_initialized 设为 True
-                # 后进入 init_db 阻塞；超时后标志位仍为 True，主线程后续访问 conn 时
-                # 不会触发 lazy-init → 查询空表直接报错。此处重置标志位以便主线程重试。
-                primary.store._schema_initialized = False
-            except Exception as e:
-                logger.error(
-                    "[启动] Step 3/6 失败（已跳过，后续 lazy-init 兜底）: %s", e
-                )
-                primary.store._schema_initialized = False
+        # 【P0-2026-08-08】用共享原语 run_with_timeout 做超时保护：显式 executor +
+        # shutdown(wait=False, cancel_futures=True)，超时/异常后立即返回，不阻塞
+        # 启动流程；后台 init_db worker 跑完自行退出（避免 `with` 块里
+        # shutdown(wait=True) 让超时保护形同虚设的已复现问题）。
+        result, timed_out, raised = run_with_timeout(
+            _db_init, timeout=_DB_INIT_TIMEOUT, thread_name="db-init")
+        if timed_out or raised:
+            logger.error(
+                "[启动] Step 3/6 超时/失败: SQLiteStore 初始化跳过"
+                "（后续首次访问 conn 时将 lazy-init 重试）"
+            )
+            # 重置标志位以便主线程 lazy-init 重试
+            primary.store._schema_initialized = False
+        else:
+            logger.info("[启动] Step 3/6 完成: SQLiteStore 初始化成功")
 
         # ── Step 4: 绑定决策追踪器 ──
         logger.debug("[启动] Step 4/6: 绑定决策追踪器到 SQLiteStore")

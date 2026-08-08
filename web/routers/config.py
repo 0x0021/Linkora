@@ -511,8 +511,13 @@ async def get_config(platform: str = ""):
         def _mask(v):
             return v[:4] + "****" if v else ""
         if "llm" in data:
+            # 注意：新增任何 llm.*_api_key 字段都必须在此补一行，否则会明文回传。
+            # 本列表须与下方导出脱敏的 _SECRET_KEYS 保持同步（secondary_fallback_api_key
+            # 此前只在导出侧脱敏、GET /api/config 漏masked，已补齐）。
             data["llm"]["api_key"] = _mask(data["llm"].get("api_key", ""))
             data["llm"]["fallback_api_key"] = _mask(data["llm"].get("fallback_api_key", ""))
+            data["llm"]["secondary_fallback_api_key"] = _mask(
+                data["llm"].get("secondary_fallback_api_key", ""))
         if "embedding" in data:
             data["embedding"]["api_key"] = _mask(data["embedding"].get("api_key", ""))
             data["embedding"]["hf_token"] = _mask(data["embedding"].get("hf_token", ""))

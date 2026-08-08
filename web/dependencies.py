@@ -26,7 +26,7 @@ import asyncio
 import urllib.parse
 import urllib.request
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, Query
@@ -366,6 +366,18 @@ _MARKET_RANKINGS_LOCK = asyncio.Lock()
 # slug → 原始图标 URL 映射：在 _fetch_market_rankings 时填充，供安装时下载图标用
 _ICON_URL_MAP: dict[str, str] = {}
 
+# 后台任务强引用池：事件循环只持弱引用，裸 create_task 的任务可能在完成前被 GC，
+# 导致图标预取静默中断。持有引用并在完成后自动移除。
+_BG_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_bg(coro) -> asyncio.Task:
+    """派发后台任务并持有强引用，完成后自动移除。"""
+    task = asyncio.create_task(coro)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
 
 # ── 技能图标本地缓存检查 ────────────────────────────────────────────
 def _slug_to_safe_name(slug: str) -> str:
@@ -532,14 +544,16 @@ async def _fetch_market_rankings(force: bool = False) -> dict:
         # 全部技能图标，确保用户首次打开市场页面时图标已就绪，消灭"先看 SVG
         # 兜底、刷新才出真图标"的半成品体验。
         _icon_map_snapshot = dict(_ICON_URL_MAP)
-        asyncio.create_task(_trigger_icon_prefetch(_icon_map_snapshot))
+        _spawn_bg(_trigger_icon_prefetch(_icon_map_snapshot))
 
         all_sorted = sorted(universe, key=lambda x: float(x.get("score") or 0), reverse=True)
         stars_sorted = sorted(universe, key=lambda x: int(x.get("stars") or 0), reverse=True)
 
         data = {
             "ok": True,
-            "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            # datetime.utcnow() 在 3.12+ 已弃用且计划移除，改用时区感知的 UTC 取值；
+            # 输出格式保持 "...Z" 不变，前端无需改动。
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "total": len(all_sorted),
             "sections": {
                 "all": _norm(all_sorted),

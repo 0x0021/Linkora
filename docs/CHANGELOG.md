@@ -76,7 +76,14 @@
 - **perf(web,js)**: 新增 `core/util.js::loadChart()`——首次调用动态注入 `<script src="/static/vendor/chart.umd.min.js">`，`Promise` 缓存，`window.Chart` 就绪后 resolve；重复进入不再重复下载。`index.html` 删除该 eager `<script defer>` 标签。
 - **refactor(web,js)**: 11 处 `new Chart` 渲染函数（dashboard/messages/intent 各 1、metrics 5、cost_quality 3）改为 `async` 并在 `new Chart` 前 `await window.loadChart()`，且把加载置于 canvas 空态早退之后——仅在确有图表时才拉 Chart.js。各函数均 fire-and-forget，调用方不依赖同步返回值，回归风险可控。
 
-- **defer(前端)**: 以下 HIGH 项本轮**未做**，列为下轮独立迭代——F-H3 图片缩略图 + WebP（需服务端 Pillow 压缩 + 落盘 + 内容协商 + 前端 srcset，工作量大但收益高）、F-H8 FontAwesome 子集（审查时「无 brands/regular 用法」前提**有误**——`fa-regular` 在 persona/simulate/routetrace/index 多处使用，`solid-subset` 仅含 solid 字型，直接切换会致 regular 图标缺字，需重做双字重子集）。
+### 前端性能优化（F-H8 FontAwesome 双字重子集）
+
+> `all.min.css`(FontAwesome Free 7.3.0, 90169B) 含全量图标 + brands 字型，但应用仅用 72 个图标（solid+regular 双字重、`fa-regular` 在 persona/simulate/routetrace/index 多处使用、0 brands），且大部分 base utility/keyframes 未用。生成双字重子集替换，体积 -63%。
+
+- **perf(web,css)**: 新增 `scripts/gen_fa_subset.py`——扫描 `web/static` + `web/templates` 全部 `fa-*` token（跳过 `fontawesome/` 自身与 `dist/`、`build/` 产物，避免把被裁 CSS 的图标名又收回来），按规则裁剪 `all.min.css`：保留 solid/regular 双 `@font-face`（含 FontAwesome 5/4 兼容面，字节极小）+ 仅 72 个在用图标 `.fa-NAME{--fa:...}` + 仅用到的 base utility（如 `fa-spin` spinner）+ 仅用到的 `@keyframes`，丢弃 brands `@font-face` 与全部未用图标/工具类/动画。产出 `web/static/fontawesome/fa-subset.min.css` = 33042B（**-63%，省 ~57KB/请求**），校验 72 个在用图标**零缺失**。
+- **perf(web,html)**: `index.html` 的 FontAwesome `<link>` 由 `all.min.css` 切到 `fa-subset.min.css`；删除上一轮「solid-only」废弃子集 `solid-subset.min.css`（仅含 solid 字型、`fa-regular` 会缺字，前提有误）。
+
+- **defer(前端)**: 以下 HIGH 项本轮**未做**，列为下轮独立迭代——F-H3 图片缩略图 + WebP（需服务端 Pillow 压缩 + 落盘 + 内容协商 + 前端 srcset，工作量大但收益高）。
 
 ## 2026-08-07
 

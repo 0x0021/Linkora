@@ -6,7 +6,9 @@
     <title>灵桥 (Linkora) · 企业管理平台</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/linkora-logo.svg">
     <!-- Font Awesome CSS -->
-    <link rel="stylesheet" href="/static/fontawesome/all.min.css">
+    {# F-H8：FontAwesome 双字重子集(solid+regular, 0 brands)，由 scripts/gen_fa_subset.py 生成，
+       体积 90KB→33KB；如需增删图标重跑生成器并重建产物 #}
+    <link rel="stylesheet" href="/static/fontawesome/fa-subset.min.css">
     <!-- Bootstrap 5 CSS -->
     <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
     {% if bundle_css_v %}

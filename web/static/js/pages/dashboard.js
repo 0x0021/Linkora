@@ -716,7 +716,6 @@ function loadRoutingQualityOverview() {
 
 // var（非 let）确保跨脚本共享变量被提升为 window 属性，避免脚本加载顺序变化时的 TDZ ReferenceError
 var lastMessageId = null;
-var recentMessagesPolling = null;
 var embStatusPolling = null;
 var _pollSeq = 0;
 
@@ -770,58 +769,82 @@ async function pollNewMessages() {
         const newMessages = messages.filter(m => m.id > lastMessageId);
         if (newMessages.length > 0) {
             lastMessageId = messages[0].id;
-            const newItemsHtml = newMessages.map(m => renderLogItem(m)).join('');
-            stream.insertAdjacentHTML('afterbegin', newItemsHtml);
-
-            const newItems = stream.querySelectorAll('.log-item');
-            newItems.forEach((item, index) => {
-                if (index < newMessages.length) {
-                    item.classList.add('new-item');
-                    setTimeout(() => item.classList.remove('new-item'), 500);
-                }
-            });
-
-            if (stream.scrollHeight > 220) {
-                stream.scrollTop = 0;
-            }
+            applyNewMessages(newMessages);
         }
     } catch (e) {
         console.error('Poll new messages failed:', e);
     }
 }
 
-function startRecentMessagesPolling() {
-    if (recentMessagesPolling) clearInterval(recentMessagesPolling);
-    recentMessagesPolling = setInterval(pollNewMessages, 5000);
-}
-
-function stopRecentMessagesPolling() {
-    if (recentMessagesPolling) {
-        clearInterval(recentMessagesPolling);
-        recentMessagesPolling = null;
+// ============ F-H6：单通道实时轮询（合并消息/决策/日志三路为 1 个 setInterval） ============
+// 原 recentMessages(5s) / decisions(5s) / realtimeLogs(2s) 三路独立轮询 ≈ 54 req/min，
+// 现合并为单个 /api/dashboard/stream-data（带增量游标），5s 一次 ≈ 12 req/min。
+let dashboardLivePolling = null;
+async function fetchDashboardStream() {
+    if (currentPage !== 'dashboard') return;
+    try {
+        const levelSel = document.getElementById('log-level-select');
+        const logLevel = levelSel ? levelSel.value : 'info';
+        const platform = (typeof window.store !== 'undefined' && window.store && window.store.getPlatform)
+            ? window.store.getPlatform() : '';
+        const params = new URLSearchParams({
+            last_message_id: String(lastMessageId || 0),
+            last_log_id: String(lastLogId || 0),
+            log_level: logLevel,
+            decisions_n: '2',
+            decisions_platform: platform,
+            platform: 'all',
+        });
+        const data = await api.fetch('/api/dashboard/stream-data?' + params.toString());
+        // 日志：复用 applyRealtimeLogs
+        if (data && data.logs) applyRealtimeLogs(data.logs);
+        // 决策：直接渲染到 dashboard feed（n=2 紧凑，与 loadDashboardData 初始渲染一致）
+        if (data && data.decisions && document.getElementById('decisions-feed')) {
+            renderDecisionFeed('decisions-feed', data.decisions.decisions || [], { emptyText: '暂无决策记录，发一条消息试试' });
+        }
+        // 消息：服务端已按游标过滤，直接渲染增量
+        if (data && data.messages && data.messages.length) {
+            lastMessageId = data.max_message_id || lastMessageId;
+            applyNewMessages(data.messages);
+        }
+    } catch (e) {
+        // 静默失败：实时面板不应干扰其它功能
     }
 }
-
-// 最近决策追踪：5s 轻量轮询（卡片已从意图页移至仪表盘，复用全局 loadDecisions）
-let _decisionPolling = null;
-function startDecisionPolling() {
-    if (_decisionPolling) clearInterval(_decisionPolling);
-    _decisionPolling = setInterval(() => {
-        if (currentPage !== 'dashboard') return;
-        if (typeof loadDecisions === 'function') { loadDecisions().catch(() => {}); }
-    }, 5000);
+function startDashboardLivePolling() {
+    if (dashboardLivePolling) clearInterval(dashboardLivePolling);
+    dashboardLivePolling = setInterval(fetchDashboardStream, 5000);
 }
-function stopDecisionPolling() {
-    if (_decisionPolling) {
-        clearInterval(_decisionPolling);
-        _decisionPolling = null;
+function stopDashboardLivePolling() {
+    if (dashboardLivePolling) {
+        clearInterval(dashboardLivePolling);
+        dashboardLivePolling = null;
+    }
+}
+window.startDashboardLivePolling = startDashboardLivePolling;
+window.stopDashboardLivePolling = stopDashboardLivePolling;
+
+// 将一批「新增消息」渲染进实时消息流（F-H6：抽出以便被单通道 stream 复用）
+function applyNewMessages(newMessages) {
+    const stream = document.getElementById('recent-messages-stream');
+    if (!stream || !newMessages || newMessages.length === 0) return;
+    const newItemsHtml = newMessages.map(m => renderLogItem(m)).join('');
+    stream.insertAdjacentHTML('afterbegin', newItemsHtml);
+    const newItems = stream.querySelectorAll('.log-item');
+    newItems.forEach((item, index) => {
+        if (index < newMessages.length) {
+            item.classList.add('new-item');
+            setTimeout(() => item.classList.remove('new-item'), 500);
+        }
+    });
+    if (stream.scrollHeight > 220) {
+        stream.scrollTop = 0;
     }
 }
 
 
 // ============ 实时日志面板（独立轮询，只刷日志容器，不刷新框架） ============
 let lastLogId = 0;
-let realtimeLogPolling = null;
 let logAutoScroll = true;
 
 function renderLogLine(l) {
@@ -841,73 +864,62 @@ function renderLogLine(l) {
 }
 
 async function pollRealtimeLogs() {
-    const stream = document.getElementById('realtime-log-stream');
-    if (!stream) return;
     const levelSel = document.getElementById('log-level-select');
     const level = levelSel ? levelSel.value : 'info';
     try {
         // 仪表盘实时面板保留全局概览：显式 platform=all，避免被当前平台上下文隔离
         const data = await api.fetch(`/api/logs?level=${encodeURIComponent(level)}&since=${lastLogId}&limit=300&platform=all`);
-        const logs = (data && data.logs) || [];
-        // 缓冲区重置（后端重启 / wrap）检测：返回的最大 id 小于本地游标时，
-        // 清空游标让下次拉全量，避免实时日志冻结在旧记录上。
-        if (data && typeof data.max_id === 'number' && data.max_id > 0 && data.max_id < lastLogId) {
-            lastLogId = 0;
-        }
-        // 清除初始连接骨架
-        const skel = stream.querySelector('.rt-log-skeleton');
-        if (skel) skel.remove();
-        // 更新计数徽章（用缓冲区总量，非本次增量条数）
-        const cnt = document.getElementById('log-count');
-        if (cnt && data) {
-            cnt.textContent = (data.buffer_total != null ? data.buffer_total : (data.total || 0)) + ' 条';
-        }
-        if (!logs.length) {
-            // 增量无新日志：保留已有历史，仅在容器真正为空时才显示占位，
-            // 避免空闲轮询把历史覆盖成“等待日志输出…”（原 bug）。
-            if (stream.childElementCount === 0 && !stream.querySelector('.rt-log-empty')) {
-                stream.innerHTML = '<div class="rt-log-empty"></div>';
-            }
-            return;
-        }
-        // 清除空状态占位
-        const empty = stream.querySelector('.rt-log-empty');
-        if (empty) stream.innerHTML = '';
-        const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 48;
-        const before = stream.childElementCount;
-        stream.insertAdjacentHTML('beforeend', logs.map(renderLogLine).join(''));
-        // 仅对新插入行施加入场动画
-        const kids = stream.children;
-        for (let i = before; i < kids.length; i++) {
-            kids[i].classList.add('rt-new');
-        }
-        // 限制 DOM 行数（保留最近 150 条，足够看上下文）
-        while (stream.childElementCount > 150) {
-            stream.removeChild(stream.firstChild);
-        }
-        if (logAutoScroll && atBottom) {
-            stream.scrollTop = stream.scrollHeight;
-        }
-        lastLogId = logs[logs.length - 1].id;
+        applyRealtimeLogs(data);
     } catch (e) {
         // 静默失败：日志面板不应干扰其它功能
     }
 }
 
-function startRealtimeLogPolling() {
-    if (realtimeLogPolling) clearInterval(realtimeLogPolling);
-    realtimeLogPolling = setInterval(() => {
-        // 仅在仪表盘页活跃时拉取，避免后台无谓请求
-        if (currentPage !== 'dashboard') return;
-        pollRealtimeLogs();
-    }, 2000);
-}
-
-function stopRealtimeLogPolling() {
-    if (realtimeLogPolling) {
-        clearInterval(realtimeLogPolling);
-        realtimeLogPolling = null;
+// 将日志增量 payload 渲染进实时日志面板（F-H6：抽出以便被单通道 stream 复用）
+function applyRealtimeLogs(data) {
+    const stream = document.getElementById('realtime-log-stream');
+    if (!stream) return;
+    const logs = (data && data.logs) || [];
+    // 缓冲区重置（后端重启 / wrap）检测：返回的最大 id 小于本地游标时，
+    // 清空游标让下次拉全量，避免实时日志冻结在旧记录上。
+    if (data && typeof data.max_id === 'number' && data.max_id > 0 && data.max_id < lastLogId) {
+        lastLogId = 0;
     }
+    // 清除初始连接骨架
+    const skel = stream.querySelector('.rt-log-skeleton');
+    if (skel) skel.remove();
+    // 更新计数徽章（用缓冲区总量，非本次增量条数）
+    const cnt = document.getElementById('log-count');
+    if (cnt && data) {
+        cnt.textContent = (data.buffer_total != null ? data.buffer_total : (data.total || 0)) + ' 条';
+    }
+    if (!logs.length) {
+        // 增量无新日志：保留已有历史，仅在容器真正为空时才显示占位，
+        // 避免空闲轮询把历史覆盖成“等待日志输出…”（原 bug）。
+        if (stream.childElementCount === 0 && !stream.querySelector('.rt-log-empty')) {
+            stream.innerHTML = '<div class="rt-log-empty"></div>';
+        }
+        return;
+    }
+    // 清除空状态占位
+    const empty = stream.querySelector('.rt-log-empty');
+    if (empty) stream.innerHTML = '';
+    const atBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 48;
+    const before = stream.childElementCount;
+    stream.insertAdjacentHTML('beforeend', logs.map(renderLogLine).join(''));
+    // 仅对新插入行施加入场动画
+    const kids = stream.children;
+    for (let i = before; i < kids.length; i++) {
+        kids[i].classList.add('rt-new');
+    }
+    // 限制 DOM 行数（保留最近 150 条，足够看上下文）
+    while (stream.childElementCount > 150) {
+        stream.removeChild(stream.firstChild);
+    }
+    if (logAutoScroll && atBottom) {
+        stream.scrollTop = stream.scrollHeight;
+    }
+    lastLogId = logs[logs.length - 1].id;
 }
 
 

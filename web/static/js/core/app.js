@@ -247,21 +247,14 @@ function switchPage(page) {
 
     if (page === 'dashboard') {
         loadDashboard();
-        startRecentMessagesPolling();
+        startDashboardLivePolling();
         startEmbeddingStatusPolling();
     } else {
-        stopRecentMessagesPolling();
+        stopDashboardLivePolling();
         stopEmbeddingStatusPolling();
         // 销毁 Chart.js 实例，防止切页后内存泄漏和 resize 事件空转
         if (_messageTrendChart) { _messageTrendChart.destroy(); _messageTrendChart = null; }
         if (_msgTypeChart) { _msgTypeChart.destroy(); _msgTypeChart = null; }
-    }
-    if (page === 'dashboard') {
-        startRealtimeLogPolling();
-        startDecisionPolling();
-    } else {
-        stopRealtimeLogPolling();
-        stopDecisionPolling();
     }
     // 运行日志页：独立轮询（与仪表盘 realtime-log 面板互不干扰）
     if (page === 'logs') {
@@ -525,10 +518,8 @@ async function init() {
         }
         // 仅仪表盘直接 loadDashboard() 绕过了 switchPage，需手动启停轮询
         if (!saved || saved === 'dashboard') {
-            startRecentMessagesPolling();
+            startDashboardLivePolling();
             startEmbeddingStatusPolling();
-            startRealtimeLogPolling();
-            startDecisionPolling();
         }
     }
 
@@ -636,9 +627,7 @@ function showLoginOverlay() {
     // 保存当前页面，登录后恢复（避免登录后跳到仪表盘）
     window._preLoginPage = currentPage;
     // 停止所有轮询，防止 401 风暴
-    if (typeof stopRecentMessagesPolling === 'function') stopRecentMessagesPolling();
-    if (typeof stopRealtimeLogPolling === 'function') stopRealtimeLogPolling();
-    if (typeof stopDecisionPolling === 'function') stopDecisionPolling();
+    stopDashboardLivePolling();
     document.getElementById('login-overlay').style.display = 'flex';
     document.getElementById('login-error').textContent = '';
     document.getElementById('login-username').value = '';
@@ -684,10 +673,8 @@ async function doLogin() {
             switchPage(prevPage);
         } else {
             loadDashboard();
-            startRecentMessagesPolling();
+            startDashboardLivePolling();
             startEmbeddingStatusPolling();
-            startRealtimeLogPolling();
-            if (typeof startDecisionPolling === 'function') startDecisionPolling();
         }
     } else if (data && data.error === 'unauthorized') {
         api.clearAuth();

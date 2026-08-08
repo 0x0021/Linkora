@@ -581,6 +581,9 @@ async function init() {
     window.loadSkillsPage = loadSkillsPage;
     window.loadDeadLettersPage = loadDeadLettersPage;
     window.loadDraftsPage = loadDraftsPage;
+    // drafts.js 是 type=module（defer 执行），在 app.js 同步求值时 loadDraftsPage 尚不可用。
+    // 把 debounced 包装放在 init()（DOMContentLoaded 后）创建，确保函数已暴露到全局。
+    window.debouncedLoadDraftsPage = debounce(loadDraftsPage, 300);
 
     window.loadDashboard = loadDashboard;
     window.loadDashboardData = loadDashboardData;
@@ -806,7 +809,6 @@ window.debouncedFilterThread = debounce(filterThread, 300);
 // 但 oninput 直接触发整页服务端重载 → 中文 IME 下 8–10 次/键击 = 8–10 次全量请求。
 // 套 debounce(300) 把请求收敛到输入停顿后一次（过滤仍由 load 内客户端逻辑完成）。
 window.debouncedLoadDeadLettersPage = debounce(loadDeadLettersPage, 300);
-window.debouncedLoadDraftsPage = debounce(loadDraftsPage, 300);
 
 // ===== 全局模态框行为：Esc 关闭 + 背景点击关闭 + 焦点管理 + 无障碍 =====
 (function () {

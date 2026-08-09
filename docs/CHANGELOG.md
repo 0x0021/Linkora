@@ -24,6 +24,15 @@
 - **fix(data)**: 修正历史被错标数据 —— `data/conversations/dingtalk__*.db` 中 23 条「存在 ±10 分钟内同内容 `is_bot=1, role=assistant` 孪生记录」的 `is_bot=0` 记录回正为 `is_bot=1`（先 DRY-RUN 命中 29 条，收紧规则后仅改 23 条安全项；无孪生记录的真人消息一律不动）。修正后复核原误判窗口，接管判定返回 `False`（已修复）。
 - **test(poller)**: `tests/test_poller.py::TestBotMessageDetectionMarkdownPrefix` 新增 2 例回归 —— `test_check_if_bot_message_whitespace_normalized` / `test_is_duplicate_self_message_whitespace_normalized`，用真实 SQLiteStore 种入带 `\n` 的 assistant 记录、再以空格版 echo 回查，断言均命中。pyright=94=基线；`test_poller.py` + `test_reply_gate_sendtime.py` 97 例全过。
 
+### 视频/语音消息被误判为图片（连带 30 秒回复延迟）
+
+> 排查上一条接管误判时，从同一段日志里揪出的第二个真实缺陷。
+
+- **fix(poller)**: 钉钉视频/语音消息在 `msgType` 字段缺失时，`content` 形如 `[视频消息](mediaId=@lQb...) fileName=xxx.mp4 url: ...`，而 `_detect_msg_type` 第 2.5 步只要 `"mediaId=" in content` 就一律 `return "image"` → 3.6MB 的 MP4 被下载存成 `.png` 再喂 OCR，报 `cannot identify image file`。更实质的代价是**回复被拖慢 30 秒**：消息先以 `[图片识别中...]` 占位入库，防抖逻辑「等 OCR 完成」直到超时（线上实测 10:58:02 → 10:58:32），期间还白下载整段视频、把 `[视频消息](mediaId=...)` 这种噪音送进 RAG 检索与 LLM。存量数据显示这不是孤例：两个会话库合计 **48 条视频 + 17 条语音**被错标为 `image`。
+- 修复：新增模块级 `_detect_media_kind()`，按「中文标记（`[图片消息]`/`[视频消息]`/`[语音消息]`/`[文件]`）→ `fileName` 扩展名（video/audio/image 三类扩展名表）→ 兜底 `image`（保持历史行为）」分流。图片标记优先，保证图文混排仍走 OCR；误判代价不对称（视频判成 image 要下整段+阻塞 30s，图片判成 file 只是少一次 OCR），故宁可漏 OCR 不可误 OCR。
+- **fix(poller)**: `_download_received_file` 的文件名提取原本只解析 JSON 形态，纯文本形态取不到 `fileName=` → 视频落盘退化为 `video_<mediaId>.mp4`，丢掉真实文件名，影响「把刚才那个视频转发给 XX」的可读性与匹配。补正则提取，并保留原有 `os.path.basename` 防目录穿越。
+- **test(poller)**: `tests/test_poller_core_parse.py::TestDetectMsgType` 新增 4 例（视频/语音标记不判 image、图文混排仍判 image、扩展名分流含大小写与老查询串回退）；`tests/test_poller_core_ocr.py::TestReceivedFileName` 新增 4 例（纯文本 `fileName=` 提取、JSON 形态优先、缺失时默认名、`../../etc/passwd` 穿越被剥离）。两文件 62 例全过。
+
 ### 代码卫生
 
 - **chore(lint)**: 清理 08-08 审计轮新建测试文件遗留的 5 处死代码（`test_image_thumbnail.py::_req` 未用变量 `tok`；`test_timeout_guard.py` 未用导入 `shutil`/`pathlib.Path`/`pytest`；`test_web_dashboard_live.py` 未用导入 `json`）。CI 通用 ruff 为 report-only（`continue-on-error` / `|| true`）故此前不阻断，但会淹没「新代码零容忍」的信噪比；清理后 `ruff check src tests web scripts` 全仓库 All checks passed。

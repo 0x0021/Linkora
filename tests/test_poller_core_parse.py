@@ -110,6 +110,45 @@ class TestDetectMsgType:
     def test_image_by_content_mediaId(self):
         assert self.fp._detect_msg_type({"content": "mediaId=abc123", "senderId": "uid_001"}) == "image"
 
+    # ---- P0-2026-08-09: msgType 缺失时视频/语音不得被误判为 image ----
+    # 线上实测：钉钉视频消息 msgType 为空、content 含 mediaId=，旧逻辑一律判 image，
+    # 导致 3.6MB MP4 被存成 .png 喂 OCR（cannot identify image file），且防抖
+    # 「等 OCR 完成」白阻塞 30 秒。
+
+    def test_video_by_content_marker_not_image(self):
+        raw = {
+            "content": ("[视频消息](mediaId=@lQbPJwotjO5Eob8AALCBaiJf1GTSGQpKu120vFkA) "
+                        "fileName=mmexport1786244232175.mp4 url: @l"),
+            "senderId": "uid_001",
+        }
+        assert self.fp._detect_msg_type(raw) == "video"
+
+    def test_voice_by_content_marker_not_image(self):
+        raw = {
+            "content": ("[语音消息](mediaId=@lR_PKdYMu7EwVokAALDRvM-IJNZKfgdcIV96z3MA) "
+                        "注意：如需下载使用dws chat message download"),
+            "senderId": "uid_001",
+        }
+        assert self.fp._detect_msg_type(raw) == "voice"
+
+    def test_image_marker_still_image_with_caption(self):
+        """图文混排（标记后跟随文字说明）仍须走 image，保住 OCR 能力。"""
+        raw = {
+            "content": "@主人[图片消息](mediaId=@lQLPJxPGGIj_y-nNAj3NA0uwRR_V2Kj)现场挂VPN上不去",
+            "senderId": "uid_001",
+        }
+        assert self.fp._detect_msg_type(raw) == "image"
+
+    def test_media_kind_by_filename_extension(self):
+        """无中文标记时按 fileName 扩展名分流；图片扩展名/无扩展名仍回退 image。"""
+        def t(content):
+            return self.fp._detect_msg_type({"content": content, "senderId": "uid_001"})
+        assert t("mediaId=abc fileName=clip.MOV") == "video"
+        assert t("mediaId=abc fileName=rec.amr") == "voice"
+        assert t("mediaId=abc fileName=合同.pdf") == "file"
+        assert t("mediaId=abc fileName=shot.PNG") == "image"
+        assert t("mediaId=abc123&text=老查询串格式") == "image"
+
     def test_voice_by_msgType(self):
         assert self.fp._detect_msg_type({"msgType": "voice", "senderId": "uid_001"}) == "voice"
 

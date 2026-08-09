@@ -32,6 +32,46 @@ _OA_INSTANCE_ID_RE = re.compile(
 )
 
 
+# 钉钉在 msgType 缺失时，图片/视频/语音/文件消息的 content 形如：
+#   [图片消息](mediaId=@lQL...)          [视频消息](mediaId=@lQb...) fileName=x.mp4 url: ...
+#   [语音消息](mediaId=@lR_...) 注意：…   [文件](mediaId=...) fileName=x.pdf
+# 仅凭 "mediaId=" 一律判 image，会把 MP4/AMR 下载成 .png 喂 OCR（见 _detect_media_kind）。
+_MEDIA_MARKERS = (
+    ("[图片消息]", "image"),   # 图片优先：图文混排时 OCR 有价值
+    ("[视频消息]", "video"),
+    ("[语音消息]", "voice"),
+    ("[文件]", "file"),
+)
+_VIDEO_EXTS = (".mp4", ".mov", ".avi", ".mkv", ".flv", ".wmv", ".webm", ".m4v", ".3gp")
+_AUDIO_EXTS = (".amr", ".mp3", ".wav", ".aac", ".m4a", ".ogg", ".opus", ".silk")
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic", ".tiff")
+_FILENAME_RE = re.compile(r"(?i)\bfile_?name\s*[=:]\s*\"?([^\s\"&)]+)")
+
+
+def _detect_media_kind(raw_content: str) -> str:
+    """含 mediaId 的非 JSON content 归类为 image / video / voice / file。
+
+    判定顺序：中文标记 → fileName 扩展名 → 兜底 image（保持历史行为）。
+    误判代价不对称：视频被判成 image 会下载整段 MP4、OCR 报错，且防抖「等 OCR
+    完成」白阻塞 30 秒；图片被判成 file 只是少一次 OCR。故宁可漏 OCR 不可误 OCR。
+    """
+    if not raw_content:
+        return "image"
+    for marker, kind in _MEDIA_MARKERS:
+        if marker in raw_content:
+            return kind
+    m = _FILENAME_RE.search(raw_content)
+    if m:
+        name = m.group(1).lower()
+        if name.endswith(_VIDEO_EXTS):
+            return "video"
+        if name.endswith(_AUDIO_EXTS):
+            return "voice"
+        if not name.endswith(_IMAGE_EXTS):
+            return "file"
+    return "image"
+
+
 def _extract_oa_instance_id(content_obj) -> str:
     """从 OA 卡片解析后的 content 对象里尽力提取审批实例 ID。
 
@@ -204,11 +244,15 @@ class ParseMixin(PollerMixinBase):
                     return _kw
             return resolved
 
-        # 2.5 通过 content 前缀判断图片消息（mediaId=xxx 查询串格式，非 JSON）
+        # 2.5 通过 content 前缀判断媒体消息（mediaId=xxx 查询串格式，非 JSON）
+        #     注意：钉钉的 视频/语音 消息在 msgType 缺失时 content 同样是
+        #     "[视频消息](mediaId=@lQb...) fileName=xxx.mp4"，若一律判为 image，
+        #     会把 MP4 当图片下载成 .png 再喂给 OCR（`cannot identify image file`），
+        #     且防抖会「等 OCR 完成」白白阻塞 30 秒。故先按标记/扩展名分流。
         if not msg_type:
             raw_content = raw.get("content") or ""
-            if raw_content.startswith("mediaId=") or "mediaId=" in raw_content:
-                return "image"
+            if "mediaId=" in raw_content:
+                return _detect_media_kind(raw_content)
 
         # 3. 通过 content 结构判断
         content = raw.get("content") or ""

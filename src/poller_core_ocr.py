@@ -426,6 +426,13 @@ class OcrMixin(PollerMixinBase):
             logger.debug(f"_download_received_file: swallowed exception: {_exc}")
             pass
         if not filename:
+            # 非 JSON 的纯文本形态：`[视频消息](mediaId=@lQb...) fileName=xxx.mp4 url: ...`
+            # 不提取则退化成 video_<mediaId>.mp4，丢掉真实文件名，影响「把刚才那个
+            # 视频/文件转发给 XX」的可读性与匹配。
+            _m = re.search(r"(?i)\bfile_?name\s*[=:]\s*\"?([^\s\"&)]+)", raw_content)
+            if _m:
+                filename = _m.group(1)
+        if not filename:
             ext = {"voice": "amr", "video": "mp4", "file": "bin"}.get(media_type, "bin")
             filename = f"{media_type}_{re.sub(r'[^\w]', '_', str(media_id))[:40]}.{ext}"
         else:

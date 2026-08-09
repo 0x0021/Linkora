@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import pytest
 
 from src.utils.security import (
     mask_oid,

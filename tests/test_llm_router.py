@@ -4,9 +4,7 @@
 """
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestRagGroundedConfident:
@@ -16,7 +14,7 @@ class TestRagGroundedConfident:
         """Agent 有 RAG 能力时返回 True。"""
         agent = MagicMock()
         agent.config.rag_enabled = True
-        
+
         result = False  # mock 默认值
         # 通过源码验证逻辑存在
         with open('src/llm/router.py', 'r') as f:

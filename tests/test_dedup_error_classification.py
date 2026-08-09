@@ -4,9 +4,6 @@
 """
 from __future__ import annotations
 
-import pytest
-import inspect
-from datetime import datetime, timedelta
 
 
 class TestOwnerPresenceGateErrorClassification:
@@ -17,7 +14,7 @@ class TestOwnerPresenceGateErrorClassification:
         # 验证源码包含分类逻辑
         with open('src/platform/runtime_inbound.py', 'r') as f:
             source = f.read()
-        
+
         assert 'database is locked' in source or 'busy' in source, "应检测 DB busy 错误"
         assert 'timeout' in source, "应检测超时错误"
 
@@ -25,14 +22,14 @@ class TestOwnerPresenceGateErrorClassification:
         """DB 超时错误时返回 False（保守放行）。"""
         with open('src/platform/runtime_inbound.py', 'r') as f:
             source = f.read()
-        
+
         assert 'timeout' in source.lower(), "应检测 timeout 错误"
 
     def test_schema_error_logs_error(self):
         """Schema 错误时记录 ERROR 级别日志。"""
         with open('src/platform/runtime_inbound.py', 'r') as f:
             source = f.read()
-        
+
         assert 'no such table' in source or 'schema' in source.lower(), "应检测 schema 错误"
         assert 'logger.error' in source, "schema 错误应记录 ERROR 日志"
 
@@ -40,7 +37,7 @@ class TestOwnerPresenceGateErrorClassification:
         """未知错误时返回 False 并记录 warning。"""
         with open('src/platform/runtime_inbound.py', 'r') as f:
             source = f.read()
-        
+
         # 未知错误应有兜底处理
         assert 'except Exception' in source, "应有通用异常处理"
 
@@ -48,7 +45,7 @@ class TestOwnerPresenceGateErrorClassification:
         """正常查询成功时的路径存在。"""
         with open('src/platform/runtime_inbound.py', 'r') as f:
             source = f.read()
-        
+
         assert 'has_user_message_from' in source, "应调用 has_user_message_from"
 
 
@@ -59,7 +56,7 @@ class TestMessageLoopTimerProtection:
         """_process_pending_messages 应检查 _running 标志。"""
         with open('src/platform/message_loop.py', 'r') as f:
             source = f.read()
-        
+
         assert '_running' in source, "防抖 Timer 应检查 _running 标志"
         assert 'return' in source, "应提前返回避免执行后续逻辑"
 
@@ -92,7 +89,7 @@ class TestSummaryConsecutiveFailureProtection:
         """验证源码包含连续失败保护逻辑。"""
         with open('src/platform/memory.py', 'r') as f:
             source = f.read()
-        
+
         assert 'consecutive_failures' in source, "摘要调度缺少连续失败计数"
         assert 'max_consecutive_failures' in source or '>= 3' in source, "缺少失败阈值判断"
 
@@ -104,7 +101,7 @@ class TestFeishuChatTypeCacheTTL:
         """缓存应具有 TTL 机制。"""
         with open('src/poller_strategy.py', 'r') as f:
             source = f.read()
-        
+
         assert 'cache_ttl' in source, "应有 cache_ttl 变量"
         assert 'expired_keys' in source, "应有过期条目清理逻辑"
 
@@ -112,7 +109,7 @@ class TestFeishuChatTypeCacheTTL:
         """TTL 值应合理（分钟级）。"""
         with open('src/poller_strategy.py', 'r') as f:
             source = f.read()
-        
+
         # 查找 TTL 赋值
         import re
         ttl_match = re.search(r'cache_ttl\s*=\s*(\d+)', source)

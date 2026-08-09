@@ -343,7 +343,7 @@ def _require_basic_auth(request: Request) -> JSONResponse | None:
             content={"detail": "Too many failed login attempts. Try again later."},
         )
     auth_header = request.headers.get("Authorization", "")
-    
+
     # 支持 Basic Auth 和 Bearer Token (JWT)
     if auth_header.startswith("Bearer "):
         # JWT Token 模式
@@ -495,9 +495,9 @@ async def login(request: Request):
     - JSON Body: {"username": "...", "password": "..."}
     """
     from web.auth_middleware import login as jwt_login
-    
+
     auth_header = request.headers.get("Authorization", "")
-    
+
     if auth_header.startswith("Basic "):
         # Basic Auth 模式 - 复用现有验证逻辑
         ip = _client_ip(request)
@@ -512,12 +512,12 @@ async def login(request: Request):
         except Exception as e:
             logger.warning("login 凭据解码失败: %s", sanitize_log_message(str(e)))
             return JSONResponse(status_code=401, content={"detail": "Invalid credentials format"})
-        
+
         config = _get_cfg()
         if config is None or not _auth_check(username, password, config):
             _auth_record_fail(ip)
             return JSONResponse(status_code=401, content={"detail": "Invalid username or password"})
-        
+
         # 登录成功，生成 JWT
         try:
             result = jwt_login(username, password)
@@ -525,37 +525,37 @@ async def login(request: Request):
         except Exception as e:
             logger.error("JWT 生成失败: %s", e)
             return JSONResponse(status_code=500, content={"detail": "Token generation failed"})
-    
+
     elif request.method == "POST":
         # JSON Body 模式
         try:
             body = await request.json()
             username = body.get("username", "")
             password = body.get("password", "")
-            
+
             if not username or not password:
                 return JSONResponse(
                     status_code=400,
                     content={"detail": "username and password are required"}
                 )
-            
+
             # 使用基本认证验证
             config = _get_cfg()
             if config is None:
                 return JSONResponse(status_code=500, content={"detail": "Configuration unavailable"})
-            
+
             if not _auth_check(username, password, config):
                 return JSONResponse(status_code=401, content={"detail": "Invalid username or password"})
-            
+
             # 登录成功，生成 JWT
             from web.auth_middleware import login as jwt_login
             result = jwt_login(username, password)
             return JSONResponse(content=result)
-            
+
         except Exception as e:
             logger.warning("login 请求处理失败: %s", sanitize_log_message(str(e)))
             return JSONResponse(status_code=400, content={"detail": str(e)})
-    
+
     else:
         return JSONResponse(
             status_code=405,

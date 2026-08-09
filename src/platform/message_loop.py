@@ -357,7 +357,7 @@ class MessageLoopMixin(EngineMixinBase):
         if getattr(self, '_running', True) is False:
             logger.debug("[防抖] 已停止运行，跳过处理 %s", key)
             return
-        
+
         # 【并发安全】定时器删除、出队 pop 及三个共享 dict 的 pop 必须在同一把
         # _timer_lock 下，与 handle_message 的入队 append 互斥。否则旧批次 Timer
         # 在锁外 pop _pending_platform 时可能偷走新批次写入的 platform_id，导致

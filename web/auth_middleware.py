@@ -8,14 +8,11 @@ import base64
 import hashlib
 import hmac
 import logging
-import secrets
 import time
-from datetime import datetime, timedelta
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 

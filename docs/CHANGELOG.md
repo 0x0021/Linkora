@@ -33,6 +33,19 @@
 - **fix(poller)**: `_download_received_file` 的文件名提取原本只解析 JSON 形态，纯文本形态取不到 `fileName=` → 视频落盘退化为 `video_<mediaId>.mp4`，丢掉真实文件名，影响「把刚才那个视频转发给 XX」的可读性与匹配。补正则提取，并保留原有 `os.path.basename` 防目录穿越。
 - **test(poller)**: `tests/test_poller_core_parse.py::TestDetectMsgType` 新增 4 例（视频/语音标记不判 image、图文混排仍判 image、扩展名分流含大小写与老查询串回退）；`tests/test_poller_core_ocr.py::TestReceivedFileName` 新增 4 例（纯文本 `fileName=` 提取、JSON 形态优先、缺失时默认名、`../../etc/passwd` 穿越被剥离）。两文件 62 例全过。
 
+### 防抖内容去重吞掉用户真实连发的消息
+
+> 起因是怀疑「list-all 重复抓取同一条消息」，查证后发现**判断错了**——那两条日志是两条不同的物理消息，暴露出的是另一个缺陷。
+
+- **fix(platform)**: 防抖层的「内容去重」与「跨通道去重」原本只比对 `content` 是否相同，命中即 `return`，第二条消息完全不入队。线上实证（会话 `cidBOuwoo7UD…`）：同一位用户在 **32 秒**内发了两条一字不差的消息，`openMessageId` 分别为 `msgTyfifNsDVb9hPaY9pzXssA==`（ts=10:58:31）与 `msgsCYr1SZmTcofwLdXP8rVbg==`（ts=10:59:03）——**两条不同的物理消息**，第二条被静默吞掉，AI 完全看不到用户又催了一次。「在吗」…「在吗」、「收到」…「收到」这类催促/确认在真实聊天里很常见，属于静默丢语境。
+- 修复：新增 `_is_same_physical_message()`，判据改为「内容相同 **且** 服务端时间接近（≤2s）」才算重复投递。依据是同一条物理消息无论走 list-all 还是 per-conversation 路径，`timestamp` 都取自服务端 `createTime`（两条路径共用 `_raw_to_message` 解析）必然一致，而用户手动连发时间必然拉开；2s 是容错余量，理论差值为 0。时间戳缺失或 tz-aware/naive 混用不可比时**保守判为重复**，维持历史行为——宁可合并一次，也不冒重复回复的风险。
+- 保留原有两处去重的全部防护语义（不取消旧定时器、跨 key 同 `chat_id` 合并），只收紧判据，不放宽。
+- **test(platform)**: `tests/test_reply_lock_dedup.py` 新增 9 例 —— `TestRealResendNotSwallowed` 3 例（复刻 32 秒连发案例、跨通道分支同样不吞、同一物理消息仍去重）与 `TestIsSamePhysicalMessage` 6 例判据边界（内容不同/时间戳相同/容差内/超容差/时间戳缺失/tz 混用）。顺带补齐裸实例 fixture 缺失的 `_metrics_lock`、`_incomplete_delay_count`、`_incomplete_extra_sec`（内容被判「不完整」时会抛 `AttributeError`，与去重逻辑无关的既有缺口）。
+
+### 数据清理
+
+- **chore(data)**: 清理 `data/tmp_images/` 中 12 个「扩展名是图片、魔数实为 MP4/AMR」的孤儿文件（合计 23.36 MB），系上面视频误判缺陷的产物。清理前已按魔数识别而非文件名，并逐个核对全部 11 个会话库**无任何消息记录引用**；走系统废纸篓而非 `rm`，可恢复。
+
 ### 代码卫生
 
 - **chore(lint)**: 清理 08-08 审计轮新建测试文件遗留的 5 处死代码（`test_image_thumbnail.py::_req` 未用变量 `tok`；`test_timeout_guard.py` 未用导入 `shutil`/`pathlib.Path`/`pytest`；`test_web_dashboard_live.py` 未用导入 `json`）。CI 通用 ruff 为 report-only（`continue-on-error` / `|| true`）故此前不阻断，但会淹没「新代码零容忍」的信噪比；清理后 `ruff check src tests web scripts` 全仓库 All checks passed。

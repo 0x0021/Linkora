@@ -7,6 +7,39 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 同一条物理消息经 list-all 与 per-conversation 两条路径抓回时 msg_id 可能不同，
+# id 级去重失效，只能退回内容比对。但**纯内容比对会误伤用户真实连发**——
+# 「在吗」…「在吗」「收到」…「收到」这类催促/确认在真实聊天里很常见，第二条会被
+# 静默吞掉，用户永远等不到那次回复。
+#
+# 判据：同一条物理消息无论走哪条路径，timestamp 都取自服务端 createTime（两条路径
+# 共用 _raw_to_message 解析），必然一致；而用户手动连发，服务端时间必然拉开。
+# 故内容相同时再叠加时间窗判据。窗口取 2s 纯为容错余量（理论差值为 0）。
+_DUP_CONTENT_WINDOW_SECONDS = 2.0
+
+
+def _is_same_physical_message(a, b, window_seconds: float = _DUP_CONTENT_WINDOW_SECONDS) -> bool:
+    """判断两条消息是否为「同一条物理消息的重复投递」。
+
+    - 内容不同 → 一定不是重复；
+    - 内容相同且服务端时间差 <= window_seconds → 判为重复投递（去重，避免重复回复）；
+    - 内容相同但时间差 > window_seconds → 判为用户真实连发（放行，必须回复）。
+
+    时间戳缺失或不可比（tz-aware/naive 混用）时保守判为重复，维持历史行为：
+    宁可合并一次，也不冒重复回复的风险。
+    """
+    if a.content != b.content:
+        return False
+    ta = getattr(a, "timestamp", None)
+    tb = getattr(b, "timestamp", None)
+    if ta is None or tb is None:
+        return True
+    try:
+        return abs((ta - tb).total_seconds()) <= window_seconds
+    except Exception:
+        # tz-aware 与 naive 相减会抛 TypeError，退回保守去重
+        return True
+
 
 class MessageLoopMixin(EngineMixinBase):
     def _is_incomplete_message(self, message: Message) -> bool:
@@ -254,11 +287,13 @@ class MessageLoopMixin(EngineMixinBase):
             # 第二条会取消旧定时器 → 重建新定时器 → 旧批次被丢弃；
             # 若此时第一条已触发回复且持有 _replying_lock，新定时器触发时
             # 会被锁挡掉 → 整条消息静默丢弃，用户永远收不到回复。
-            # 解决：同 key 下已有相同内容的消息时直接跳过，且不取消旧定时器。
+            # 解决：同 key 下已有「同一条物理消息」时直接跳过，且不取消旧定时器。
+            # 注：判据是「内容相同 + 服务端时间接近」，不是纯内容相同——否则用户
+            # 隔几秒连发两条同样的话，第二条会被静默吞掉（见 _is_same_physical_message）。
             for pending_msg in self._pending_messages[key]:
-                if pending_msg.content == message.content:
+                if _is_same_physical_message(pending_msg, message):
                     logger.info(
-                        "[防抖] 内容去重：%s 已有相同内容待处理，跳过（不取消定时器）",
+                        "[防抖] 重复投递去重：%s 同一条消息已在待处理队列，跳过（不取消定时器）",
                         message.msg_id[:20],
                     )
                     return
@@ -272,9 +307,9 @@ class MessageLoopMixin(EngineMixinBase):
             # 合并到已存在的那一条，避免重复投递与锁竞争。
             for _pend_key, _pend_list in self._pending_messages.items():
                 for _pm in _pend_list:
-                    if _pm.chat_id == message.chat_id and _pm.content == message.content:
+                    if _pm.chat_id == message.chat_id and _is_same_physical_message(_pm, message):
                         logger.info(
-                            "[防抖] 跨通道去重：chat_id=%s 已有相同内容待处理，跳过重复投递: %s",
+                            "[防抖] 跨通道去重：chat_id=%s 同一条消息已在待处理队列，跳过重复投递: %s",
                             message.chat_id[:20], message.msg_id[:20],
                         )
                         return

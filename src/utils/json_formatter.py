@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import logging
 import sys
-import time
 import traceback
 from datetime import datetime
 from typing import Any

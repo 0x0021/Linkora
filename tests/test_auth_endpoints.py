@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
@@ -121,7 +120,6 @@ class TestAuthMiddleware:
             mock_mgr.verify_token.return_value = {"sub": "user1", "role": "viewer"}
 
             from web.api import _require_basic_auth
-            from fastapi import Request
 
             request = MagicMock()
             request.headers.get.return_value = "Bearer test_token"
@@ -132,7 +130,6 @@ class TestAuthMiddleware:
     def test_basic_auth_rejected_without_creds(self):
         """无认证头应返回 401。"""
         from web.api import _require_basic_auth
-        from fastapi import Request
 
         request = MagicMock()
         request.headers.get.return_value = ""

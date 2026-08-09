@@ -6,6 +6,7 @@ from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tr
 from .base import _active_platform_ctx  # 显式下划线符号
 import logging
 from src.paths import get_skills_root
+from src.utils.security import mask_oid
 
 
 logger = logging.getLogger("src.platform.runtime")
@@ -422,13 +423,13 @@ class SetupMixin(EngineMixinBase):
                         if sid and (sid == self.current_user_id or sid == self.current_open_dingtalk_id):
                             oid = msg.get("senderOpenDingTalkId", "")
                             if oid:
-                                logger.info("[初始化] 从消息中提取到自己的 openDingTalkId: %s", oid)
+                                logger.info("[初始化] 从消息中提取到自己的 openDingTalkId: %s", mask_oid(oid))
                                 return oid
                         # 兜底：仅当无法用 ID 判定时，才用姓名匹配
                         if sender and sender == self.current_user_name:
                             oid = msg.get("senderOpenDingTalkId", "")
                             if oid:
-                                logger.info("[初始化] 从消息中提取到自己的 openDingTalkId(姓名兜底): %s", oid)
+                                logger.info("[初始化] 从消息中提取到自己的 openDingTalkId(姓名兜底): %s", mask_oid(oid))
                                 return oid
                 logger.warning("[初始化] 无法从消息中提取 openDingTalkId（遍历了 %d 个会话），自我检测可能不准确", len(conv_list))
                 return ""

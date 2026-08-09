@@ -18,14 +18,8 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 
 
-def _mask_oid(oid: str) -> str:
-    """脱敏 openDingTalkId / userId 等敏感标识：仅保留首尾各 2 位（参考 primary._oid_display）。
-
-    避免敏感标识明文落日志（CWE-532）。
-    """
-    if not oid:
-        return ""
-    return f"{oid[:2]}***{oid[-2:]}" if len(oid) > 4 else "***"
+# 从 utils.security 导入脱敏函数，确保全局一致
+from src.utils.security import mask_oid, sanitize_log_message
 
 # 注：早期版本的"单聊已读不回复"闸门已移除——它依赖 DWS 未读接口判断，
 # 而 bot 回复后该会话会移出未读列表、对方追问又不回填，导致漏回消息（"为什么不回复我"）。
@@ -132,20 +126,27 @@ class PollerStrategyMixin(PollerMixinBase):
             logger.warning("[resilience] silent exception in _feishu_correct_chat_type", exc_info=True)
 
         try:
-            # H3-2026-08-08：单轮内按 conv_id 缓存 chat_conversation_info 结果，
+            # P1-4: 单轮内按 conv_id 缓存 chat_conversation_info 结果，带 TTL 过期机制
             # 避免 _build_group_list_all_cache（遍历所有群）/ _fetch_conversation_messages
-            # 对同一会话重复发起 subprocess CLI 调用。用哨兵区分"未缓存"与"缓存到 None"。
+            # 对同一会话重复发起 subprocess CLI 调用。
+            import time
             cache = getattr(self, "_feishu_conv_info_cache", None)
+            cache_ttl = getattr(self, "_feishu_conv_info_cache_ttl", 300)  # 5 分钟 TTL
             if cache is None:
                 cache = {}
                 self._feishu_conv_info_cache = cache
+            # 清理过期条目
+            now = time.time()
+            expired_keys = [k for k, (t, _) in cache.items() if now - t > cache_ttl]
+            for k in expired_keys:
+                del cache[k]
             _miss = object()
             cached = cache.get(conv_id, _miss)
             if cached is _miss:
                 info = self.dws.chat_conversation_info(conv_id)
-                cache[conv_id] = info
+                cache[conv_id] = (now, info)
             else:
-                info = cached
+                info = cached[1]
         except Exception as e:
             logger.debug(
                 "[轮询器] 飞书 chat_type 纠错: 无法获取 %s 会话信息: %s",
@@ -598,7 +599,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     peer_oid_from_msgs = candidate_oid
                     break
             if peer_oid_from_msgs:
-                logger.debug("[轮询器] 正在更新 %s 的对方信息：openDingTalkId=%s", _mask_oid(open_id), _mask_oid(peer_oid_from_msgs))
+                logger.debug("[轮询器] 正在更新 %s 的对方信息：openDingTalkId=%s", mask_oid(open_id), mask_oid(peer_oid_from_msgs))
                 self.store._conversation_repo.upsert_conversation(
                     open_id, title, "single",
                     peer_open_dingtalk_id=peer_oid_from_msgs
@@ -722,7 +723,7 @@ class PollerStrategyMixin(PollerMixinBase):
             peer_id = conv_messages[0].sender_id
             peer_name = conv_messages[0].sender_name
             if peer_id and (not peer.get("open_dingtalk_id") and not peer.get("user_id")):
-                logger.debug("[轮询器] 从消息中更新对方信息：%s → %s", _mask_oid(open_id), _mask_oid(peer_id))
+                logger.debug("[轮询器] 从消息中更新对方信息：%s → %s", mask_oid(open_id), mask_oid(peer_id))
                 self.store._conversation_repo.upsert_conversation(
                     open_id, peer_name or title, "single",
                     peer_open_dingtalk_id=peer_id,

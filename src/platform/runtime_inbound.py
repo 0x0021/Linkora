@@ -122,9 +122,19 @@ class InboundMixin(EngineMixinBase):
             return self.store._conversation_repo.has_user_message_from(
                 message.chat_id, since, sender_ids
             )
-        except Exception as e:  # 查询异常时保守放行（不静默），避免 DB 抖动误杀正常回复
-            logger.warning("[真人在场] 查询失败，保守放行回复: %s", e)
-            return False
+        except Exception as e:  # P1-3: 区分错误类型，避免 DB 抖动误杀正常回复
+            # 临时错误（连接超时、busy）→ 保守放行，不抑制
+            # 持久错误（schema 损坏、权限）→ 记录告警，保守放行
+            err_str = str(e).lower()
+            if any(k in err_str for k in ("database is locked", "busy", "timeout")):
+                logger.debug("[真人在场] DB 临时繁忙，保守放行: %s", type(e).__name__)
+                return False
+            elif any(k in err_str for k in ("no such table", "schema", "permission")):
+                logger.error("[真人在场] DB schema 异常，需人工介入: %s: %s", type(e).__name__, e)
+                return False
+            else:
+                logger.warning("[真人在场] 查询失败，保守放行: %s: %s", type(e).__name__, e)
+                return False
 
     def _reply_gate_reason(self, message: Message,
                            taken_over: "bool | None" = None,

@@ -390,10 +390,12 @@ class MemoryRepo:
         cutoff_date = (datetime.now().timestamp() - max_age_days * 86400)
         cutoff_iso = datetime.fromtimestamp(cutoff_date).isoformat()
 
-        cur = self.store.conn.cursor()
-        cur.execute("DELETE FROM memories WHERE created_at < ?", (cutoff_iso,))
-        deleted_count = cur.rowcount
-        self.store.conn.commit()
+        # P0-1: 使用 store 级 RLock 保证清理操作原子性，避免多 daemon 线程竞态
+        with self.store._lock:
+            cur = self.store.conn.cursor()
+            cur.execute("DELETE FROM memories WHERE created_at < ?", (cutoff_iso,))
+            deleted_count = cur.rowcount
+            self.store.conn.commit()
 
         if deleted_count > 0:
             logger.info("清理了 %d 个超过 %d 天的旧记忆", deleted_count, max_age_days)

@@ -353,6 +353,11 @@ class MessageLoopMixin(EngineMixinBase):
 
     def _process_pending_messages(self, key: tuple[str, str]) -> None:
         """定时器触发：合并消息并调用 _handle_message_impl。"""
+        # P1-2: 检查是否已停止运行，避免 shutdown 后 Timer 仍触发导致竞态
+        if getattr(self, '_running', True) is False:
+            logger.debug("[防抖] 已停止运行，跳过处理 %s", key)
+            return
+        
         # 【并发安全】定时器删除、出队 pop 及三个共享 dict 的 pop 必须在同一把
         # _timer_lock 下，与 handle_message 的入队 append 互斥。否则旧批次 Timer
         # 在锁外 pop _pending_platform 时可能偷走新批次写入的 platform_id，导致

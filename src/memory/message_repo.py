@@ -85,23 +85,25 @@ class MessageRepo:
             dict with keys: deleted_count, before_ts
         """
         before = (datetime.now() - timedelta(days=retention_days)).isoformat()
-        cur = self._cc().cursor()
-        cur.execute("SELECT COUNT(*) FROM messages WHERE created_at < ?", (before,))
-        count = cur.fetchone()[0]
-        if count > 0:
-            # 收集待删消息引用的本地图片（相对 data/tmp_images 的 POSIX 路径），
-            # 删行后一并清理磁盘文件，避免「消息已删、图片成孤儿文件永久累积」的磁盘泄漏。
-            # 文件名含 msg_id（ocr_<msg_id>.png / card_<key>.png），与消息 1:1，可直接删除。
-            cur.execute(
-                "SELECT image_path FROM messages WHERE created_at < ? AND image_path != ''",
-                (before,),
-            )
-            image_paths = [r[0] for r in cur.fetchall()]
-            cur.execute("DELETE FROM messages WHERE created_at < ?", (before,))
-            self._cc().commit()
-            removed_files = purge_orphan_images(self.store.db_path, image_paths)
-            logger.info("清理 %d 条旧消息记录（%s 天前），删除孤儿图片 %d 个",
-                        count, retention_days, removed_files)
+        # P0-1: 使用 store 级锁保证清理操作原子性，避免与其他清理线程竞态
+        with self.store._lock:
+            cur = self._cc().cursor()
+            cur.execute("SELECT COUNT(*) FROM messages WHERE created_at < ?", (before,))
+            count = cur.fetchone()[0]
+            if count > 0:
+                # 收集待删消息引用的本地图片（相对 data/tmp_images 的 POSIX 路径），
+                # 删行后一并清理磁盘文件，避免「消息已删、图片成孤儿文件永久累积」的磁盘泄漏。
+                # 文件名含 msg_id（ocr_<msg_id>.png / card_<key>.png），与消息 1:1，可直接删除。
+                cur.execute(
+                    "SELECT image_path FROM messages WHERE created_at < ? AND image_path != ''",
+                    (before,),
+                )
+                image_paths = [r[0] for r in cur.fetchall()]
+                cur.execute("DELETE FROM messages WHERE created_at < ?", (before,))
+                self._cc().commit()
+                removed_files = purge_orphan_images(self.store.db_path, image_paths)
+                logger.info("清理 %d 条旧消息记录（%s 天前），删除孤儿图片 %d 个",
+                            count, retention_days, removed_files)
         return {"deleted_count": count, "before_ts": before}
 
     # ============ 死信队列（P0-2）============

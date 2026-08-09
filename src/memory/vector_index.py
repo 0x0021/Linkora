@@ -29,7 +29,8 @@ class VectorIndex:
 
     def __init__(self, dim: int, index_path: str | None = None, *,
                  index_type: str = "flat", hnsw_ef: int = 64,
-                 phantom_rebuild_ratio: float = 0.3, cache_embeddings: bool = True):
+                 phantom_rebuild_ratio: float = 0.1, cache_embeddings: bool = True):
+        # P0-4: 降低重建阈值从 0.3 到 0.1，更早触发重建回收内存
         self.dim = dim
         self.index_path = index_path
         # 校验并回落不安全值，避免外部传入未知类型导致静默异常

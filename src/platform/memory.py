@@ -294,7 +294,12 @@ class MemoryMixin(EngineMixinBase):
         summary_ratio = cs.get("summary_ratio", 0.4)
         th = self.config.llm_throttle
 
+        # P1-7: 连续失败计数器，防止 LLM 故障时持续占用资源
+        consecutive_failures = 0
+        max_consecutive_failures = 3
+
         def summary_loop():
+            nonlocal consecutive_failures
             while self._running:
                 if not enabled:
                     time.sleep(60)
@@ -318,6 +323,8 @@ class MemoryMixin(EngineMixinBase):
                                 ctx.id, len(conversations), th.max_summaries_per_cycle,
                             )
                             processed = 0
+                            # P1-7: 重置连续失败计数（新会话批次开始）
+                            consecutive_failures = 0
                             for conv in conversations:
                                 chat_id = conv["chat_id"]
                                 chat_name = conv.get("chat_name", "")
@@ -349,9 +356,16 @@ class MemoryMixin(EngineMixinBase):
                                 else:
                                     # LLM 未产出摘要（瞬时失败/空响应）：本轮不标记，下个周期重试；
                                     # 若此处也标记，该会话会永久跳过、再无机会压缩（LOW#4 修复）。
-                                    logger.debug("[摘要] 平台 %s 会话 %s 无法生成摘要，本轮跳过、下轮重试",
-                                                 ctx.id, chat_id[:20])
+                                    consecutive_failures += 1
+                                    logger.debug("[摘要] 平台 %s 会话 %s 无法生成摘要，连续失败 %d/%d，本轮跳过",
+                                                 ctx.id, chat_id[:20], consecutive_failures, max_consecutive_failures)
+                                    if consecutive_failures >= max_consecutive_failures:
+                                        logger.error("[摘要] 平台 %s 连续 %d 次摘要失败，暂停本轮",
+                                                     ctx.id, max_consecutive_failures)
+                                        break
                                     continue
+                                # LLM 调用成功，重置失败计数
+                                consecutive_failures = 0
                                 processed += 1
 
                                 if processed >= th.max_summaries_per_cycle:

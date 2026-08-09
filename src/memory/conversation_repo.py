@@ -259,7 +259,10 @@ class ConversationRepo:
                     ORDER BY m.timestamp DESC LIMIT 1) AS peer_name,
                    (SELECT COUNT(*) FROM messages m WHERE m.chat_id = c.chat_id) AS real_count
                FROM conversations c
-               ORDER BY COALESCE(c.last_message_time, c.updated_at) DESC LIMIT ?""",
+               ORDER BY COALESCE(
+                   (SELECT MAX(m.timestamp) FROM messages m WHERE m.chat_id = c.chat_id),
+                   c.updated_at
+               ) DESC LIMIT ?""",
             (limit,),
         )
         rows = [dict(row) for row in cur.fetchall()]

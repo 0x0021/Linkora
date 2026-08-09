@@ -35,6 +35,7 @@
 - 去重查询异常分类处理（区分临时/持久错误）
 
 ### 测试覆盖
+- **fix(type-check)**: 为 request.state 动态属性添加 type: ignore 注释，修复 pyright 类型错误
 - 新增 tests/test_auth_integration.py (10 cases): 认证系统集成测试
 - 新增 6 个测试文件，67 个用例
 - 总测试通过数：212 passed, 2 skipped

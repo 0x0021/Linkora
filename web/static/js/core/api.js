@@ -2,6 +2,7 @@ class ApiClient {
     constructor(baseUrl = '') {
         this.baseUrl = baseUrl;
         this._auth = null;
+        this._token = null;  // JWT token
         this._loadAuth();
         this._pendingRequests = new Map();
         this._requestCache = new Map();
@@ -15,6 +16,14 @@ class ApiClient {
 
     _loadAuth() {
         try {
+            // 先尝试加载 JWT token
+            const token = localStorage.getItem('jwt_token');
+            if (token) {
+                this._token = token;
+                this._auth = 'Bearer ' + token;
+                return;
+            }
+            // 兼容旧的 Basic Auth
             const creds = localStorage.getItem('web_auth');
             if (creds) {
                 this._auth = creds;
@@ -24,18 +33,85 @@ class ApiClient {
         }
     }
 
+    /**
+     * 使用 JSON Body 登录（新方式）
+     */
+    async loginJson(username, password) {
+        try {
+            const response = await fetch(this.baseUrl + '/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.detail || 'Login failed');
+            }
+            
+            const data = await response.json();
+            this.setAuthToken(data.access_token, data.role || 'viewer');
+            return data;
+        } catch (error) {
+            this.clearAuth();
+            throw error;
+        }
+    }
+
+    /**
+     * 使用 Basic Auth 登录（兼容旧方式）
+     */
     setAuth(username, password) {
         this._auth = 'Basic ' + btoa(unescape(encodeURIComponent(username + ':' + password)));
+        this._token = null;
         try { localStorage.setItem('web_auth', this._auth); } catch (_) {}
+        try { localStorage.removeItem('jwt_token'); } catch (_) {}
+    }
+
+    /**
+     * 设置 JWT Token（新方式）
+     */
+    setAuthToken(token, role = 'viewer') {
+        this._token = token;
+        this._auth = 'Bearer ' + token;
+        try { localStorage.setItem('jwt_token', token); } catch (_) {}
+        try { localStorage.removeItem('web_auth'); } catch (_) {}
+        // 存储用户角色信息
+        try { localStorage.setItem('user_role', role); } catch (_) {}
     }
 
     clearAuth() {
         this._auth = null;
+        this._token = null;
         try { localStorage.removeItem('web_auth'); } catch (_) {}
+        try { localStorage.removeItem('jwt_token'); } catch (_) {}
+        try { localStorage.removeItem('user_role'); } catch (_) {}
     }
 
     isAuthenticated() {
         return !!this._auth;
+    }
+
+    getUserRole() {
+        try {
+            return localStorage.getItem('user_role') || 'viewer';
+        } catch (_) {
+            return 'viewer';
+        }
+    }
+
+    getCurrentUser() {
+        if (!this._token) return null;
+        try {
+            const payload = JSON.parse(atob(this._token.split('.')[1]));
+            return {
+                username: payload.sub,
+                role: payload.role,
+                exp: payload.exp
+            };
+        } catch (_) {
+            return null;
+        }
     }
 
     _getHeaders(extra = {}) {

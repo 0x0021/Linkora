@@ -653,36 +653,62 @@ async function doLogin() {
     errorEl.textContent = '';
     window.__loginInProgress = true;
     try {
-    api.setAuth(username, password);
-
-    // 验证凭证：调用一个受保护的 API
-    const data = await api.getStatus();
-    if (data && data.status === 'running') {
-        hideLoginOverlay();
-        updateWebUserInfo(username);
-        showToast('登录成功', 'success');
-        await refreshImageToken();  // 预取图片 token，避免首屏图片 401 裂图
-        try { await initPlatformSwitcher(); } catch (e) {}  // 登录后刷新平台列表
-
-        // 恢复到登录前所在页面（非首次登录时则不跳到仪表盘）
-        const prevPage = window._preLoginPage;
-        delete window._preLoginPage;
-        if (prevPage && prevPage !== 'dashboard') {
-            // 临时重置 currentPage 以绕过 switchPage 的同页短路检查
-            currentPage = '';
-            switchPage(prevPage);
-        } else {
-            loadDashboard();
-            startDashboardLivePolling();
-            startEmbeddingStatusPolling();
+        // 尝试使用新的 JSON API 登录（JWT）
+        try {
+            const loginResult = await api.loginJson(username, password);
+            if (loginResult && loginResult.access_token) {
+                // JWT 登录成功
+                hideLoginOverlay();
+                const userRole = loginResult.role || 'viewer';
+                updateWebUserInfo(username, userRole);
+                showToast('登录成功', 'success');
+                await refreshImageToken();
+                try { await initPlatformSwitcher(); } catch (e) {}
+                
+                const prevPage = window._preLoginPage;
+                delete window._preLoginPage;
+                if (prevPage && prevPage !== 'dashboard') {
+                    currentPage = '';
+                    switchPage(prevPage);
+                } else {
+                    loadDashboard();
+                    startDashboardLivePolling();
+                    startEmbeddingStatusPolling();
+                }
+                return;
+            }
+        } catch (jwtError) {
+            // JWT 登录失败，尝试旧的 Basic Auth 方式
+            console.log('JWT login failed, falling back to Basic Auth:', jwtError);
         }
-    } else if (data && data.error === 'unauthorized') {
-        api.clearAuth();
-        errorEl.textContent = '用户名或密码错误';
-    } else {
-        api.clearAuth();
-        errorEl.textContent = '登录失败，请检查网络或服务状态';
-    }
+        
+        // 回退到 Basic Auth
+        api.setAuth(username, password);
+        const data = await api.getStatus();
+        if (data && data.status === 'running') {
+            hideLoginOverlay();
+            updateWebUserInfo(username);
+            showToast('登录成功', 'success');
+            await refreshImageToken();
+            try { await initPlatformSwitcher(); } catch (e) {}
+            
+            const prevPage = window._preLoginPage;
+            delete window._preLoginPage;
+            if (prevPage && prevPage !== 'dashboard') {
+                currentPage = '';
+                switchPage(prevPage);
+            } else {
+                loadDashboard();
+                startDashboardLivePolling();
+                startEmbeddingStatusPolling();
+            }
+        } else if (data && data.error === 'unauthorized') {
+            api.clearAuth();
+            errorEl.textContent = '用户名或密码错误';
+        } else {
+            api.clearAuth();
+            errorEl.textContent = '登录失败，请检查网络或服务状态';
+        }
     } catch (e) {
         api.clearAuth();
         errorEl.textContent = '登录失败，请检查网络或服务状态';

@@ -769,6 +769,60 @@ class TestBotMessageDetectionMarkdownPrefix:
         )
         assert poller._check_if_bot_message(echo_msg) is True
 
+    def test_check_if_bot_message_whitespace_normalized(self, tmp_db_path):
+        """回归：bot 回复发出时 content 带 \\n，钉钉 list-all 抓回时 \\n→空格，
+        _check_if_bot_message 必须空格归一化识别为 bot 代发；否则 echo 被错存
+        is_bot=0 污染接管判定（误判「用户手动接管」，漏回消息）。"""
+        poller, store = self._make_real_store_poller(tmp_db_path)
+        chat_id = "cid+test-chat-ws"
+        bot_msg = make_message(
+            msg_id="bot-uuid-ws",
+            chat_id=chat_id,
+            sender_id="bot-open-id-001",
+            sender_name="机器人",
+            content='视频和图片我这边无法直接查看内容。\n你把视频里的问题或图片里的内容描述一下，我帮你处理。',
+            role="assistant",
+            timestamp=datetime(2026, 8, 9, 10, 58, 37),
+        )
+        bot_msg.is_bot = True
+        store._message_repo.save_message(bot_msg, role="assistant")
+        echo_msg = make_message(
+            msg_id="openMessageId-ws",
+            chat_id=chat_id,
+            sender_id="bot-open-id-001",
+            sender_name="机器人",
+            content='视频和图片我这边无法直接查看内容。 你把视频里的问题或图片里的内容描述一下，我帮你处理。',
+            timestamp=datetime(2026, 8, 9, 10, 58, 37),
+        )
+        assert poller._check_if_bot_message(echo_msg) is True, \
+            "\\n↔空格 差异不应击穿 bot 检测（F-接管误判根因）"
+
+    def test_is_duplicate_self_message_whitespace_normalized(self, tmp_db_path):
+        """同场景：_is_duplicate_self_message 也应空格归一化返回 True，
+        避免 AI 回复被双写（is_bot=1 + is_bot=0 两条）污染接管判定。"""
+        poller, store = self._make_real_store_poller(tmp_db_path)
+        chat_id = "cid+test-chat-ws2"
+        bot_msg = make_message(
+            msg_id="bot-uuid-ws2",
+            chat_id=chat_id,
+            sender_id="bot-open-id-001",
+            sender_name="机器人",
+            content='视频和图片我这边无法直接查看内容。\n你把视频里的问题描述一下。',
+            role="assistant",
+            timestamp=datetime(2026, 8, 9, 10, 58, 37),
+        )
+        bot_msg.is_bot = True
+        store._message_repo.save_message(bot_msg, role="assistant")
+        echo_msg = make_message(
+            msg_id="openMessageId-ws2",
+            chat_id=chat_id,
+            sender_id="bot-open-id-001",
+            sender_name="机器人",
+            content='视频和图片我这边无法直接查看内容。 你把视频里的问题描述一下。',
+            timestamp=datetime(2026, 8, 9, 10, 58, 37),
+        )
+        assert poller._is_duplicate_self_message(echo_msg) is True
+
 
 class TestPollStatsPlatformLabel:
     """周期统计日志（每 12 轮一次）应带平台标识，多平台运行时各平台一目了然。"""

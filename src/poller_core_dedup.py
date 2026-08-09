@@ -10,6 +10,21 @@ from src.poller_mixins_base import PollerMixinBase
 logger = logging.getLogger(__name__)
 
 
+def _norm_ws(text: str) -> str:
+    """归一化用于内容比较：去前导 markdown 标题符 + 空白归一化。
+
+    兼容两类真实格式差异，避免内容前缀 LIKE 失配：
+    1. AI 回复「发出时(\n) ↔ 钉钉 list-all 抓回时(空格)」；
+    2. extract_card_title 存库时「去 ## 头部 ↔ echo 保留 ## 头部」。
+    用于 _check_if_bot_message / _is_duplicate_self_message，防止 AI 自己的回复被
+    误判为 is_bot=0（伪真人消息）进而污染接管判定。
+    """
+    if not text:
+        return ""
+    t = re.sub(r'^#+\s*', '', text)  # 去前导 ## ### 标题符（与历史行为一致）
+    return re.sub(r"\s+", " ", t).strip()
+
+
 class DedupMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。"""
 
@@ -140,26 +155,24 @@ class DedupMixin(PollerMixinBase):
                 logger.debug("[轮询器] bot 消息检查失败: %s", e)
 
         # 2. 通过内容+时间匹配查找（msg_id 不一致时的兜底）
-        #    修：只去前导 ## 标记（不要去 **，因为中间成对 ** 是内容的一部分）
-        #    加 ±120s 时间窗与 _is_duplicate_self_message 对齐
+        #    钉钉 list-all 抓回的消息会把发出时的 \n 转成空格，故用空白归一化比较，
+        #    避免 LIKE 前缀因 \n↔空格 差异失配，导致 AI 回复被误判为 is_bot=0（伪真人消息）。
         if msg.content and msg.chat_id:
             try:
                 cur = self.store.conv_conn(get_current_platform()).cursor()
-                # 只去掉前导 markdown 标题符（## ### 等），不去 ** 因为中间成对 ** 是粗体内容
-                norm = re.sub(r'^#+\s*', '', msg.content).strip()
-                content_prefix = norm[:50]
                 ts_str = msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
                 cur.execute(
-                    "SELECT role, is_bot FROM messages "
+                    "SELECT role, is_bot, content FROM messages "
                     "WHERE chat_id = ? AND role = 'assistant' "
-                    "  AND content LIKE ? "
-                    "  AND ABS(julianday(timestamp) - julianday(?)) < 0.00139 "
-                    "LIMIT 1",
-                    (msg.chat_id, f"{content_prefix}%", ts_str),
+                    "  AND ABS(julianday(timestamp) - julianday(?)) < 0.00139",
+                    (msg.chat_id, ts_str),
                 )
-                row = cur.fetchone()
-                if row:
-                    return True
+                msg_norm = _norm_ws(msg.content)
+                for row in cur.fetchall():
+                    cand_norm = _norm_ws(row["content"])
+                    # 双向前缀匹配（取前 60 归一化字符），兼容截断/格式差异
+                    if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
+                        return True
             except Exception as e:
                 logger.debug("[轮询器] 内容匹配去重查询失败: %s", e)
 
@@ -176,21 +189,23 @@ class DedupMixin(PollerMixinBase):
             return False
         try:
             cur = self.store.conv_conn(get_current_platform()).cursor()
-            # 只去掉前导 markdown 标题符（## ### 等），不去 ** 因为中间成对 ** 是粗体内容
-            norm = re.sub(r'^#+\s*', '', msg.content).strip()
-            prefix = norm[:60]
             # 用时间窗口缩小匹配范围，避免误杀不同时间的相似回复
             ts_str = msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
             cur.execute(
-                """SELECT id FROM messages
+                """SELECT content FROM messages
                    WHERE chat_id = ? AND role = 'assistant'
-                     AND content LIKE ?
-                     AND ABS(julianday(timestamp) - julianday(?)) < 0.00139
-                   LIMIT 1""",
-                (msg.chat_id, f"{prefix}%", ts_str),
+                     AND ABS(julianday(timestamp) - julianday(?)) < 0.00139""",
+                (msg.chat_id, ts_str),
             )
             # 0.00139 ≈ 120 秒 / 86400
-            return cur.fetchone() is not None
+            # 空白归一化比较，兼容 AI 回复发出(\n)与钉钉抓回(空格)的格式差异，
+            # 否则 LIKE 失配会导致 AI 回复被重复入库（is_bot=1 + is_bot=0 两条）。
+            msg_norm = _norm_ws(msg.content)
+            for row in cur.fetchall():
+                cand_norm = _norm_ws(row["content"])
+                if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
+                    return True
+            return False
         except Exception as e:
             logger.debug("[轮询器] 重复消息检查失败: %s", e)
             return False

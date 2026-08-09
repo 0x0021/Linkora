@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
+
+> 线上现象：用户根本没登录钉钉，日志却打「[用户接管] XXX 已手动回复 …，跳过 AI 回复」，AI 静默漏回消息。
+> 根因不在接管判定本身，而在**自身消息识别失败导致 AI 自己的回复被错标成「真人手动回复」**。
+
+### 缺陷链路（根因）
+
+1. AI 回复发送时以本地 UUID 作为 `msg_id` 入库（`is_bot=1, role=assistant`），而钉钉 list-all 抓回同一条消息用的是 DWS `openMessageId` —— 两个 ID 不同，`_check_if_bot_message` 第 1 步 msg_id 精确查询必然落空，只能走第 2 步内容兜底。
+2. 内容兜底用 SQL `content LIKE '<前 50 字>%'`。AI 回复**发出时含 `\n`**，钉钉**抓回时 `\n` 被转成空格** → `LIKE` 前缀失配 → 兜底返回 `False`。
+3. 该消息遂被当作「owner 手动发的真人消息」二次入库为 `is_bot=0, role=user`（`_is_duplicate_self_message` 同样用 `LIKE` 前缀，同样失配，未能拦住重复写入）。
+4. 这条伪真人记录的时间戳排在对方下一条消息之后 → `conversation_repo.has_user_message_from`（`is_bot=0` + owner sender_id + 时间窗）命中 → `_has_user_taken_over` 判定「真人已接管」→ 跳过 AI 回复。
+
+### 修复
+
+- **fix(poller)**: `src/poller_core_dedup.py` 新增模块级 `_norm_ws()`（去前导 `#`/`##` 标题符 + `\s+`→单空格 + strip），`_check_if_bot_message` 与 `_is_duplicate_self_message` 的内容兜底不再用脆弱的 SQL `content LIKE '<前缀>%'`，改为**先按 ±120s 时间窗取候选、再在 Python 侧做归一化双向前缀比对**（`cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60])`）。同时兼容两类真实格式差异：`\n ↔ 空格`（发出 vs 抓回）与 `## 头部保留 vs 去除`（`extract_card_title` 存库 vs echo 回显）。
+- 说明：曾评估「发送时回写 DWS 真实 `openMessageId` 到 messages 表」以根治 msg_id 不一致，但 DWS 发送接口返回的是 `openTaskId`（发送任务 ID）而非消息的 `openMessageId`（见 `runtime_dispatch.py::_record_reply_success`），无法可靠关联，故本轮以归一化比对同时覆盖「误判自身消息」与「重复入库」两个放大点。
+- **fix(data)**: 修正历史被错标数据 —— `data/conversations/dingtalk__*.db` 中 23 条「存在 ±10 分钟内同内容 `is_bot=1, role=assistant` 孪生记录」的 `is_bot=0` 记录回正为 `is_bot=1`（先 DRY-RUN 命中 29 条，收紧规则后仅改 23 条安全项；无孪生记录的真人消息一律不动）。修正后复核原误判窗口，接管判定返回 `False`（已修复）。
+- **test(poller)**: `tests/test_poller.py::TestBotMessageDetectionMarkdownPrefix` 新增 2 例回归 —— `test_check_if_bot_message_whitespace_normalized` / `test_is_duplicate_self_message_whitespace_normalized`，用真实 SQLiteStore 种入带 `\n` 的 assistant 记录、再以空格版 echo 回查，断言均命中。pyright=94=基线；`test_poller.py` + `test_reply_gate_sendtime.py` 97 例全过。
+
+---
+
 ## 2026-08-08 — 全面审计修复（P0/P1/P2）
 
 > 项目完整性/一致性审查后的修复轮，覆盖依赖声明、Web 安全、启动超时、CI 门禁与测试盲区；本轮追加性能优化（H1–H4）。

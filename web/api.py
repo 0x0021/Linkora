@@ -345,52 +345,60 @@ def _require_basic_auth(request: Request) -> JSONResponse | None:
     auth_header = request.headers.get("Authorization", "")
     
     # 支持 Basic Auth 和 Bearer Token (JWT)
-    try:
-        if auth_header.startswith("Basic "):
-            # Basic Auth 模式
-            creds = base64.b64decode(auth_header[6:]).decode("utf-8")
-            username, password = creds.split(":", 1)
-            logger.debug("Basic auth 尝试: user=%s", mask_oid(username[:3] if len(username) > 3 else username))
-        elif auth_header.startswith("Bearer "):
-            # JWT Token 模式
-            from web.auth_middleware import _token_manager
+    if auth_header.startswith("Bearer "):
+        # JWT Token 模式
+        from web.auth_middleware import _token_manager
+        try:
             payload = _token_manager.verify_token(auth_header[7:])
             request.state.jwt_payload = payload
             request.state.username = payload.get("sub", "unknown")
             request.state.role = payload.get("role", "viewer")
             return None  # JWT 认证成功，直接放行
-        else:
+        except HTTPException as e:
+            logger.warning("JWT auth 失败: %s", sanitize_log_message(str(e)))
+            _auth_record_fail(ip)
+            return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+        except Exception as e:
+            logger.warning("JWT 验证异常: %s", sanitize_log_message(str(e)))
+            _auth_record_fail(ip)
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Unsupported auth type. Use 'Basic' or 'Bearer'"},
+                content={"detail": "Invalid token"},
             )
-    except HTTPException as e:
-        logger.warning("auth 失败: %s", sanitize_log_message(str(e)))
-        _auth_record_fail(ip)
-        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
-    except Exception as e:
-        logger.warning("basic auth 凭据解码失败: %s", sanitize_log_message(str(e)))
-        _auth_record_fail(ip)
+    elif auth_header.startswith("Basic "):
+        # Basic Auth 模式
+        try:
+            creds = base64.b64decode(auth_header[6:]).decode("utf-8")
+            username, password = creds.split(":", 1)
+            logger.debug("Basic auth 尝试: user=%s", mask_oid(username[:3] if len(username) > 3 else username))
+        except Exception as e:
+            logger.warning("basic auth 凭据解码失败: %s", sanitize_log_message(str(e)))
+            _auth_record_fail(ip)
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid credentials format"},
+            )
+        # 账号维度限流（IP 已通过；此处独立计数，防固定 IP 多账号轮询）
+        account_key = f"{ip}|{username}"
+        if not _auth_rate_allowed(account_key):
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many failed login attempts. Try again later."},
+            )
+        config = _get_cfg()
+        if config is None or not _auth_check(username, password, config):
+            _auth_record_fail(ip)
+            _auth_record_fail(account_key)
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid username or password"},
+            )
+        return None
+    else:
         return JSONResponse(
             status_code=401,
-            content={"detail": "Invalid credentials format"},
+            content={"detail": "Authentication required", "auth_type": "basic_or_bearer"},
         )
-    # 账号维度限流（IP 已通过；此处独立计数，防固定 IP 多账号轮询）
-    account_key = f"{ip}|{username}"
-    if not _auth_rate_allowed(account_key):
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "Too many failed login attempts. Try again later."},
-        )
-    config = _get_cfg()
-    if config is None or not _auth_check(username, password, config):
-        _auth_record_fail(ip)
-        _auth_record_fail(account_key)
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid username or password"},
-        )
-    return None
 
 
 @app.middleware("http")
@@ -475,6 +483,91 @@ async def platform_context_middleware(request: Request, call_next):
         return await call_next(request)
     finally:
         _platform_ctx.reset(token)
+
+
+# ============ Authentication Endpoints ============
+@app.post("/api/auth/login")
+async def login(request: Request):
+    """用户登录，返回 JWT 令牌。
+
+    支持 Basic Auth 和 JSON body 两种模式：
+    - Basic Auth: Authorization: Basic base64(username:password)
+    - JSON Body: {"username": "...", "password": "..."}
+    """
+    from web.auth_middleware import login as jwt_login
+    
+    auth_header = request.headers.get("Authorization", "")
+    
+    if auth_header.startswith("Basic "):
+        # Basic Auth 模式 - 复用现有验证逻辑
+        ip = _client_ip(request)
+        if not _auth_rate_allowed(ip):
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many failed login attempts. Try again later."},
+            )
+        try:
+            creds = base64.b64decode(auth_header[6:]).decode("utf-8")
+            username, password = creds.split(":", 1)
+        except Exception as e:
+            logger.warning("login 凭据解码失败: %s", sanitize_log_message(str(e)))
+            return JSONResponse(status_code=401, content={"detail": "Invalid credentials format"})
+        
+        config = _get_cfg()
+        if config is None or not _auth_check(username, password, config):
+            _auth_record_fail(ip)
+            return JSONResponse(status_code=401, content={"detail": "Invalid username or password"})
+        
+        # 登录成功，生成 JWT
+        try:
+            result = jwt_login(username, password)
+            return JSONResponse(content=result)
+        except Exception as e:
+            logger.error("JWT 生成失败: %s", e)
+            return JSONResponse(status_code=500, content={"detail": "Token generation failed"})
+    
+    elif request.method == "POST":
+        # JSON Body 模式
+        try:
+            body = await request.json()
+            username = body.get("username", "")
+            password = body.get("password", "")
+            
+            if not username or not password:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "username and password are required"}
+                )
+            
+            # 使用基本认证验证
+            config = _get_cfg()
+            if config is None:
+                return JSONResponse(status_code=500, content={"detail": "Configuration unavailable"})
+            
+            if not _auth_check(username, password, config):
+                return JSONResponse(status_code=401, content={"detail": "Invalid username or password"})
+            
+            # 登录成功，生成 JWT
+            from web.auth_middleware import login as jwt_login
+            result = jwt_login(username, password)
+            return JSONResponse(content=result)
+            
+        except Exception as e:
+            logger.warning("login 请求处理失败: %s", sanitize_log_message(str(e)))
+            return JSONResponse(status_code=400, content={"detail": str(e)})
+    
+    else:
+        return JSONResponse(
+            status_code=405,
+            content={"detail": "Method not allowed. Use POST with JSON body or Basic Auth."}
+        )
+
+
+@app.get("/api/auth/me")
+async def get_current_user(request: Request):
+    """获取当前登录用户信息。"""
+    from web.auth_middleware import get_current_user
+    return get_current_user(request)
 
 
 # ============ Platform Discovery ============

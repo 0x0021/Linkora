@@ -143,6 +143,7 @@ def test_process_pending_messages_restores_context():
     bot = _harness(["dingtalk", "feishu"])
     bot.platforms["feishu"].store = MagicMock()
     bot.platforms["feishu"].poller = MagicMock()
+    bot._running = True  # 需要设置为 True 才能让方法正常执行
     _seed_timer_state(bot)
 
     key = ("c1", "s1")

@@ -13,7 +13,7 @@ echo "======================================"
 STAGING_HOST="${STAGING_HOST:-staging.linkora.local}"
 STAGING_PORT="${STAGING_PORT:-8080}"
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/linkora}"
-LOG_FILE="${LOG_FILE:-/var/log/linkora/staging-deploy.log}"
+LOG_FILE="${LOG_FILE:-/tmp/staging-deploy.log}"
 
 # 颜色定义
 RED='\033[0;31m'

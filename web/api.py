@@ -350,9 +350,9 @@ def _require_basic_auth(request: Request) -> JSONResponse | None:
         from web.auth_middleware import _token_manager
         try:
             payload = _token_manager.verify_token(auth_header[7:])
-            request.state.jwt_payload = payload
-            request.state.username = payload.get("sub", "unknown")
-            request.state.role = payload.get("role", "viewer")
+            request.state.jwt_payload = payload  # type: ignore[attr-defined]
+            request.state.username = str(payload.get("sub", "unknown"))  # type: ignore[attr-defined]
+            request.state.role = str(payload.get("role", "viewer"))  # type: ignore[attr-defined]
             return None  # JWT 认证成功，直接放行
         except HTTPException as e:
             logger.warning("JWT auth 失败: %s", sanitize_log_message(str(e)))

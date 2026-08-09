@@ -10,7 +10,7 @@ import sys
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 class JSONFormatter(logging.Formatter):

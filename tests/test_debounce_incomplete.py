@@ -169,6 +169,43 @@ def test_image_with_caption_ocr_preserves_text():
     assert "[图片识别中...]" not in merged.content, "占位符必须被替换"
 
 
+def test_image_with_caption_ocr_no_duplicate_caption():
+    """P0 回归（C-1）：wait_for_ocr 真实返回形如「caption\\n<card...>」
+    （见 poller_core_ocr._resolve_image_content——随图文字 caption 与 OCR 卡片一起返回），
+    必须与消息自身 content 里的 caption 去重，不能让同一句用户指令在投喂 LLM 的
+    上下文里出现两次、也不能把 <card> 再包一层「图片识别内容」区块。"""
+    app = _make_app(5)
+    app.poller = MagicMock()
+    caption = "坤哥，2026-07-042378流程需要终止"
+    # 真实 _resolve_image_content 在有 caption 时返回的串：caption 前缀 + <card> 包裹的 OCR
+    app.poller.wait_for_ocr.return_value = (
+        f'{caption}\n<card title="图片内容">\n'
+        "工单表：三笔苏州佳世达返厂换新\n</card>"
+    )
+    app.poller.get_image_path.return_value = ""
+    app.store = MagicMock()
+    app._handle_message_impl = MagicMock()
+    key = ("c1", "u1")
+
+    img = _msg(f"{caption}\n[图片识别中...]", msg_id="img1")
+    img.msg_type = "image"
+    app._pending_messages[key] = [img]
+
+    app._process_pending_messages(key)
+
+    app._handle_message_impl.assert_called_once()
+    merged = app._handle_message_impl.call_args.args[0]
+    # caption 必须只出现一次（不能因 wait_for_ocr 已含前缀而重复）
+    assert merged.content.count(caption) == 1, (
+        f"随图文字(caption)不应重复出现，实际次数={merged.content.count(caption)}"
+    )
+    # OCR 内容存在且卡片只包一层
+    assert "工单表" in merged.content
+    assert merged.content.count('<card title="图片内容">') == 1, "OCR 卡片应只出现一次"
+    assert "[图片识别中...]" not in merged.content, "占位符必须被替换"
+    _cancel_timers(app)
+
+
 def test_get_debounce_metrics_shape():
     """get_debounce_metrics 返回结构正确。"""
     app = _make_app(5)

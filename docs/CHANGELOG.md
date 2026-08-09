@@ -42,6 +42,14 @@
 - 保留原有两处去重的全部防护语义（不取消旧定时器、跨 key 同 `chat_id` 合并），只收紧判据，不放宽。
 - **test(platform)**: `tests/test_reply_lock_dedup.py` 新增 9 例 —— `TestRealResendNotSwallowed` 3 例（复刻 32 秒连发案例、跨通道分支同样不吞、同一物理消息仍去重）与 `TestIsSamePhysicalMessage` 6 例判据边界（内容不同/时间戳相同/容差内/超容差/时间戳缺失/tz 混用）。顺带补齐裸实例 fixture 缺失的 `_metrics_lock`、`_incomplete_delay_count`、`_incomplete_extra_sec`（内容被判「不完整」时会抛 `AttributeError`，与去重逻辑无关的既有缺口）。
 
+### 图文混合消息 OCR 内容被双重包裹、随图文字重复
+
+> 缺陷挖掘轮（C-1）从 `_process_pending_messages` 的 OCR 刷新路径揪出；图文混合消息（截图+配文）是高频用法。
+
+- **fix(platform)**: `wait_for_ocr` 返回的串形如 `{caption}\n<card title="图片内容">...</card>`（`poller_core_ocr._resolve_image_content` 在 `msgType` 缺 caption 时把「随图文字 + OCR 卡片」一起返回），而 `_process_pending_messages` 又用消息自身 content 剥离占位符得到的 `preserved`（同样等于 caption）再拼一次 → 用户指令出现两次、`<card>` 被再包一层「图片识别内容」区块，污染当轮 LLM 上下文与多轮/RAG 历史一致性。
+- 修复：`ocr_text` 拼接前若以 `preserved`(caption) 开头则去掉该前缀，只保留纯 OCR 文本，由下方统一用 `preserved + ———— 图片识别内容 ———— 区块`组装。修复点仅收紧组装、不动 OCR 下载/持久化契约；异步回调落库的 `caption+card` 与防抖合并落库的 `preserved+区块` 两套形态均不含重复 caption，历史一致性恢复。
+- **test(platform)**: `tests/test_debounce_incomplete.py` 新增 `test_image_with_caption_ocr_no_duplicate_caption` —— 用**真实返回格式**（`{caption}\n<card...>`）mock `wait_for_ocr`，断言 `merged.content` 中 caption 仅出现 1 次、`<card title="图片内容">` 仅 1 个、占位符被替换。原 `test_image_with_caption_ocr_preserves_text` 的 mock 返回纯 OCR 文本，恰好掩盖该 bug，故新增用例锁定真实契约。
+
 ### 数据清理
 
 - **chore(data)**: 清理 `data/tmp_images/` 中 12 个「扩展名是图片、魔数实为 MP4/AMR」的孤儿文件（合计 23.36 MB），系上面视频误判缺陷的产物。清理前已按魔数识别而非文件名，并逐个核对全部 11 个会话库**无任何消息记录引用**；走系统废纸篓而非 `rm`，可恢复。

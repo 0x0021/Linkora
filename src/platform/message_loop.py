@@ -400,6 +400,13 @@ class MessageLoopMixin(EngineMixinBase):
                         # 用户手打的文字被静默丢弃（AI 只看到图片识别内容，看不到指令）。
                         ocr_text = ocr_result.strip()
                         preserved = m.content.replace("[图片识别中...]", "").strip()
+                        # 【关键修复】wait_for_ocr 返回的串形如「{caption}\n<card...>」
+                        # （见 poller_core_ocr._resolve_image_content：随图文字 caption 与
+                        # OCR 卡片一起返回），而 preserved 同样等于 caption。若直接拼接会
+                        # 导致用户指令出现两次、且 OCR 卡片被再包一层「图片识别内容」区块。
+                        # 这里去掉前缀只保留纯 OCR 文本，由下方统一用 preserved + 区块包裹组装。
+                        if preserved and ocr_text.startswith(preserved):
+                            ocr_text = ocr_text[len(preserved):].strip()
 
                         # 【OCR 后处理管线】在投喂 LLM 前做可配置的多步清洗。
                         # Pipeline 步骤独立开关受 config.yaml [ocr_postprocess] 控制。

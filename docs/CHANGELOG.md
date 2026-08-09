@@ -10,6 +10,28 @@
 > 线上现象：用户根本没登录钉钉，日志却打「[用户接管] XXX 已手动回复 …，跳过 AI 回复」，AI 静默漏回消息。
 > 根因不在接管判定本身，而在**自身消息识别失败导致 AI 自己的回复被错标成「真人手动回复」**。
 
+
+## 2026-08-14 — A-F 任务完成 & P0/P1 缺陷修复
+
+### 安全增强
+- 新增 JWT 认证中间件 `web/auth_middleware.py`
+- 支持基于角色的访问控制 (RBAC: admin/operator/viewer)
+- 新增敏感数据脱敏工具 `src/utils/security.py` (mask_oid, mask_token, sanitize_log_message)
+- IP 白名单校验，防止 SSRF 攻击
+- 统一异常体系 `src/exceptions.py` (LinkoraError 层级)
+
+### 稳定性修复
+- SQLite 并发写入竞态修复：清理操作加 `_lock` 事务锁
+- faiss 索引内存泄漏修复：`phantom_rebuild_ratio` 从 0.3 降至 0.1
+- 防抖 Timer 竞态修复：shutdown 时检查 `_running` 标志
+- 飞书 chat_type 缓存添加 TTL 机制（5 分钟过期）
+- 摘要调度连续失败保护（3 次失败暂停本轮）
+- 去重查询异常分类处理（区分临时/持久错误）
+
+### 测试覆盖
+- 新增 6 个测试文件，53 个用例
+- 总测试通过数：193 passed, 2 skipped
+
 ### 缺陷链路（根因）
 
 1. AI 回复发送时以本地 UUID 作为 `msg_id` 入库（`is_bot=1, role=assistant`），而钉钉 list-all 抓回同一条消息用的是 DWS `openMessageId` —— 两个 ID 不同，`_check_if_bot_message` 第 1 步 msg_id 精确查询必然落空，只能走第 2 步内容兜底。

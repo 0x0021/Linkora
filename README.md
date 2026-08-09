@@ -284,6 +284,15 @@ KMP_DUPLICATE_LIB_OK=TRUE .venv/bin/python -m pytest tests/ -q
 
 ---
 
+## 安全增强 (2026-08-14)
+
+本项目新增多项安全特性，提升企业级部署的安全性：
+
+- **JWT 认证**: 支持令牌认证和基于角色的访问控制 (RBAC)
+- **数据脱敏**: 日志中自动脱敏敏感信息 (CWE-532)
+- **输入验证**: IP 验证和平台 ID 校验，防止 SSRF
+- **速率限制**: 认证暴力破解防护
+
 ## 近期更新
 
 完整变更记录见 [CHANGELOG.md](docs/CHANGELOG.md)。

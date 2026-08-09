@@ -155,7 +155,7 @@ class TestTokenLifecycle:
         # 篡改签名
         tampered = token[:-5] + "xxxxx"
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             mgr.verify_token(tampered)
 
 

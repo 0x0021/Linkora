@@ -15,7 +15,7 @@ class TestRagGroundedConfident:
         agent = MagicMock()
         agent.config.rag_enabled = True
 
-        result = False  # mock 默认值
+        _result = False  # mock 默认值
         # 通过源码验证逻辑存在
         with open('src/llm/router.py', 'r') as f:
             source = f.read()
@@ -27,7 +27,7 @@ class TestCheckStaleToolResults:
 
     def test_no_tool_calls_returns_none(self):
         """无工具调用时返回 None。"""
-        messages = [{"role": "user", "content": "hello"}]
+        _messages = [{"role": "user", "content": "hello"}]
         # 验证函数存在
         with open('src/llm/router.py', 'r') as f:
             source = f.read()
@@ -45,7 +45,7 @@ class TestFilterSchemasByPlatform:
 
     def test_filters_tools_by_platform(self):
         """根据平台过滤工具。"""
-        schemas = [
+        _schemas = [
             {"name": "dingtalk_tool", "platforms": ["dingtalk"]},
             {"name": "feishu_tool", "platforms": ["feishu"]},
             {"name": "wecom_tool", "platforms": ["wecom"]},

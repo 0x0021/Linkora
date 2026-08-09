@@ -72,7 +72,7 @@ class TestSummaryConsecutiveFailureProtection:
         should_fail = [True, True, True, False]
         break_at_failure = False
 
-        for i, should_fal in enumerate(should_fail):
+        for _, should_fal in enumerate(should_fail):
             if should_fal:
                 consecutive_failures += 1
                 if consecutive_failures >= max_failures:

@@ -73,7 +73,7 @@ class TokenManager:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Token verification failed: {e}")
+            raise HTTPException(status_code=401, detail=f"Token verification failed: {e}") from e
 
     def _sign(self, data: str) -> str:
         """计算 HMAC-SHA256 签名。"""
@@ -104,7 +104,7 @@ def require_auth(f: Callable) -> Callable:
                 request.state.username = username
                 request.state.role = ROLE_ADMIN
             except Exception as e:
-                raise HTTPException(status_code=401, detail=f"Invalid credentials: {e}")
+                raise HTTPException(status_code=401, detail=f"Invalid credentials: {e}") from e
         elif auth_header.startswith("Bearer "):
             # Bearer Token (JWT)
             token = auth_header[7:]
@@ -115,7 +115,7 @@ def require_auth(f: Callable) -> Callable:
             except HTTPException:
                 raise
             except Exception as e:
-                raise HTTPException(status_code=401, detail=f"Token error: {e}")
+                raise HTTPException(status_code=401, detail=f"Token error: {e}") from e
         else:
             raise HTTPException(status_code=401, detail="Unsupported auth type")
 

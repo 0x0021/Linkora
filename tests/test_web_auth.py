@@ -47,7 +47,7 @@ class TestTokenManager:
         signature = mgr._sign(f"{header}.{payload}")
         expired_token = f"{header}.{payload}.{signature}"
 
-        with pytest.raises(Exception):  # HTTPException
+        with pytest.raises(Exception):  # noqa: B017
             mgr.verify_token(expired_token)
 
     def test_invalid_token_format(self):
@@ -55,7 +55,7 @@ class TestTokenManager:
         from web.auth_middleware import TokenManager
 
         mgr = TokenManager()
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             mgr.verify_token("invalid.token")
 
     def test_tampered_signature(self):
@@ -66,7 +66,7 @@ class TestTokenManager:
         token = mgr.generate_token("user1")
         tampered = token[:-5] + "xxxxx"
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             mgr.verify_token(tampered)
 
 
@@ -85,7 +85,7 @@ class TestRequireAuth:
         request = MagicMock()
         request.headers.get.return_value = ""
 
-        with pytest.raises(Exception):  # HTTPException
+        with pytest.raises(Exception):  # noqa: B017
             import asyncio
             asyncio.run(dummy_handler(request))
 

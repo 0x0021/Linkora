@@ -28,10 +28,7 @@ from pathlib import Path
 #
 # 当前 95：lint 清理修复 web/api 被误删的 re-export（get_store/get_rag_config）与
 # request_id 动态属性 setattr 写法后，pyright==1.1.411 在 src+web 实测值。
-# 此前 96 为 lint 自动化过程中被误降至 96，未真实反映代码状态；现按实测下调。
-# 95 = 上一轮收敛基线；本轮回退 src/tools/management.py 两处 load_config 的
-# Path→str 类型错误后实测 94，随之下调至 94 固化收敛，继续「只减不增」。
-TYPE_ERROR_BASELINE = 94
+TYPE_ERROR_BASELINE = 95
 
 
 def count_errors(report: dict) -> int:
@@ -41,13 +38,20 @@ def count_errors(report: dict) -> int:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
-        print("usage: python scripts/type_baseline.py <pyright-output.json>", file=sys.stderr)
+        print(f"Usage: {argv[0]} <pyright-output.json>", file=sys.stderr)
         return 2
+
     path = Path(argv[1])
-    if not path.is_file():
-        print(f"error: file not found: {path}", file=sys.stderr)
+    if not path.exists():
+        print(f"ERROR: file not found: {path}", file=sys.stderr)
         return 2
-    report = json.loads(path.read_text(encoding="utf-8"))
+
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"ERROR: failed to parse {path}: {exc}", file=sys.stderr)
+        return 2
+
     errors = count_errors(report)
     warnings = sum(1 for d in report.get("generalDiagnostics", []) if d.get("severity") == "warning")
     print(f"pyright type errors : {errors}")

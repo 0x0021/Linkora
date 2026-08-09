@@ -378,8 +378,24 @@ class AccessControlMixin(PollerMixinBase):
         title = conv.get("title", "")
         sender = conv.get("sender") or conv.get("senderName") or ""
 
-        # 明确有 singleChat 字段时，直接用它判断
+        # 明确有 singleChat 字段时，先做二次校验防止 DB 误判
         if single_chat is True:
+            # 二次校验：如果消息中有 >=3 个不同发送者，说明是群聊，修正分类
+            msgs = conv.get("messages", [])
+            if msgs:
+                senders = set()
+                sender_ids = set()
+                for m in msgs:
+                    s = m.get("sender") or m.get("senderName") or ""
+                    sid = m.get("senderOpenDingTalkId") or m.get("senderId") or ""
+                    if s:
+                        senders.add(s)
+                    if sid:
+                        sender_ids.add(sid)
+                if len(senders) >= 3 or len(sender_ids) >= 3:
+                    logger.debug("[轮询器] chat_type 二次校验: %s (singleChat=True 但有多发送者=%d)，修正为 group",
+                                 title, len(senders))
+                    return "group"
             # 单聊：根据对方名称/发送者判定是否是系统/应用账号
             if self._is_system_sender(title) or self._is_system_sender(sender):
                 return "other"

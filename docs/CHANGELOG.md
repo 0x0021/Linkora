@@ -20,6 +20,12 @@
 - IP 白名单校验，防止 SSRF 攻击
 - 统一异常体系 `src/exceptions.py` (LinkoraError 层级)
 
+### API 增强
+- 新增 `/api/auth/login` 登录端点（支持 JSON Body 和 Basic Auth）
+- 新增 `/api/auth/me` 获取当前用户信息端点
+- 集成 JWT Bearer Token 到现有认证中间件
+- 将认证端点加入白名单，无需预认证即可访问
+
 ### 稳定性修复
 - SQLite 并发写入竞态修复：清理操作加 `_lock` 事务锁
 - faiss 索引内存泄漏修复：`phantom_rebuild_ratio` 从 0.3 降至 0.1

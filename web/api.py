@@ -222,7 +222,7 @@ app.mount("/static", VersionedStaticFiles(directory=str(get_static_dir())), name
 # ============ Web Auth Middleware ============
 # /api/platforms 仅暴露 id/display_name/enabled/adapter_type（无密钥），供前端切换器
 # 在登录前即可渲染，故加入白名单免认证。
-_AUTH_WHITELIST = {"/", "/health", "/api/platforms"}
+_AUTH_WHITELIST = {"/", "/health", "/api/platforms", "/api/auth/login", "/api/auth/me"}
 # /api/image/ 和 /api/skill-icons/ 保留在白名单（免 Basic Auth），
 # 因为前端用 <img src> 直接渲染，浏览器不会自动带 Basic Auth 头。
 # /api/image/ 内部已用签名 token 做二次校验。

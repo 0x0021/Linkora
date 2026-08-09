@@ -50,6 +50,16 @@
 - 修复：`ocr_text` 拼接前若以 `preserved`(caption) 开头则去掉该前缀，只保留纯 OCR 文本，由下方统一用 `preserved + ———— 图片识别内容 ———— 区块`组装。修复点仅收紧组装、不动 OCR 下载/持久化契约；异步回调落库的 `caption+card` 与防抖合并落库的 `preserved+区块` 两套形态均不含重复 caption，历史一致性恢复。
 - **test(platform)**: `tests/test_debounce_incomplete.py` 新增 `test_image_with_caption_ocr_no_duplicate_caption` —— 用**真实返回格式**（`{caption}\n<card...>`）mock `wait_for_ocr`，断言 `merged.content` 中 caption 仅出现 1 次、`<card title="图片内容">` 仅 1 个、占位符被替换。原 `test_image_with_caption_ocr_preserves_text` 的 mock 返回纯 OCR 文本，恰好掩盖该 bug，故新增用例锁定真实契约。
 
+### 企微凭证 Web 写回被静默丢弃（已修复）
+
+> 缺陷挖掘轮（D-1）从 `web/routers/config.py` 的 `_apply_wecom_platform` 揪出。
+
+- **fix(web)**: `_apply_wecom_platform` 此前是空壳（仅 `_ensure_platform_config` 保证对象存在），Web 面板提交的企微 `corp_id/corp_secret/agent_id/token/encoding_aes_key` 被静默丢弃、保存后重启即丢。根因：`AdapterOverrideConfig` 无企微凭证字段、`get_config` 的 wecom 分支硬编码空串、函数注释标「占位，后续接入 adapter 后激活写入」。
+- 修复：`AdapterOverrideConfig`（`src/config_models.py`）新增 5 个可选字段 `wecom_corp_id/corp_secret/agent_id/token/encoding_aes_key`；`_apply_wecom_platform` 真正写入 `platforms[wecom].adapter`。`update_config` 落盘走 `cfg.model_dump()` 全量写回（非 changed_keys 过滤），故写入即持久化。
+- **重要边界**：当前企微适配器经 `wecom-cli` 扫码登录拉消息（`src/im_adapter/wecom.py`），**并不消费这些凭证字段**——它们是「企微自建应用回调模式」预留配置。本修复只消除 UI 静默丢数据，不改变企微登录方式；若要企微走凭证登录需另实现回调模式（独立功能）。
+- **防误清**：空串/None 不覆盖已保存值（`if update.wecom_x not in (None, "")`），避免 GET 返回空串占位后、用户在另一次保存时把已存凭证误清空。`get_config` 的 wecom 分支维持返回空串（与 feishu `app_secret` 一致，敏感字段不回显）。
+- **test(web)**: `tests/test_config_secret_redaction.py` 新增 `test_apply_wecom_platform_writes_credentials`（写回 5 字段）+ `test_apply_wecom_platform_keeps_existing_on_blank`（空串/None 不覆盖）。
+
 ### 数据清理
 
 - **chore(data)**: 清理 `data/tmp_images/` 中 12 个「扩展名是图片、魔数实为 MP4/AMR」的孤儿文件（合计 23.36 MB），系上面视频误判缺陷的产物。清理前已按魔数识别而非文件名，并逐个核对全部 11 个会话库**无任何消息记录引用**；走系统废纸篓而非 `rm`，可恢复。

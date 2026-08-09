@@ -63,3 +63,50 @@ def test_restore_secrets_from_disk_plaintext():
     current = {"llm": {"api_key": "disk-plain-123"}}
     _restore_secrets(imported, current)
     assert imported["llm"]["api_key"] == "disk-plain-123"
+
+
+def test_apply_wecom_platform_writes_credentials():
+    """D-1 回归：Web 提交的企微凭证必须真正写入 platforms[wecom].adapter，
+    不再被 _apply_wecom_platform 空壳静默丢弃。"""
+    from web.routers.config import _apply_wecom_platform
+    from web.schemas import ConfigUpdate
+    from src.config import AppConfig
+
+    cfg = AppConfig(web={"auth_enabled": False})
+    update = ConfigUpdate(
+        wecom_corp_id="wwabcd",
+        wecom_corp_secret="SECRET_X",
+        wecom_agent_id="1000002",
+        wecom_token="TK",
+        wecom_encoding_aes_key="AESKEY",
+    )
+    _apply_wecom_platform(update, cfg)
+
+    wecom = next(p for p in cfg.platforms if p.id == "wecom")
+    assert wecom.adapter.wecom_corp_id == "wwabcd"
+    assert wecom.adapter.wecom_corp_secret == "SECRET_X"
+    assert wecom.adapter.wecom_agent_id == "1000002"
+    assert wecom.adapter.wecom_token == "TK"
+    assert wecom.adapter.wecom_encoding_aes_key == "AESKEY"
+
+
+def test_apply_wecom_platform_keeps_existing_on_blank():
+    """空串/None 不应覆盖已保存的企微凭证（避免空白表单在另一次保存时误清）。"""
+    from web.routers.config import _apply_wecom_platform
+    from web.schemas import ConfigUpdate
+    from src.config import AppConfig
+
+    cfg = AppConfig(web={"auth_enabled": False})
+    _apply_wecom_platform(
+        ConfigUpdate(wecom_corp_id="wwabcd", wecom_corp_secret="SECRET_X"), cfg
+    )
+    # 第二次只提交 agent_id，corp_id 留空串、corp_secret 留 None
+    _apply_wecom_platform(
+        ConfigUpdate(wecom_agent_id="1000002", wecom_corp_id="", wecom_corp_secret=None),
+        cfg,
+    )
+
+    wecom = next(p for p in cfg.platforms if p.id == "wecom")
+    assert wecom.adapter.wecom_corp_id == "wwabcd", "空串不应清掉已保存的 corp_id"
+    assert wecom.adapter.wecom_corp_secret == "SECRET_X", "None 不应清掉已保存的 corp_secret"
+    assert wecom.adapter.wecom_agent_id == "1000002"

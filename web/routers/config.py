@@ -73,9 +73,28 @@ def _apply_feishu_platform(update: ConfigUpdate, cfg: AppConfig):
         _fp.poller.reply_cooldown_seconds = update.feishu_reply_cooldown_seconds
 
 
-def _apply_wecom_platform(update: ConfigUpdate, cfg: AppConfig) -> None:  # noqa: ARG001
-    """企微平台配置（占位，后续接入 adapter 后激活写入）"""
-    _ensure_platform_config(cfg, "wecom")  # ensure it exists for API consistency
+def _apply_wecom_platform(update: ConfigUpdate, cfg: AppConfig) -> None:
+    """企微平台配置：把 Web 提交的凭证写入 platforms[wecom].adapter。
+
+    此前该函数是空壳（仅 _ensure_platform_config 保证对象存在），导致 Web 面板提交的
+    企微凭证被静默丢弃、重启即丢。现改为真正写入，消除数据丢失。
+
+    重要：当前企微适配器经 wecom-cli 扫码登录拉消息，并不消费这些字段——它们是为
+    「企微自建应用回调模式」预留的配置。故本函数只负责持久化，不改变企微登录方式。
+    空串/None 不覆盖已保存值，避免空白表单（GET 返回空串占位）在另一次保存时误清凭证。
+    """
+    _wp = _ensure_platform_config(cfg, "wecom")
+    _adapter = _wp.adapter
+    if update.wecom_corp_id not in (None, ""):
+        _adapter.wecom_corp_id = update.wecom_corp_id
+    if update.wecom_corp_secret not in (None, ""):
+        _adapter.wecom_corp_secret = update.wecom_corp_secret
+    if update.wecom_agent_id not in (None, ""):
+        _adapter.wecom_agent_id = update.wecom_agent_id
+    if update.wecom_token not in (None, ""):
+        _adapter.wecom_token = update.wecom_token
+    if update.wecom_encoding_aes_key not in (None, ""):
+        _adapter.wecom_encoding_aes_key = update.wecom_encoding_aes_key
 
 
 def _apply_poller_base(update: ConfigUpdate, cfg: AppConfig):

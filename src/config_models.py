@@ -43,6 +43,14 @@ class AdapterOverrideConfig(BaseModel):
     retries: int | None = None
     dry_run: bool | None = None
     profile: str | None = None
+    # 企微平台凭证（仅持久化用）。注意：当前企微适配器经 wecom-cli 扫码登录拉消息，
+    # 并不消费这些字段——它们是为「企微自建应用回调模式」预留的配置。UI 写回落地这些字段，
+    # 避免此前 _apply_wecom_platform 空壳导致 Web 提交的企微凭证被静默丢弃、重启即丢。
+    wecom_corp_id: str | None = None
+    wecom_corp_secret: str | None = None
+    wecom_agent_id: str | None = None
+    wecom_token: str | None = None
+    wecom_encoding_aes_key: str | None = None
 
 
 class PollerConfig(BaseModel):

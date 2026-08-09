@@ -64,9 +64,13 @@ class JSONFormatter(logging.Formatter):
         if self.include_extra and hasattr(record, "extra_fields"):
             log_entry["extra"] = record.extra_fields
 
-        # 添加调用者信息（可选）
-        if getattr(record, "caller", None):
-            log_entry["caller"] = record.caller
+        # 添加调用者信息（可选，兼容旧代码）
+        try:
+            caller = getattr(record, "caller", None)
+            if caller:
+                log_entry["caller"] = caller
+        except Exception:
+            pass
 
         return json.dumps(log_entry, ensure_ascii=False, default=str)
 

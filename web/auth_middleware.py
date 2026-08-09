@@ -145,10 +145,11 @@ def require_role(*roles: str) -> Callable:
 
 def login(username: str, password: str) -> dict[str, Any]:
     """用户登录，返回令牌。"""
-    # TODO: 从配置或数据库验证凭据
-    # 这里简化为固定凭据验证
-    from src.config import get_config
+    # Import config using shared_state
+    from src.shared_state import get_config
     cfg = get_config()
+    if cfg is None:
+        raise HTTPException(status_code=500, detail="Configuration not loaded")
 
     if not cfg.web.auth_enabled:
         raise HTTPException(status_code=403, detail="Authentication is disabled")

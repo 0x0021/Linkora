@@ -800,8 +800,10 @@ async function fetchDashboardStream() {
         // 日志：复用 applyRealtimeLogs
         if (data && data.logs) applyRealtimeLogs(data.logs);
         // 决策：直接渲染到 dashboard feed（n=2 紧凑，与 loadDashboardData 初始渲染一致）
-        if (data && data.decisions && document.getElementById('decisions-feed')) {
-            renderDecisionFeed('decisions-feed', data.decisions.decisions || [], { emptyText: '暂无决策记录，发一条消息试试' });
+        // 注意：HTML 模板中元素 ID 是 decisions-top-list，不是 decisions-feed
+        const decContainer = document.getElementById('decisions-top-list');
+        if (data && data.decisions && decContainer) {
+            renderDecisionFeed('decisions-top-list', data.decisions.decisions || [], { max: 2, emptyText: '暂无决策记录，发一条消息试试' });
         }
         // 消息：服务端已按游标过滤，直接渲染增量
         if (data && data.messages && data.messages.length) {

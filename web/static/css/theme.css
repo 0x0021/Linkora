@@ -8522,3 +8522,103 @@ td .action-btns .btn i,
 .onboarding-title { font-size: 1.2rem; margin-bottom: 0.5rem; }
 .onboarding-desc { font-size: 0.9rem; color: var(--text-secondary, #666); line-height: 1.6; margin-bottom: 1.25rem; }
 .onboarding-actions .btn { min-width: 120px; }
+
+/* 工具调用排行 - 新表格布局 */
+.ts-rank-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+}
+
+.ts-rank-header {
+    display: grid;
+    grid-template-columns: 40px 1fr 80px 70px;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.ts-rank-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 80px 70px;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    align-items: center;
+    background: var(--bg-card, var(--bg-subtle));
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.ts-rank-row:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--brand-primary);
+}
+
+.ts-rank-col {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    overflow: hidden;
+}
+
+.ts-rank-col-rank {
+    justify-content: center;
+}
+
+.ts-rank-col-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.ts-rank-col-calls {
+    justify-content: flex-end;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
+.ts-rank-col-rate {
+    justify-content: flex-end;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.ts-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--bg-elevated);
+    color: var(--text-tertiary);
+}
+
+.ts-rank-row.rank-1 .ts-rank-badge {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #fff;
+}
+
+.ts-rank-row.rank-2 .ts-rank-badge {
+    background: linear-gradient(135deg, #94a3b8, #64748b);
+    color: #fff;
+}
+
+.ts-rank-row.rank-3 .ts-rank-badge {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    color: #fff;
+}
+
+.ts-rank-rate.rate-high { color: var(--brand-success); }
+.ts-rank-rate.rate-medium { color: var(--brand-warning); }
+.ts-rank-rate.rate-low { color: var(--brand-danger); }

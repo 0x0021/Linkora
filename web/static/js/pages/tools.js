@@ -189,28 +189,31 @@ async function loadToolsToolStats() {
         setText('tools-ts-duration', Math.round(avgDuration) + 'ms');
         setText('tools-ts-count', String(tools.length));
         const maxCalls = tools[0].total_calls || 1;
-        let html = '';
-        for (let i = 0; i < tools.length; i++) {
+        // 优化布局：使用更紧凑的表格格式，减少视觉噪音
+        let html = '<div class="ts-rank-table">';
+        // 表头
+        html += '<div class="ts-rank-header">';
+        html += '<span class="ts-rank-col ts-rank-col-rank">排名</span>';
+        html += '<span class="ts-rank-col ts-rank-col-name">工具名称</span>';
+        html += '<span class="ts-rank-col ts-rank-col-calls">调用次数</span>';
+        html += '<span class="ts-rank-col ts-rank-col-rate">成功率</span>';
+        html += '</div>';
+        
+        // 数据行（只显示前 10 名）
+        const displayCount = Math.min(tools.length, 10);
+        for (let i = 0; i < displayCount; i++) {
             const tool = tools[i];
             const successRate = tool.success_rate || 0;
             const rateClass = successRate >= 90 ? 'rate-high' : successRate >= 70 ? 'rate-medium' : 'rate-low';
-            const barWidth = Math.max(4, (tool.total_calls / maxCalls) * 100);
             const rankClass = i < 3 ? `rank-${i + 1}` : '';
-            html += `
-            <div class="ts-rank-item ${rankClass}">
-                <div class="ts-rank-num">${i + 1}</div>
-                <div class="ts-rank-info">
-                    <div class="ts-rank-name" title="${escapeHtml(tool.tool_name)}">${escapeHtml(tool.display_name || tool.tool_name)}</div>
-                    <div class="ts-rank-bar">
-                        <div class="ts-rank-bar-fill" style="width: ${barWidth}%"></div>
-                    </div>
-                </div>
-                <div class="ts-rank-right">
-                    <div class="ts-rank-calls">${tool.total_calls}</div>
-                    <div class="ts-rank-rate ${rateClass}">${successRate.toFixed(0)}%</div>
-                </div>
-            </div>`;
+            html += `<div class="ts-rank-row ${rankClass}">`;
+            html += `<span class="ts-rank-col ts-rank-col-rank"><span class="ts-rank-badge ${rankClass}">${i + 1}</span></span>`;
+            html += `<span class="ts-rank-col ts-rank-col-name" title="${escapeHtml(tool.tool_name)}">${escapeHtml(tool.display_name || tool.tool_name)}</span>`;
+            html += `<span class="ts-rank-col ts-rank-col-calls">${tool.total_calls.toLocaleString()}</span>`;
+            html += `<span class="ts-rank-col ts-rank-col-rate ${rateClass}">${successRate.toFixed(0)}%</span>`;
+            html += '</div>';
         }
+        html += '</div>';
         container.innerHTML = html;
     } catch (e) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><p>加载失败: ' + escapeHtml(e.message) + '</p></div>';

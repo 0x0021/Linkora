@@ -310,10 +310,17 @@ async function loadMessages() {
     _activeChatId = activeChatId;
     if (convFilter) convFilter.value = activeChatId;
 
+    // 按最后消息时间排序（降序），确保列表顺序固定
+    const sortedConversations = [...filteredConversations].sort((a, b) => {
+        const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+        const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+        return bTime - aTime; // 降序：最新的在前
+    });
+
     const grouped = {
-        single: filteredConversations.filter(c => c.chat_type === 'single'),
-        group: filteredConversations.filter(c => c.chat_type === 'group'),
-        other: filteredConversations.filter(c => c.chat_type !== 'single' && c.chat_type !== 'group'),
+        single: sortedConversations.filter(c => c.chat_type === 'single'),
+        group: sortedConversations.filter(c => c.chat_type === 'group'),
+        other: sortedConversations.filter(c => c.chat_type !== 'single' && c.chat_type !== 'group'),
     };
     const groupOrder = [
         { key: 'single', title: '单聊' },

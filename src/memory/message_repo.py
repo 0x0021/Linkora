@@ -112,18 +112,31 @@ class MessageRepo:
         """保存一条消息，同时更新会话统计（写 messages + conversations 跨表事务）。
 
         使用 with self._cc() as _conn: 确保两表写入原子性：任一失败则全部回滚。
+        
+        OA审批系统推送消息使用独立会话（chat_id = 'system:oa_approval'），
+        避免与"工作通知"群混在一起。
         """
         with self._cc() as _conn:
             cur = self._cc().cursor()
             now = datetime.now().isoformat()
             chat_name = message.chat_name.strip() if message.chat_name else ""
+            
+            # OA审批消息使用独立会话
+            if message.sender_name == "OA审批":
+                effective_chat_id = "system:oa_approval"
+                effective_chat_name = "OA审批"
+                effective_chat_type = "other"
+            else:
+                effective_chat_id = message.chat_id
+                effective_chat_name = chat_name
+                effective_chat_type = message.chat_type or "single"
             cur.execute(
                 """INSERT OR IGNORE INTO messages
                    (chat_id, chat_type, msg_id, sender_id, sender_name, content, msg_type, timestamp, role, image_path, is_bot, skip_reason, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    message.chat_id,
-                    message.chat_type,
+                    effective_chat_id,
+                    effective_chat_type,
                     message.msg_id,
                     message.sender_id,
                     message.sender_name,
@@ -150,9 +163,9 @@ class MessageRepo:
                            message_count = COALESCE(conversations.message_count, 0) + 1,
                            updated_at = excluded.updated_at""",
                     (
-                        message.chat_id,
-                        chat_name,
-                        message.chat_type or "unknown",
+                        effective_chat_id,
+                        effective_chat_name,
+                        effective_chat_type,
                         "",
                         "",
                         last_message_time,
@@ -669,16 +682,22 @@ class MessageRepo:
         return [dict(row) for row in cur.fetchall()]
 
     def get_top_senders(self, limit: int = 10, platform: str = "") -> list[dict]:
-        """用户侧消息（role 为 'user' 或空）的高频发送者 TOP N，返回 [{sender_name, cnt}]。"""
+        """用户侧消息（role 为 'user' 或空）的高频发送者 TOP N，返回 [{sender_name, cnt}]。
+        
+        过滤掉系统推送发送者（如 'OA审批', '钉钉人事旗舰版' 等），避免系统消息干扰统计。
+        """
         cur = self._cc_for(platform).cursor()
+        # 系统发送者白名单（根据实际业务场景调整）
+        system_senders = ('OA审批', '钉钉人事旗舰版', '智能人事', '系统', '钉钉', '钉钉机器人')
         cur.execute(
             """SELECT sender_name, COUNT(*) as cnt
                FROM messages
-               WHERE role = 'user' OR role = ''
+               WHERE (role = 'user' OR role = '') 
+                 AND sender_name NOT IN ({})
                GROUP BY sender_name
                ORDER BY cnt DESC
-               LIMIT ?""",
-            (limit,),
+               LIMIT ?""".format(','.join(['?'] * len(system_senders))),
+            list(system_senders) + [limit],
         )
         return [dict(row) for row in cur.fetchall()]
 

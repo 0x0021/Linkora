@@ -28,6 +28,7 @@ from src.config import load_config
 from src.dws_adapter import DwsAdapter
 from src.shared_state import get_app_instance, get_config as _get_shared_config
 from src.utils.request_id import request_id_scope
+from src.utils.security import mask_oid, sanitize_log_message
 from src.paths import (
     get_config_path, get_data_dir, get_log_dir, get_static_dir,
     get_templates_dir, get_user_data_dir, is_frozen, data_path,
@@ -342,16 +343,33 @@ def _require_basic_auth(request: Request) -> JSONResponse | None:
             content={"detail": "Too many failed login attempts. Try again later."},
         )
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Basic "):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Authentication required", "auth_type": "basic"},
-        )
+    
+    # 支持 Basic Auth 和 Bearer Token (JWT)
     try:
-        creds = base64.b64decode(auth_header[6:]).decode("utf-8")
-        username, password = creds.split(":", 1)
+        if auth_header.startswith("Basic "):
+            # Basic Auth 模式
+            creds = base64.b64decode(auth_header[6:]).decode("utf-8")
+            username, password = creds.split(":", 1)
+            logger.debug("Basic auth 尝试: user=%s", mask_oid(username[:3] if len(username) > 3 else username))
+        elif auth_header.startswith("Bearer "):
+            # JWT Token 模式
+            from web.auth_middleware import _token_manager
+            payload = _token_manager.verify_token(auth_header[7:])
+            request.state.jwt_payload = payload
+            request.state.username = payload.get("sub", "unknown")
+            request.state.role = payload.get("role", "viewer")
+            return None  # JWT 认证成功，直接放行
+        else:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Unsupported auth type. Use 'Basic' or 'Bearer'"},
+            )
+    except HTTPException as e:
+        logger.warning("auth 失败: %s", sanitize_log_message(str(e)))
+        _auth_record_fail(ip)
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
     except Exception as e:
-        logger.warning("basic auth 凭据解码失败: %s", e)
+        logger.warning("basic auth 凭据解码失败: %s", sanitize_log_message(str(e)))
         _auth_record_fail(ip)
         return JSONResponse(
             status_code=401,

@@ -33,7 +33,6 @@ def _make_png(path: Path, w: int = 1000, h: int = 800, color=(200, 30, 30, 255))
 
 
 def _req(accept="image/webp"):
-    tok = None
     import web.routers.image as img
     req = MagicMock()
     req.cookies = {"img_token": img._make_image_token()}

@@ -4,8 +4,6 @@
 （last_message_id / last_log_id）正确工作，从而让前端可由多路轮询收敛为单通道。
 """
 
-import json
-
 import pytest
 from fastapi.testclient import TestClient
 from fastapi.responses import JSONResponse

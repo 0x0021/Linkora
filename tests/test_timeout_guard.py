@@ -7,12 +7,8 @@ shutdown(wait=False, cancel_futures=True)」下是真实硬中断（不阻塞调
 """
 from __future__ import annotations
 
-import shutil
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from src.platform._timeout import run_with_timeout
 

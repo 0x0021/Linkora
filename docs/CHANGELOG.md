@@ -24,6 +24,10 @@
 - **fix(data)**: 修正历史被错标数据 —— `data/conversations/dingtalk__*.db` 中 23 条「存在 ±10 分钟内同内容 `is_bot=1, role=assistant` 孪生记录」的 `is_bot=0` 记录回正为 `is_bot=1`（先 DRY-RUN 命中 29 条，收紧规则后仅改 23 条安全项；无孪生记录的真人消息一律不动）。修正后复核原误判窗口，接管判定返回 `False`（已修复）。
 - **test(poller)**: `tests/test_poller.py::TestBotMessageDetectionMarkdownPrefix` 新增 2 例回归 —— `test_check_if_bot_message_whitespace_normalized` / `test_is_duplicate_self_message_whitespace_normalized`，用真实 SQLiteStore 种入带 `\n` 的 assistant 记录、再以空格版 echo 回查，断言均命中。pyright=94=基线；`test_poller.py` + `test_reply_gate_sendtime.py` 97 例全过。
 
+### 代码卫生
+
+- **chore(lint)**: 清理 08-08 审计轮新建测试文件遗留的 5 处死代码（`test_image_thumbnail.py::_req` 未用变量 `tok`；`test_timeout_guard.py` 未用导入 `shutil`/`pathlib.Path`/`pytest`；`test_web_dashboard_live.py` 未用导入 `json`）。CI 通用 ruff 为 report-only（`continue-on-error` / `|| true`）故此前不阻断，但会淹没「新代码零容忍」的信噪比；清理后 `ruff check src tests web scripts` 全仓库 All checks passed。
+
 ---
 
 ## 2026-08-08 — 全面审计修复（P0/P1/P2）

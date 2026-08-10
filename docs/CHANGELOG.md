@@ -30,6 +30,10 @@
   **未引入正则门控**——上下文暴露清楚后交由 LLM 自行判断（避免硬编码规则把正常业务消息误杀）。
 - `test(llm)`: 新增 `tests/test_context_speaker_exposure.py`（发言人分离 + 收尾指令），重写 `tests/test_message_wrap.py`（发言人前缀期望值同步）。
 - `chore`: 仓库移除 4 个 `upload_*.jpg` 截图并加入 `.gitignore`（`upload_*` / `tmp_images/`），避免截图误提交。
+- `fix(poller)`: **消息年龄门槛**——在 poller 两条过滤链（per-conversation + list-all）中加入无条件年龄检查：
+  超过 `history_days`（默认 3 天）的远古消息直接跳过、不触发 AI 回复。
+  修复 7/8 的「好的」在 8/10 仍被当作当前消息处理导致 AI 瞎回复的线上事故。
+  此前仅冷启动首次轮询有 `first_run_ignore` 保护，后续轮询无任何年龄门槛。
 
 ---
 

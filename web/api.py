@@ -554,7 +554,7 @@ async def login(request: Request):
 
         except Exception as e:
             logger.warning("login 请求处理失败: %s", sanitize_log_message(str(e)))
-            return JSONResponse(status_code=400, content={"detail": str(e)})
+            return JSONResponse(status_code=400, content={"detail": "登录请求处理失败，请检查输入后重试"})
 
     else:
         return JSONResponse(

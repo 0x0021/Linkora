@@ -182,6 +182,7 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     _ensure_column(cur, "messages", "is_bot", "INTEGER DEFAULT 0")
     _ensure_column(cur, "messages", "is_archived", "INTEGER DEFAULT 0")
     _ensure_column(cur, "messages", "skip_reason", "TEXT")
+    _ensure_column(cur, "messages", "is_withdrawn", "INTEGER DEFAULT 0")
     _ensure_column(cur, "decisions", "skill_name", "TEXT DEFAULT ''")
     _ensure_column(cur, "decisions", "skill_source", "TEXT DEFAULT ''")
     _ensure_column(cur, "memories", "sender_id", "TEXT")
@@ -562,6 +563,7 @@ def init_conv_schema(conn: sqlite3.Connection, db_path: str) -> None:
             is_bot INTEGER DEFAULT 0,
             is_archived INTEGER DEFAULT 0,
             skip_reason TEXT,
+            is_withdrawn INTEGER DEFAULT 0,
             created_at TEXT NOT NULL
         );
 

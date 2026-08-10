@@ -38,6 +38,14 @@
   历史消息带 `[今天 09:12] 发言人：` 时间标记；相邻两条间隔超 30 分钟（可配）时在两段的上下文间
   插入自然语言分隔说明；当前消息距最后一条历史过久再提醒「先判断是不是同一件事、别再索要上文信息」。
   话题是否同一件事交由 LLM 自判，**不写话题分类正则**（延续「暴露上下文而非硬拦截」原则）。
+- `fix(llm)`: **历史消息 DESC→ASC 归一化**——`get_conversation_history` 返回 DESC（新→旧），
+  但 tiering/断层检测/RAG 回溯均假设 ASC，导致 LLM 拿到最老的消息当"近期"、断层间隔算成负值。
+  在 `build_user_message` 入口按时间戳归一化为 ASC，修复根因并新增回归测试。
+- `fix(security)`: **CodeQL #56 异常信息泄露**——`web/api.py:557` 的 `except Exception` 把 `str(e)` 通过 HTTP 响应暴露给外部用户；
+  `web/routers/conversations.py` 有 4 处同类问题。统一改为通用安全错误信息（`SAFE_OPERATION_FAILED`）。
+- `feat(web)`: **撤回消息软标记**——此前撤回直接 `delete_message` 硬删（聊天记录里彻底消失）；
+  改为 `mark_message_withdrawn` 设 `is_withdrawn=1`（保留行、Web 端显示红色「已撤回」占位提示，与归档视觉区分）。
+  涉及：schema 迁移新列 / Message 模型 / `_handle_recall_message` / messages.js 渲染 / theme.css 样式。
 - `fix(llm)`: 修复历史顺序根因——`get_conversation_history` 返回 DESC（新→旧），但
   `_apply_history_tiering` / 话题断层检测 / `_sanitize_rag_query` 均假设 ASC，导致 tiering 保留最老的
   `max_recent` 条、丢弃最新，断层间隔被算成负值（提示永不触发），RAG 回溯取到最老消息。

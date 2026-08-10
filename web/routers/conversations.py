@@ -23,6 +23,7 @@ from src.config import DEFAULT_TMP_IMAGES_DIR
 from src.image_path import safe_path_component
 from src.memory.message_repo import MessageRepo
 from web.dependencies import logger, get_current_platform, get_app_instance
+from web.errors import SAFE_OPERATION_FAILED
 
 router = APIRouter()
 
@@ -127,7 +128,7 @@ async def conversations(limit: int = 50):
             return {"conversations": result}
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=SAFE_OPERATION_FAILED) from e
 
 
 @router.get("/api/messages")
@@ -214,7 +215,7 @@ async def messages(chat_id: str = "", limit: int = 50):
             }
         return await run_in_threadpool(_work)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=SAFE_OPERATION_FAILED) from e
 
 
 @router.post("/api/messages/batch-delete")
@@ -241,7 +242,7 @@ async def batch_delete_messages(payload: dict):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=SAFE_OPERATION_FAILED) from e
 
 
 def _resolve_missing_image_path(msg: dict) -> str:
@@ -336,4 +337,4 @@ async def export_messages(chat_id: str = "", limit: int = 1000):
             headers={"Content-Disposition": f"attachment; filename=messages_{date_tag}.csv"},
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=SAFE_OPERATION_FAILED) from e

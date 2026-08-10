@@ -2257,6 +2257,34 @@ html {
     color: #9ca3af;
     border: 1px dashed #d1d5db;
     margin-left: 6px;
+}
+
+/* 撤回消息视觉区分（与归档不同色调） */
+.chat-message.withdrawn {
+    opacity: 0.45;
+    transition: opacity 0.2s ease;
+}
+.chat-message.withdrawn:hover {
+    opacity: 0.75;
+}
+.withdrawn-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.withdrawn-content-hint {
+    color: var(--text-tertiary);
+    font-style: italic;
+    font-size: 0.85em;
+}
     vertical-align: middle;
 }
 

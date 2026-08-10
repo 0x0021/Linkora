@@ -445,8 +445,10 @@ async function renderThread(chatId, conversations) {
         const isMe = isMeByDirection || isMeBySender || isMeByBot;
         const isBot = !!(m.is_bot);
         const isArchived = !!(m.is_archived);
+        const isWithdrawn = !!(m.is_withdrawn);
         const roleClass = isMe ? 'user' : 'assistant';
         const archivedClass = isArchived ? 'archived' : '';
+        const withdrawnClass = isWithdrawn ? 'withdrawn' : '';
         const senderName = escapeHtml(m.sender_name || '未知');
         const displaySender = isMe ? currentUserName : senderName;
         const displayReceiver = isMe ? peerName : currentUserName;
@@ -459,6 +461,7 @@ async function renderThread(chatId, conversations) {
         else if (isMe) aitagHtml = '<span class="aitag aitag-me"><i class="fa-solid fa-user"></i> 我</span>';
         else if (m.sender_name) aitagHtml = '<span class="aitag aitag-other"><i class="fa-solid fa-user-group"></i> 对方</span>';
         let archiveBadge = isArchived ? '<span class="archive-badge"><i class="fa-solid fa-box-archive"></i> 已归档</span>' : '';
+        let withdrawBadge = isWithdrawn ? '<span class="withdrawn-badge"><i class="fa-solid fa-rotate-left"></i> 已撤回</span>' : '';
         let skipBadge = (m.skip_reason) ? `<span class="skip-badge">[已跳过：${m.skip_reason === 'reply_single_only_when_unread' ? '单聊已读不回复' : escapeHtml(m.skip_reason)}]</span>` : '';
 
         // ---- 构造 bubble 内容 ----
@@ -506,13 +509,13 @@ async function renderThread(chatId, conversations) {
             bubbleContent = `${mediaBadge}${content}`;
         }
 
-        html += `<div class="chat-message ${roleClass} ${archivedClass}" data-text="${escapeHtml((m.content || '').toLowerCase())}">
+        html += `<div class="chat-message ${roleClass} ${archivedClass} ${withdrawnClass}" data-text="${escapeHtml((m.content || '').toLowerCase())}">
             <div class="chat-avatar" style="background:${color}">${escapeHtml(initial)}</div>
             <div class="chat-bubble">
                 <div class="chat-bubble-meta">
-                    <span>${aitagHtml} ${displaySender} ${archiveBadge}${skipBadge}</span><span>→ ${displayReceiver}</span><span>${formatTime(m.timestamp)}</span>
+                    <span>${aitagHtml} ${displaySender} ${archiveBadge}${withdrawBadge}${skipBadge}</span><span>→ ${displayReceiver}</span><span>${formatTime(m.timestamp)}</span>
                 </div>
-                <div class="chat-bubble-content">${bubbleContent}</div>
+                <div class="chat-bubble-content">${isWithdrawn ? '<span class="withdrawn-content-hint">该消息已被撤回</span>' : bubbleContent}</div>
                 ${imageHtml}
                 ${feedbackHtml(m)}
             </div>

@@ -20,3 +20,5 @@ class Message:
     role: str = ""  # user / assistant / system
     image_path: str = ""  # 持久化图片路径（相对 data/tmp_images）
     is_bot: bool = False  # True=机器人/AI发送, False=真人
+    is_withdrawn: bool = False  # True=消息已被撤回
+    is_archived: bool = False  # True=已归档（旧消息压缩）

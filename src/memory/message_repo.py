@@ -288,6 +288,25 @@ class MessageRepo:
                 purge_orphan_images(self.store.db_path, [image_path])
             return deleted
 
+    def mark_message_withdrawn(self, msg_id: str) -> bool:
+        """标记消息为已撤回（软删除：保留记录但标记 is_withdrawn=1）。
+
+        相比 delete_message（硬删），撤回标记保留消息行，
+        让 Web 消息记录能看到「该消息已撤回」的占位提示。
+        返回是否标记成功。
+        """
+        if not msg_id:
+            return False
+        with self.store._lock:
+            cur = self._cc().cursor()
+            cur.execute(
+                "UPDATE messages SET is_withdrawn = 1 WHERE msg_id = ? AND is_withdrawn = 0",
+                (msg_id,),
+            )
+            marked = cur.rowcount > 0
+            self._cc().commit()
+            return marked
+
     def update_message(self, msg_id: str, content: str) -> bool:
         """更新消息（用于消息编辑）。返回是否更新成功。"""
         if not msg_id or not content:
@@ -719,14 +738,14 @@ class MessageRepo:
     _MESSAGE_VIEW_COLUMNS = (
         "m.id, m.chat_id, m.chat_type, m.msg_id, m.sender_id, m.sender_name, m.content, "
         "m.msg_type, m.timestamp, m.role, m.image_path, m.is_bot, m.is_archived, "
-        "m.skip_reason, c.chat_name"
+        "m.is_withdrawn, m.skip_reason, c.chat_name"
     )
 
     #: 消息 CSV 导出列（顺序即导出表头顺序，调用方直接复用以保持契约稳定）
     EXPORT_COLUMNS: tuple[str, ...] = (
         "id", "chat_id", "chat_type", "msg_id", "sender_id", "sender_name",
         "content", "msg_type", "timestamp", "role", "is_bot", "is_archived",
-        "skip_reason", "chat_name",
+        "is_withdrawn", "skip_reason", "chat_name",
     )
 
     def list_messages_with_chat_name(self, chat_id: str = "", limit: int = 50,

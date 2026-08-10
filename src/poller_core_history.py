@@ -304,10 +304,10 @@ class HistorySyncMixin(PollerMixinBase):
 
 
     def _handle_recall_message(self, msg: Message) -> None:
-        """处理消息撤回事件：删除本地消息记录。
+        """处理消息撤回事件：标记本地消息为已撤回（保留记录，Web 端可展示占位提示）。
 
         撤回消息通常包含被撤回消息的引用信息，需要从中提取被撤回的消息ID，
-        然后删除本地数据库中的对应记录。
+        然后把本地数据库中的对应记录标记为 is_withdrawn=1。
         """
         raw = msg.raw or {}
 
@@ -316,9 +316,9 @@ class HistorySyncMixin(PollerMixinBase):
             recalled_msg_id = msg.msg_id
 
         if recalled_msg_id:
-            success = self.store._message_repo.delete_message(recalled_msg_id)
+            success = self.store._message_repo.mark_message_withdrawn(recalled_msg_id)
             if success:
-                logger.info("[轮询器] 消息撤回已处理，删除消息 %s", recalled_msg_id[:20])
+                logger.info("[轮询器] 消息撤回已处理，标记消息 %s 为已撤回", recalled_msg_id[:20])
             else:
                 logger.warning("[轮询器] 消息撤回处理失败，未找到消息 %s", recalled_msg_id[:20])
         else:

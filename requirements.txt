@@ -11,9 +11,9 @@ platformdirs==4.11.0
 # ---- LLM / 嵌入模型 ----
 openai==2.53.0
 numpy==2.5.1
-sentence-transformers==5.7.0
+sentence-transformers==5.6.1
 huggingface_hub==1.26.1
-tokenizers==0.23.0
+tokenizers==0.22.2
 
 # ---- Web 服务 ----
 fastapi==0.141.1

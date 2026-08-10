@@ -60,7 +60,7 @@ distro==1.9.0
     # via openai
 et-xmlfile==2.0.0
     # via openpyxl
-faiss-cpu==1.14.3
+faiss-cpu==1.15.0
     # via -r requirements.txt
 fastapi==0.141.1
     # via -r requirements.txt
@@ -88,7 +88,7 @@ httpx==0.28.1
     # via
     #   huggingface-hub
     #   openai
-huggingface-hub==1.26.0
+huggingface-hub==1.26.1
     # via
     #   -r requirements.txt
     #   sentence-transformers
@@ -184,7 +184,7 @@ onnxruntime==1.27.0
     # via
     #   -c (workspace)
     #   rapidocr-onnxruntime
-openai==2.52.0
+openai==2.53.0
     # via -r requirements.txt
 opencv-python==5.0.0.93
     # via rapidocr-onnxruntime
@@ -234,7 +234,7 @@ pygments==2.20.0
     # via
     #   pytest
     #   rich
-pymupdf==1.28.0
+pymupdf==1.28.2
     # via -r requirements.txt
 pypdfium2==5.12.1
     # via pdfplumber
@@ -285,7 +285,7 @@ scipy==1.18.0
     #   sentence-transformers
 sentence-transformers==5.6.1
     # via -r requirements.txt
-setuptools==83.0.0
+setuptools==84.0.0
     # via torch
 shapely==2.1.2
     # via rapidocr-onnxruntime
@@ -297,7 +297,7 @@ sniffio==1.3.1
     # via openai
 soupsieve==2.9.2
     # via beautifulsoup4
-starlette==1.5.0
+starlette==1.6.0
     # via fastapi
 sympy==1.14.0
     # via torch
@@ -316,7 +316,7 @@ tqdm==4.69.0
     #   openai
     #   sentence-transformers
     #   transformers
-transformers==5.14.1
+transformers==5.15.0
     # via sentence-transformers
 triton==3.7.1 ; python_full_version < '3.15' and sys_platform == 'linux'
     # via torch
@@ -335,13 +335,13 @@ typing-extensions==4.16.0
     #   sentence-transformers
     #   torch
     #   typing-inspection
-typing-inspection==0.4.2
+typing-inspection==0.4.3
     # via
     #   fastapi
     #   pydantic
 urllib3==2.7.0
     # via requests
-uvicorn==0.52.0
+uvicorn==0.52.1
     # via -r requirements.txt
 xlsxwriter==3.2.9
     # via python-pptx

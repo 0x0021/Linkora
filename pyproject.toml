@@ -114,9 +114,8 @@ max-complexity = 50
 [tool.ruff.lint.per-file-ignores]
 # 已知待拆 / 高复杂度模块（渐进收紧，拆分或重构降复杂度后移除豁免）。
 "src/platform/runtime_*.py" = ["C901", "F405"]  # F1 拆分产物：runtime_*.py 为真实逻辑模块（222–619 行），仍含高复杂度方法，C901 继续豁免；F405 为 star-import 重导出
-# C901/E402 per-file-ignores: 渐进阈值 50，待拆分后移除豁免。
-"src/poller_strategy.py" = ["C901", "E402"]       # poll_once 复杂度 ~93，待 T5 拆分；E402 见下方说明
-"src/poller_core_discovery.py" = ["C901", "E402"]   # _fetch_messages_via_list_all 复杂度 52；E402 结构性后置 import
+# poller_strategy.py / poller_core_discovery.py 的 C901/E402 豁免已于 2026-08-10 收敛移除
+# （_fetch_messages_via_list_all 抽 helper 降至阈值内；poller_strategy 的 mask_oid import 上移）。
 # web/routers/config.py 已于 2026-08-06 移除 C901 豁免（update_config 拆分出 ~27 个 domain helper）
 "src/config.py" = ["F401"]                   # config_models 重导出层（保 `from src.config import AppConfig` 旧路径兼容）
 "src/dws_adapter/__init__.py" = ["F401"]      # dws_adapter 组合根（保 `from src.dws_adapter import DwsError, is_permission_error, ...` 旧路径兼容）

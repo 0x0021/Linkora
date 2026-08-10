@@ -13,13 +13,11 @@ from src.dws_adapter import DwsPermissionError
 from src.models import Message
 from src.poller_mixins_base import PollerMixinBase
 from src.poller_utils import match_notification_signature
+from src.utils.security import mask_oid
 from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-
-# 从 utils.security 导入脱敏函数，确保全局一致
-from src.utils.security import mask_oid
 
 # 注：早期版本的"单聊已读不回复"闸门已移除——它依赖 DWS 未读接口判断，
 # 而 bot 回复后该会话会移出未读列表、对方追问又不回填，导致漏回消息（"为什么不回复我"）。

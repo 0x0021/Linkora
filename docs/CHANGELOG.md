@@ -86,6 +86,12 @@
 - `chore(lint)`: `runtime.py` 已完成 F1 拆分（现 35 行薄 re-export），移除其 C901 圈复杂度豁免；`runtime_*.py`（222–619 行真实逻辑模块）保留 C901/F405 豁免。同步更新 ruff 注释说明。
 - `chore`: 提交运维脚本 `scripts/merge_orphan_conv_dbs.py`（账号漂移孤儿分库合并，默认 dry-run）；删除 2026-08-06 配置事故残档 `config.yaml.damaged-20260806T093507`。
 
+### C901 门禁收敛（poller 模块）
+- **实测纠偏**：`poller_strategy.py`(877 行) / `poller_core_discovery.py`(424 行) 并非真·上帝类——按项目阈值 50 跑 C901，仅 `_fetch_messages_via_list_all`(52) 越线 2 点，其余函数均 ≤22；E402 仅 `poller_strategy.py` 一处 `mask_oid` import 后置。
+- `refactor(poller)`: 把 `_fetch_messages_via_list_all` 内约 20 分支点的白名单构建块抽出为 `_build_list_all_whitelist`（行为不变），调用方复杂度 52 → ~33，新助手 ~21，均远低于 50。
+- `fix(lint)`: `poller_strategy.py` 的 `from src.utils.security import mask_oid` 上移到顶部 import 块，消除唯一 E402。
+- `chore(lint)`: 移除 `pyproject.toml` 中 `poller_strategy.py` / `poller_core_discovery.py` 的 C901/E402 per-file-ignores（豁免已无违规依据）；rumm 全绿、pyright 仍 95 = 基线；poller/discovery 相关 157 测试全过。
+
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
 
 > 线上现象：用户根本没登录钉钉，日志却打「[用户接管] XXX 已手动回复 …，跳过 AI 回复」，AI 静默漏回消息。

@@ -101,46 +101,13 @@ class DiscoveryMixin(PollerMixinBase):
         return discovered
 
 
-    def _fetch_messages_via_list_all(self) -> list[Message]:
-        """直接用 list-all 拉最近消息并返回（含外部好友，无需 list-direct）。
+    def _build_list_all_whitelist(
+        self, is_feishu: bool, start_time: datetime
+    ) -> tuple[list[str], dict[str, dict]]:
+        """构建 list-all 白名单（外部好友 + DB 窗口内活跃会话）。
 
-        关键发现：外部好友的消息无法通过 list-direct 拉取（no permission），
-        但 list-all 可以按时间范围直接返回这些消息！
-        这是处理外部好友消息的唯一可靠方式。
+        从 `_fetch_messages_via_list_all` 抽出以降低其圈复杂度；行为不变。
         """
-        # 飞书无真正"有未读"接口，chat_message_list_unread_conversations 返回的是
-        # 最近会话列表而非实际未读状态，闸门不可靠 → 全平台豁免
-        is_feishu = type(self.dws).__name__ == 'FeishuCliAdapter'
-
-        # 用上次轮询时间作为起点（避免重复处理）
-        # 首次运行时用配置的时间窗口
-        now = datetime.now()
-        if self._last_list_all_time is not None:
-            start_time = self._last_list_all_time
-        else:
-            start_time = now - timedelta(minutes=self.config.list_all_first_run_minutes)
-        start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-        end_str = now.strftime("%Y-%m-%d %H:%M:%S")
-
-        # 窗口钳制：把可能算出的超宽时间窗（如误配 22 天 / 增量游标卡死在起点）
-        # 钳制到最近 list_all_max_window_days 天，避免实时轮询循环每轮重扫全部历史、
-        # 永远撞分页上限刷警告。深度历史回填请走 sync_history，不要靠实时轮询循环。
-        max_window = timedelta(days=self.config.list_all_max_window_days)
-        if start_time < now - max_window:
-            clamped = now - max_window
-            logger.info(
-                "[轮询器] list-all 时间窗过长（起点 %s），钳制为最近 %d 天（起点 %s）以适配实时轮询",
-                start_str, self.config.list_all_max_window_days,
-                clamped.strftime("%Y-%m-%d %H:%M:%S"),
-            )
-            start_time = clamped
-            start_str = clamped.strftime("%Y-%m-%d %H:%M:%S")
-
-        # 飞书每轮轮询优化：构建「已知相关会话白名单」，避免 +chat-list 全量翻页
-        # （封顶 200 个会话 + 逐会话拉消息）。白名单 = 外部好友 + DB 中窗口内有
-        # 活动的会话；再叠加适配器内部的单次最近活跃探嗅捕获新活跃会话。
-        # 每隔 list_all_full_scan_interval_minutes 分钟做一次完整 +chat-list 翻页
-        # （全量扫描），用于发现长期未活跃但重新活跃的新会话。
         whitelist_ids: list[str] = []
         whitelist_meta: dict[str, dict] = {}
 
@@ -204,6 +171,50 @@ class DiscoveryMixin(PollerMixinBase):
                 }
         except Exception as e:
             logger.debug("[轮询器] 构建 DB 会话白名单失败: %s", e)
+
+        return whitelist_ids, whitelist_meta
+
+    def _fetch_messages_via_list_all(self) -> list[Message]:
+        """直接用 list-all 拉最近消息并返回（含外部好友，无需 list-direct）。
+
+        关键发现：外部好友的消息无法通过 list-direct 拉取（no permission），
+        但 list-all 可以按时间范围直接返回这些消息！
+        这是处理外部好友消息的唯一可靠方式。
+        """
+        # 飞书无真正"有未读"接口，chat_message_list_unread_conversations 返回的是
+        # 最近会话列表而非实际未读状态，闸门不可靠 → 全平台豁免
+        is_feishu = type(self.dws).__name__ == 'FeishuCliAdapter'
+
+        # 用上次轮询时间作为起点（避免重复处理）
+        # 首次运行时用配置的时间窗口
+        now = datetime.now()
+        if self._last_list_all_time is not None:
+            start_time = self._last_list_all_time
+        else:
+            start_time = now - timedelta(minutes=self.config.list_all_first_run_minutes)
+        start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        # 窗口钳制：把可能算出的超宽时间窗（如误配 22 天 / 增量游标卡死在起点）
+        # 钳制到最近 list_all_max_window_days 天，避免实时轮询循环每轮重扫全部历史、
+        # 永远撞分页上限刷警告。深度历史回填请走 sync_history，不要靠实时轮询循环。
+        max_window = timedelta(days=self.config.list_all_max_window_days)
+        if start_time < now - max_window:
+            clamped = now - max_window
+            logger.info(
+                "[轮询器] list-all 时间窗过长（起点 %s），钳制为最近 %d 天（起点 %s）以适配实时轮询",
+                start_str, self.config.list_all_max_window_days,
+                clamped.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+            start_time = clamped
+            start_str = clamped.strftime("%Y-%m-%d %H:%M:%S")
+
+        # 飞书每轮轮询优化：构建「已知相关会话白名单」，避免 +chat-list 全量翻页
+        # （封顶 200 个会话 + 逐会话拉消息）。白名单 = 外部好友 + DB 中窗口内有
+        # 活动的会话；再叠加适配器内部的单次最近活跃探嗅捕获新活跃会话。
+        # 每隔 list_all_full_scan_interval_minutes 分钟做一次完整 +chat-list 翻页
+        # （全量扫描），用于发现长期未活跃但重新活跃的新会话。
+        whitelist_ids, whitelist_meta = self._build_list_all_whitelist(is_feishu, start_time)
 
         # 3) 决定本轮走白名单模式还是全量扫描
         #    - 白名单为空（首次运行 / DB 为空）→ 必须全量扫描以种子化

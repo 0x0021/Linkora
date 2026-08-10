@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "灵桥 (Linkora) — 多平台 AI 自动回复助手（钉钉/飞书/企业微信 + RAG + 规则引擎 + Web 管理台）"
 readme = "README.md"
 # requires-python = ">=3.14"：项目仅支持 Python 3.14 系列（CI / 工作流 / Docker 统一切到 3.14.6），
-# 不再兼容 3.12 / 3.13。锁定依赖（numpy==2.5.1、tokenizers==0.22.2、rapidocr-onnxruntime==1.2.3 等）
+# 不再兼容 3.12 / 3.13。锁定依赖（numpy==2.5.1、tokenizers==0.23.1、rapidocr-onnxruntime==1.2.3 等）
 # 均已确认提供 cp314 wheel 或在 3.14.6 下可从 sdist 构建。改动依赖版本后请重跑 `python scripts/check_deps.py`。
 requires-python = ">=3.14"
 authors = [{ name = "Linkora Team" }]
@@ -26,18 +26,18 @@ dependencies = [
     "python-dotenv==1.2.2",
     "platformdirs==4.11.0",
     # ---- LLM / 嵌入模型 ----
-    "openai==2.52.0",
+    "openai==2.53.0",
     "numpy==2.5.1",
-    "sentence-transformers==5.6.1",
-    "huggingface_hub==1.26.0",
-    "tokenizers==0.22.2",
+    "sentence-transformers==5.7.0",
+    "huggingface_hub==1.26.1",
+    "tokenizers==0.23.1",
     # ---- Web 服务 ----
     "fastapi==0.141.1",
-    "uvicorn==0.52.0",
+    "uvicorn==0.52.1",
     "jinja2==3.1.6",
     "python-multipart==0.0.32",
     # ---- 向量检索 / OCR ----
-    "faiss-cpu==1.14.3",
+    "faiss-cpu==1.15.0",
     "requests==2.34.2",
     "jieba==0.42.1",
     "regex==2026.7.19",
@@ -45,7 +45,7 @@ dependencies = [
     # ---- 文档解析 ----
     "beautifulsoup4==4.15.0",
     "pdfplumber==0.11.10",
-    "pymupdf==1.28.0",
+    "pymupdf==1.28.2",
     "python-pptx==1.0.2",
     "python-docx==1.2.0",
     "pytesseract==0.3.13",

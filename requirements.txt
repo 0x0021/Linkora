@@ -9,20 +9,20 @@ python-dotenv==1.2.2
 platformdirs==4.11.0
 
 # ---- LLM / 嵌入模型 ----
-openai==2.52.0
+openai==2.53.0
 numpy==2.5.1
-sentence-transformers==5.6.1
-huggingface_hub==1.26.0
-tokenizers==0.22.2
+sentence-transformers==5.7.0
+huggingface_hub==1.26.1
+tokenizers==0.23.1
 
 # ---- Web 服务 ----
 fastapi==0.141.1
-uvicorn==0.52.0
+uvicorn==0.52.1
 jinja2==3.1.6
 python-multipart==0.0.32
 
 # ---- 向量检索 / OCR ----
-faiss-cpu==1.14.3
+faiss-cpu==1.15.0
 requests==2.34.2
 jieba==0.42.1
 regex==2026.7.19
@@ -34,7 +34,7 @@ rapidocr-onnxruntime==1.2.3
 # 缺失会让「从 URL 导入知识库」直接 500。
 beautifulsoup4==4.15.0
 pdfplumber==0.11.10
-pymupdf==1.28.0
+pymupdf==1.28.2
 python-pptx==1.0.2
 python-docx==1.2.0
 pytesseract==0.3.13

@@ -42,6 +42,9 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         self.current_user_user_id = current_user_user_id
         self._rule_engine = rule_engine
         self.platform_id = platform_id
+        # 由 platform_id 推导平台类型（platform_id 形如 dingtalk / dingtalk__<account>），
+        # 供平台专属逻辑（如钉钉群枚举）判断，避免依赖 PollerConfig 未持有的 adapter_type。
+        self.adapter_type = platform_id.split("__")[0] if platform_id else ""
         # 历史回填用的独立子进程：跳过图片 OCR / 卡片图下载（仅存文本），并跳过启动期
         # 全量已处理 ID 预载（sync_history 的去重走 DB is_message_processed，不依赖内存集合），
         # 让「全部历史」这类重同步明显变快。
@@ -94,6 +97,9 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         # 置顶/最近会话列表缓存（极少变化，无需每轮打 DWS）
         self._top_convs_cache: list = []
         self._top_convs_cache_ts: float = 0.0
+        # 钉钉群枚举缓存（chat +chat-list-all / +chat-list-mine，极少变化，TTL 10 分钟）
+        self._group_enum_cache: list = []
+        self._group_enum_cache_ts: float = 0.0
         # 长尾会话按会话限频抓取的时间戳（openConversationId -> 上次抓取 epoch）
         self._last_fetch_time: dict[str, float] = {}
 

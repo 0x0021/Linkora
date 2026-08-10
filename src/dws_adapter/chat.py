@@ -54,6 +54,52 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             return result.get("conversations", [])
         return []
 
+    def chat_list_groups_joined(self, limit: int = 200) -> list[dict]:
+        """分页拉取「我加入的所有群」（dws chat +chat-list-all）。
+
+        钉钉群聊不在「消息搜索权益」覆盖范围内，``chat message list-all`` 只回单聊，
+        导致群消息长期拉不到。本方法通过专用群列举命令补全群枚举，返回的
+        openConversationId 进入轮询会话集后，由 poller 走 ``chat message list``
+        （list-all 按 openConversationId 过滤）拉取群消息。
+        """
+        return self._chat_list_groups(["chat", "+chat-list-all"], limit)
+
+    def chat_list_groups_mine(self, limit: int = 200) -> list[dict]:
+        """分页拉取「我创建/管理的群」（dws chat +chat-list-mine）。"""
+        return self._chat_list_groups(["chat", "+chat-list-mine"], limit)
+
+    def _chat_list_groups(self, base_args: list[str], limit: int) -> list[dict]:
+        """通用群列表分页拉取，合并去重返回 [{openConversationId, name}]。"""
+        merged: list[dict] = []
+        seen: set[str] = set()
+        cursor = ""
+        pages = 0
+        while True:
+            pages += 1
+            args = list(base_args) + ["--limit", str(limit)]
+            if cursor:
+                args += ["--cursor", cursor]
+            try:
+                data = self.run(args, operation="chat_list_groups", force_no_dry_run=True)
+            except DwsError as e:
+                logger.warning("[DWS] 群列表拉取失败（%s）: %s", base_args[-1], e)
+                break
+            result = self._get_result(data)
+            if not isinstance(result, dict):
+                break
+            for g in result.get("groups", []) or []:
+                cid = g.get("openConversationId", "")
+                if not cid or cid in seen:
+                    continue
+                seen.add(cid)
+                merged.append({"openConversationId": cid, "name": g.get("name", "")})
+            if result.get("complete") or not result.get("nextCursor") or pages >= 10:
+                break
+            cursor = result.get("nextCursor", "") or ""
+            if not cursor:
+                break
+        return merged
+
     def chat_message_list_direct(self, user_id: str = "",
                                  open_dingtalk_id: str = "",
                                  time_str: str = "",

@@ -93,6 +93,7 @@
 - `chore(lint)`: 移除 `pyproject.toml` 中 `poller_strategy.py` / `poller_core_discovery.py` 的 C901/E402 per-file-ignores（豁免已无违规依据）；rumm 全绿、pyright 仍 95 = 基线；poller/discovery 相关 157 测试全过。
 
 - `docs(chore)`: **特性标志状态审计，消除沉默债与模板漂移**——经核实 `rerank_enabled` 为有意默认关（opt-in 高级特性，开启需本地 BGE 权重 + 引入推理开销），`citation_enabled`/`combo_enabled` 在生产 `config.yaml` 已置 `true`（已 GA，非长期关着）。在 `config.yaml.example` 与 `src/config_models.py` 注释中明示上述状态，纠正"三特性默认关无人管"的误判；不改任何默认值与 live config。
+- `fix(poller)`: **钉钉群/系统推送补全**——根因：钉钉群聊不在「消息搜索权益」覆盖范围内，`chat message list-all` 主通道只回单聊，导致群消息与 `工作通知:*` 类系统会话长期拉不到（DB 实测钉钉 0 群 vs `dws chat +chat-list-all` 实际返回 58 群）。修复：新增群枚举源（`dws chat +chat-list-all`/`+chat-list-mine`，10min TTL 缓存），把群 `openConversationId` 纳入轮询会话集，由 `_poll_one_conversation` 走 `chat message list`（list-all 按群过滤）拉取；移除「工作通知」硬跳过，改走 list-all 自愈路径（失败经黑名单自愈）。适配器封装 `chat_list_groups_joined`/`chat_list_groups_mine`；新增 `tests/test_poller_group_enum.py` 回归测试（6 项全过）。
 
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
 

@@ -382,6 +382,23 @@ class PollerStrategyMixin(PollerMixinBase):
         except Exception as e:
             logger.warning("列出外部好友失败：%s", e)
 
+        # 5. 钉钉群枚举源（chat +chat-list-all / +chat-list-mine 补全群，list-all 搜索权益不覆盖群）
+        try:
+            groups = self._get_cached_joined_groups()
+            for g in groups:
+                oid = g.get("openConversationId", "")
+                if oid and oid not in seen and not self._is_blocked(oid):
+                    seen.add(oid)
+                    all_conversations.append({
+                        "openConversationId": oid,
+                        "singleChat": False,   # 群聊：走 chat_message_list（list-all 按群过滤）
+                        "title": g.get("name", ""),
+                    })
+            if groups:
+                logger.debug("[轮询器] + %d 个群枚举（来自 dws 群列表），总计 %d", len(groups), len(all_conversations))
+        except Exception as e:
+            logger.warning("群枚举失败：%s", e)
+
         return all_conversations, forced_ids
 
     def _resolve_external_friend_conv(self, ef: dict, seen: set) -> tuple[str, dict | None]:
@@ -419,6 +436,50 @@ class PollerStrategyMixin(PollerMixinBase):
             "singleChat": True,
             "title": ef_name,
         }
+
+    def _get_cached_joined_groups(self) -> list[dict]:
+        """获取钉钉群枚举（含「我加入 + 我创建」的群，TTL 缓存）。
+
+        群列表极少变化，无需每轮(默认5s)都打 DWS 的 chat +chat-list-all。
+        缓存有效期内直接返回内存副本；过期或首次才真正请求。请求失败则抛出，
+        交由调用方的 try/except 处理。
+        """
+        ttl = getattr(self.config, "group_enum_cache_ttl_seconds", 600) or 600
+        now = time.time()
+        if self._group_enum_cache and (now - self._group_enum_cache_ts) < ttl:
+            return self._group_enum_cache
+        fresh = self._fetch_joined_groups()
+        self._group_enum_cache = fresh or []
+        self._group_enum_cache_ts = now
+        return self._group_enum_cache
+
+    def _fetch_joined_groups(self) -> list[dict]:
+        """从 DWS 群列举命令拉取并合并「我加入 + 我创建」的群。
+
+        仅钉钉适配器支持；非钉钉（飞书/企微）或不支持该方法的适配器返回空列表。
+        """
+        if getattr(self, "adapter_type", "") != "dingtalk":
+            return []
+        joined_fn = getattr(self.dws, "chat_list_groups_joined", None)
+        mine_fn = getattr(self.dws, "chat_list_groups_mine", None)
+        if joined_fn is None or mine_fn is None:
+            return []
+        try:
+            joined = joined_fn()
+        except Exception as e:
+            logger.warning("[轮询器] 拉取已加入群列表失败: %s", e)
+            joined = []
+        try:
+            mine = mine_fn()
+        except Exception as e:
+            logger.warning("[轮询器] 拉取自建群列表失败: %s", e)
+            mine = []
+        merged: dict[str, dict] = {}
+        for g in (joined or []) + (mine or []):
+            cid = g.get("openConversationId", "")
+            if cid:
+                merged[cid] = g
+        return list(merged.values())
 
     def _compute_last_poll_time(self, open_id: str, now=None) -> tuple[datetime, bool]:
         """计算会话的上次轮询时间点。
@@ -544,10 +605,9 @@ class PollerStrategyMixin(PollerMixinBase):
         last_poll, is_first_poll = self._compute_last_poll_time(open_id)
         time_str = last_poll.strftime("%Y-%m-%d %H:%M:%S")
 
-        # 工作通知是钉钉系统通知渠道，list-direct API 永久返回权限错误
-        if title and title.startswith("工作通知"):
-            logger.debug("[轮询器] 跳过系统通知会话（工作通知），消息通过 list-all 获取: %s", title)
-            return None
+        # 工作通知会话（如「工作通知:XX」）已在群枚举阶段作为 cid 会话纳入遍历，
+        # 走 chat_message_list（list-all，user API）拉取；失败由 _handle_fetch_errors
+        # 兜底（瞬时重试 / 拉黑自愈），不再在此硬跳过（原 list-direct 单聊权限错误不适用群路径）。
 
         # 记录本次抓取时间（供长尾限频判断，仅真正发起请求时更新）
         self._last_fetch_time[open_id] = time.time()

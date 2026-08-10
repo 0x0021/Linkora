@@ -521,6 +521,7 @@ web:
   auth_enabled: true                               # 是否开启认证（安全默认开启；关闭=管理后台裸奔，高危）
   auth_username: admin                             # * 登录用户名
   auth_password: 'please-change-me'                # * 登录密码——务必修改！auth_enabled=true 且密码为空会启动报错（fail-closed 拒绝启动）
+  jwt_secret: ''                                    # * JWT 签名密钥——生产务必设置固定高熵值；留空则运行时生成临时随机密钥（重启失效）
 
 # ============================================================
 # ⑬ 工具配置（可用工具和速率限制）

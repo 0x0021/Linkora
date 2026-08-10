@@ -773,6 +773,9 @@ class WebConfig(BaseModel):
     # 安全策略：默认密码为空，启动时若 auth_enabled 为 true 且密码为空则强制报错，
     # 防止部署方忘记修改默认密码导致管理后台裸奔。请在 config.yaml 中显式设置。
     auth_password: str = ""
+    # JWT 令牌签名密钥。为空时运行时会生成本进程临时随机密钥（重启失效），
+    # 仅适合本地开发；生产环境务必设为固定高熵值，否则令牌可被伪造/重放风险升高。
+    jwt_secret: str = ""
 
     @model_validator(mode="after")
     def _enforce_non_empty_auth_password(self) -> "WebConfig":

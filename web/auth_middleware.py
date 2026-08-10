@@ -7,7 +7,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import logging
+import secrets
 import time
 from functools import wraps
 from typing import Any, Callable
@@ -17,8 +19,42 @@ from fastapi import Request, HTTPException
 logger = logging.getLogger(__name__)
 
 # JWT 配置（简单实现，生产环境建议使用 pyjwt）
-_TOKEN_SECRET_KEY = "linkora-dev-secret-change-in-production"
+# 安全：源码中不存在任何硬编码密钥。TokenManager 默认用哨兵标记 __NOT_SET__，
+# 运行时由 _resolve_jwt_secret() 优先读取 config.web.jwt_secret，否则生成本进程唯一的
+# 随机密钥（重启失效），从而让任何用旧占位值伪造的令牌在校验时失效。
+_DEFAULT_SECRET_SENTINEL = object()  # 仅用于区分「未显式设置密钥」与「显式密钥」
 _TOKEN_EXPIRE_SECONDS = 3600 * 24  # 24 小时
+
+# 运行期解析出的 JWT 签名密钥（进程内缓存，保证签发与校验使用同一密钥）。
+_runtime_jwt_secret: str | None = None
+
+
+def _resolve_jwt_secret() -> str:
+    """解析 JWT 签名密钥。
+
+    - 若 config.web.jwt_secret 已设置，使用它（推荐，跨重启稳定）；
+    - 否则生成本进程唯一的随机密钥并告警（重启后旧令牌失效，但不再是公开硬编码值）。
+    """
+    global _runtime_jwt_secret
+    if _runtime_jwt_secret is not None:
+        return _runtime_jwt_secret
+    try:
+        from src.shared_state import get_config
+
+        cfg = get_config()
+        if cfg is not None:
+            secret = (getattr(cfg.web, "jwt_secret", "") or "").strip()
+            if secret:
+                _runtime_jwt_secret = secret
+                return _runtime_jwt_secret
+    except Exception:
+        pass
+    _runtime_jwt_secret = secrets.token_urlsafe(32)
+    logger.warning(
+        "JWT 签名密钥未配置（web.jwt_secret 为空），已生成本进程临时随机密钥，"
+        "重启后已签发令牌将失效；生产环境请在 config.yaml 的 web.jwt_secret 设置固定高熵密钥"
+    )
+    return _runtime_jwt_secret
 
 # 角色定义
 ROLE_ADMIN = "admin"
@@ -31,8 +67,14 @@ VALID_ROLES = {ROLE_ADMIN, ROLE_OPERATOR, ROLE_VIEWER}
 class TokenManager:
     """简单的令牌管理器。"""
 
-    def __init__(self, secret_key: str = _TOKEN_SECRET_KEY):
+    def __init__(self, secret_key: str = _DEFAULT_SECRET_SENTINEL):  # type: ignore[assignment]
         self.secret_key = secret_key
+
+    def _secret(self) -> str:
+        """取得实际签名密钥：显式设置过则用显式值，否则走运行期解析。"""
+        if self.secret_key is not _DEFAULT_SECRET_SENTINEL:
+            return self.secret_key
+        return _resolve_jwt_secret()
 
     def generate_token(self, username: str, role: str = ROLE_VIEWER) -> str:
         """生成 JWT 风格的令牌。"""
@@ -61,9 +103,9 @@ class TokenManager:
             if not hmac.compare_digest(signature, expected_signature):
                 raise HTTPException(status_code=401, detail="Invalid signature")
 
-            # 解码 payload
+            # 解码 payload（JSON，绝不使用 eval）
             decoded_payload = base64.urlsafe_b64decode(payload).decode()
-            data = eval(decoded_payload)  # 简化实现，生产环境用 json.loads
+            data = json.loads(decoded_payload)
 
             # 检查过期
             if data.get("exp", 0) < time.time():
@@ -78,7 +120,7 @@ class TokenManager:
     def _sign(self, data: str) -> str:
         """计算 HMAC-SHA256 签名。"""
         return base64.urlsafe_b64encode(
-            hmac.new(self.secret_key.encode(), data.encode(), hashlib.sha256).digest()
+            hmac.new(self._secret().encode(), data.encode(), hashlib.sha256).digest()
         ).decode()
 
 

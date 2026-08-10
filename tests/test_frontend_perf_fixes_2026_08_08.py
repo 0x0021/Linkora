@@ -18,6 +18,10 @@ from fastapi.responses import Response
 import web.api as _api
 from web.api import VersionedStaticFiles
 
+# 静态目录用仓库绝对路径，避免依赖当前工作目录（全量套件中其他测试的 cwd 状态可能变化，
+# 相对路径 "web/static" 会解析失败导致 404）。生产挂载同样使用 get_static_dir() 绝对路径。
+_STATIC_DIR = str(Path(__file__).resolve().parent.parent / "web" / "static")
+
 
 # ============================================================
 # F-H1 · 静态资源缓存判定
@@ -28,7 +32,7 @@ def _call_get_response(vs: VersionedStaticFiles, path: str, query: bytes = b"") 
 
 
 def test_fh1_dist_hashed_bundle_is_immutable():
-    vs = VersionedStaticFiles(directory="web/static")
+    vs = VersionedStaticFiles(directory=_STATIC_DIR)
     resp = _call_get_response(vs, "dist/bundle.c7a77f28d3df.css")
     cc = resp.headers.get("cache-control", "")
     assert "immutable" in cc, f"dist bundle 应为 immutable，实际: {cc}"
@@ -36,7 +40,7 @@ def test_fh1_dist_hashed_bundle_is_immutable():
 
 
 def test_fh1_vendor_unversioned_keeps_etag_no_maxage_zero():
-    vs = VersionedStaticFiles(directory="web/static")
+    vs = VersionedStaticFiles(directory=_STATIC_DIR)
     resp = _call_get_response(vs, "vendor/chart.umd.min.js")
     cc = resp.headers.get("cache-control", "")
     assert cc == "no-cache", f"未版本化资源应为 no-cache，实际: {cc}"
@@ -47,7 +51,7 @@ def test_fh1_vendor_unversioned_keeps_etag_no_maxage_zero():
 
 
 def test_fh1_query_v_still_immutable():
-    vs = VersionedStaticFiles(directory="web/static")
+    vs = VersionedStaticFiles(directory=_STATIC_DIR)
     resp = _call_get_response(vs, "css/theme.css", query=b"v=12345")
     assert "immutable" in resp.headers.get("cache-control", "")
 

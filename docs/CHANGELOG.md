@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-08-10 — 安全与 CI 一致性修复
+
+### 安全（P0）
+- `fix(security)`: JWT 签名密钥此前硬编码为公开占位值（源码内不再保留任何密钥字面量），
+  且 `config.web` 无密钥配置项，导致任何人可用该公开密钥伪造 `role=admin` 的令牌绕过密码认证。
+  改为运行时惰性解析：`config.web.jwt_secret` 优先，未配置则生成本进程唯一随机密钥（重启失效）并告警，
+  旧硬编码密钥签发的令牌在重启后一律校验失败。
+- `fix(security)`: `verify_token` 解析 payload 由 `eval()` 改为 `json.loads()`，消除代码执行风险。
+- `feat(config)`: `WebConfig` 新增 `jwt_secret` 字段（默认空），`config.yaml.example` 同步说明。
+
+### CI / Lint
+- `fix(ci)`: 对齐 ruff 版本——CI 安装 `ruff==0.16.0` 与 `pyproject.toml` dev extra 的 `0.16.1` 漂移，
+  改为统一 `ruff==0.16.1`（与注释「需与 dev extra 一致」相符）。
+- `fix(ci)`: 修正 type-check 阶段 pyright 基线注释（94 → 95，与 `scripts/type_baseline.py` 实际值一致）。
+- `fix(lint)`: 清理 `src/memory/message_repo.py` 最近提交引入的 4 处空白符告警（W293/W291）。
+- `fix(test)`: `tests/test_frontend_perf_fixes_2026_08_08.py` 中 `VersionedStaticFiles(directory="web/static")` 用相对路径，依赖 cwd，全量套件下偶发 404 致 `test_fh1_dist_hashed_bundle_is_immutable` 失败；改为仓库绝对路径（`_STATIC_DIR`），与生产挂载（绝对路径）一致，消除顺序相关脆弱性。
+
+---
+
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
 
 > 线上现象：用户根本没登录钉钉，日志却打「[用户接管] XXX 已手动回复 …，跳过 AI 回复」，AI 静默漏回消息。

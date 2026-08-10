@@ -10,3 +10,7 @@
 043800f8839cc3471accd1e6a76c1fff6ac51126:config.yaml:generic-api-key:70
 d17784c8ae8c48fc815bbbf1472f12ebbd7fb648:tests/test_feishu_adapter.py:generic-api-key:437
 d17784c8ae8c48fc815bbbf1472f12ebbd7fb648:tests/test_feishu_adapter.py:generic-api-key:443
+# docs/deployment-guide.md 中的 JWT 格式示例（文档教学占位符，非真实密钥），
+# 原文为 TOKEN="<JWT 头部.载荷.签名，已截断>" 形式，不入库。
+5f43e16f1aa8eb42fab79346c36eae010e4d6b92:docs/deployment-guide.md:generic-api-key:33
+5f43e16f1aa8eb42fab79346c36eae010e4d6b92:docs/deployment-guide.md:generic-api-key:95

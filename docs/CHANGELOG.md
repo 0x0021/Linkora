@@ -22,6 +22,15 @@
 - `fix(lint)`: 清理 `src/memory/message_repo.py` 最近提交引入的 4 处空白符告警（W293/W291）。
 - `fix(test)`: `tests/test_frontend_perf_fixes_2026_08_08.py` 中 `VersionedStaticFiles(directory="web/static")` 用相对路径，依赖 cwd，全量套件下偶发 404 致 `test_fh1_dist_hashed_bundle_is_immutable` 失败；改为仓库绝对路径（`_STATIC_DIR`），与生产挂载（绝对路径）一致，消除顺序相关脆弱性。
 
+### 对话上下文 / 回复质量
+- `fix(llm)`: 修复「对话已结束 AI 仍继续追问」问题（线上案例：用户说「改完了。老数据不用挪吧」、对方回「老数据先不用了」，AI 仍索要程诗艺工号手机号）。
+  根因是**历史消息被吞掉发言人姓名、不同人的发言被合并成一条无署名文本**，LLM 看不到「谁说了什么」，无法判断话题已闭环。
+  改为：历史与当前消息统一暴露发言人姓名（`prompt_builder` 历史归一化 + `message_wrap` 当前消息），且**不同发言人绝不跨人合并**；
+  `system_prompt` 与 RAG 追问指令以自然语言告知「对方表示任务完成/不再需要时收尾、不要追问细节或索要信息」。
+  **未引入正则门控**——上下文暴露清楚后交由 LLM 自行判断（避免硬编码规则把正常业务消息误杀）。
+- `test(llm)`: 新增 `tests/test_context_speaker_exposure.py`（发言人分离 + 收尾指令），重写 `tests/test_message_wrap.py`（发言人前缀期望值同步）。
+- `chore`: 仓库移除 4 个 `upload_*.jpg` 截图并加入 `.gitignore`（`upload_*` / `tmp_images/`），避免截图误提交。
+
 ---
 
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）

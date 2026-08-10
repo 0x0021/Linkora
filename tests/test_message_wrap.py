@@ -1,6 +1,11 @@
-"""wrap_incoming_message 单测：truncate + 群前缀两层包装。
+"""wrap_incoming_message 单测：truncate + 群前缀 + 发言人归属三层包装。
 
 零依赖：只传 Message + truncate_fn 桩函数。
+
+发言人归属（2026-08 修复）：
+多人会话必须把「谁说的」写进消息文本，否则 LLM 看不到发言人、
+会把不同人的话合并成一条无署名文本，从而无法判断「哪个话题已闭环」
+（线上事故：对方说「老数据先不用了」AI 仍追问工号手机号）。
 """
 
 from __future__ import annotations
@@ -15,14 +20,15 @@ from src.llm.message_wrap import wrap_incoming_message
 from src.models import Message
 
 
-def _make_msg(content: str, *, chat_type: str = "p2p", chat_name: str = "tester") -> Message:
+def _make_msg(content: str, *, chat_type: str = "p2p", chat_name: str = "tester",
+             sender_name: str = "user_a") -> Message:
     return Message(
         msg_id="m1",
         chat_id="c1",
         chat_type=chat_type,
         chat_name=chat_name,
         sender_id="u1",
-        sender_name="user_a",
+        sender_name=sender_name,
         content=content,
         msg_type="text",
         timestamp=datetime.now(),
@@ -43,71 +49,73 @@ class _Recorder:
 class TestWrapBasic:
     """基础场景：p2p 文本消息。"""
 
-    def test_short_text_not_truncated(self):
-        """短文本原样返回。"""
+    def test_short_text_exposes_sender(self):
+        """p2p 短文本带发言人前缀返回（2026-08 修复）。"""
         rec = _Recorder()
         msg = _make_msg("你好世界")
         out = wrap_incoming_message(msg, truncate_fn=rec, max_chars=1000)
-        assert out == "你好世界"
-        # truncate 一定被调用过一次（哪怕不截断），用于保持调用一致性
+        assert out == "user_a：你好世界"
         assert len(rec.calls) == 1
         assert rec.calls[0] == ("你好世界", 1000)
 
-    def test_long_text_truncated(self):
-        """超 max_chars 文本被截断。"""
+    def test_long_text_truncated_then_prefixed(self):
+        """超 max_chars 文本先截断再加发言人前缀。"""
         rec = _Recorder()
         msg = _make_msg("a" * 2000)
         out = wrap_incoming_message(msg, truncate_fn=rec, max_chars=1000)
-        assert len(out) == 1000
-        assert out == "a" * 1000
+        assert out == f"user_a：{'a' * 1000}"
+        assert len(out) == 1000 + len("user_a：")
 
 
 class TestWrapGroupPrefix:
-    """群消息加 [群]chat_name: 前缀。"""
+    """群消息加 [群]chat_name 前缀 + 发言人。"""
 
-    def test_group_message_gets_prefix(self):
+    def test_group_message_gets_chat_and_sender(self):
         rec = _Recorder()
         msg = _make_msg("hi", chat_type="group", chat_name="研发群")
         out = wrap_incoming_message(msg, truncate_fn=rec)
-        assert out == "[群]研发群:hi"
+        assert out == "[群]研发群 user_a：hi"
 
-    def test_p2p_no_prefix(self):
+    def test_group_no_sender_name(self):
+        """群消息无 sender_name 时只保留群前缀（不崩、不留空发言人）。"""
         rec = _Recorder()
-        msg = _make_msg("hi", chat_type="p2p")
+        msg = _make_msg("hi", chat_type="group", chat_name="研发群", sender_name=None)
         out = wrap_incoming_message(msg, truncate_fn=rec)
-        assert out == "hi"
+        assert out == "[群]研发群：hi"
 
     def test_group_long_truncated_first(self):
-        """群消息先 truncate 再加前缀（截断在文本层，不影响 [群] 前缀完整性）。"""
         rec = _Recorder()
         msg = _make_msg("x" * 2000, chat_type="group", chat_name="g")
         out = wrap_incoming_message(msg, truncate_fn=rec, max_chars=500)
-        assert out == f"[群]g:{'x' * 500}"
-        assert len(out) == 500 + len("[群]g:")
+        assert out == f"[群]g user_a：{'x' * 500}"
 
     def test_group_no_chat_name(self):
-        """chat_name 为 None 时用空字符串（不崩）。"""
         rec = _Recorder()
-        msg = _make_msg("hi", chat_type="group")
+        msg = _make_msg("hi", chat_type="group", sender_name=None)
         msg.chat_name = None
         out = wrap_incoming_message(msg, truncate_fn=rec)
-        assert out == "[群]None:hi"  # Message 字段允许 None，保留原行为
+        assert out == "[群]None：hi"  # chat_name=None 保留原行为
 
 
 class TestWrapEdgeCases:
-    """边界：非字符串 content / max_chars 默认值。"""
+    """边界：非字符串 content / max_chars 默认值 / 无发言人。"""
 
     def test_non_string_content_unchanged(self):
-        """非字符串 content（如 dict 图片 marker）跳过 truncate。"""
         rec = _Recorder()
-        msg = _make_msg("dummy")  # str
+        msg = _make_msg("dummy")
         msg.content = {"type": "image", "url": "..."}
         out = wrap_incoming_message(msg, truncate_fn=rec)
         assert out == {"type": "image", "url": "..."}
-        assert rec.calls == []  # 非字符串不调 truncate
+        assert rec.calls == []
+
+    def test_p2p_no_sender_name_no_prefix(self):
+        """p2p 且 sender_name 为 None 时原样返回（不强行加空前缀）。"""
+        rec = _Recorder()
+        msg = _make_msg("hi", sender_name=None)
+        out = wrap_incoming_message(msg, truncate_fn=rec)
+        assert out == "hi"
 
     def test_default_max_chars_is_1000(self):
-        """未传 max_chars 时默认 1000（与拆分前一致）。"""
         rec = _Recorder()
         msg = _make_msg("a" * 1500)
         wrap_incoming_message(msg, truncate_fn=rec)
@@ -120,7 +128,6 @@ class TestWrapEdgeCases:
         assert rec.calls[0][1] == 50
 
     def test_truncate_failure_does_not_crash_wrap(self):
-        """truncate_fn 抛异常时不崩溃（透传给调用方，不吞错）。"""
         def _boom(content, max_chars=500):
             raise ValueError("simulated")
         msg = _make_msg("hi")

@@ -177,20 +177,32 @@ class PromptBuilder:
             content = h.content
             if isinstance(content, str):
                 content = agent._truncate_long_message(content)
-            history_msgs.append({"role": role, "content": content})
+                # ★ 多人会话必须标注发言人：否则不同的人被合并成一条无署名文本，
+                #   模型无法判断「谁说了什么」「哪个话题已闭环」（2026-08 事故）。
+                if role == "user" and h.sender_name:
+                    content = f"{h.sender_name}：{content}"
+            history_msgs.append({
+                "role": role,
+                "content": content,
+                "_speaker": h.sender_name or "",  # 供归一化判定
+            })
 
-        # 归一化多轮历史结构（B2 修复）
+        # 归一化多轮历史结构（B2 修复 + 发言人感知）
         normalized = []
         last_role = None
+        last_speaker = None
         for m in history_msgs:
             role = m["role"]
+            speaker = m.pop("_speaker", "")
             if role == "assistant" and not normalized:
                 continue
-            if last_role == role:
-                normalized[-1]["content"] += "\n\n" + m["content"]
+            # ★ 仅「同 role 且同发言人」才合并；不同人绝不拼成一条
+            if last_role == role and last_speaker == speaker:
+                normalized[-1]["content"] += "\n" + m["content"]
             else:
                 normalized.append(m)
                 last_role = role
+                last_speaker = speaker
 
         incoming = wrap_incoming_message(
             message,

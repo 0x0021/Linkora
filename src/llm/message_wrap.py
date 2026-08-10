@@ -33,6 +33,11 @@ def wrap_incoming_message(message: "Message", *, truncate_fn, max_chars: int = 1
     content = message.content
     if isinstance(content, str):
         content = truncate_fn(content, max_chars=max_chars)
-    if message.chat_type == "group":
-        content = f"[群]{message.chat_name}:{content}"
+        if message.chat_type == "group":
+            prefix = f"[群]{message.chat_name}"
+            if message.sender_name:
+                prefix += f" {message.sender_name}"
+            content = f"{prefix}：{content}"
+        elif message.sender_name:
+            content = f"{message.sender_name}：{content}"
     return content

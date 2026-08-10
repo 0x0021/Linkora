@@ -563,8 +563,9 @@ def sanitize_reply(
         cleaned = _re.sub(r'\n{3,}', '\n\n', cleaned)
         cleaned = cleaned.strip()
 
-        # 如果清洗后内容变化超过 60%，直接用兜底回复覆盖
-        if len(cleaned) == 0 or (len(cleaned) / max(_original_len, 1)) < 0.4:
+        # 如果清洗后内容变化超过 75%，才用兜底回复覆盖
+        # （原阈值 60% 过激进：正常回复含 URL/IP 被剥后易误触发，导致自然表达被模板替换、还原度骤降）
+        if len(cleaned) == 0 or (len(cleaned) / max(_original_len, 1)) < 0.25:
             logger.warning(
                 "[sanitize][空RAG] 清洗后内容缩减超60%% (%d→%d)，替换为兜底回复",
                 _original_len, len(cleaned),
@@ -789,7 +790,8 @@ def gate_reply(reply: str, user_name: str = "", user_title: str = "") -> "tuple[
     triggered = False
 
     # 1) 主人名字 + 评估/审批/协助/走正规 口吻（整句层面）
-    if user_name:
+    #    短回复（≤20字）几乎不可能是自引用泄漏，跳过以避免误伤真人简短表达
+    if user_name and len(reply) > 20:
         name = _re.escape(user_name)
         name_pat = _re.compile(
             rf"(?:由\s*{name}"

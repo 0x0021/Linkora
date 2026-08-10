@@ -71,6 +71,13 @@
 - `fix(poller)`: **修复上一轮编辑引入的缩进事故**——上一轮把 `msg = self._raw_to_message(...)` 与本人消息 `if` 块从 raw 循环体内（indent 16）误缩进到循环体外（indent 12），且把非本人消息处理链嵌进本人 `if` 块，导致 list-all **完全不处理任何来消息**（非本人分支不可达）。已把整段还原到循环体内正确缩进（与 `git HEAD` 原始结构一致），并保留上述本人消息落库修复。
 - `fix(test)`: 修正 `tests/test_poller_core_history.py` 撤回测试——生产已改为 `mark_message_withdrawn`（软标记）而非 `delete_message`（硬删），旧断言 `delete_message` 已过时，改为断言 `mark_message_withdrawn`，与实际行为一致。
 
+### 还原度（fidelity）提升
+- `fix(fidelity)`: **低置信风格回退策略重构**——`_LOW_CONF_NEUTRAL_STYLE` 原命令模型「不要刻意模仿任何不确定的口头禅或个人风格」（还原度 7.5/100 首要根因），改为允许轻度模仿口吻特征（简短、口语化、不拘形式），同时保留防编造护栏。低置信时从「中性客服」→「有个性的人」。
+- `fix(fidelity)`: **RAG 空结果 fallback 注入风格保持指令**——第2级引导追问块原为纯负面禁止清单（8 条「绝对禁止」），现新增第0条正面引导「以主人惯用口吻回复，不要变成机械客服」，让空 RAG 场景下仍带人格。
+- `fix(fidelity)`: **系统提示硬规则软化**——3 处「知识库查不到时直接说『知识库中未找到相关信息』」强制模板句改为允许自然表达（「不清楚」「不确定」「这个我得确认一下」等真人式回应），消除机械模板对还原度的拖累。
+- `fix(fidelity)`: **收窄清洗管线误伤**——`sanitize_reply` 空-RAG 清洗替换阈值从 60% 收紧至 75%（原阈值过激进：正常回复含 URL/IP 被剥后易误触发整句替换为兜底模板）；`gate_reply` 新增短回复豁免（≤20 字跳过自引用检测），避免真人简短表达被误伤。
+- `config(fidelity)`: **扩大上下文窗口 + 放宽长度限制**——`history_tiering_recent` 4→8、`history_window` 6→12、`history_days` 3→7（更多历史消息供风格学习）；`max_chars_daily_chat` 256→512、`max_chars_tech_issue` 512→1024（不再硬截断真人自然表达）；`temperature` 0.3→0.6（更自然不机械）。
+
 ---
 
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）

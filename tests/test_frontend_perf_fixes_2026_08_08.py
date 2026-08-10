@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -33,7 +34,10 @@ def _call_get_response(vs: VersionedStaticFiles, path: str, query: bytes = b"") 
 
 def test_fh1_dist_hashed_bundle_is_immutable():
     vs = VersionedStaticFiles(directory=_STATIC_DIR)
-    resp = _call_get_response(vs, "dist/bundle.c7a77f28d3df.css")
+    # dist bundle 哈希随内容变化，从 manifest.json 读取实际文件名（避免硬编码旧哈希 404）
+    manifest = json.loads((Path(_STATIC_DIR) / "dist" / "manifest.json").read_text(encoding="utf-8"))
+    css_bundle = manifest["css"]
+    resp = _call_get_response(vs, f"dist/{css_bundle}")
     cc = resp.headers.get("cache-control", "")
     assert "immutable" in cc, f"dist bundle 应为 immutable，实际: {cc}"
     assert "max-age=86400" in cc

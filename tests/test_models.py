@@ -39,7 +39,7 @@ def test_all_field_names():
     assert names == {
         "msg_id", "chat_id", "chat_type", "chat_name", "sender_id",
         "sender_name", "content", "msg_type", "timestamp", "raw",
-        "role", "image_path", "is_bot",
+        "role", "image_path", "is_bot", "is_withdrawn", "is_archived",
     }
 
 

@@ -121,46 +121,46 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             return result.get("messages", [])
         return []
 
+    def chat_message_list_group(self, group_id: str, time_str: str,
+                                 limit: int = 50,
+                                 timeout: int | None = None) -> list[dict]:
+        """按 openConversationId 拉取单个群的会话消息（用户本人身份，按时间正序）。
+
+        底层命令 ``dws chat message list --group <openConversationId> --time <t>
+        --direction newer``，是**用户级逐群接口**（非群机器人接口），实测对个人钉钉群
+        可用，且能拉到「工作通知」等系统推送会话的消息。
+
+        ⚠️ 为什么不用 list-all（search_messages_by_time_range）：该接口依赖「消息搜索权益」，
+        而该权益默认**不覆盖群聊**，对群调用会返回业务错误（PREPARE_CALL_TOOL_ERROR），
+        导致群消息长期拉不到。逐群接口不受此限制，是群消息的正确拉取通道。
+        """
+        data = self.run([
+            "chat", "message", "list",
+            "--group", group_id,
+            "--time", time_str,
+            "--direction", "newer",
+            "--limit", str(limit),
+        ], operation="chat_message_list_group", force_no_dry_run=True,
+           timeout=timeout or self.timeout)
+        result = self._get_result(data)
+        if not isinstance(result, dict):
+            return []
+        return result.get("messages", []) or []
+
     def chat_message_list(self, group: str, time_str: str,
                           limit: int = 50,
                           cached_result: dict | None = None,
                           timeout: int | None = None) -> list[dict]:
         """拉取指定群聊的消息（按时间正序）。
 
-        ⚠️ 关键修正：dws 的 ``chat message list`` 底层是 ``list_conversation_message_v2``，
-        这是**面向机器人(群机器人)**的接口，要求 bot 在群内才能调用；但 dws 以
-        **用户本人身份**运行，群成员本人调 v2 会收到 ``AUTH_PERMISSION_DENIED``
-        （与"用户是否在群里"无关）。因此这里改用面向用户本人的 ``chat message list-all``
-        （``search_messages_by_time_range``），按 openConversationId 过滤出该群消息，
-        无需建机器人、且尊重用户自身的群成员权限。底层 API 映射已用 ``dws --dry-run`` 验证：
-        ``chat message list`` → ``list_conversation_message_v2``（bot API，拒）；
-        ``chat message list-all`` → ``search_messages_by_time_range``（user API，通过）。
+        群消息走用户级逐群接口 ``chat message list --group``（见 ``chat_message_list_group``），
+        绕过 list-all 的「消息搜索权益」群聊限制；旧实现经 list-all 按 openConversationId 过滤，
+        但 list-all 对群返回业务错误，导致群消息长期拉不到。
 
-        ⚡ 性能优化（cached_result 快路径）：poller 主循环对 N 个活跃群原本会各自
-        独立跑一次整窗 ``list-all`` 全扫再按群过滤（N 次全量扫描）。改为由 poller 先按
-        所有活跃群的**并集时间窗**只扫一次，把合并字典通过 ``cached_result`` 传入，这里
-        直接内存过滤、零额外 API 调用。``cached_result`` 为 None（自愈探针 / 工具单次调用
-        / 单测）时走原 fallback：自己跑一次 ``chat_message_list_all``。
+        ``cached_result`` 保留为兼容参数（历史 batch-prefetch 快路径），当前实现不再依赖它，
+        直接按群逐拉。
         """
-        if cached_result is not None and isinstance(cached_result, dict):
-            # 快路径：从预取的 list-all 合并字典按 openConversationId 过滤。
-            # cached_result 覆盖 [min_time_str, now] ⊇ 本群的 [time_str, now]，
-            # 故过滤结果包含本群在 time_str 之后的全部消息（更早的消息由
-            # is_message_processed 去重兜底，不会重复处理）。
-            for conv in cached_result.get("conversationMessagesList", []) or []:
-                if conv.get("openConversationId") == group:
-                    return conv.get("messages", []) or []
-            return []
-
-        # fallback：自行整窗扫描（保留给非批量调用点）。
-        end = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        merged = self.chat_message_list_all(time_str, end, limit=limit, timeout=timeout)
-        if not isinstance(merged, dict):
-            return []
-        for conv in merged.get("conversationMessagesList", []) or []:
-            if conv.get("openConversationId") == group:
-                return conv.get("messages", []) or []
-        return []
+        return self.chat_message_list_group(group, time_str, limit, timeout)
 
     def chat_message_list_all(self, start: str, end: str,
                               limit: int = 50, timeout: int | None = None,

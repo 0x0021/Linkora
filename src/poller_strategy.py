@@ -176,56 +176,14 @@ class PollerStrategyMixin(PollerMixinBase):
     # 不再依据会失真的未读状态做跳过判定（见 commit 说明）。
 
     def _build_group_list_all_cache(self, conversations: list[dict]) -> dict | None:
-        """为所有活跃群按并集时间窗预取一次 list-all，供 per-group chat_message_list 复用。
+        """已弃用：群消息改走用户级逐群接口 chat_message_list_group，不再依赖 list-all。
 
-        群消息 chat_message_list 自 F5 改用用户接口 list-all 后，每个活跃群每轮会
-        独立跑一次整窗 list-all 全扫再按群过滤（N 个群 = N 次全量扫描）。这里改为：
-        取所有群 time_str 的最小值（并集窗起点），只扫一次 list-all，把合并字典返回，
-        由主循环作为 ``cached_result`` 传给每个群的 chat_message_list（内存过滤，零额外
-        API 调用）。单聊走 list-direct、other 类型走 list-all 主通道，均不参与。
-
-        Returns:
-            chat_message_list_all 的合并字典（conversationMessagesList 按
-            openConversationId 聚合）；无群可预取或预取失败时返回 None
-            （主循环对该群走 chat_message_list 的 fallback 全扫，行为不变）。
+        旧的 list-all 批量预取（search_messages_by_time_range）对群聊返回业务错误
+        （消息搜索权益不覆盖群聊），既拉不到群消息又每轮刷 warning。群消息现由
+        ``_poll_one_conversation`` 逐群调用 ``chat_message_list_group`` 直接拉取，
+        本方法保留为兼容桩、恒返回 None。
         """
-        now = datetime.now()
-        min_dt: datetime | None = None
-        min_ts: str | None = None
-        for conv in conversations:
-            oid = conv.get("openConversationId", "")
-            if not oid or self._is_blocked(oid):
-                continue
-            # 与 poll_once 主循环口径一致：先 detect 再飞书纠错
-            chat_type = self._detect_chat_type(conv)
-            chat_type = self._feishu_correct_chat_type(oid, conv.get("title", ""), chat_type)
-            # 仅群聊需要 per-group 补拉；单聊走 list-direct、other 走 list-all 主通道
-            if chat_type == "single" or chat_type == "other":
-                continue
-            # 与主循环 time_str 计算口径一致：last_poll 优先，否则 DB last_message_time
-            lp = self._last_poll_time.get(oid, now - timedelta(hours=24))
-            if oid not in self._last_poll_time:
-                db_conv = self.store._conversation_repo.get_conversation(oid)
-                if db_conv and db_conv.get("last_message_time"):
-                    try:
-                        lp = datetime.fromisoformat(db_conv["last_message_time"])
-                    except (ValueError, TypeError) as _exc:
-                        logger.debug(f"_build_group_list_all_cache: swallowed exception: {_exc}")
-                        pass
-            ts = lp.strftime("%Y-%m-%d %H:%M:%S")
-            if min_dt is None or lp < min_dt:
-                min_dt = lp
-                min_ts = ts
-        if not min_ts:
-            return None
-        try:
-            end_ts = now.strftime("%Y-%m-%d %H:%M:%S")
-            return self.dws.chat_message_list_all(
-                min_ts, end_ts, limit=self.config.messages_per_conversation
-            )
-        except Exception as e:
-            logger.warning("[轮询器] 群消息批量预取失败，回退逐群扫描: %s", e)
-            return None
+        return None
 
 
     # ── poll_once 辅助方法（T5 拆分）──
@@ -634,10 +592,9 @@ class PollerStrategyMixin(PollerMixinBase):
                     limit=self.config.messages_per_conversation,
                 )
             else:
-                # === 群聊：用 --group ===
+                # === 群聊：chat_message_list 现走用户级逐群接口（绕过 list-all 群消息搜索权益限制）===
                 raw_msgs = self.dws.chat_message_list(
                     open_id, time_str, self.config.messages_per_conversation,
-                    cached_result=group_cache,
                 )
             logger.debug("[轮询器] 从 %s（类型=%s）获取了 %d 条原始消息",
                         title, chat_type, len(raw_msgs))

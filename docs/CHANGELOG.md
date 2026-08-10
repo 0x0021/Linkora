@@ -21,6 +21,9 @@
 - `fix(ci)`: 修正 type-check 阶段 pyright 基线注释（94 → 95，与 `scripts/type_baseline.py` 实际值一致）。
 - `fix(lint)`: 清理 `src/memory/message_repo.py` 最近提交引入的 4 处空白符告警（W293/W291）。
 - `fix(test)`: `tests/test_frontend_perf_fixes_2026_08_08.py` 中 `VersionedStaticFiles(directory="web/static")` 用相对路径，依赖 cwd，全量套件下偶发 404 致 `test_fh1_dist_hashed_bundle_is_immutable` 失败；改为仓库绝对路径（`_STATIC_DIR`），与生产挂载（绝对路径）一致，消除顺序相关脆弱性。
+- `fix(ci)`: 修复 list-all 本人消息落库后 type-check 新增的 3 个错误（`poller_core_discovery.py` 调用 `_store_self_message_if_new` + `chat_message_list_all(chat_ids=, chat_meta=)`）：
+  `PollerMixinBase` 补 `_store_self_message_if_new` 桩；`BaseIMAdapter` 与 `WeCom` 的 `chat_message_list_all` 签名补齐 `chat_ids`/`chat_meta`（默认 `None`，与 Feishu/DWS 实现对齐，无 `reportIncompatibleMethodOverride`）。pyright error 数 98 → 95 回到基线。
+- `fix(test)`: `test_models.test_all_field_names` 同步 `Message` 新增字段 `is_withdrawn`/`is_archived`；`test_frontend_perf_fixes` 的 dist bundle 哈希改从 `dist/manifest.json` 读取（不再硬编码已失效的 `c7a77f28d3df`，该哈希的 bundle 已从仓库 dist 移除致 404）。
 
 ### 对话上下文 / 回复质量
 - `fix(llm)`: 修复「对话已结束 AI 仍继续追问」问题（线上案例：用户说「改完了。老数据不用挪吧」、对方回「老数据先不用了」，AI 仍索要程诗艺工号手机号）。

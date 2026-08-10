@@ -283,11 +283,15 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
     @abc.abstractmethod
     def chat_message_list_all(self, start: str, end: str,
                               limit: int = 50,
-                              max_pages: int | None = None) -> dict:
+                              max_pages: int | None = None,
+                              chat_ids: list[str] | None = None,
+                              chat_meta: dict[str, dict] | None = None) -> dict:
         """按时间范围拉取所有消息（自动分页聚合）。
 
         Args:
             max_pages: 分页上限（dws 适配器使用；其他适配器可忽略）。
+            chat_ids: 白名单模式——仅拉取指定 openConversationId 列表（dws 适配器使用）。
+            chat_meta: 白名单会话的标题/类型等元数据（dws 适配器使用）。
         """
         ...
 

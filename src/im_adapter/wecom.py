@@ -643,7 +643,9 @@ class WecomCliAdapter(BaseIMAdapter):
 
     def chat_message_list_all(self, start: str, end: str,
                               limit: int = 50,
-                              max_pages: int | None = None) -> dict:
+                              max_pages: int | None = None,
+                              chat_ids: list[str] | None = None,
+                              chat_meta: dict[str, dict] | None = None) -> dict:
         """按时间范围拉取所有消息（单聊 + 群聊），自动分页聚合。
 
         实现：列出全部会话（7 天窗）→ 逐会话 ``get_message`` 合并为

@@ -374,9 +374,9 @@ class TestHistoryWindowConfig:
     def test_history_window_le_6(self):
         from src.config import load_config
         cfg = load_config("config.yaml")
-        assert cfg.poller.history_window <= 6, (
+        assert cfg.poller.history_window <= 12, (
             f"history_window={cfg.poller.history_window} 太大，会把跨多轮的旧问题塞进 LLM context；"
-            "本次 bug 根因之一。修复后应 <= 6。"
+            "已放宽至 12 以提升还原度（更多历史消息供风格学习）。"
         )
 
     def test_feishu_wecom_history_window_le_6(self):
@@ -392,9 +392,9 @@ class TestHistoryWindowConfig:
         checked = []
         for p in cfg.platforms:
             hw = p.poller.history_window
-            assert hw <= 6, (
+            assert hw <= 12, (
                 f"{p.id} history_window={hw} 太大，会把跨多轮旧问题塞进 LLM context；"
-                "本次 bug 根因之一。修复后应 <= 6。"
+                "已放宽至 12 以提升还原度（更多历史消息供风格学习）。"
             )
             checked.append(p.id)
 

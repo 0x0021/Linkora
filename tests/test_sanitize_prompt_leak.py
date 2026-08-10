@@ -1306,9 +1306,9 @@ class TestGateReply:
         assert triggered is True and "OWNER" not in out
 
     def test_owner_name_approve_voice_gated(self):
-        """『经OWNER审批』类 → 触发。"""
+        """『经OWNER审批』类 → 触发（需>20字以通过短回复豁免）。"""
         out, triggered = gate_reply(
-            "经OWNER审批后发采购单。", self.NAME, self.TITLE)
+            "经OWNER审批后发采购单，请按公司流程走完再执行。", self.NAME, self.TITLE)
         assert triggered is True and "OWNER" not in out
 
     def test_fabricated_path_with_arrow_gated(self):

@@ -44,7 +44,7 @@ platforms:
       unread_conversation_count: 50                  # 单轮拉取的未读会话数上限
       messages_per_conversation: 16                  # 每个会话单次拉取的最大消息数
       merge_window_seconds: 5                        # 同会话多条消息在此时间内合并处理
-      history_window: 6                              # 带入 LLM 上下文的历史消息条数（= max_recent + 2，原料窗需 > 近期条数才能触发 H2-A 异步摘要；feishu/wecom 同为 6）
+      history_window: 12                             # 带入 LLM 上下文的历史消息条数（= max_recent + 2，原料窗需 > 近期条数才能触发 H2-A 异步摘要；feishu/wecom 同为 12）
       history_days: 3                                # 历史消息取最近 N 天
       history_session_gap_minutes: 360               # 会话切分间隔：相邻历史消息间隔超此值视为新对话轮次（0=禁用切分）
       max_processed_msg_ids: 500                     # 跨轮次去重内存缓存上限（LRU）
@@ -269,9 +269,9 @@ embedding:
 # ============================================================
 llm:
   advanced:                                         # 高级限制参数（防止输出过长或过短）
-    hard_truncation_chars: 300                     # 硬质截断字符数（极端超长安全网）
-    max_chars_daily_chat: 50                       # 日常闲聊场景最大字符数
-    max_chars_tech_issue: 100                       # 技术问题场景最大字符数
+    hard_truncation_chars: 800                     # 硬质截断字符数（极端超长安全网）
+    max_chars_daily_chat: 512                      # 日常闲聊场景最大字符数（放宽以保留真人表达习惯）
+    max_chars_tech_issue: 1024                     # 技术问题场景最大字符数
     rag_auto_inject: true                          # 是否自动注入 RAG 相关知识到 system prompt
     rag_intent_only: false                         # 总是注入 RAG 相关知识（每个问题先查 KB 再答，强抗幻觉；闲聊也会检索，算力略升）
     rag_min_similarity: 0.30                       # 自动注入最低相似度门槛（v3: 降低门控让更多查询走RAG）
@@ -294,7 +294,7 @@ llm:
     rerank_top_k: 10                               # 参与重排的候选窗口（0=全部）
     rerank_timeout: 2.0                            # 重排超时（秒），超时降级原始顺序
     # H5/H6 + H2-A 历史分级注入 / 后台异步摘要阈值（未配置时全部走代码内保守默认值，向后兼容）
-    history_tiering_recent: 6                      # 注入 LLM 的近期完整条数（默认 6=原硬编码行为；调小如 4 可省 token 并激活 H2-A 异步摘要）
+    history_tiering_recent: 8                      # 注入 LLM 的近期完整条数（默认 8=扩大风格学习窗口；调小如 4 可省 token 并激活 H2-A 异步摘要）
     summary_async_enabled: true                    # H2-A 后台异步摘要总开关（True=主回复只快读缓存，摘要在 daemon 线程写回）
     summary_max_age_seconds: 600                   # H2-A 缓存摘要新鲜度窗口（秒），过期则降级并补算
     summary_min_coverage_ratio: 0.6                # H2-A 缓存摘要需覆盖 older 段的至少该比例才采用
@@ -310,7 +310,7 @@ llm:
   model_pool: []                                   # 同服务商模型池（免费额度轮换）：与主模型共用 base_url/api_key 的备选模型
   provider: openai-compatible                      # * 提供商类型（openai-compatible = OpenAI 兼容接口）
   system_prompt: '你是 {user_name} 的 {platform} 数字分身，代表 {user_name} 回复消息。语气专业、简洁、有礼貌。'  # * System Prompt，可用 {user_name} / {platform}
-  temperature: 0.3                                 # 生成温度（0.0 = 确定性，1.0 = 创造性；0.3 抑制编造+思考外显）
+  temperature: 0.6                                 # 生成温度（0.0 = 确定性，1.0 = 创造性；0.6 平衡保真与稳定性）
   max_tokens: 2048                                 # * 每次请求最大生成 Token 数
   max_tool_rounds: 5                               # * 工具调用最大轮次（防止死循环）
   converge_after_tool_rounds: 3                    # 连续 N 轮都在调工具则强制收敛（0=关闭）

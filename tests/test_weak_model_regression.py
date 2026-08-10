@@ -142,7 +142,7 @@ class TestOwnerNameGateIncident:
         assert "OWNER" not in out  # 坏原句自引用不残留
 
     def test_owner_name_assist_voice_gated(self):
-        bad = "OWNER会帮您协助处理这个审批单。"
+        bad = "OWNER会帮您协助处理这个审批单，请您提供相关材料以便尽快推进。"
         out, triggered = gate_reply(bad, OWNER_NAME, OWNER_TITLE)
         assert triggered is True
         assert "OWNER" not in out

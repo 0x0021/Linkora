@@ -94,6 +94,7 @@
 
 - `docs(chore)`: **特性标志状态审计，消除沉默债与模板漂移**——经核实 `rerank_enabled` 为有意默认关（opt-in 高级特性，开启需本地 BGE 权重 + 引入推理开销），`citation_enabled`/`combo_enabled` 在生产 `config.yaml` 已置 `true`（已 GA，非长期关着）。在 `config.yaml.example` 与 `src/config_models.py` 注释中明示上述状态，纠正"三特性默认关无人管"的误判；不改任何默认值与 live config。
 - `fix(poller)`: **钉钉群/系统推送补全**——根因：钉钉群聊不在「消息搜索权益」覆盖范围内，`chat message list-all` 主通道只回单聊，导致群消息与 `工作通知:*` 类系统会话长期拉不到（DB 实测钉钉 0 群 vs `dws chat +chat-list-all` 实际返回 58 群）。修复：新增群枚举源（`dws chat +chat-list-all`/`+chat-list-mine`，10min TTL 缓存），把群 `openConversationId` 纳入轮询会话集，由 `_poll_one_conversation` 走 `chat message list`（list-all 按群过滤）拉取；移除「工作通知」硬跳过，改走 list-all 自愈路径（失败经黑名单自愈）。适配器封装 `chat_list_groups_joined`/`chat_list_groups_mine`；新增 `tests/test_poller_group_enum.py` 回归测试（6 项全过）。
+- `fix(poller)`: **群列举分页崩溃修复**——`dws chat +chat-list-all` 的 `nextCursor` 是**数字**（非字符串），翻到第二页拼 `--cursor` 时未转 `str`，导致 `subprocess.run`/`" ".join(cmd)` 抛 `TypeError: sequence item 6: expected str instance, int found`，群枚举首轮即失败、群消息仍拉不到。修复：`_chat_list_groups` 与 `_chat_message_list_all_single` 的 cursor 一律 `str()` 化；`im_adapter/base.py` 的 debug 日志改 `" ".join(str(x) for x in cmd)` 防御。实际验证：`chat_list_groups_joined` 拉到 104 群 + `chat_list_groups_mine` 13 群（共 117），list-all 翻页正常。新增 `tests/test_dws_chat_groups.py` 回归测试（2 项全过）。
 
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
 

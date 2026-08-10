@@ -78,7 +78,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             pages += 1
             args = list(base_args) + ["--limit", str(limit)]
             if cursor:
-                args += ["--cursor", cursor]
+                args += ["--cursor", str(cursor)]
             try:
                 data = self.run(args, operation="chat_list_groups", force_no_dry_run=True)
             except DwsError as e:
@@ -243,7 +243,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                     break
                 convs = result.get("conversationMessagesList", []) or []
                 self._merge_list_all_conversations(merged, convs)
-                next_cursor = result.get("nextCursor", "") or ""
+                next_cursor = str(result.get("nextCursor", "") or "")
                 has_more = bool(result.get("hasMore", False))
                 merged["hasMore"] = has_more
                 merged["nextCursor"] = next_cursor

@@ -158,7 +158,7 @@ class BaseIMAdapter:
         last_error: IMAdapterError | None = None
         for attempt in range(retries + 1):
             try:
-                logger.debug("正在运行: %s", " ".join(cmd))
+                logger.debug("正在运行: %s", " ".join(str(x) for x in cmd))
                 result = subprocess.run(
                     cmd, capture_output=True, text=True,
                     timeout=timeout, encoding="utf-8",

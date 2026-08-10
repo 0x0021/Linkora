@@ -88,7 +88,7 @@ class TestChatMessageList:
         }
         with patch.object(adapter, "chat_message_list_group") as m_group:
             m_group.return_value = []
-            r = adapter.chat_message_list(
+            adapter.chat_message_list(
                 group="g1", time_str="2026-07-11 00:00:00", cached_result=cached
             )
         # cached_result 不再被消费，走逐群接口

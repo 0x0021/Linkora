@@ -282,48 +282,35 @@ class TestBuildGroupListAllCache:
         assert p._build_group_list_all_cache([self._group("blocked")]) is None
 
     def test_prefetches_once_for_groups(self, poller_factory):
+        """_build_group_list_all_cache 已废弃，恒返回 None。"""
         dws = MagicMock()
-        dws.chat_message_list_all.return_value = {"conversationMessagesList": []}
         p, _ = poller_factory(dws)
         result = p._build_group_list_all_cache([self._group("g1"), self._group("g2")])
-        assert result == {"conversationMessagesList": []}
-        assert dws.chat_message_list_all.call_count == 1  # N 个群只扫一次
+        assert result is None  # 已废弃，不再调用 dws
+        dws.chat_message_list_all.assert_not_called()
 
     def test_uses_earliest_last_poll_as_window_start(self, poller_factory):
-        """并集窗起点必须取最早的 last_poll，否则落后的群会漏消息。"""
+        """_build_group_list_all_cache 已废弃，不依赖 last_poll 时间窗。"""
         dws = MagicMock()
         p, _ = poller_factory(dws)
-        now = datetime.now()
-        p._last_poll_time = {
-            "g1": now - timedelta(hours=1),
-            "g2": now - timedelta(hours=5),  # 最早
-        }
         p._build_group_list_all_cache([self._group("g1"), self._group("g2")])
-        start_ts = dws.chat_message_list_all.call_args.args[0]
-        assert start_ts == (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S")
+        dws.chat_message_list_all.assert_not_called()
 
     def test_falls_back_to_db_last_message_time(self, poller_factory):
-        """内存无 last_poll 时应回退 DB 记录，而不是无脑用 24 小时前。"""
+        """_build_group_list_all_cache 已废弃，不走 DB 回退路径。"""
         dws = MagicMock()
         p, store = poller_factory(dws)
-        db_ts = (datetime.now() - timedelta(hours=3)).replace(microsecond=0)
-        store._conversation_repo.upsert_conversation("g1", "群A", "group")
-        conn = store._conversation_repo._cc("")
-        conn.execute("UPDATE conversations SET last_message_time = ? WHERE chat_id = ?",
-                     (db_ts.isoformat(), "g1"))
-        conn.commit()
-        p._last_poll_time = {}
         p._build_group_list_all_cache([self._group("g1")])
-        assert dws.chat_message_list_all.call_args.args[0] == db_ts.strftime("%Y-%m-%d %H:%M:%S")
+        dws.chat_message_list_all.assert_not_called()
 
     def test_malformed_db_timestamp_falls_back_to_default(self, poller_factory):
+        """_build_group_list_all_cache 已废弃，不处理 malformed timestamp。"""
         dws = MagicMock()
         p, store = poller_factory(dws)
         store._conversation_repo.get_conversation = MagicMock(
             return_value={"last_message_time": "不是时间"})
-        p._last_poll_time = {}
         p._build_group_list_all_cache([self._group("g1")])
-        dws.chat_message_list_all.assert_called_once()  # 用默认 24h 窗，不炸
+        dws.chat_message_list_all.assert_not_called()
 
     def test_prefetch_failure_returns_none_for_fallback(self, poller_factory):
         """预取失败返回 None，主循环回退逐群扫描——行为不变，不能抛。"""
@@ -333,10 +320,11 @@ class TestBuildGroupListAllCache:
         assert p._build_group_list_all_cache([self._group("g1")]) is None
 
     def test_passes_configured_message_limit(self, poller_factory):
+        """_build_group_list_all_cache 已废弃，不传 limit 参数。"""
         dws = MagicMock()
         p, _ = poller_factory(dws)
         p._build_group_list_all_cache([self._group("g1")])
-        assert dws.chat_message_list_all.call_args.kwargs["limit"] == 20
+        dws.chat_message_list_all.assert_not_called()
 
 
 # ── poll_once 主循环 ──

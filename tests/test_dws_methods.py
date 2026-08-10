@@ -66,13 +66,9 @@ class TestChatMessageList:
             adapter.chat_message_list_direct()
 
     def test_chat_message_list(self, adapter):
-        # 群消息现改走 list-all（用户接口）按 openConversationId 过滤，不再直调 v2 bot 接口
-        with patch.object(adapter, "chat_message_list_all") as m:
-            m.return_value = {
-                "conversationMessagesList": [
-                    {"openConversationId": "g1", "messages": [{"msgId": "m99"}]}
-                ]
-            }
+        # 群消息走用户级逐群接口 chat_message_list_group
+        with patch.object(adapter, "chat_message_list_group") as m:
+            m.return_value = [{"msgId": "m99"}]
             r = adapter.chat_message_list(group="g1", time_str="2026-07-11 00:00:00")
         assert r[0]["msgId"] == "m99"
 
@@ -82,32 +78,35 @@ class TestChatMessageList:
             r = adapter.chat_message_list(group="g1", time_str="now")
         assert r == []
 
-    def test_chat_message_list_cached_result_fast_path(self, adapter):
-        """性能优化：cached_result 命中时直接内存过滤，不应再调 chat_message_list_all 全扫。"""
+    def test_chat_message_list_cached_result_ignored(self, adapter):
+        """cached_result 参数保留为兼容接口，当前实现不读取它（已废弃）。"""
         cached = {
             "conversationMessagesList": [
                 {"openConversationId": "g1", "messages": [{"msgId": "m1"}, {"msgId": "m2"}]},
                 {"openConversationId": "g2", "messages": [{"msgId": "m3"}]},
             ]
         }
-        with patch.object(adapter, "chat_message_list_all") as m_all:
+        with patch.object(adapter, "chat_message_list_group") as m_group:
+            m_group.return_value = []
             r = adapter.chat_message_list(
                 group="g1", time_str="2026-07-11 00:00:00", cached_result=cached
             )
-        assert r == [{"msgId": "m1"}, {"msgId": "m2"}]
-        assert not m_all.called, "cached_result 命中时应跳过 chat_message_list_all 全扫"
+        # cached_result 不再被消费，走逐群接口
+        assert m_group.called
+        m_group.assert_called_once_with("g1", "2026-07-11 00:00:00", 50, None)
 
-    def test_chat_message_list_cached_result_missing_group(self, adapter):
-        """群不在缓存中时返回空列表，且不触发全扫。"""
+    def test_chat_message_list_cached_result_missing_group_ignored(self, adapter):
+        """群不在缓存中时同样忽略 cached_result，直接调逐群接口返回空列表。"""
         cached = {"conversationMessagesList": [
             {"openConversationId": "g_other", "messages": [{"msgId": "x"}]}
         ]}
-        with patch.object(adapter, "chat_message_list_all") as m_all:
+        with patch.object(adapter, "chat_message_list_group") as m_group:
+            m_group.return_value = []
             r = adapter.chat_message_list(
                 group="g_missing", time_str="2026-07-11 00:00:00", cached_result=cached
             )
         assert r == []
-        assert not m_all.called
+        assert m_group.called
 
     def test_list_all_single_page(self, adapter):
         """list_all 单页返回，无 hasMore 时应直接返回。"""

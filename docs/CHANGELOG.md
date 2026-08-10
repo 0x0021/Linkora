@@ -53,6 +53,16 @@
 - `test(llm)`: 新增 `tests/test_context_topic_boundary.py`（时间标注 + 断层提示 + 顺序归一化回归）；
   修正 `tests/test_context_isolation.py` 历史桩的时间戳与 `sender：` 前缀断言，使其与当前暴露上下文行为一致。
 
+### 存储 / 健壮性
+- `fix(storage)`: **存量分库列迁移自愈**——`init_conv_schema`（per-conversation 分库）原只对**新建**分库用
+  `CREATE TABLE IF NOT EXISTS` 带全列，已存在的分库表不会自动 ALTER 补列。
+  线上复现：新增 `is_withdrawn` 列后，Web 查询存量分库报 `no such column: m.is_withdrawn` 致 `/api/dashboard/stream-data` 500
+  （Web 进程先于 worker 重启，未触发 worker 侧的 `init_schema` 迁移）。
+  改为在 `init_conv_schema` 末尾加 `_ensure_column` 兜底（与 `init_schema` 对齐），**每次连分库自动补缺失列**；
+  并给 Web 启动加 `lifespan` 钩子主动遍历 `conversations/` 下所有存量分库一并迁移，不等首次查询触发。
+- `fix(storage)`: `_ensure_column` 不再依赖 `row_factory=sqlite3.Row`，改用 `PRAGMA table_info` 的 `row[1]`（列名），
+  避免裸连接（如 `init_conv_schema` 真实入参）下 `tuple indices` 崩溃，提升迁移健壮性。
+
 ---
 
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）

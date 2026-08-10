@@ -114,11 +114,60 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 
 
-app = FastAPI(title="灵桥 (Linkora) 管理后台", version="2.0")
+def _migrate_schemas_on_startup() -> None:
+    """Web 启动即补齐所有存量 DB 的列，避免「加列后 Web 先于 worker 重启 → 查询 500」。
+
+    根因（2026-08-10）：``init_conv_schema`` 原只对**新建**分库用
+    ``CREATE TABLE IF NOT EXISTS`` 带全列；已存在的分库表不会自动 ALTER 补列，
+    导致 Web 查询存量分库报 ``no such column: m.is_withdrawn``。
+
+    修复分两层：
+    1. ``init_conv_schema`` 末尾已加 ``_ensure_column`` 兜底（每次连分库自动自愈）；
+    2. 此处主动遍历 ``conversations/`` 下所有存量分库，启动时一并迁移，
+       不等首次查询触发（主库由 ``get_store().init_db()`` 在首次请求时自愈）。
+    """
+    try:
+        import sqlite3
+
+        from src.memory.schema import init_conv_schema
+
+        conv_dir = os.path.join(get_data_dir(), "conversations")
+        if not os.path.isdir(conv_dir):
+            return
+        for name in os.listdir(conv_dir):
+            if not name.endswith(".db"):
+                continue
+            path = os.path.join(conv_dir, name)
+            try:
+                conn = sqlite3.connect(path)
+                conn.row_factory = sqlite3.Row
+                init_conv_schema(conn, path)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[Web 启动迁移] 分库迁移失败，将在查询时自愈: %s (%s)", path, e)
+            finally:
+                try:
+                    conn.close()
+                except Exception:  # noqa: BLE001
+                    pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[Web 启动迁移] 遍历分库失败（非致命，查询时自愈）: %s", e)
+
+
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    _migrate_schemas_on_startup()
+    yield
+
 
 # 全链路 gzip 压缩：HTML / JSON API / 静态 bundle 一并压缩（首屏文本体积约降 75–86%）。
 # minimum_size=1024 跳过极小响应（如 304/空体），避免无谓的压缩开销。
+app = FastAPI(title="灵桥 (Linkora) 管理后台", version="2.0", lifespan=_lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
 
 
 # F29：每个 Web 请求分配独立 request_id 并贯穿日志（Web→Runtime 链路可见）；

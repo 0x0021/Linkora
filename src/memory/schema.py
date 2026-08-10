@@ -23,7 +23,9 @@ def _ensure_column(cursor: sqlite3.Cursor, table: str, column: str, col_def: str
     if not cursor.fetchone():
         return
     cursor.execute(f"PRAGMA table_info({table})")
-    existing = {row["name"] for row in cursor.fetchall()}
+    # 用 row[1]（PRAGMA 第二列即列名）而非 row["name"]，避免依赖 row_factory=sqlite3.Row
+    # （生产路径 sqlite_store_conn 设了 Row，但 init_conv_schema 直接接裸连接时不应强依赖）。
+    existing = {row[1] for row in cursor.fetchall()}
     if column not in existing:
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
 
@@ -607,5 +609,21 @@ def init_conv_schema(conn: sqlite3.Connection, db_path: str) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_blocked_source ON blocked_conversations(source);
     """)
+    conn.commit()
+    # ── 列迁移：兼容「建库早于本列新增」的存量分库 ─────────────────────
+    # 上面的 CREATE TABLE IF NOT EXISTS 只对新建分库生效；已存在的分库表
+    # 不会自动 ALTER 补列，会导致 Web 查询报 no such column（2026-08-10 复现：
+    # is_withdrawn 加在 CREATE 里但存量分库缺列 → /api/dashboard/stream-data 500）。
+    # 这里与 init_schema 对齐，对存量分库做 _ensure_column 兜底。
+    _ensure_column(cur, "messages", "image_path", "TEXT DEFAULT ''")
+    _ensure_column(cur, "messages", "is_bot", "INTEGER DEFAULT 0")
+    _ensure_column(cur, "messages", "is_archived", "INTEGER DEFAULT 0")
+    _ensure_column(cur, "messages", "skip_reason", "TEXT")
+    _ensure_column(cur, "messages", "is_withdrawn", "INTEGER DEFAULT 0")
+    _ensure_column(cur, "conversations", "peer_user_id", "TEXT")
+    _ensure_column(cur, "conversations", "peer_open_dingtalk_id", "TEXT")
+    _ensure_column(cur, "conversations", "last_reply_time", "TEXT")
+    _ensure_column(cur, "conversations", "last_replied_msg_id", "TEXT")
+    _ensure_column(cur, "conversations", "last_summary_at", "TEXT")
     conn.commit()
     logger.debug("会话库状态正常：%s", db_path)

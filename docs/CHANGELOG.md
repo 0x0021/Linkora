@@ -63,6 +63,11 @@
 - `fix(storage)`: `_ensure_column` 不再依赖 `row_factory=sqlite3.Row`，改用 `PRAGMA table_info` 的 `row[1]`（列名），
   避免裸连接（如 `init_conv_schema` 真实入参）下 `tuple indices` 崩溃，提升迁移健壮性。
 
+### 消息落库 / poller
+- `fix(poller)`: **list-all 路径漏存本人发出的消息（「徐冰洁等今日消息缺失」真因）**——`_fetch_messages_via_list_all` 对本人消息原直接 `continue` 丢弃，导致「我主动发给别人的消息」永远不进聊天记录（尤其对方尚未回复的新会话，如新同事入职首条消息：list-all 能拉到该会话但消息被丢弃 → 会话空有壳无消息）。改为对齐 per-conversation 路径，统一走 `_store_self_message_if_new` 落库（保留上下文、不触发 AI 回复、不进 `new_messages`）。新增回归测试 `tests/test_poller_core_discovery.py::TestFetchViaListAllStoresSelfMessage`。
+- `fix(poller)`: **修复上一轮编辑引入的缩进事故**——上一轮把 `msg = self._raw_to_message(...)` 与本人消息 `if` 块从 raw 循环体内（indent 16）误缩进到循环体外（indent 12），且把非本人消息处理链嵌进本人 `if` 块，导致 list-all **完全不处理任何来消息**（非本人分支不可达）。已把整段还原到循环体内正确缩进（与 `git HEAD` 原始结构一致），并保留上述本人消息落库修复。
+- `fix(test)`: 修正 `tests/test_poller_core_history.py` 撤回测试——生产已改为 `mark_message_withdrawn`（软标记）而非 `delete_message`（硬删），旧断言 `delete_message` 已过时，改为断言 `mark_message_withdrawn`，与实际行为一致。
+
 ---
 
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）

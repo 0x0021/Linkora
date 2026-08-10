@@ -297,9 +297,20 @@ class DiscoveryMixin(PollerMixinBase):
 
                 msg = self._raw_to_message(raw, conv_id, chat_type, title)
 
-                if msg.sender_id and self._is_self_sender(msg.sender_id):
-                    logger.debug("[轮询器] list-all 强制过滤：丢弃自己发的消息（%s，类型=%s）：%s",
-                                msg.sender_name, msg.msg_type, (msg.content or "")[:30])
+                # 【修复】自己发的消息（含手动发出的，不限于 bot 回复）也要落库，
+                # 作为对话上下文保留，但不触发 AI 回复、不进入 new_messages。
+                # 原先此处直接 continue 丢弃，导致「我主动发给别人的消息」永远不进记录
+                # （尤其对方尚未回复的新会话，如新同事入职首条消息，list-all 全扫能拉到
+                # 该会话但消息被丢弃 → 会话空有壳无消息）。对齐 per-conversation 路径
+                # （_poll_one_conversation 已用统一的 _store_self_message_if_new 正确落库）。
+                if self._is_self_message(msg):
+                    self._store_self_message_if_new(msg)
+                    if msg.timestamp and (conv_id not in conv_latest_time or msg.timestamp > conv_latest_time[conv_id]):
+                        conv_latest_time[conv_id] = msg.timestamp
+                    logger.debug("[轮询器] list-all 记录自己发的消息（%s，%s）：%s",
+                                msg.sender_name,
+                                "AI代发" if getattr(msg, "is_bot", False) else "真人",
+                                (msg.content or "")[:30])
                     continue
 
                 # 【无条件年龄门槛】超过 history_days 的远古消息不触发 AI 回复。
@@ -343,22 +354,6 @@ class DiscoveryMixin(PollerMixinBase):
                 if msg.timestamp and msg.timestamp < start_time:
                     logger.debug("[轮询器] list-all 跳过时间窗口外的老消息: %s (%s)",
                                  msg.msg_id[:20], msg.timestamp)
-                    continue
-                if self._is_self_message(msg):
-                    is_bot_msg = self._check_if_bot_message(msg)
-                    msg.is_bot = is_bot_msg
-                    msg.role = "assistant" if is_bot_msg else "user"
-                    # 【双写去重】main.py 已存过一份，跳过重复
-                    if not self._is_duplicate_self_message(msg):
-                        try:
-                            self.store._message_repo.save_message(msg, msg.role)
-                        except Exception as e:
-                            logger.debug("[轮询器] list-all 保存消息失败: %s", e)
-                    else:
-                        logger.debug("[轮询器] list-all：跳过双写（%s，内容已存在）：%s",
-                                    msg.sender_name, msg.content[:30])
-                    logger.debug("[轮询器] list-all：跳过自己发的消息（%s，%s）",
-                                msg.sender_name, "AI代发" if is_bot_msg else "真人")
                     continue
                 # 图片消息：未启用 OCR 时按旧逻辑跳过
                 if msg.msg_type == "image" and not self.config.image_ocr_enabled:

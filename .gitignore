@@ -115,3 +115,11 @@ Desktop.ini
 
 # Agent 本地记录（非项目产物）
 .agnes/
+
+# 用户上传/截图（临时文件，不入库）
+upload_*.jpg
+upload_*.png
+upload_*.jpeg
+upload_*.gif
+upload_*.webp
+tmp_images/

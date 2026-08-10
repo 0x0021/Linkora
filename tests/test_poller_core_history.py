@@ -62,34 +62,34 @@ class TestHandleEditMessage:
 class TestHandleRecallMessage:
     def test_recall_with_recalled_msg_id(self):
         fh = FakeHistory()
-        fh.store._message_repo.delete_message.return_value = True
+        fh.store._message_repo.mark_message_withdrawn.return_value = True
         msg = _mk("recall_1", raw={"recalledMsgId": "orig_recall_1"})
         fh._handle_recall_message(msg)
-        fh.store._message_repo.delete_message.assert_called_with("orig_recall_1")
+        fh.store._message_repo.mark_message_withdrawn.assert_called_with("orig_recall_1")
 
     def test_recall_fallback_to_target_msg_id(self):
         fh = FakeHistory()
-        fh.store._message_repo.delete_message.return_value = True
+        fh.store._message_repo.mark_message_withdrawn.return_value = True
         msg = _mk("recall_2", raw={"targetMsgId": "targ_2"})
         fh._handle_recall_message(msg)
-        fh.store._message_repo.delete_message.assert_called_with("targ_2")
+        fh.store._message_repo.mark_message_withdrawn.assert_called_with("targ_2")
 
     def test_recall_fallback_to_msg_id(self):
         fh = FakeHistory()
-        fh.store._message_repo.delete_message.return_value = True
+        fh.store._message_repo.mark_message_withdrawn.return_value = True
         msg = _mk("recall_3")
         fh._handle_recall_message(msg)
-        fh.store._message_repo.delete_message.assert_called_with("recall_3")
+        fh.store._message_repo.mark_message_withdrawn.assert_called_with("recall_3")
 
-    def test_recall_delete_failed(self):
+    def test_recall_mark_failed(self):
         fh = FakeHistory()
-        fh.store._message_repo.delete_message.return_value = False
+        fh.store._message_repo.mark_message_withdrawn.return_value = False
         _mk("recall_4", raw={"recalledMsgId": "r4"})
-        # 不抛异常即可
+        # 未找到消息：不抛异常即可
 
     def test_recall_marks_raw_id_processed(self):
         fh = FakeHistory()
-        fh.store._message_repo.delete_message.return_value = True
+        fh.store._message_repo.mark_message_withdrawn.return_value = True
         fh.store._message_repo.mark_message_processed.return_value = True
         msg = _mk("recall_5", chat_id="chat_1",
                   raw={"recalledMsgId": "r5", "openMessageId": "open_r5"})

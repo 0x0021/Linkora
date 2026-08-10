@@ -282,13 +282,13 @@ llm:
     low_confidence_handoff_enabled: true           # 低置信度转人工/草稿（RAG 未命中时推主人审签）
     low_confidence_threshold: 0.35                 # RAG 最佳相似度低于此值视为低置信（默认放宽以减少草稿审签打扰）
     # Phase 2 RAG 引文溯源+置信度页脚（默认关，灰度开；开启后回复末尾附「依据：《标题》（相关度88%）」）
-    citation_enabled: false                        # 引文页脚总开关（默认关）
+    citation_enabled: false                        # 引文页脚总开关（默认关；生产环境 config.yaml 已置 true 开启）
     citation_in_group: false                       # 群聊是否也附引文（默认关，更克制）
     citation_high_threshold: 0.75                  # ≥此值标「依据」，[low,high) 标「参考」
     citation_low_threshold: 0.5                    # 相关度低于此值不追加页脚
     citation_max_items: 2                          # 页脚最多列几条引文
     # Phase 2 P2-6 BGE 本地离线重排（默认关；开启需本地已缓存 bge-reranker-base 权重）
-    rerank_enabled: false                          # 重排总开关（默认关）
+    rerank_enabled: false                          # 重排总开关（默认关；opt-in 高级特性：开启需本地 BGE 权重并引入推理开销，属有意默认关）
     rerank_model: BAAI/bge-reranker-base           # 重排模型
     rerank_offline: false                          # 纯离线加载（local_files_only）
     rerank_top_k: 10                               # 参与重排的候选窗口（0=全部）

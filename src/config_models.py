@@ -433,7 +433,7 @@ class LlmAdvancedConfig(BaseModel):
     # ---------- RAG 引文溯源 + 置信度产品化（Phase 2） ----------
     # 在真实回复末尾可选追加「依据：《标题》（相关度88%）」页脚，让回答可溯源。
     # 默认关闭（灰度）；开启后仅在 RAG 命中且相关度达阈值时追加，低置信不追加。
-    citation_enabled: bool = False        # 引文页脚总开关，默认关
+    citation_enabled: bool = False        # 引文页脚总开关，默认关（生产 config.yaml 已置 true 开启）
     citation_in_group: bool = False       # 群聊是否也附引文，默认关（更克制）
     citation_high_threshold: float = 0.75  # ≥此值标「依据」，[low,high) 标「参考」
     citation_low_threshold: float = 0.50  # 低于此值不追加页脚
@@ -448,7 +448,7 @@ class LlmAdvancedConfig(BaseModel):
     # ---------- BGE 本地离线重排（Phase 2 · P2-6，默认关） ----------
     # 对 RAG 召回候选做 cross-encoder 重排，仅调整顺序（reorder-only，
     # 不改原相似度 score），提升注入质量；默认关，开启需本地有模型权重。
-    rerank_enabled: bool = False          # 重排总开关，默认关
+    rerank_enabled: bool = False          # 重排总开关，默认关（opt-in 高级特性：开启需 BGE 权重、引入推理开销，有意默认关）
     rerank_model: str = "BAAI/bge-reranker-base"  # 重排模型
     rerank_offline: bool = False          # 纯离线加载（local_files_only）
     rerank_top_k: int = 10                # 参与重排的候选窗口（None/0=全部）

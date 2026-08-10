@@ -92,6 +92,8 @@
 - `fix(lint)`: `poller_strategy.py` 的 `from src.utils.security import mask_oid` 上移到顶部 import 块，消除唯一 E402。
 - `chore(lint)`: 移除 `pyproject.toml` 中 `poller_strategy.py` / `poller_core_discovery.py` 的 C901/E402 per-file-ignores（豁免已无违规依据）；rumm 全绿、pyright 仍 95 = 基线；poller/discovery 相关 157 测试全过。
 
+- `docs(chore)`: **特性标志状态审计，消除沉默债与模板漂移**——经核实 `rerank_enabled` 为有意默认关（opt-in 高级特性，开启需本地 BGE 权重 + 引入推理开销），`citation_enabled`/`combo_enabled` 在生产 `config.yaml` 已置 `true`（已 GA，非长期关着）。在 `config.yaml.example` 与 `src/config_models.py` 注释中明示上述状态，纠正"三特性默认关无人管"的误判；不改任何默认值与 live config。
+
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
 
 > 线上现象：用户根本没登录钉钉，日志却打「[用户接管] XXX 已手动回复 …，跳过 AI 回复」，AI 静默漏回消息。

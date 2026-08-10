@@ -675,6 +675,23 @@ class PollerStrategyMixin(PollerMixinBase):
                                  int(age_minutes), msg.sender_name, msg.timestamp)
                     continue
 
+            # 【无条件年龄门槛】超过 history_days 的远古消息不触发 AI 回复。
+            # 即使去重表被清空（重启/维护）导致 DWS 重新拉到老消息，
+            # 也不应把一个月前的「好的」当作当前对话处理（2026-08 线上事故）。
+            # 首次运行的 first_run_ignore 已在上游处理过；本检查覆盖所有后续轮次。
+            history_days = self.config.history_days
+            if history_days > 0 and msg.timestamp:
+                age_days = (datetime.now() - msg.timestamp).total_seconds() / 86400
+                if age_days > history_days:
+                    logger.info(
+                        "[轮询器] 跳过 %.1f 天前的远古消息（>%d 天阈值，"
+                        "来自 %s，时间=%s，内容=%s）",
+                        age_days, history_days,
+                        msg.sender_name, msg.timestamp,
+                        (msg.content or "")[:40],
+                    )
+                    continue
+
             if self._is_self_message(msg):
                 self._store_self_message_if_new(msg)
                 is_bot = msg.is_bot if hasattr(msg, 'is_bot') else False

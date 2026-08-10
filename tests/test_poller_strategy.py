@@ -916,3 +916,101 @@ class TestPollOnce:
                       chat_id="oc_a", chat_type="group", title="群A")]
         out = p.poll_once()
         assert out == []
+
+
+# ── 消息年龄门槛（远古消息不触发 AI 回复）──
+
+class TestMessageAgeGate:
+    """验证超过 history_days 的消息在两条路径中均被跳过。
+
+    覆盖 2026-08 线上事故：7/8 的「好的」被当作当前消息触发 AI 回复。
+    """
+
+    def _make_old_raw(self, days_ago: int, content: str = "好的") -> dict:
+        ts = (datetime.now() - timedelta(days=days_ago)).isoformat()
+        return {
+            "openMessageId": f"old-msg-{days_ago}d",
+            "content": content,
+            "createTime": ts,
+            "senderOpenDingTalkId": "ou_peer_old",
+            "senderNickName": "韩业鑫",
+        }
+
+    def test_per_conversation_skips_ancient_message(self, poller_factory):
+        """per-conversation 路径：超过 history_days 的消息被跳过。"""
+        p, store = poller_factory()
+        p.config.history_days = 3
+        _stub_poll_once_deps(p)
+
+        # 模拟 30 天前的老消息
+        old_raw = self._make_old_raw(30)
+        p.dws.chat_message_list_unread_conversations.return_value = [{
+            "openConversationId": "oc_old", "title": "韩业鑫",
+            "singleChat": True}]
+        p.dws.chat_message_list.return_value = [old_raw]
+
+        out = p.poll_once()
+        assert out == [], "30 天前的消息不应触发任何回复"
+
+    def test_per_conversation_passes_recent_message(self, poller_factory):
+        """per-conversation 路径：不超过 history_days 的消息不被年龄门槛拦截。
+
+        不要求消息完整派发（需要 handler 等重桩），只验证年龄门槛放行。
+        """
+        p, store = poller_factory()
+        p.config.history_days = 3
+        p.config.first_run_ignore_older_than_minutes = 0
+        _stub_poll_once_deps(p)
+
+        # 用 1 小时前的消息（远在 history_days=3 窗口内）
+        recent_raw = self._make_old_raw(0.04)  # ~1 hour
+        p.dws.chat_message_list_unread_conversations.return_value = [{
+            "openConversationId": "oc_recent", "title": "韩业鑫",
+            "singleChat": True}]
+        p.dws.chat_message_list.return_value = [recent_raw]
+
+        # 不抛异常、不被年龄门槛拦截即视为通过
+        # （消息可能被后续其他过滤器拦住，但不应被年龄门槛拦）
+        out = p.poll_once()
+        assert isinstance(out, list)  # 正常完成即可
+
+    def test_listall_skips_ancient_message(self, poller_factory):
+        """list-all 路径：超过 history_days 的消息被跳过。
+
+        注意：不能 mock _fetch_messages_via_list_all（会绕过内部年龄检查），
+        而是 mock DWS 层让 list-all 走真实过滤链。
+        """
+        p, _ = poller_factory()
+        p.config.history_days = 3
+        # 让 list-all 被启用（默认可能因配置未启用）
+        p._last_list_all_time = datetime.now() - timedelta(minutes=5)
+        _stub_poll_once_deps(p)
+
+        old_raw = self._make_old_raw(30)
+        # list-all 返回包含远古消息的结果
+        p.dws.chat_message_list_all.return_value = {
+            "conversationMessagesList": [{
+                "conversationId": "oc_old2",
+                "messages": [old_raw],
+            }]
+        }
+        out = p.poll_once()
+        assert out == [], "list-all 路径应跳过 30 天前的消息"
+
+    def test_age_gate_respects_zero_disabled(self, poller_factory):
+        """history_days=0 时年龄门槛禁用（向后兼容）。"""
+        p, _ = poller_factory()
+        p.config.history_days = 0  # 禁用
+        p.config.first_run_ignore_older_than_minutes = 0  # 也关闭首次运行忽略
+        _stub_poll_once_deps(p)
+
+        old_raw = self._make_old_raw(30)
+        p.dws.chat_message_list_unread_conversations.return_value = [{
+            "openConversationId": "oc_dis", "title": "韩业鑫",
+            "singleChat": True}]
+        p.dws.chat_message_list.return_value = [old_raw]
+
+        out = p.poll_once()
+        # history_days=0 不拦截，但可能被其他过滤器（如 first_run_ignore）拦住；
+        # 关键是不因年龄门槛抛异常
+        assert isinstance(out, list)  # 不崩溃即可

@@ -10,7 +10,8 @@
    旧代码 `for h in history` 直接顺序遍历，导致上一轮的 assistant 回复被插到
    用户提问「之前」，多轮结构非法（assistant 先于 user），弱模型锚点错乱、
    对含糊追问「再试试」误判并触发 get_weather 兜底工具。
-   → 修复：_build_user_message 用 `for h in reversed(history)` 还原为时间正序。
+   → 修复：_build_user_message 先把 history 归一成时间正序（DESC→ASC），再按正序织入，
+     同时给每条历史 user 消息加 `[时间] 发言人：` 前缀，便于模型区分「谁何时说的」。
 2) 重复处理：已答复消息可能因 dedup 标记与「已回复」判定两套机制更新时机不一致
    而被重新拉取重跑；msg_id 为空时 _has_replied_after 直接放行导致空 msg_id
    漏防重复回复。
@@ -22,7 +23,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import MethodType, SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -48,13 +49,20 @@ def _make_agent():
     return agent
 
 
+_ts_seq = {"n": 0}
+
+
 def _hist(role: str, content: str, sender_name: str = "张三", is_bot: bool = False) -> Message:
     """构造一条历史消息。注意：get_conversation_history 返回 DESC（最新在前），
-    测试里按「真实返回顺序」构造（最新在列表头部）。"""
+    且时间戳与列表顺序一致（头部最新、尾部最旧）。这里用递减计数器模拟——
+    每多构造一条时间戳更早，使列表头部时间戳最大，忠实复现 DESC 契约，
+    供 _normalize_history_asc 正确翻正序（否则构造顺序的递增时间戳会被误判为 ASC）。"""
+    _ts_seq["n"] += 1
+    ts = datetime(2026, 8, 10, 12, 0, 0) - timedelta(seconds=_ts_seq["n"])
     return Message(
         msg_id="h", chat_id="c1", chat_type="single", chat_name="单聊",
         sender_id="u1", sender_name=sender_name, content=content,
-        msg_type="text", timestamp=datetime.now(), role=role, is_bot=is_bot,
+        msg_type="text", timestamp=ts, role=role, is_bot=is_bot,
     )
 
 
@@ -92,11 +100,11 @@ def test_history_in_chronological_order():
 
     # 角色必须合法交替且以 user 收尾
     assert roles == ["user", "assistant", "user"], f"角色序列错误: {roles}"
-    # 最旧的 user 提问必须排在最前，对应 assistant 紧随其后
-    assert contents[0] == "珞石股价走势及最新价格", "最早的股价提问必须排第一"
+    # 最旧的 user 提问必须排在最前（历史 user 消息带 [时间] 发言人： 前缀，用 endswith 容错）
+    assert contents[0].endswith("珞石股价走势及最新价格"), "最早的股价提问必须排第一"
     assert contents[1].startswith("珞石"), "对应的股价回复必须紧随其后"
-    # 当前 incoming 必须是最后一条
-    assert contents[-1] == "再试试", "当前用户消息必须排在最后"
+    # 当前 incoming 必须是最后一条（incoming 带 发言人： 前缀，用 endswith 容错）
+    assert contents[-1].endswith("再试试"), "当前用户消息必须排在最后"
 
 
 def test_three_turn_history_keeps_user_before_assistant():
@@ -133,8 +141,8 @@ def test_reversed_not_double_reversing():
     ]
     messages = agent._build_user_message(_incoming(), history)
     contents = [m["content"] for m in _non_system(messages)]
-    assert contents[0] == "第一条问题", "最旧的历史 user 必须排在第一"
-    assert contents[-1] == "再试试", "当前 incoming 必须最后"
+    assert contents[0].endswith("第一条问题"), "最旧的历史 user 必须排在第一"
+    assert contents[-1].endswith("再试试"), "当前 incoming 必须最后"
 
 
 def test_leading_assistant_trimmed_to_valid_alternation():
@@ -195,8 +203,8 @@ def test_own_auto_reply_excluded_from_context():
     messages = agent._build_user_message(_incoming(), history)
     contents = [m["content"] for m in _non_system(messages)]
     assert not any("[自动回复]" in c for c in contents), "自动回复不应进入上下文"
-    assert contents[0] == "在吗"
-    assert contents[-1] == "再试试"
+    assert contents[0].endswith("在吗")
+    assert contents[-1].endswith("再试试")
 
 
 # ---------------------------------------------------------------------------

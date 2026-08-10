@@ -34,6 +34,16 @@
   超过 `history_days`（默认 3 天）的远古消息直接跳过、不触发 AI 回复。
   修复 7/8 的「好的」在 8/10 仍被当作当前消息处理导致 AI 瞎回复的线上事故。
   此前仅冷启动首次轮询有 `first_run_ignore` 保护，后续轮询无任何年龄门槛。
+- `feat(llm)`: 话题边界软提示——新增 `src/llm/timeline.py`（时间标注/断层提示纯函数）。
+  历史消息带 `[今天 09:12] 发言人：` 时间标记；相邻两条间隔超 30 分钟（可配）时在两段的上下文间
+  插入自然语言分隔说明；当前消息距最后一条历史过久再提醒「先判断是不是同一件事、别再索要上文信息」。
+  话题是否同一件事交由 LLM 自判，**不写话题分类正则**（延续「暴露上下文而非硬拦截」原则）。
+- `fix(llm)`: 修复历史顺序根因——`get_conversation_history` 返回 DESC（新→旧），但
+  `_apply_history_tiering` / 话题断层检测 / `_sanitize_rag_query` 均假设 ASC，导致 tiering 保留最老的
+  `max_recent` 条、丢弃最新，断层间隔被算成负值（提示永不触发），RAG 回溯取到最老消息。
+  在 `build_user_message` 入口按 DESC 契约把 history 归一成 ASC（DESC→`reversed`），下游逻辑统一基于正序。
+- `test(llm)`: 新增 `tests/test_context_topic_boundary.py`（时间标注 + 断层提示 + 顺序归一化回归）；
+  修正 `tests/test_context_isolation.py` 历史桩的时间戳与 `sender：` 前缀断言，使其与当前暴露上下文行为一致。
 
 ---
 

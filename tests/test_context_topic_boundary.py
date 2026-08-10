@@ -325,7 +325,7 @@ class TestHistoryOrdering:
             _Msg("小雅", "user", "旧", base),
         ]
         asc = _normalize_history_asc(desc)
-        ts = [getattr(m, "timestamp") for m in asc]
+        ts = [m.timestamp for m in asc]
         assert ts == sorted(ts), ts
 
     def test_normalize_tolerates_missing_timestamps(self):

@@ -80,6 +80,12 @@
 
 ---
 
+### 工程清理（P0）
+- `fix(lint)`: 修复 `tests/test_context_topic_boundary.py:328` 的 ruff B009（`getattr(m, "timestamp")` 改为 `m.timestamp`）；该测试文件此前未被 CI lint 路径覆盖，遗留 1 处告警现已清零，ruff 全绿。
+- `chore(config)`: `pyproject.toml` 的 `[tool.pyright]` 注释陈旧地写「基线 205 条」，更正为真实锁定值 **95**（与 `scripts/type_baseline.py::TYPE_ERROR_BASELINE` 一致）。CHANGELOG 中历史 94/95 为各时间点的真实记录，未改动。
+- `chore(lint)`: `runtime.py` 已完成 F1 拆分（现 35 行薄 re-export），移除其 C901 圈复杂度豁免；`runtime_*.py`（222–619 行真实逻辑模块）保留 C901/F405 豁免。同步更新 ruff 注释说明。
+- `chore`: 提交运维脚本 `scripts/merge_orphan_conv_dbs.py`（账号漂移孤儿分库合并，默认 dry-run）；删除 2026-08-06 配置事故残档 `config.yaml.damaged-20260806T093507`。
+
 ## 2026-08-09 — 生产缺陷修复（手动接管误判致漏回）
 
 > 线上现象：用户根本没登录钉钉，日志却打「[用户接管] XXX 已手动回复 …，跳过 AI 回复」，AI 静默漏回消息。

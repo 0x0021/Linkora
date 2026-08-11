@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-08-11 — 发布前夜收尾（依赖冲突收敛 / 测试断言同步 / lint 清理）
+
+- `fix(deps)`: **tokenizers 版本冲突收敛**——Dependabot 升级引入解析冲突，经两轮调整（先降 `0.23.0`，再对齐 pyproject 锁定值）统一回 **`0.22.2`**，并重建 `requirements.lock` / `uv.lock`（后一轮仅动约束与锁文件，不改功能）。
+- `fix(test)`: `tests/test_dws_methods.py` / `tests/test_poller_strategy.py` 过时 mock 断言同步当前代码（撤回软标记等行为变更后的断言收敛）。
+- `fix(lint)`: 清理 `test_dws_methods.py` 未使用变量，消除 CI annotation，ruff 保持全绿。
+
+## v0.3.0 (2026-08-11)
+
+> 距 v0.2.0（2026-08-07）以来的累计发布：JWT 认证与 RBAC、钉钉群消息/系统推送补全、会话上下文质量重构、还原度（fidelity）提升、前端性能优化（H1-H7）、安全加固与存储自愈、文档站商业级重设计。
+
+### 核心亮点
+- **安全加固（P0）**：JWT 签名密钥不再硬编码（`config.web.jwt_secret` 惰性解析 + 进程随机兜底，重启后旧令牌失效）；`verify_token` 由 `eval` 改 `json.loads`，消除代码执行风险；异常信息不再经 HTTP 外泄（CodeQL #56 及同类 4 处）；新增登录端点 + JWT Bearer + RBAC（admin/operator/viewer）+ IP 白名单（防 SSRF）。
+- **会话上下文质量重构**：历史消息 DESC→ASC 归一化（修复 tiering 保留最老消息、断层间隔算负值、RAG 回溯取最老消息）；发言人姓名全链路暴露、不同发言人绝不跨人合并；话题边界时间标注 + 断层提示（间隔超阈值提示「先判断是否同一件事」）；消息年龄门槛（超 `history_days` 的远古消息不触发 AI 回复）。修复「对话已闭环仍追问」「旧话题串味」「老消息误触发回复」三类线上事故。
+- **钉钉群消息/系统推送补全**：群聊与「工作通知」此前因 list-all 搜索权益限制长期拉不到（DB 实测 0 群 vs 实际 117 群）；改为逐群接口 `chat message list --group` + 群枚举缓存（10min TTL），并修复群列举分页 cursor 未转 str 崩溃。
+- **还原度（fidelity）提升**：低置信风格回退由「中性客服」→「有个性的人」；RAG 空结果注入风格保持指令；系统提示硬模板句软化；清洗管线误伤阈值 60%→75% + 短回复豁免；上下文/长度限制放宽（tiering 4→8、window 6→12、days 3→7、`temperature` 0.3→0.6）。
+- **存储自愈**：存量分库列迁移自愈（每次连接自动补列 + Web 启动 lifespan 遍历迁移），修复 `no such column` 500；撤回消息改软标记（`is_withdrawn`，Web 端显示「已撤回」）。
+- **前端性能优化（H1-H7）**：Chart.js 按需懒加载、FontAwesome 双字重子集、图片缩略图 WebP、仪表盘三路轮询合并为单通道 stream-data、记忆列表分页（offset/total）、事件循环阻塞/门控重复查库治理。
+- **文档站（Pages）商业级重设计**：品牌渐变落地页 + 设计系统；迁移自定义 Actions 部署工作流（消除 Node 20 弃用告警）。
+
+### 质量门禁
+- 全量回归 **3537 通过**（2 skipped / 2 xfailed）；pyright 类型基线 **95**（零新增）；ruff 全绿（C901/E402 过时豁免清除）；gitleaks 每次提交通过。
+
+### 升级注意
+- 新增可选配置项 `config.web.jwt_secret`：不配置时每次启动生成进程随机密钥（重启后旧令牌全部失效），建议固定为高熵值（`secrets.token_urlsafe(48)`）。
+- 上下文/长度参数默认值放宽：`history_tiering_recent` 4→8、`history_window` 6→12、`history_days` 3→7、`max_chars_daily_chat` 256→512、`max_chars_tech_issue` 512→1024、`temperature` 0.3→0.6（既有显式配置不受影响）。
+- 无破坏性变更（breaking change）。
+
+---
+
 ## 2026-08-10 — 安全与 CI 一致性修复
 
 ### 安全（P0）
@@ -103,22 +132,22 @@
 > 根因不在接管判定本身，而在**自身消息识别失败导致 AI 自己的回复被错标成「真人手动回复」**。
 
 
-## 2026-08-14 — A-F 任务完成 & P0/P1 缺陷修复
+### A-F 任务完成 & P0/P1 缺陷修复
 
-### 安全增强
+#### 安全增强
 - 新增 JWT 认证中间件 `web/auth_middleware.py`
 - 支持基于角色的访问控制 (RBAC: admin/operator/viewer)
 - 新增敏感数据脱敏工具 `src/utils/security.py` (mask_oid, mask_token, sanitize_log_message)
 - IP 白名单校验，防止 SSRF 攻击
 - 统一异常体系 `src/exceptions.py` (LinkoraError 层级)
 
-### API 增强
+#### API 增强
 - 新增 `/api/auth/login` 登录端点（支持 JSON Body 和 Basic Auth）
 - 新增 `/api/auth/me` 获取当前用户信息端点
 - 集成 JWT Bearer Token 到现有认证中间件
 - 将认证端点加入白名单，无需预认证即可访问
 
-### 稳定性修复
+#### 稳定性修复
 - SQLite 并发写入竞态修复：清理操作加 `_lock` 事务锁
 - faiss 索引内存泄漏修复：`phantom_rebuild_ratio` 从 0.3 降至 0.1
 - 防抖 Timer 竞态修复：shutdown 时检查 `_running` 标志
@@ -126,27 +155,27 @@
 - 摘要调度连续失败保护（3 次失败暂停本轮）
 - 去重查询异常分类处理（区分临时/持久错误）
 
-### 测试覆盖
+#### 测试覆盖
 - **fix(type-check)**: 为 request.state 动态属性添加 type: ignore 注释，修复 pyright 类型错误
 - 新增 tests/test_auth_integration.py (10 cases): 认证系统集成测试
 - 新增 6 个测试文件，67 个用例
 - 总测试通过数：212 passed, 2 skipped
 
-### 缺陷链路（根因）
+#### 缺陷链路（根因）
 
 1. AI 回复发送时以本地 UUID 作为 `msg_id` 入库（`is_bot=1, role=assistant`），而钉钉 list-all 抓回同一条消息用的是 DWS `openMessageId` —— 两个 ID 不同，`_check_if_bot_message` 第 1 步 msg_id 精确查询必然落空，只能走第 2 步内容兜底。
 2. 内容兜底用 SQL `content LIKE '<前 50 字>%'`。AI 回复**发出时含 `\n`**，钉钉**抓回时 `\n` 被转成空格** → `LIKE` 前缀失配 → 兜底返回 `False`。
 3. 该消息遂被当作「owner 手动发的真人消息」二次入库为 `is_bot=0, role=user`（`_is_duplicate_self_message` 同样用 `LIKE` 前缀，同样失配，未能拦住重复写入）。
 4. 这条伪真人记录的时间戳排在对方下一条消息之后 → `conversation_repo.has_user_message_from`（`is_bot=0` + owner sender_id + 时间窗）命中 → `_has_user_taken_over` 判定「真人已接管」→ 跳过 AI 回复。
 
-### 修复
+#### 修复
 
 - **fix(poller)**: `src/poller_core_dedup.py` 新增模块级 `_norm_ws()`（去前导 `#`/`##` 标题符 + `\s+`→单空格 + strip），`_check_if_bot_message` 与 `_is_duplicate_self_message` 的内容兜底不再用脆弱的 SQL `content LIKE '<前缀>%'`，改为**先按 ±120s 时间窗取候选、再在 Python 侧做归一化双向前缀比对**（`cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60])`）。同时兼容两类真实格式差异：`\n ↔ 空格`（发出 vs 抓回）与 `## 头部保留 vs 去除`（`extract_card_title` 存库 vs echo 回显）。
 - 说明：曾评估「发送时回写 DWS 真实 `openMessageId` 到 messages 表」以根治 msg_id 不一致，但 DWS 发送接口返回的是 `openTaskId`（发送任务 ID）而非消息的 `openMessageId`（见 `runtime_dispatch.py::_record_reply_success`），无法可靠关联，故本轮以归一化比对同时覆盖「误判自身消息」与「重复入库」两个放大点。
 - **fix(data)**: 修正历史被错标数据 —— `data/conversations/dingtalk__*.db` 中 23 条「存在 ±10 分钟内同内容 `is_bot=1, role=assistant` 孪生记录」的 `is_bot=0` 记录回正为 `is_bot=1`（先 DRY-RUN 命中 29 条，收紧规则后仅改 23 条安全项；无孪生记录的真人消息一律不动）。修正后复核原误判窗口，接管判定返回 `False`（已修复）。
 - **test(poller)**: `tests/test_poller.py::TestBotMessageDetectionMarkdownPrefix` 新增 2 例回归 —— `test_check_if_bot_message_whitespace_normalized` / `test_is_duplicate_self_message_whitespace_normalized`，用真实 SQLiteStore 种入带 `\n` 的 assistant 记录、再以空格版 echo 回查，断言均命中。pyright=94=基线；`test_poller.py` + `test_reply_gate_sendtime.py` 97 例全过。
 
-### 视频/语音消息被误判为图片（连带 30 秒回复延迟）
+#### 视频/语音消息被误判为图片（连带 30 秒回复延迟）
 
 > 排查上一条接管误判时，从同一段日志里揪出的第二个真实缺陷。
 
@@ -155,7 +184,7 @@
 - **fix(poller)**: `_download_received_file` 的文件名提取原本只解析 JSON 形态，纯文本形态取不到 `fileName=` → 视频落盘退化为 `video_<mediaId>.mp4`，丢掉真实文件名，影响「把刚才那个视频转发给 XX」的可读性与匹配。补正则提取，并保留原有 `os.path.basename` 防目录穿越。
 - **test(poller)**: `tests/test_poller_core_parse.py::TestDetectMsgType` 新增 4 例（视频/语音标记不判 image、图文混排仍判 image、扩展名分流含大小写与老查询串回退）；`tests/test_poller_core_ocr.py::TestReceivedFileName` 新增 4 例（纯文本 `fileName=` 提取、JSON 形态优先、缺失时默认名、`../../etc/passwd` 穿越被剥离）。两文件 62 例全过。
 
-### 防抖内容去重吞掉用户真实连发的消息
+#### 防抖内容去重吞掉用户真实连发的消息
 
 > 起因是怀疑「list-all 重复抓取同一条消息」，查证后发现**判断错了**——那两条日志是两条不同的物理消息，暴露出的是另一个缺陷。
 
@@ -164,7 +193,7 @@
 - 保留原有两处去重的全部防护语义（不取消旧定时器、跨 key 同 `chat_id` 合并），只收紧判据，不放宽。
 - **test(platform)**: `tests/test_reply_lock_dedup.py` 新增 9 例 —— `TestRealResendNotSwallowed` 3 例（复刻 32 秒连发案例、跨通道分支同样不吞、同一物理消息仍去重）与 `TestIsSamePhysicalMessage` 6 例判据边界（内容不同/时间戳相同/容差内/超容差/时间戳缺失/tz 混用）。顺带补齐裸实例 fixture 缺失的 `_metrics_lock`、`_incomplete_delay_count`、`_incomplete_extra_sec`（内容被判「不完整」时会抛 `AttributeError`，与去重逻辑无关的既有缺口）。
 
-### 图文混合消息 OCR 内容被双重包裹、随图文字重复
+#### 图文混合消息 OCR 内容被双重包裹、随图文字重复
 
 > 缺陷挖掘轮（C-1）从 `_process_pending_messages` 的 OCR 刷新路径揪出；图文混合消息（截图+配文）是高频用法。
 
@@ -172,7 +201,7 @@
 - 修复：`ocr_text` 拼接前若以 `preserved`(caption) 开头则去掉该前缀，只保留纯 OCR 文本，由下方统一用 `preserved + ———— 图片识别内容 ———— 区块`组装。修复点仅收紧组装、不动 OCR 下载/持久化契约；异步回调落库的 `caption+card` 与防抖合并落库的 `preserved+区块` 两套形态均不含重复 caption，历史一致性恢复。
 - **test(platform)**: `tests/test_debounce_incomplete.py` 新增 `test_image_with_caption_ocr_no_duplicate_caption` —— 用**真实返回格式**（`{caption}\n<card...>`）mock `wait_for_ocr`，断言 `merged.content` 中 caption 仅出现 1 次、`<card title="图片内容">` 仅 1 个、占位符被替换。原 `test_image_with_caption_ocr_preserves_text` 的 mock 返回纯 OCR 文本，恰好掩盖该 bug，故新增用例锁定真实契约。
 
-### 企微凭证 Web 写回被静默丢弃（已修复）
+#### 企微凭证 Web 写回被静默丢弃（已修复）
 
 > 缺陷挖掘轮（D-1）从 `web/routers/config.py` 的 `_apply_wecom_platform` 揪出。
 
@@ -182,11 +211,11 @@
 - **防误清**：空串/None 不覆盖已保存值（`if update.wecom_x not in (None, "")`），避免 GET 返回空串占位后、用户在另一次保存时把已存凭证误清空。`get_config` 的 wecom 分支维持返回空串（与 feishu `app_secret` 一致，敏感字段不回显）。
 - **test(web)**: `tests/test_config_secret_redaction.py` 新增 `test_apply_wecom_platform_writes_credentials`（写回 5 字段）+ `test_apply_wecom_platform_keeps_existing_on_blank`（空串/None 不覆盖）。
 
-### 数据清理
+#### 数据清理
 
 - **chore(data)**: 清理 `data/tmp_images/` 中 12 个「扩展名是图片、魔数实为 MP4/AMR」的孤儿文件（合计 23.36 MB），系上面视频误判缺陷的产物。清理前已按魔数识别而非文件名，并逐个核对全部 11 个会话库**无任何消息记录引用**；走系统废纸篓而非 `rm`，可恢复。
 
-### 代码卫生
+#### 代码卫生
 
 - **chore(lint)**: 清理 08-08 审计轮新建测试文件遗留的 5 处死代码（`test_image_thumbnail.py::_req` 未用变量 `tok`；`test_timeout_guard.py` 未用导入 `shutil`/`pathlib.Path`/`pytest`；`test_web_dashboard_live.py` 未用导入 `json`）。CI 通用 ruff 为 report-only（`continue-on-error` / `|| true`）故此前不阻断，但会淹没「新代码零容忍」的信噪比；清理后 `ruff check src tests web scripts` 全仓库 All checks passed。
 

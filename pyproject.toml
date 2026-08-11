@@ -1,6 +1,6 @@
 [project]
 name = "linkora"
-version = "0.2.0"
+version = "0.3.0"
 description = "灵桥 (Linkora) — 多平台 AI 自动回复助手（钉钉/飞书/企业微信 + RAG + 规则引擎 + Web 管理台）"
 readme = "README.md"
 # requires-python = ">=3.14"：项目仅支持 Python 3.14 系列（CI / 工作流 / Docker 统一切到 3.14.6），

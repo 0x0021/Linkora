@@ -46,6 +46,11 @@
 - `fix(a11y)`: 图表 canvas 加 `role="img"` + `aria-label`——通用组件 `chartCard.js::ensureCanvas` 新增可选 `label` 参数（fallback 用 canvasId），一处修改惠及所有图表（含仪表盘）；`metrics.js` 两处图表补充中文语义标签（技能命中分布柱状图 / 路由来源分布环形图）。
 - 注：index.html `<html lang="zh-CN">` 已就位；151 个 `<button>` 中纯图标按钮的 `aria-label` 补全属更大工程（需逐条语义判断），留待后续批次。
 
+### 2026-08-11 — 前端工具调用排行卡片布局修复
+- `fix(frontend)`: `tools.js::loadToolsToolStats` 渲染新表格前移除容器残留的旧 `.ts-ranking-list`（5 列网格）class——该 class 会把内部的 `.ts-rank-table` 压成约 1/5 宽，导致工具名被截断、数值挤成横排「乱套」。修复后表格占满容器（每工具一行，排名/名称/调用次数/成功率四列）。
+- 注：`web/templates/index.html:2110` 的 `id="tools-rank-container"` 仍带 `ts-ranking-list` 骨架 class（其余占位节点也用旧 `.ts-rank-item`），属历史遗留死样式，本次仅运行时摘除、未改动模板与旧 CSS；后续可清理 `.ts-ranking-list`/`.ts-rank-item` 等死类（低优先级）。
+- 质量门禁：前端构建通过（JS bundle 哈希 `af445a22f936` → `fab1a144bc6d`）；vitest 11/11 通过。
+
 ---
 
 ## 2026-08-10 — 安全与 CI 一致性修复

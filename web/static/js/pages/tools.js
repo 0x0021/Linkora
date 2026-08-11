@@ -164,6 +164,9 @@ window.loadToolsPage = loadToolsPage;
 async function loadToolsToolStats() {
     const container = document.getElementById('tools-rank-container');
     if (!container) return;
+    // HTML 模板残留 .ts-ranking-list（旧 5 列网格）会把内部的 .ts-rank-table 压成 ~1/5 宽，
+    // 导致工具名被截断、数值被挤成横排。渲染新表格前移除该 class，让表格占满容器。
+    container.classList.remove('ts-ranking-list');
     container.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-spinner fa-spin"></i><p>加载中…</p></div>';
     try {
         const data = await api.getToolStats({ period: 7, top_n: 20 });

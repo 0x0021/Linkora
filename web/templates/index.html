@@ -3433,13 +3433,11 @@
         <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
 
-    <!-- Bootstrap 5 JS -->
-    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     {% if bundle_js_v %}
     <!-- 构建产物：esbuild 合并后的单 JS bundle（经典脚本合并，app.js 在末，
          等价于多 <script> 共享全局作用域；详见 scripts/build_frontend.mjs）。
-         defer：脚本在 DOMContentLoaded 前按文档顺序执行，bootstrap(3425 立即) 先于它、
-         drafts.js(module 默认 defer, 3472) 后于它；全局桥接不受影响，且不阻塞 HTML 解析。 -->
+         defer：脚本在 DOMContentLoaded 前执行，drafts.js(module 默认 defer) 后于它；
+         全局桥接不受影响，且不阻塞 HTML 解析。 -->
     <script defer src="/static/dist/{{ bundle_js_v }}"></script>
     {% else %}
     <script src="/static/js/icons.js?v={{ icons_js_v }}"></script>

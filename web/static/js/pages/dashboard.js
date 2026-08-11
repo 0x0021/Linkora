@@ -718,7 +718,6 @@ function loadRoutingQualityOverview() {
 // var（非 let）确保跨脚本共享变量被提升为 window 属性，避免脚本加载顺序变化时的 TDZ ReferenceError
 var lastMessageId = null;
 var embStatusPolling = null;
-var _pollSeq = 0;
 
 async function loadRecentMessages() {
     const stream = document.getElementById('recent-messages-stream');
@@ -755,26 +754,6 @@ function renderLogItem(m) {
             <span class="log-type">${escapeHtml(m.msg_type || 'text')}</span>
         </div>
     `;
-}
-
-async function pollNewMessages() {
-    const stream = document.getElementById('recent-messages-stream');
-    if (!stream || !lastMessageId) return;
-    const seq = ++_pollSeq;
-    try {
-        const data = await api.getMessages('', 20);
-        if (seq !== _pollSeq) return; // 忽略过期请求，防止竞态覆盖
-        const messages = data.messages || [];
-        if (messages.length === 0 || messages[0].id === lastMessageId) return;
-
-        const newMessages = messages.filter(m => m.id > lastMessageId);
-        if (newMessages.length > 0) {
-            lastMessageId = messages[0].id;
-            applyNewMessages(newMessages);
-        }
-    } catch (e) {
-        console.error('Poll new messages failed:', e);
-    }
 }
 
 // ============ F-H6：单通道实时轮询（合并消息/决策/日志三路为 1 个 setInterval） ============
@@ -842,6 +821,9 @@ function applyNewMessages(newMessages) {
     });
     if (stream.scrollHeight > 220) {
         stream.scrollTop = 0;
+    }
+    while (stream.childElementCount > 150) {
+        stream.removeChild(stream.lastElementChild);
     }
 }
 

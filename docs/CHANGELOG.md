@@ -32,6 +32,15 @@
 - 上下文/长度参数默认值放宽：`history_tiering_recent` 4→8、`history_window` 6→12、`history_days` 3→7、`max_chars_daily_chat` 256→512、`max_chars_tech_issue` 512→1024、`temperature` 0.3→0.6（既有显式配置不受影响）。
 - 无破坏性变更（breaking change）。
 
+## 2026-08-11 — 前端快赢优化（移除冗余依赖 / 清理死代码 / 运行时治理）
+
+- `perf(frontend)`: 移除生产态无条件加载且全仓零调用的 `bootstrap.bundle.min.js`（~80KB 下载 + 消除解析阻塞）；`bootstrap.min.css` 因项目强依赖其栅格/表单/按钮基础类，**保留**（避免 UI 崩坏）。
+- `perf(frontend)`: `api.js` 请求缓存加惰性 TTL 淘汰（条数超 200 时清理过期项），防止 SPA 长会话内存无限增长；重试分支透传 `timeoutMs`，尊重调用方自定义超时。
+- `fix(frontend)`: `dashboard.js` 实时消息流 `applyNewMessages` 加 DOM 上限 150（与日志面板一致），修复单通道轮询下 DOM 节点线性膨胀的内存泄漏。
+- `chore(frontend)`: 删除死代码 `app.js::imgTokUrl`（零调用）与 `dashboard.js::pollNewMessages`+`_pollSeq`（单通道 `fetchDashboardStream` 改造后遗留）。
+- `fix(frontend)`: `fa-subset.min.css` 的 `font-display:block` 改为 `swap`，消除首屏图标/文本 FOIT 空白。
+- 质量门禁：前端构建通过（esbuild 合并，JS bundle 哈希 `b0c91c49f4c7` → `f3f399e458e6`）；vitest 11/11 通过。
+
 ---
 
 ## 2026-08-10 — 安全与 CI 一致性修复

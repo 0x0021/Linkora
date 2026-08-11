@@ -18,12 +18,6 @@ async function refreshImageToken() {
         }
     } catch (e) { /* 保留旧 token，下次轮询再试 */ }
 }
-function imgTokUrl(url) {
-    // 图片鉴权改由后端下发的 HttpOnly Cookie(img_token) 携带；URL 不再含 token/platform，
-    // 地址保持稳定 → 浏览器可长期缓存，杜绝每轮 token 轮换引发的整屏图片重复下载。
-    // refreshImageToken 仅周期性刷新该 Cookie（见下方 setInterval），不再改写任何 URL/DOM。
-    return url;
-}
 // 启动即拉取，并每 4 分钟刷新（token TTL 5 分钟）。登出后不再请求，避免持续 401。
 refreshImageToken();
 setInterval(() => { if (api.isAuthenticated()) refreshImageToken(); }, 4 * 60 * 1000);

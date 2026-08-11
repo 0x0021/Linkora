@@ -164,6 +164,17 @@ class ApiClient {
         this._requestCache.clear();
     }
 
+    _evictExpired() {
+        // 惰性淘汰：仅当缓存条数超过阈值时才清理过期项，避免 SPA 长会话内存无限增长
+        if (this._requestCache.size <= 200) return;
+        const now = Date.now();
+        for (const [key, cached] of this._requestCache) {
+            if (now - cached.timestamp >= this._cacheTTL) {
+                this._requestCache.delete(key);
+            }
+        }
+    }
+
     _generateRequestKey(url, method, body) {
         return `${method}:${url}:${body ? JSON.stringify(body) : ''}`;
     }
@@ -181,6 +192,7 @@ class ApiClient {
             data,
             timestamp: Date.now()
         });
+        this._evictExpired();
     }
 
     // 多平台隔离：透明给所有数据请求追加 ?platform=<当前平台>（由 store 管理）。
@@ -223,7 +235,7 @@ class ApiClient {
 
             if (this._retryConfig.retryOnStatus.includes(res.status) && retries < this._retryConfig.maxRetries) {
                 await new Promise(r => setTimeout(r, this._retryConfig.retryDelay * (retries + 1)));
-                return this._fetchWithRetry(url, method, body, retries + 1);
+                return this._fetchWithRetry(url, method, body, retries + 1, timeoutMs);
             } else if (this._retryConfig.retryOnStatus.includes(res.status)) {
                 this._notifyGlobalError(`服务端错误（${res.status}），请稍后重试`);
             }

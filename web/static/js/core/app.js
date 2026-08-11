@@ -273,6 +273,13 @@ function switchPage(page) {
     if (page === 'cost-quality') { loadCostQualityPage(); startCostQualityPolling(); }
     else { stopCostQualityPolling(); }
     if (page === 'simulate') { window.loadSimulatePage && window.loadSimulatePage(); }
+
+    // 可访问性：切换页面后将焦点移到目标页面容器，避免键盘/屏幕阅读器用户丢失位置（WCAG 2.4.3）
+    const _pageEl = document.getElementById(`page-${page}`);
+    if (_pageEl) {
+        _pageEl.setAttribute('tabindex', '-1');
+        _pageEl.focus({ preventScroll: true });
+    }
 }
 
 // ============ 多平台隔离：平台切换器 ============

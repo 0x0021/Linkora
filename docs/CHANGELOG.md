@@ -41,6 +41,11 @@
 - `fix(frontend)`: `fa-subset.min.css` 的 `font-display:block` 改为 `swap`，消除首屏图标/文本 FOIT 空白。
 - 质量门禁：前端构建通过（esbuild 合并，JS bundle 哈希 `b0c91c49f4c7` → `f3f399e458e6`）；vitest 11/11 通过。
 
+### 2026-08-11 — 前端可访问性（a11y）修补（续）
+- `fix(a11y)`: `switchPage` 切换页面后将焦点移到目标页面容器（`#page-${page}`，`tabindex=-1` + `focus({preventScroll:true})`），修复键盘/屏幕阅读器用户切页后丢失焦点位置（WCAG 2.4.3）。
+- `fix(a11y)`: 图表 canvas 加 `role="img"` + `aria-label`——通用组件 `chartCard.js::ensureCanvas` 新增可选 `label` 参数（fallback 用 canvasId），一处修改惠及所有图表（含仪表盘）；`metrics.js` 两处图表补充中文语义标签（技能命中分布柱状图 / 路由来源分布环形图）。
+- 注：index.html `<html lang="zh-CN">` 已就位；151 个 `<button>` 中纯图标按钮的 `aria-label` 补全属更大工程（需逐条语义判断），留待后续批次。
+
 ---
 
 ## 2026-08-10 — 安全与 CI 一致性修复

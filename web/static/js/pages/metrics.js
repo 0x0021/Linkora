@@ -183,7 +183,7 @@ async function renderSkillChart(data) {
     // 确保 canvas 存在（空状态可能覆盖过 canvas）
     let canvas = wrap.querySelector("canvas");
     if (!canvas) {
-        wrap.innerHTML = '<canvas id="chart-metrics-skill"></canvas>';
+        wrap.innerHTML = '<canvas id="chart-metrics-skill" role="img" aria-label="技能命中次数分布柱状图"></canvas>';
         canvas = wrap.querySelector("canvas");
     }
     await window.loadChart();
@@ -238,7 +238,7 @@ async function renderSourceChart(data) {
     }
     let canvas = wrap.querySelector("canvas");
     if (!canvas) {
-        wrap.innerHTML = '<canvas id="chart-metrics-source"></canvas>';
+        wrap.innerHTML = '<canvas id="chart-metrics-source" role="img" aria-label="路由来源分布环形图"></canvas>';
         canvas = wrap.querySelector("canvas");
     }
     await window.loadChart();

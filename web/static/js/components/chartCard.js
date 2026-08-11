@@ -16,13 +16,17 @@
 
   const _registry = new Map(); // canvasId -> Chart
 
-  function ensureCanvas(wrapId, canvasId) {
+  function ensureCanvas(wrapId, canvasId, label) {
     const wrap = typeof wrapId === 'string' ? document.getElementById(wrapId) : wrapId;
     if (!wrap) return null;
+    const ariaLabel = escapeHtml(label || canvasId);
     let canvas = wrap.querySelector('canvas');
     if (!canvas) {
-      wrap.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+      wrap.innerHTML = `<canvas id="${canvasId}" role="img" aria-label="${ariaLabel}"></canvas>`;
       canvas = wrap.querySelector('canvas');
+    } else if (label) {
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', ariaLabel);
     }
     return { wrap, canvas };
   }

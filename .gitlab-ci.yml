@@ -1,15 +1,16 @@
 # 灵桥 (Linkora) CI — GitLab 流水线
-# 与 .github/workflows/ci.yml 保持等价：lint + test(py3.14) + 覆盖率 + 漏洞扫描
+# 与 .github/workflows/ci.yml 保持等价：静态检查 + 测试(py3.14) + 覆盖率 + 漏洞扫描
 
 stages:
-  - lint
-  - test
+  - 静态检查
+  - 测试
 
 # ============================================================================
 # Secret Scan (F22) — 密钥扫描门禁
 # ============================================================================
 secret-scan:
-  stage: lint
+  name: 密钥扫描门禁
+  stage: 静态检查
   image: gitleaks/gitleaks:v8.18.4
   timeout: 10m
   script:
@@ -27,10 +28,11 @@ cache:
     - .cache/pip/
 
 # ============================================================================
-# Lint
+# 静态检查
 # ============================================================================
 lint:
-  stage: lint
+  name: 静态检查
+  stage: 静态检查
   image: python:3.14-slim
   timeout: 10m
   before_script:
@@ -59,10 +61,10 @@ PY
   allow_failure: true
 
 # ============================================================================
-# Test (Python 3.14)
+# 测试 (Python 3.14)
 # ============================================================================
 .test_base:
-  stage: test
+  stage: 测试
   timeout: 20m
   before_script:
     - python -m pip install --upgrade pip
@@ -80,5 +82,6 @@ PY
 
 # 项目仅支持 3.14 系列（requires-python>=3.14），单矩阵与 GitHub CI 对齐
 test:py314:
+  name: 测试 (Python 3.14)
   extends: .test_base
   image: python:3.14-slim

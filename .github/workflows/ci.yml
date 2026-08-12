@@ -13,6 +13,7 @@ permissions: read-all
 
 jobs:
   lint:
+    name: 静态检查
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -73,6 +74,7 @@ jobs:
           PY
 
   test:
+    name: 测试
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -135,6 +137,7 @@ jobs:
           path: coverage.xml
 
   type-check:
+    name: 类型检查
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -180,6 +183,7 @@ jobs:
           path: pyright-report.json
 
   frontend:
+    name: 前端构建与测试
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

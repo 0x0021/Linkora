@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 import time
-from typing import Callable
+from typing import Any, Callable
 
 from src.dws_adapter import DwsAdapter, DwsNonRetryableError, DwsError
 from src.memory.sqlite_store import SQLiteStore
@@ -25,12 +25,14 @@ class DocSyncScheduler:
     def __init__(self, dws: DwsAdapter, db_path: str,
                  sync_interval_seconds: int = 3600,
                  embedding_client=None,
-                 on_sync: Callable[[dict], None] | None = None):
+                 on_sync: Callable[[dict], None] | None = None,
+                 config: Any = None):
         self.dws = dws
         self.db_path = db_path
         self.sync_interval = sync_interval_seconds
         self.embedding_client = embedding_client
         self.on_sync = on_sync
+        self.config = config  # 应用配置（可选）；用于读取 rag.chunk_hard_max 安全天花板
 
         self._running = False
         self._thread: threading.Thread | None = None
@@ -122,7 +124,13 @@ class DocSyncScheduler:
                 url=remote.get("url", ""),
                 content=remote_content,
             )
-            chunks = split_text(remote_content)
+            chunks = split_text(
+                remote_content,
+                hard_max=(
+                    getattr(getattr(self.config, "rag", None), "chunk_hard_max", None)
+                    if self.config is not None else None
+                ),
+            )
             store._kb_repo.add_kb_chunks(kb_doc_id, chunks)
 
             # 新文档创建成功后，再删除旧文档

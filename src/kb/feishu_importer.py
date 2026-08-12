@@ -76,6 +76,11 @@ def import_single_feishu_doc(
     if rag_config is None:
         rag_config = {"chunk_size": 800, "chunk_overlap": 200}
 
+    # 安全天花板：优先取配置，否则由 split_text 按 chunk_size*2 派生
+    chunk_hard_max = rag_config.get("chunk_hard_max")
+    if chunk_hard_max is None and config is not None:
+        chunk_hard_max = getattr(getattr(config, "rag", None), "chunk_hard_max", None)
+
     feishu_adapter = _get_feishu_adapter()
 
     # 读取飞书文档内容
@@ -116,6 +121,7 @@ def import_single_feishu_doc(
         content,
         max_len=rag_config["chunk_size"],
         overlap=rag_config["chunk_overlap"],
+        hard_max=chunk_hard_max,
     )
     store._kb_repo.add_kb_chunks(doc_id, chunks)
 

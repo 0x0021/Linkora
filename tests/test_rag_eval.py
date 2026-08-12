@@ -119,7 +119,7 @@ def _recall_at_k(doc_chunks: dict[str, list[str]], client, top_k: int = TOP_K):
 
     hits = 0
     evaluated = 0
-    for qi, q in enumerate(RAG_EVAL_QUERIES):
+    for _qi, q in enumerate(RAG_EVAL_QUERIES):
         chunks = doc_chunks[q["doc_id"]]
         golden_n = _norm_ws(q["golden_text"])
         local = next((i for i, c in enumerate(chunks) if golden_n in _norm_ws(c)), None)

@@ -92,7 +92,7 @@ def is_frozen() -> bool:
 def get_app_root() -> Path:
     """资源根目录：开发态=仓库根；冻结态=_MEIPASS（含 web/、config.yaml 样例、内置 skills）。"""
     if is_frozen():
-        return Path(sys._MEIPASS)
+        return Path(getattr(sys, "_MEIPASS", ""))
     # src/paths.py -> parents[1] = 仓库根（Linkora/）
     return Path(__file__).resolve().parents[1]
 

@@ -147,7 +147,6 @@ class IntentRegistry:
                 if cat is not None:
                     existing = set(cat.evidence_keywords)
                     added = [k for k in kws if k not in existing]
-                    cat.evidence_keywords = existing | set(kws)
                     cat.evidence_keywords = list(existing) + added
                     stats[cfg_key] = len(added)
 

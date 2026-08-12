@@ -24,11 +24,18 @@ from pathlib import Path
 # 锁定基线：在 main（Python 3.14.6）实测 src+web 的 pyright error 数。
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
 # 历次基线：1057（2026-08-05 初始）→ 205（mixin 共享基类重构）→ 96（误标，
-# 实际 6e24aa0 仍 334）→ 95（本轮 lint 清理后真实值）。
+# 实际 6e24aa0 仍 334）→ 95（lint 清理后真实值）→ 74（2026-08-12 安全批次：
+# 12 个自包含模块零行为变更修复，含 ocr_postprocess 真实 import bug）。
 #
-# 当前 95：lint 清理修复 web/api 被误删的 re-export（get_store/get_rag_config）与
-# request_id 动态属性 setattr 写法后，pyright==1.1.411 在 src+web 实测值。
-TYPE_ERROR_BASELINE = 95
+# 当前 74（pyright==1.1.411，src+web）：规则分布 reportArgumentType(29)/
+# reportReturnType(16)/reportAttributeAccessIssue(7)/reportOptionalMemberAccess(7)/
+# reportOptionalSubscript(5)/reportCallIssue(4)/reportOptionalOperand(3)/
+# reportOperatorIssue(2)/reportAssignmentType(1)。
+# 剩余大头：web/routers(kb 8/api 4/persona 3/config 2/intents 2)、
+# src/memory/embedding(6)、src/platform/runtime_lifecycle(4)、
+# src/skills/tool_wrapper(4)、src/llm(agent/history/prompt_builder/system_prompt 各 2-3)。
+# 多为 DB 返回 int|None 守卫、None→str 参数、web 字典下标，需逐函数核实后谨慎收敛。
+TYPE_ERROR_BASELINE = 74
 
 
 def count_errors(report: dict) -> int:

@@ -121,7 +121,7 @@ def _resolve_binary(name: str) -> Optional[str]:
     return None
 
 
-def _parse_version(text: str) -> Optional[tuple[int, int, int]]:
+def _parse_version(text: str) -> Optional[tuple[int, ...]]:
     m = _VERSION_RE.search(text or "")
     if not m:
         return None
@@ -182,7 +182,9 @@ def _has_upstream_update(spec: CliSpec, installed: str, timeout: int = 60) -> bo
             return _UPDATE_KEYWORDS_RE.search(blob) is not None
         cur = data.get("current") or data.get("installed") or data.get("version")
         lat = data.get("latest") or data.get("available") or data.get("target")
-        if cur and lat and _parse_version(str(lat)) > _parse_version(str(cur)):
+        parsed_cur = _parse_version(str(cur)) if cur else None
+        parsed_lat = _parse_version(str(lat)) if lat else None
+        if parsed_cur and parsed_lat and parsed_lat > parsed_cur:
             return True
         for k in ("outdated", "updateAvailable", "hasUpdate", "needUpdate", "update_available"):
             if data.get(k):
@@ -316,7 +318,7 @@ def run_checks(data_root: str | None = None) -> dict:
     return result
 
 
-def _safe_run(data_root: str) -> None:
+def _safe_run(data_root: str | None = None) -> None:
     try:
         run_checks(data_root)
     except Exception:  # noqa: BLE001

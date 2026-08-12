@@ -97,7 +97,7 @@ def run_ocr_postprocess(text: str, min_chars: int = 5) -> tuple[str, bool]:
 
     # 懒加载 config 获取 [ocr_postprocess] 节
     try:
-        from src.config import get_config
+        from src.shared_state import get_config
         cfg = get_config()
         ocfg = getattr(cfg, "ocr_postprocess", None)
     except Exception:

@@ -19,7 +19,7 @@ def _http_get(url: str, timeout: int, retries: int = 3):
     出站统一经 ssrf_safe_get（src.utils.net）：先校验 URL 公网可达并钉死 IP，
     杜绝 SSRF DNS 重绑定。
     """
-    last_err = None
+    last_err: Exception | None = None
     for attempt in range(retries):
         try:
             return ssrf_safe_get(url, headers=_HEADERS, timeout=timeout, allow_redirects=True)
@@ -30,6 +30,7 @@ def _http_get(url: str, timeout: int, retries: int = 3):
             last_err = e
             if attempt < retries - 1:
                 time.sleep(0.5 + attempt * 0.5)
+    assert last_err is not None
     raise last_err
 
 _HEADERS = {

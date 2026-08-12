@@ -303,7 +303,7 @@ class SendMessageTool(BaseTool):
         # feishu.py 会自动用 --as bot 重试。
         prev_disable = getattr(self.dws, "_disable_bot_fallback", False)
         if is_external:
-            self.dws._disable_bot_fallback = True
+            setattr(self.dws, "_disable_bot_fallback", True)
         try:
             if chat_type == "group":
                 self.dws.chat_message_send(
@@ -446,7 +446,7 @@ class SendMessageTool(BaseTool):
             return {"error": f"发送失败: {e}"}
         finally:
             # 恢复跨租户外部好友场景的 fallback 状态
-            self.dws._disable_bot_fallback = prev_disable
+            setattr(self.dws, "_disable_bot_fallback", prev_disable)
 
         # 持久化机器人回复（is_bot=1），后续在消息记录页可区分真人/机器人
         if self.store:

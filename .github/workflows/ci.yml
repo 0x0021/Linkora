@@ -203,6 +203,16 @@ jobs:
         # 将 40+ CSS / 30+ JS 合并为单 bundle，减少首屏请求数；产物写入 web/static/dist/。
         run: npm run build:frontend
 
+      - name: 校验前端产物已提交（dist 守卫）
+        # web/static/dist 强制进仓库；若源码改了但忘了重编提交 dist，
+        # 此处比对工作树与 HEAD 的 dist 差异并标红，避免 Pages 用旧包上线。
+        run: |
+          if ! git diff --quiet -- web/static/dist; then
+            echo "::error::web/static/dist 与源码不一致，请重新运行 npm run build:frontend 并提交产物"
+            git --no-pager diff --stat -- web/static/dist
+            exit 1
+          fi
+
       - name: bundle 冒烟（全局符号校验）
         # 在 jsdom 中求值打包产物，验证关键全局函数/对象已挂载、无重复声明错误。
         run: node scripts/smoke_bundle.mjs

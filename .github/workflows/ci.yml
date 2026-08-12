@@ -203,6 +203,16 @@ jobs:
         # 将 40+ CSS / 30+ JS 合并为单 bundle，减少首屏请求数；产物写入 web/static/dist/。
         run: npm run build:frontend
 
+      - name: 校验前端产物已提交（dist 守卫）
+        # web/static/dist 强制进仓库；若源码改了但忘了重编提交 dist，
+        # 此处比对工作树与 HEAD 的 dist 差异并标红，避免 Pages 用旧包上线。
+        run: |
+          if ! git diff --quiet -- web/static/dist; then
+            echo "::error::web/static/dist 与源码不一致，请重新运行 npm run build:frontend 并提交产物"
+            git --no-pager diff --stat -- web/static/dist
+            exit 1
+          fi
+
       - name: bundle 冒烟（全局符号校验）
         # 在 jsdom 中求值打包产物，验证关键全局函数/对象已挂载、无重复声明错误。
         run: node scripts/smoke_bundle.mjs
@@ -211,3 +221,17 @@ jobs:
         # 防前端回归：覆盖 api 客户端、工具函数、页面关键逻辑。
         # 仅跑既有 vitest 套件，不引入 eslint/axe（避免新依赖与存量告警阻塞 CI）。
         run: npm run test:frontend
+
+  # 汇总门禁：仅当上述 4 个自定义 job 全部通过才通过。
+  # 作为分支保护唯一必填检查，把「我们自己的 CI」收成一个绿勾，
+  # 与平台级内置扫描（CodeQL / Advanced Security AI 扫描 / Dependabot）天然分组隔离。
+  # needs 默认语义：任一依赖 job 失败/取消时本 job 自动 skipped，
+  # 而 skipped 的必填检查会阻断合并 —— 任一子项挂即整体挂。
+  ci-summary:
+    name: CI 汇总
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [lint, test, type-check, frontend]
+    steps:
+      - name: 汇总结果
+        run: echo "✅ 全部自定义 CI 检查已通过（静态检查 / 测试 / 类型检查 / 前端）"

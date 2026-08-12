@@ -60,8 +60,9 @@ class JSONFormatter(logging.Formatter):
         }
 
         # 添加额外字段
-        if self.include_extra and hasattr(record, "extra_fields"):
-            log_entry["extra"] = record.extra_fields
+        extra_fields = getattr(record, "extra_fields", None)
+        if self.include_extra and extra_fields is not None:
+            log_entry["extra"] = extra_fields
 
         # 添加调用者信息（可选，兼容旧代码）
         try:

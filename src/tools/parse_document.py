@@ -495,8 +495,9 @@ class DocumentParser:
             for i, slide in enumerate(prs.slides):
                 slide_texts = []
                 for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text:
-                        slide_texts.append(shape.text)
+                    text = getattr(shape, "text", None)
+                    if text:
+                        slide_texts.append(text)
 
                 if slide_texts:
                     text_parts.append(f"[第 {i+1} 页]\n" + "\n".join(slide_texts))

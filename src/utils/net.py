@@ -12,6 +12,7 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,8 @@ def ssrf_safe_get(url: str, **kwargs):
             super().init_poolmanager(*args, **kwargs)
 
         def _new_pool(self, scheme, host, port, request_context=None):
-            pool = super()._new_pool(scheme, host, port, request_context)
+            manager: Any = super()
+            pool = manager._new_pool(scheme, host, port, request_context)
             if scheme == "http":
                 pool.ConnectionCls = lambda *a, **kw: _FixedHostHTTPConnection(
                     *a, _dest_ip=self._dest_ip, _orig_host=self._orig_host, **kw)
@@ -153,7 +155,7 @@ def resolve_safe_ip(hostname: str) -> str | None:
         logger.warning(f"resolve_safe_ip: swallowed exception: {_exc}")
         return None
     for info in infos:
-        ip_str = info[4][0]
+        ip_str = str(info[4][0])
         try:
             ip = ipaddress.ip_address(ip_str)
         except ValueError as _exc:

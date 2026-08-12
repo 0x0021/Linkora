@@ -345,7 +345,7 @@ def _is_blocked_host(url: str) -> bool:
         for resolved in socket.getaddrinfo(host, None):
             addr = resolved[4][0]
             try:
-                if _ip_is_blocked(ipaddress.ip_address(addr.split("%")[0])):
+                if _ip_is_blocked(ipaddress.ip_address(str(addr).split("%")[0])):
                     return True
             except ValueError as _exc:
                 logger.warning("_is_blocked_host: 解析保留段判断失败，保守拦截: %s", _exc)
@@ -373,7 +373,7 @@ def _http_get(url: str, timeout: int, retries: int = 3, allow_redirects: bool = 
     出站统一经 ssrf_safe_get（src.utils.net）：先校验 URL 公网可达并钉死 IP，
     杜绝 SSRF DNS 重绑定；allow_redirects=False 用于抓取外部结果页，避免 301/302 跳内网。
     """
-    last_err = None
+    last_err: Exception | None = None
     for attempt in range(retries):
         try:
             return ssrf_safe_get(
@@ -386,6 +386,7 @@ def _http_get(url: str, timeout: int, retries: int = 3, allow_redirects: bool = 
             last_err = e
             if attempt < retries - 1:
                 time.sleep(0.5 + attempt * 0.5)
+    assert last_err is not None
     raise last_err
 
 

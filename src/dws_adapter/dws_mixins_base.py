@@ -17,6 +17,7 @@ class DwsAdapterBase(BaseIMAdapter):
     _list_all_cap_warn_at: Any
     _perm_warned: Any
     ai_tag_default: Any
+    _disable_bot_fallback: bool
 
     # === 跨 mixin 方法（真实签名原样；实现在各自 mixin） ===
     def _base_error_class(self) -> Any: ...

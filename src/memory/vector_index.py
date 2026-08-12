@@ -313,8 +313,9 @@ class VectorIndex:
                     if self._emb_cache is not None and not self.cache_embeddings:
                         self._emb_cache = None
                     # HNSW 加载后 efSearch 不随序列化保存，需重新应用
-                    if self.index_type == "hnsw" and getattr(self._index, "hnsw", None) is not None:
-                        self._index.hnsw.efSearch = max(self.hnsw_ef, 32)
+                    hnsw = getattr(self._index, "hnsw", None)
+                    if self.index_type == "hnsw" and hnsw is not None:
+                        hnsw.efSearch = max(self.hnsw_ef, 32)
 
             # 反推 embedding 缓存（支撑加载后自动重建）
             if self.cache_embeddings:

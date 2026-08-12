@@ -11,6 +11,7 @@ from contextvars import ContextVar
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import cast
 
 from src.utils.request_id import get_request_id, get_trace_id
 
@@ -287,7 +288,7 @@ class RichConsoleFormatter:
         line.append(": ")
         line.append(msg_text)
 
-        return line
+        return cast(str, line)
 
     def _get_module_color(self, name: str) -> str:
         for prefix, color in self.MODULE_COLORS.items():
@@ -306,11 +307,11 @@ class RichConsoleFormatter:
 class RichHandler(logging.Handler):
     def __init__(self):
         super().__init__()
-        self.formatter = RichConsoleFormatter()
+        self.formatter = cast("logging.Formatter", RichConsoleFormatter())
 
     def emit(self, record: logging.LogRecord):
         try:
-            self.formatter.print(record)
+            cast("RichConsoleFormatter", self.formatter).print(record)
         except Exception:
             self.handleError(record)
 

@@ -70,8 +70,8 @@ class DingTalkApprovalProvider(ApprovalProvider):
             status = str(_pick(t, "status", "taskStatus")).upper()
             if status not in _ACTIVE_TASK_STATUSES:
                 continue
-                nodes.append(ApprovalNode(
-                    name=str(_pick(t, "activityName", "activity_name", "name")),
+            nodes.append(ApprovalNode(
+                name=str(_pick(t, "activityName", "activity_name", "name")),
                 status=status,
                 approver_id=str(_pick(t, "userId", "userid", "user_id")),
                 task_id=str(_pick(t, "taskId", "taskid", "task_id")),

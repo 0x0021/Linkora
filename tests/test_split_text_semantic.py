@@ -5,6 +5,10 @@
 - 分块优先遵循语义边界（段落→句子→子句→空白），避免中间截断；
 - hard_max 仅作安全天花板，拦截病态超长单元，且仍优先语义边界。
 """
+import re
+
+import pytest
+
 from src.tools.utils import split_text
 
 

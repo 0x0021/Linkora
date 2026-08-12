@@ -7,47 +7,6 @@
 
 #page-keywords { gap: 1rem; }
 
-/* ---------- 页面级 Tab（规则列表 / 匹配测试）— 胶囊风格 ---------- */
-#page-keywords > .section-tabs {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 0;
-    padding: 0;
-    border-bottom: none;
-    background: transparent;
-}
-
-#page-keywords > .section-tabs .section-tab {
-    padding: 0.45rem 1rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-bottom-color: var(--border-color);
-    border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    margin-bottom: 0;
-    transition: all 0.18s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-
-#page-keywords > .section-tabs .section-tab:hover {
-    border-color: var(--brand-primary);
-    color: var(--brand-primary);
-    background: var(--brand-primary-light, rgba(37,99,235,0.06));
-    transform: translateY(-1px);
-}
-
-#page-keywords > .section-tabs .section-tab.active {
-    background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
-    color: #fff;
-    border-color: transparent;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
-    font-weight: 600;
-}
-
 /* ---------- 入场动画 ---------- */
 @keyframes kwFadeUp {
     from { opacity: 0; transform: translateY(8px); }

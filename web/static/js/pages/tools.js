@@ -164,6 +164,9 @@ window.loadToolsPage = loadToolsPage;
 async function loadToolsToolStats() {
     const container = document.getElementById('tools-rank-container');
     if (!container) return;
+    // HTML 模板残留 .ts-ranking-list（旧 5 列网格）会把内部的 .ts-rank-table 压成 ~1/5 宽，
+    // 导致工具名被截断、数值被挤成横排。渲染新表格前移除该 class，让表格占满容器。
+    container.classList.remove('ts-ranking-list');
     container.innerHTML = '<div class="empty-state" style="padding:16px"><i class="fa-solid fa-spinner fa-spin"></i><p>加载中…</p></div>';
     try {
         const data = await api.getToolStats({ period: 7, top_n: 20 });
@@ -189,23 +192,28 @@ async function loadToolsToolStats() {
         setText('tools-ts-duration', Math.round(avgDuration) + 'ms');
         setText('tools-ts-count', String(tools.length));
         const maxCalls = tools[0].total_calls || 1;
-        // 多列小卡片网格：4列紧凑布局，左侧彩色边条 + 药丸成功率
-        let html = '<div class="ts-rank-grid">';
+        // 优化布局：使用更紧凑的表格格式，减少视觉噪音
+        let html = '<div class="ts-rank-table">';
+        // 表头
+        html += '<div class="ts-rank-header">';
+        html += '<span class="ts-rank-col ts-rank-col-rank">排名</span>';
+        html += '<span class="ts-rank-col ts-rank-col-name">工具名称</span>';
+        html += '<span class="ts-rank-col ts-rank-col-calls">调用次数</span>';
+        html += '<span class="ts-rank-col ts-rank-col-rate">成功率</span>';
+        html += '</div>';
+        
+        // 数据行（只显示前 10 名）
         const displayCount = Math.min(tools.length, 10);
         for (let i = 0; i < displayCount; i++) {
             const tool = tools[i];
             const successRate = tool.success_rate || 0;
             const rateClass = successRate >= 90 ? 'rate-high' : successRate >= 70 ? 'rate-medium' : 'rate-low';
             const rankClass = i < 3 ? `rank-${i + 1}` : '';
-            html += `<div class="ts-rank-card ${rankClass}">`;
-            html += '<div class="ts-rank-card-header">';
-            html += `<span class="ts-rank-card-badge">${i + 1}</span>`;
-            html += `<span class="ts-rank-card-name" title="${escapeHtml(tool.tool_name)}">${escapeHtml(tool.display_name || tool.tool_name)}</span>`;
-            html += '</div>';
-            html += '<div class="ts-rank-card-footer">';
-            html += `<span class="ts-rank-card-calls">${tool.total_calls.toLocaleString()} 次</span>`;
-            html += `<span class="ts-rank-card-rate ${rateClass}">${successRate.toFixed(0)}%</span>`;
-            html += '</div>';
+            html += `<div class="ts-rank-row ${rankClass}">`;
+            html += `<span class="ts-rank-col ts-rank-col-rank"><span class="ts-rank-badge ${rankClass}">${i + 1}</span></span>`;
+            html += `<span class="ts-rank-col ts-rank-col-name" title="${escapeHtml(tool.tool_name)}">${escapeHtml(tool.display_name || tool.tool_name)}</span>`;
+            html += `<span class="ts-rank-col ts-rank-col-calls">${tool.total_calls.toLocaleString()}</span>`;
+            html += `<span class="ts-rank-col ts-rank-col-rate ${rateClass}">${successRate.toFixed(0)}%</span>`;
             html += '</div>';
         }
         html += '</div>';

@@ -339,14 +339,15 @@ function skToolRanking(n = 20) {
     let h = '';
     for (let i = 0; i < n; i++) {
         h += `
-            <div class="ts-rank-card" aria-label="loading">
-                <div class="ts-rank-card-header">
-                    <span class="ts-rank-card-badge"></span>
-                    <span class="ts-rank-card-name"><span class="skeleton skeleton-line" style="width:70%;height:12px;display:inline-block"></span></span>
+            <div class="ts-rank-item">
+                <div class="ts-rank-num">${i + 1}</div>
+                <div class="ts-rank-info">
+                    <div class="skeleton skeleton-line" style="height:14px;width:70%"></div>
+                    <div class="skeleton skeleton-line" style="height:8px;width:100%;margin-top:4px"></div>
                 </div>
-                <div class="ts-rank-card-footer">
-                    <span class="ts-rank-card-calls"><span class="skeleton skeleton-line" style="width:24px;height:10px;display:inline-block"></span></span>
-                    <span class="ts-rank-card-rate"><span class="skeleton skeleton-line" style="width:18px;height:10px;display:inline-block"></span></span>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                    <div class="skeleton skeleton-line" style="height:12px;width:30px"></div>
+                    <div class="skeleton skeleton-line" style="height:10px;width:24px"></div>
                 </div>
             </div>`;
     }

@@ -231,7 +231,6 @@ class PrimaryMixin(EngineMixinBase):
             db_path=self.store.db_path,
             sync_interval_seconds=self.config.storage.doc_sync_interval_hours * 3600,
             embedding_client=self.embedding_client,
-            config=self.config,
         )
         self.db_backups: dict[str, DatabaseBackup] = {}
         if self.config.storage.backup_enabled:

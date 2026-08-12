@@ -293,7 +293,6 @@ class PlatformRagConfig(BaseModel):
 
     chunk_size: int | None = None
     chunk_overlap: int | None = None
-    chunk_hard_max: int | None = None  # 安全天花板（字符数）；None=派生为 chunk_size*2
     embedding_model: str | None = None
 
 
@@ -758,11 +757,8 @@ class DeadLetterConfig(BaseModel):
 
 
 class RagConfig(BaseModel):
-    chunk_size: int = 500  # 分块软目标/上限参考（字符数）；语义分块优先在此长度附近断块
+    chunk_size: int = 500  # 分块大小（字符数）
     chunk_overlap: int = 50  # 分块重叠大小（字符数）
-    chunk_hard_max: int | None = None  # 安全天花板（字符数）；None=派生为 chunk_size*2。
-    # 仅拦截病态超长单元（巨型无标点段落/URL/哈希），达到时仍优先语义边界断开。
-    # 建议设在 embedding 模型有效字符容量之下，杜绝模型侧截断。
 
 
 class WebConfig(BaseModel):

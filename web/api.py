@@ -965,7 +965,7 @@ async def index():
                 return str(int(p.stat().st_mtime))
             except FileNotFoundError:
                 return "1"
-        return tpl.render(
+        html = tpl.render(
             style_v=v("css/style.css"),
             **_read_bundle_manifest(),
             theme_v=v("css/theme.css"),
@@ -1005,6 +1005,12 @@ async def index():
             # 文件名 foo_bar.js → {{ foo_bar_js_v }}
             **_auto_page_versions(v),
         )
+        # 根 HTML 禁用启发式缓存：dist bundle 走内容哈希 + immutable 长缓存，
+        # 若 HTML 本身被浏览器启发式缓存，会持续引用旧 bundle hash，
+        # 导致前端构建更新后「刷新页面无变化」。强制 no-cache 让每次刷新都拉最新 HTML（进而拉最新 bundle）。
+        resp = HTMLResponse(html)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
     except ImportError as e:
         logger.debug("Jinja2 模板渲染失败，使用原始 HTML: %s", e)
         return html_path.read_text(encoding="utf-8")

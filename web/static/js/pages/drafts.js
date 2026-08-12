@@ -227,11 +227,13 @@ async function loadDraftsPage() {
 
     container.innerHTML = '<div class="draft-empty"><i class="fa-solid fa-spinner fa-spin" style="color:#94a3b8;"></i><p>\u52a0\u8f7d\u4e2d\u2026</p></div>';
 
-    // Build tab bar
+    // Build tab bar → render into dedicated toolbar container
     var tabsHtml = '';
     ['all', 'pending', 'approved', 'discarded'].forEach(function (s) {
         tabsHtml += '<button class="draft-tab' + (_draftStatus === s ? ' active' : '') + '" data-status="' + s + '" onclick="_draftSwitchStatus(\'' + s + '\')">' + DRAFT_STATUS_LABELS[s] + '</button>';
     });
+    var tabsContainer = document.getElementById('draft-tabs-container');
+    if (tabsContainer) tabsContainer.innerHTML = tabsHtml;
 
     try {
         // 平台筛选由 api._withPlatform() 自动追加 ?platform=
@@ -259,9 +261,8 @@ async function loadDraftsPage() {
             badge.style.display = cnt > 0 ? 'inline-flex' : 'none';
         }
 
-        // Build table (always shown, even when empty)
-        var html = '<div class="draft-tabs">' + tabsHtml + '</div>';
-        html += '<div class="draft-table-wrap"><table class="draft-table"><colgroup>'
+        // Build table (always shown, even when empty) — tabs now in toolbar
+        var html = '<div class="draft-table-wrap"><table class="draft-table"><colgroup>'
             + '<col class="c-col-check"><col class="c-col-platform"><col class="c-col-sender"><col class="c-col-conv">'
             + '<col><col><col class="c-col-rag"><col class="c-col-time"><col class="c-col-actions">' // 用户消息/AI拟回复吃剩余
             + '</colgroup><thead><tr>';
@@ -415,11 +416,35 @@ window._draftDeselectAll = _draftDeselectAll;
 
 function _draftUpdateBatchBar() {
     var bar = document.getElementById('draft-batch-bar');
-    if (!bar) return;
+    var readBtn = document.getElementById('draft-batch-read-btn');
     var count = Object.keys(_draftSelected).length;
-    document.getElementById('draft-batch-count').textContent = count;
-    bar.style.display = count > 0 ? 'flex' : 'none';
+    if (bar) {
+        document.getElementById('draft-batch-count').textContent = count;
+        bar.style.display = count > 0 ? 'flex' : 'none';
+    }
+    if (readBtn) {
+        readBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
 }
+
+async function _draftBatchMarkRead() {
+    var ids = Object.keys(_draftSelected);
+    if (ids.length === 0) return;
+    if (!confirm('确认标记选中的 ' + ids.length + ' 条为已读？')) return;
+    try {
+        const res = await api.post('/api/drafts/batch-mark-read', { ids: ids });
+        if (!res || res.error) {
+            toast('操作失败: ' + (res && res.error ? res.error : '未知错误'));
+            return;
+        }
+        _draftSelected = {};
+        toast('已标记 ' + ids.length + ' 条为已读');
+        loadDraftsPage();
+    } catch (e) {
+        toast('请求异常: ' + e.message);
+    }
+}
+window._draftBatchMarkRead = _draftBatchMarkRead;
 
 async function _draftBatchApprove() {
     var ids = Object.keys(_draftSelected);

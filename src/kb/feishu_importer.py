@@ -11,7 +11,7 @@ from typing import Any
 
 from src.memory.embedding import EmbeddingClient
 from src.shared_state import get_app_instance
-from src.tools.utils import split_text
+from src.tools.utils import clean_document_for_rag, split_text
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,11 @@ def import_single_feishu_doc(
     if rag_config is None:
         rag_config = {"chunk_size": 800, "chunk_overlap": 200}
 
+    # 安全天花板：优先取配置，否则由 split_text 按 chunk_size*2 派生
+    chunk_hard_max = rag_config.get("chunk_hard_max")
+    if chunk_hard_max is None and config is not None:
+        chunk_hard_max = getattr(getattr(config, "rag", None), "chunk_hard_max", None)
+
     feishu_adapter = _get_feishu_adapter()
 
     # 读取飞书文档内容
@@ -112,10 +117,26 @@ def import_single_feishu_doc(
         content=content,
     )
 
+    cleaned_content = content
+    rag_cfg = getattr(config, "rag", None)
+    if rag_cfg and getattr(rag_cfg, "llm_clean_enabled", False):
+        app = get_app_instance()
+        llm_client = getattr(app, "llm_client", None) if app else None
+        has_key = bool(getattr(getattr(config, "llm", None), "api_key", None))
+        max_chars = getattr(rag_cfg, "llm_clean_max_chars", 8000)
+        if llm_client and has_key:
+            cleaned_content = clean_document_for_rag(
+                content,
+                llm_client=llm_client,
+                enable_llm=True,
+                max_chars=max_chars,
+            )
+
     chunks = split_text(
-        content,
+        cleaned_content,
         max_len=rag_config["chunk_size"],
         overlap=rag_config["chunk_overlap"],
+        hard_max=chunk_hard_max,
     )
     store._kb_repo.add_kb_chunks(doc_id, chunks)
 

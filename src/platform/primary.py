@@ -226,11 +226,16 @@ class PrimaryMixin(EngineMixinBase):
             rule_engine=self.rule_engine,
             platform_id="dingtalk",
         )
+        llm_client_for_clean = None
+        if getattr(self.config.rag, "llm_clean_enabled", False) and self.config.llm.api_key:
+            llm_client_for_clean = self.llm_client
         self.doc_sync_scheduler = DocSyncScheduler(
             dws=self.dws,
             db_path=self.store.db_path,
             sync_interval_seconds=self.config.storage.doc_sync_interval_hours * 3600,
             embedding_client=self.embedding_client,
+            config=self.config,
+            llm_client=llm_client_for_clean,
         )
         self.db_backups: dict[str, DatabaseBackup] = {}
         if self.config.storage.backup_enabled:

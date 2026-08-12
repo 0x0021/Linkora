@@ -178,6 +178,7 @@ class BlacklistRepo:
             return False  # 不在缓存 = 不在黑名单
         if cu is None or cu == "":
             return True  # 永久黑名单
+        assert isinstance(cu, str)  # 此处 cu 为冷却到期时间的 iso 字符串
         return cu > datetime.now().isoformat()
 
     def cooldown_remaining(self, chat_id: str) -> int:
@@ -190,6 +191,7 @@ class BlacklistRepo:
             cu = self._cache.get(chat_id, _SENTINEL)
         if cu is _SENTINEL or not cu:
             return 0
+        assert isinstance(cu, str)  # 此处 cu 为冷却到期时间的 iso 字符串
         try:
             until = datetime.fromisoformat(cu)
             return max(0, int((until - datetime.now()).total_seconds()))

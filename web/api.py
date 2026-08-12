@@ -1047,7 +1047,8 @@ def run_web(port: int = 8000, host: str | None = None):
     if host is None:
         try:
             from src.shared_state import get_config
-            host = get_config().web.host
+            _cfg = get_config()
+            host = _cfg.web.host if _cfg is not None else None
         except Exception:
             host = "127.0.0.1"
 
@@ -1056,7 +1057,8 @@ def run_web(port: int = 8000, host: str | None = None):
         _auth_on = True
         try:
             from src.shared_state import get_config
-            _auth_on = get_config().web.auth_enabled
+            _cfg = get_config()
+            _auth_on = _cfg.web.auth_enabled if _cfg is not None else True
         except Exception:
             _auth_on = True
         if not _auth_on:
@@ -1081,7 +1083,7 @@ def run_web(port: int = 8000, host: str | None = None):
 
     # 设置 uvicorn 日志级别为 WARNING，只显示警告和错误
     # 这样静态资源的 DEBUG 日志和非 API 请求的 INFO 日志都不会显示
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    uvicorn.run(app, host=host or "127.0.0.1", port=port, log_level="warning")
 
 
 if __name__ == "__main__":

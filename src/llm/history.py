@@ -131,7 +131,7 @@ def apply_history_tiering(
 
     返回：实际注入 LLM 的 history 切片（已用摘要占位 Message 替换 older）。
     """
-    max_recent = max_recent or agent._history_tiering_recent
+    max_recent = int(max_recent or agent._history_tiering_recent or 0)
     if len(history) <= max_recent:
         return history
 

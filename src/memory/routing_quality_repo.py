@@ -113,6 +113,8 @@ class RoutingQualityRepo:
         self._insert_count += 1
         if self._insert_count % 200 == 0:
             self._prune_routing_quality()
+        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
+        assert cur.lastrowid is not None
         return cur.lastrowid
 
     def update_routing_quality_trace(

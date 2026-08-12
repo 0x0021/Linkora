@@ -82,7 +82,7 @@ async def add_memory(item: MemoryItem):
             if scope not in ("public", "personal"):
                 try:
                     from src.memory.classifier import classify_memory_scope
-                    scope, _ = classify_memory_scope(item.content, source="manual")
+                    scope, _, _conf = classify_memory_scope(item.content, source="manual")
                 except Exception:
                     scope = "personal"
             memory_id = store._memory_repo.save_memory(

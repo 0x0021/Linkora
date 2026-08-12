@@ -58,6 +58,7 @@ class DraftRepo:
              msg_type, stage, error, raw_json, now, now),
         )
         self.store.conn.commit()
+        assert cur.lastrowid is not None
         return int(cur.lastrowid)
 
     def list_dead_letters(self, status: str = "pending", limit: int = 100,

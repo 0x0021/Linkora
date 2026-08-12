@@ -71,6 +71,7 @@ class _AgentThreadState(threading.local):
     last_kb_hit: bool
     last_kb_query_intent: bool
     last_kb_citations: list[Citation]
+    last_kb_citations_raw: list
     last_kb_relevant_knowledge: str
     last_rag_empty: bool
     rag_empty_fallback_level: int
@@ -243,6 +244,14 @@ class LLMAgent:
         self._tl.last_kb_citations = val
 
     @property
+    def _last_kb_citations_raw(self) -> list:
+        return getattr(self._tl, "last_kb_citations_raw", [])
+
+    @_last_kb_citations_raw.setter
+    def _last_kb_citations_raw(self, val: list) -> None:
+        self._tl.last_kb_citations_raw = val
+
+    @property
     def _last_kb_relevant_knowledge(self) -> str:
         return getattr(self._tl, "last_kb_relevant_knowledge", "")
 
@@ -266,12 +275,12 @@ class LLMAgent:
     def _rq_id(self, val: int | None) -> None:
         self._tl.rq_id = val
 
-    def _build_system_prompt_core(self, sender_name: str = None) -> str:
+    def _build_system_prompt_core(self, sender_name: str | None = None) -> str:
         # 实际逻辑已拆到 src/llm/system_prompt.py；此处保留 thin wrapper 以兼容测试
         # monkey-patch（如 ``agent._build_system_prompt = lambda **kw: ""``）。
         return _system_prompt.build_system_prompt_core(self, sender_name)
 
-    def _build_system_prompt(self, sender_name: str = None,
+    def _build_system_prompt(self, sender_name: str | None = None,
                              include_tools: bool = False,
                              include_skills: bool = False,
                              include_few_shot: bool = True,
@@ -548,7 +557,7 @@ class LLMAgent:
 
     @request_id_scope(prefix="llm")
     def process_message(self, message: Message,
-                        history: list[Message] = None,
+                        history: list[Message] | None = None,
                         disposition: str = "",
                         intent_action: str = "llm",
                         enable_stream: bool = False) -> AgentReply:

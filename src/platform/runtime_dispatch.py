@@ -94,7 +94,7 @@ class ReplyDispatchMixin(EngineMixinBase):
 
         # 如果缓存中没有 peer 信息，动态查询
         if not peer_oid and not peer_user_id and hasattr(self.poller, '_resolve_single_chat_peer'):
-            resolved = self.poller._resolve_single_chat_peer(message.chat_id, message.chat_name)
+            resolved = self.poller._resolve_single_chat_peer(message.chat_id, message.chat_name or "")
             if resolved:
                 peer_user_id = resolved.get("user_id", "")
                 peer_oid = resolved.get("open_dingtalk_id", "")

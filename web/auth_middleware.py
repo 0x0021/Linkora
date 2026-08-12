@@ -46,7 +46,7 @@ def _resolve_jwt_secret() -> str:
             secret = (getattr(cfg.web, "jwt_secret", "") or "").strip()
             if secret:
                 _runtime_jwt_secret = secret
-                return _runtime_jwt_secret
+                return secret
     except Exception:
         pass
     _runtime_jwt_secret = secrets.token_urlsafe(32)

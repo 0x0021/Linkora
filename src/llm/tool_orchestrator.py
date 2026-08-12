@@ -85,6 +85,7 @@ class ToolOrchestrator:
             try:
                 input_args_str = json.dumps(args, ensure_ascii=False) if args else ""
                 output_result_str = json.dumps(tool_output, ensure_ascii=False) if tool_output else ""
+                assert agent.store is not None
                 agent.store.log_tool_execution(
                     tool_name=tool_name,
                     input_args=input_args_str,

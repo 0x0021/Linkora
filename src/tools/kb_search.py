@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from src.config import EmbeddingConfig
 from src.memory.sqlite_store import SQLiteStore
 from src.tools.base import BaseTool
 from src.tools.utils import safe_float, safe_int
@@ -90,7 +91,7 @@ class KBSearchTool(BaseTool):
     # 意图关键词：仅作为「显式要求搜索知识库」时的触发短语（RAG 背景检索已由系统提示词自动注入）
     intent_keywords: list[str] = []
 
-    def __init__(self, store: SQLiteStore, embedding_config: Optional[dict] = None):
+    def __init__(self, store: SQLiteStore, embedding_config: "EmbeddingConfig | dict | None" = None):
         """
         初始化 RAG 搜索工具。
 

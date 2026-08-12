@@ -42,7 +42,7 @@ class ConversationRepo:
         row = cur.fetchone()
         return row[0] if row else None
 
-    def get_latest_user_message_time(self, chat_id: str, exclude_msg_id: str = None,
+    def get_latest_user_message_time(self, chat_id: str, exclude_msg_id: str | None = None,
                                      platform: str = "") -> Optional[str]:
         """获取会话中最新用户消息的时间戳（可排除指定 msg_id）。"""
         cur = self._cc(platform).cursor()

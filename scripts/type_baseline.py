@@ -25,17 +25,12 @@ from pathlib import Path
 # 这是「只减不增」的起点；每收敛一批后下调此值，使门禁逐步收紧。
 # 历次基线：1057（2026-08-05 初始）→ 205（mixin 共享基类重构）→ 96（误标，
 # 实际 6e24aa0 仍 334）→ 95（lint 清理后真实值）→ 74（2026-08-12 安全批次：
-# 12 个自包含模块零行为变更修复，含 ocr_postprocess 真实 import bug）。
+# 12 个自包含模块零行为变更修复，含 ocr_postprocess 真实 import bug）→
+# 0（2026-08-12 收尾批次：剩余 27 个含多处真实 bug 修复，全部零行为变更收敛）。
 #
-# 当前 74（pyright==1.1.411，src+web）：规则分布 reportArgumentType(29)/
-# reportReturnType(16)/reportAttributeAccessIssue(7)/reportOptionalMemberAccess(7)/
-# reportOptionalSubscript(5)/reportCallIssue(4)/reportOptionalOperand(3)/
-# reportOperatorIssue(2)/reportAssignmentType(1)。
-# 剩余大头：web/routers(kb 8/api 4/persona 3/config 2/intents 2)、
-# src/memory/embedding(6)、src/platform/runtime_lifecycle(4)、
-# src/skills/tool_wrapper(4)、src/llm(agent/history/prompt_builder/system_prompt 各 2-3)。
-# 多为 DB 返回 int|None 守卫、None→str 参数、web 字典下标，需逐函数核实后谨慎收敛。
-TYPE_ERROR_BASELINE = 74
+# 当前 0（pyright==1.1.411，src+web）：类型债务已清零。门禁变为「零新增」——
+# 任何新引入的 pyright error 都会 fail，固化收敛成果。
+TYPE_ERROR_BASELINE = 0
 
 
 def count_errors(report: dict) -> int:

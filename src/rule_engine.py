@@ -59,7 +59,7 @@ class KeywordRule:
     enabled: bool
     hit_count: int = 0
     # regex 类型规则的预编译对象 (reload_db_keywords 时编译, 避免每条消息重复编译)
-    _compiled: "re.Pattern | None" = None
+    _compiled: "_regex.Pattern | None" = None
 
     def matches(self, text: str, stop_words: set[str] | None = None,
                 timeout: float = 1.0) -> tuple[bool, dict[str, str] | None]:
@@ -278,7 +278,7 @@ class RuleEngine:
         if result.disposition == "business":
             return "business", result.reason, result.confidence
         # social 子型：用 short_label（thank_you / acknowledge / closing / polite）保持日志兼容
-        return result.subtype or result.category_id, result.reason, result.confidence
+        return result.subtype or result.category_id or "", result.reason, result.confidence
 
     def reload_db_keywords(self) -> None:
         if not self._db_store:

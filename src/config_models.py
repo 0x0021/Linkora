@@ -763,6 +763,8 @@ class RagConfig(BaseModel):
     chunk_hard_max: int | None = None  # 安全天花板（字符数）；None=派生为 chunk_size*2。
     # 仅拦截病态超长单元（巨型无标点段落/URL/哈希），达到时仍优先语义边界断开。
     # 建议设在 embedding 模型有效字符容量之下，杜绝模型侧截断。
+    llm_clean_enabled: bool = True  # 入库文档是否用 LLM 做语义清洗（正则仅作预清洗/回退）
+    llm_clean_max_chars: int = 8000  # 单次 LLM 清洗字符上限；超长文档按段落分片，超单段上限的段回退正则
 
 
 class WebConfig(BaseModel):

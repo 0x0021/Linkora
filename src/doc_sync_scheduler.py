@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from src.dws_adapter import DwsAdapter, DwsNonRetryableError, DwsError
 from src.memory.sqlite_store import SQLiteStore
-from src.tools.utils import cross_process_lock, split_text
+from src.tools.utils import clean_document_for_rag, cross_process_lock, split_text
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +26,32 @@ class DocSyncScheduler:
                  sync_interval_seconds: int = 3600,
                  embedding_client=None,
                  on_sync: Callable[[dict], None] | None = None,
-                 config: Any = None):
+                 config: Any = None,
+                 llm_client=None):
         self.dws = dws
         self.db_path = db_path
         self.sync_interval = sync_interval_seconds
         self.embedding_client = embedding_client
         self.on_sync = on_sync
         self.config = config  # 应用配置（可选）；用于读取 rag.chunk_hard_max 安全天花板
+        self.llm_client = llm_client  # 文档 LLM 语义清洗客户端（可选）
 
         self._running = False
         self._thread: threading.Thread | None = None
         # 进程内串行化：避免调度线程与手动触发并发执行 _run_sync。
         self._sync_lock = threading.Lock()
+
+    def _clean_document_for_rag(self, content: str) -> str:
+        """按配置对文档做 LLM 语义清洗（无 client/未启用时回退正则）。"""
+        rag_cfg = getattr(self.config, "rag", None)
+        enable_llm = getattr(rag_cfg, "llm_clean_enabled", False) if rag_cfg else False
+        max_chars = getattr(rag_cfg, "llm_clean_max_chars", 8000) if rag_cfg else 8000
+        return clean_document_for_rag(
+            content,
+            llm_client=self.llm_client,
+            enable_llm=enable_llm,
+            max_chars=max_chars,
+        )
 
     def _store(self) -> SQLiteStore:
         """在后台线程中创建独立的 SQLiteStore，避免跨线程连接问题。"""
@@ -125,7 +139,7 @@ class DocSyncScheduler:
                 content=remote_content,
             )
             chunks = split_text(
-                remote_content,
+                self._clean_document_for_rag(remote_content),
                 hard_max=(
                     getattr(getattr(self.config, "rag", None), "chunk_hard_max", None)
                     if self.config is not None else None

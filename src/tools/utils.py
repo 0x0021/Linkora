@@ -4,7 +4,10 @@ import contextlib
 import os
 import re
 import tempfile
+import time
 import logging
+
+from ..rag_metrics import record_clean, record_chunk, snapshot as _rag_metrics_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -151,11 +154,30 @@ def clean_document_for_rag(
     if not (enable_llm and llm_client is not None):
         return precleaned
 
+    start = time.monotonic()
     try:
-        return _llm_clean(precleaned, llm_client, max_chars=max_chars)
+        result = _llm_clean(precleaned, llm_client, max_chars=max_chars)
     except Exception as exc:  # 任意异常都回退，保证入库不中断
         logger.warning("LLM 文档清洗失败，回退正则预清洗: %s", exc)
+        record_clean(
+            fallback=True,
+            chars_in=len(content),
+            chars_out=len(precleaned),
+            duration_ms=(time.monotonic() - start) * 1000,
+        )
+        if snapshot := _rag_metrics_snapshot():
+            logger.info(
+                "[RAG 清洗] LLM 清洗回退正则，当前累计回退率=%.1f%%（调用=%d）",
+                snapshot["clean_fallback_rate"] * 100, snapshot["clean_calls"],
+            )
         return precleaned
+    record_clean(
+        fallback=False,
+        chars_in=len(content),
+        chars_out=len(result),
+        duration_ms=(time.monotonic() - start) * 1000,
+    )
+    return result
 
 
 def _llm_preclean(content: str) -> str:
@@ -356,6 +378,7 @@ def split_text(
     ['第一段。', '第二段。']
     """
     if not text:
+        record_chunk(count=0)
         return []
 
     hard_max = hard_max or max(max_len * 2, 800)
@@ -422,6 +445,7 @@ def split_text(
             overlapped.append(tail + SEP + chunks[idx])
         chunks = overlapped
 
+    record_chunk(count=len(chunks))
     return chunks
 
 

@@ -66,9 +66,9 @@ async def intent_taxonomy(platform: str = ""):
             fs = getattr(tools_cfg, "model_fields_set", set()) or set()
         except Exception:
             fs = set()
-        if "tool_routing_mode" in fs:
+        if tools_cfg is not None and "tool_routing_mode" in fs:
             routing_mode = tools_cfg.tool_routing_mode
-        elif "expose_all_tools" in fs:
+        elif tools_cfg is not None and "expose_all_tools" in fs:
             routing_mode = "all" if tools_cfg.expose_all_tools else "keyword"
         else:
             routing_mode = "smart"

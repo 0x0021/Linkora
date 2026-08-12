@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 import time
+from typing import cast
 
 import numpy as np
 
@@ -81,7 +82,7 @@ def _make_tqdm_class(tracker: _ProgressTracker):
 
         def update(self, n=1):
             super().update(n)
-            self._tracker.add_downloaded(self.desc or "", n)
+            self._tracker.add_downloaded(self.desc or "", int(n or 0))
 
     return _EmbeddingTqdm
 
@@ -187,10 +188,10 @@ class EmbeddingClient:
                 tqdm_cls = _make_tqdm_class(tracker)
                 local_path = snapshot_download(
                     repo_id=config.model,
-                    tqdm_class=tqdm_cls,
+                    tqdm_class=tqdm_cls,  # type: ignore[arg-type]
                     token=hf_token or None,
                     max_workers=4,
-                )
+                )  # type: ignore[call-overload]
                 self._load_status["state"] = "loading"
                 self._load_status["message"] = "模型文件下载完成，正在加载…"
                 self._model = SentenceTransformer(local_path, device=device)
@@ -389,7 +390,7 @@ class EmbeddingClient:
         if provider == "local":
             if model is None:
                 return [[] for _ in texts]
-            return self._embed_local(texts, show_progress_bar=True)
+            return cast(list[list[float]], self._embed_local(texts, show_progress_bar=True))
         else:
             if api_client is None:
                 return [[] for _ in texts]
@@ -490,6 +491,7 @@ class EmbeddingClient:
             texts = [text] if isinstance(text, str) else text
             if batch_size is None:
                 batch_size = getattr(self.config, "batch_size", 128)
+            assert self._model is not None
             vector = self._model.encode(
                 texts,
                 normalize_embeddings=True,
@@ -506,6 +508,7 @@ class EmbeddingClient:
 
     def _embed_api(self, text: str) -> list[float]:
         try:
+            assert self._api_client is not None
             response = self._api_client.embeddings.create(
                 input=text,
                 model=self.config.model,

@@ -26,7 +26,7 @@ _PENDING_LOOKBACK_DAYS = 60
 _ACTIVE_TASK_STATUSES = {"RUNNING", "NEW", "PAUSED", ""}
 
 
-def _pick(d: dict, *keys, default=""):
+def _pick(d: dict, *keys, default: str | list = ""):
     """多 key 兼容取值（钉钉 API 驼峰/下划线混用）。"""
     for k in keys:
         v = d.get(k)
@@ -71,7 +71,7 @@ class DingTalkApprovalProvider(ApprovalProvider):
             if status not in _ACTIVE_TASK_STATUSES:
                 continue
             nodes.append(ApprovalNode(
-                name=_pick(t, "activityName", "activity_name", "name"),
+                name=str(_pick(t, "activityName", "activity_name", "name")),
                 status=status,
                 approver_id=str(_pick(t, "userId", "userid", "user_id")),
                 task_id=str(_pick(t, "taskId", "taskid", "task_id")),
@@ -149,7 +149,7 @@ class DingTalkApprovalProvider(ApprovalProvider):
                 if status not in _ACTIVE_TASK_STATUSES:
                     continue
                 nodes.append(ApprovalNode(
-                    name=_pick(t, "activityName", "name"),
+                    name=str(_pick(t, "activityName", "name")),
                     status=status,
                     task_id=str(_pick(t, "taskId", "taskid", "task_id")),
                 ))

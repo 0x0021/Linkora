@@ -77,7 +77,7 @@ def finish_reply(
 def process_message(
     agent,
     message: Message,
-    history: list[Message] = None,
+    history: list[Message] | None = None,
     disposition: str = "",
     intent_action: str = "llm",
     enable_stream: bool = False,

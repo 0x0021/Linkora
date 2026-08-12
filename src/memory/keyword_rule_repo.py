@@ -51,6 +51,8 @@ class KeywordRuleRepo:
             (category, match_pattern, reply_text, match_type, priority, enabled, now, now),
         )
         self.conn.commit()
+        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
+        assert cur.lastrowid is not None
         return cur.lastrowid
 
     def list(

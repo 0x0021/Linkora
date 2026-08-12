@@ -1,4 +1,6 @@
 from __future__ import annotations
+from typing import cast
+
 from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
@@ -92,7 +94,7 @@ class LifecycleMixin(EngineMixinBase):
     @property
     def store(self) -> "SQLiteStore":
         """当前平台的 SQLiteStore（多平台隔离）。"""
-        return self._active_ctx.store
+        return cast(SQLiteStore, self._active_ctx.store)
     @store.setter
     def store(self, value):
         # 向后兼容：直接赋值视为设置主平台(dingtalk)的 store。
@@ -100,21 +102,21 @@ class LifecycleMixin(EngineMixinBase):
     @property
     def dws(self) -> "DwsAdapter":
         """当前平台的 IM 适配器（多平台隔离）。"""
-        return self._active_ctx.dws
+        return cast(DwsAdapter, self._active_ctx.dws)
     @dws.setter
     def dws(self, value):
         self._ensure_primary().dws = value
     @property
     def poller(self) -> "MessagePoller":
         """当前平台的消息轮询器（多平台隔离）。"""
-        return self._active_ctx.poller
+        return cast(MessagePoller, self._active_ctx.poller)
     @poller.setter
     def poller(self, value):
         self._ensure_primary().poller = value
     @property
     def llm_agent(self) -> "LLMAgent":
         """当前平台的 LLM 智能体（多平台隔离，持有本平台 store）。"""
-        return self._active_ctx.llm_agent
+        return cast(LLMAgent, self._active_ctx.llm_agent)
     @llm_agent.setter
     def llm_agent(self, value):
         self._ensure_primary().llm_agent = value

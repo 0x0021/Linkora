@@ -355,6 +355,8 @@ class MemoryRepo:
             (key, content, source, chat_id, sender_id, sender_name, emb_str, datetime.now().isoformat(), scope),
         )
         self.store.conn.commit()
+        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
+        assert cur.lastrowid is not None
         memory_id = cur.lastrowid
 
         # 注意：记忆向量【不】写入共享的 faiss 索引（_vector_index）。

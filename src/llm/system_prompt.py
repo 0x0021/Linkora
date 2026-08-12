@@ -87,7 +87,7 @@ def _normalize_style_prompt(raw: str) -> str:
     return cleaned.strip()
 
 
-def build_system_prompt_core(agent: Any, sender_name: str = None) -> str:
+def build_system_prompt_core(agent: Any, sender_name: str | None = None) -> str:
     """组装 system prompt 的「基础身份段」（身份/部门/职位/组织/对话者 +
     规则行 + 禁止补答历史问题护栏）。
 
@@ -302,7 +302,7 @@ def build_system_prompt_core(agent: Any, sender_name: str = None) -> str:
 
 def build_system_prompt(
     agent: Any,
-    sender_name: str = None,
+    sender_name: str | None = None,
     include_tools: bool = False,
     include_skills: bool = False,
     include_few_shot: bool = True,

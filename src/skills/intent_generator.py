@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 from src.intent import IntentRegistry, LAYER_DOMAIN, default_registry
 from src.llm.client import LLMClient, LLMResponse
@@ -199,4 +199,4 @@ class IntentGenerator:
           - result: 解析后的 {intent_categories, intent_keywords}
           - error: 失败/跳过原因（成功时为 None）
         """
-        return self._generate_core(skill, force=force, return_trace=True)
+        return cast(dict, self._generate_core(skill, force=force, return_trace=True))

@@ -48,7 +48,9 @@ class ExternalFriendRepo:
                 (name, chat_id, notes, now, open_dingtalk_id),
             )
         self._cc().commit()
-        return self.get_external_friend_by_id(open_dingtalk_id)
+        row = self.get_external_friend_by_id(open_dingtalk_id)
+        assert row is not None
+        return row
 
     def get_external_friend_by_name(self, name: str) -> Optional[dict]:
         """按姓名查找外部好友。"""

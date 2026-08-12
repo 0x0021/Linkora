@@ -305,7 +305,7 @@ def _apply_storage(update: ConfigUpdate, cfg: AppConfig):
     if update.storage_messages_retention_days is not None:
         cfg.storage.messages_retention_days = update.storage_messages_retention_days
     if update.storage_doc_sync_interval_hours is not None:
-        cfg.storage.doc_sync_interval_hours = update.storage_doc_sync_interval_hours
+        cfg.storage.doc_sync_interval_hours = int(update.storage_doc_sync_interval_hours)
 
 
 def _apply_safety(update: ConfigUpdate, cfg: AppConfig):
@@ -501,12 +501,12 @@ def _ensure_platform_config(config: AppConfig, platform_id: str):
 async def restore_default_config():
     try:
         import shutil
-        from src.config import AppConfig
+        from src.config import AppConfig, WebConfig
         backup_path = _api.CONFIG_PATH + ".bak"
         if Path(_api.CONFIG_PATH).exists():
             shutil.copy2(_api.CONFIG_PATH, backup_path)
         # 出厂默认骨架（仅 web 段最小设定），其余段为 AppConfig 默认值
-        default_skeleton = AppConfig(web={"auth_enabled": True, "auth_password": "please-change-me"}).model_dump()
+        default_skeleton = AppConfig(web=WebConfig(auth_enabled=True, auth_password="please-change-me")).model_dump()
         merged = default_skeleton
         try:
             current = _api.load_config(_api.CONFIG_PATH)

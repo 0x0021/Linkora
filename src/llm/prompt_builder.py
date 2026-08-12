@@ -62,6 +62,8 @@ def _normalize_history_asc(history: list) -> list:
         first, last = timestamps[0], timestamps[-1]
     except (AttributeError, TypeError):
         return history
+    # 前面已排除含 None 的时间戳；此处显式收窄以满足类型检查。
+    assert first is not None and last is not None
     # DESC（或相等）按契约翻成正序；ASC 保持。
     if first >= last:
         return list(reversed(history))

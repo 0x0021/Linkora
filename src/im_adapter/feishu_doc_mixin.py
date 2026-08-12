@@ -457,8 +457,10 @@ class FeishuDocMixin(IMAdapterBase):
             out = []
             for slide in prs.slides:
                 for shape in slide.shapes:
-                    if shape.has_text_frame and shape.text_frame.text.strip():
-                        out.append(shape.text_frame.text)
+                    # python-pptx stubs don't declare text_frame on BaseShape,
+                    # but has_text_frame guarantees it exists at runtime.
+                    if shape.has_text_frame and shape.text_frame.text.strip():  # type: ignore[attr-defined]
+                        out.append(shape.text_frame.text)  # type: ignore[attr-defined]
             return "\n".join(out)
         # 兜底：当作 UTF-8 文本读取
         try:

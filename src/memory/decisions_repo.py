@@ -76,7 +76,7 @@ class DecisionsRepo:
         intent: str = "",
         action: str = "",
         routing_mode: str = "",
-        routed_tools: str = "",
+        routed_tools: str | list = "",
         skill_name: str = "",
         skill_source: str = "",
         reply_preview: str = "",
@@ -122,6 +122,8 @@ class DecisionsRepo:
         self._insert_count += 1
         if self._insert_count % 200 == 0:
             self._prune_decisions()
+        # 插入后 lastrowid 必然存在（AUTOINCREMENT 主键），None 实际不可能。
+        assert cur.lastrowid is not None
         return cur.lastrowid
 
     def mark_cited(self, *, request_id: str = "", platform_id: str = "",

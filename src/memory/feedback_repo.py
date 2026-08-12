@@ -32,6 +32,8 @@ class FeedbackRepo:
             (message_id, conversation_id, sender_id, rating, correction or "", note or "", datetime.now().isoformat()),
         )
         self.store.conn.commit()
+        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
+        assert cur.lastrowid is not None
         return cur.lastrowid
 
 

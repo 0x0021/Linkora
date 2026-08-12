@@ -483,6 +483,7 @@ def _read_few_shot_for_platform(store, platform: str, cfg) -> list[dict]:
                     logger.warning("[persona] 迁移 few-shot 失败（忽略）: %s", e)
                 return legacy
         return []
+    return []
 
 
 def _count_owner_messages(store, owner: str) -> int:
@@ -791,7 +792,8 @@ def _parse_judge_output(text: str):
     obj = extract_json(text)
     if isinstance(obj, dict) and "score" in obj:
         try:
-            score = int(float(obj.get("score")))
+            score_raw = obj.get("score")
+            score = -1 if score_raw is None else int(float(score_raw))
         except (TypeError, ValueError):
             score = -1
         reason = str(obj.get("reason", "") or "").strip()

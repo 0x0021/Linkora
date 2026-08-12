@@ -116,6 +116,8 @@ class KbRepo:
                 (title, doc_type, source, source_id, url, meta_str, now, now),
             )
             self.store.conn.commit()
+            # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
+            assert cur.lastrowid is not None
             return cur.lastrowid
         except Exception:
             logger.warning("[resilience] silent exception in add_kb_document", exc_info=True)

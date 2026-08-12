@@ -25,7 +25,7 @@ import time
 import asyncio
 import urllib.parse
 import urllib.request
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -68,7 +68,7 @@ async def run_sync(func, *args, **kwargs):
 _platform_ctx: ContextVar[str] = _current_platform_var
 
 
-def set_platform_context(platform: str) -> object:
+def set_platform_context(platform: str) -> Token[str]:
     """设置请求级平台上下文，返回 token 供 finally 复位。"""
     return _platform_ctx.set(platform or "dingtalk")
 

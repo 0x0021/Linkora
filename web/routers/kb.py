@@ -360,6 +360,7 @@ def import_kb_from_url(body: dict | None = None):
         store = get_store()
         # 查重
         dup = store._kb_repo.check_duplicate_document(title=page_title, content=content)
+        assert dup is not None
         if dup["duplicate"]:
             return {
                 "success": False,
@@ -643,7 +644,7 @@ async def parse_document(request: Request, file: UploadFile = File(...)):
     try:
         def _work():
             from src.tools.parse_document import DocumentParser
-            suffix = Path(file.filename).suffix.lower()
+            suffix = Path(file.filename or "").suffix.lower()
 
             # 文件类型白名单
             ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.ppt', '.pptx',
@@ -660,7 +661,9 @@ async def parse_document(request: Request, file: UploadFile = File(...)):
 
             try:
                 # 调用统一解析器
-                parser = DocumentParser(_api.get_app_instance().config if _api.get_app_instance() else None)
+                _app = _api.get_app_instance()
+                assert _app is not None
+                parser = DocumentParser(_app.config)
                 text = parser.parse(tmp_path)
 
                 if not text.strip():

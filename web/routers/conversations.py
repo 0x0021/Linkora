@@ -192,7 +192,7 @@ async def messages(chat_id: str = "", limit: int = 50):
                     if fallback_path:
                         try:
                             n = store._message_repo.backfill_missing_image_path(
-                                d.get('msg_id'), fallback_path, get_current_platform()
+                                d.get('msg_id') or "", fallback_path, get_current_platform()
                             )
                         except Exception as e:  # noqa: BLE001
                             logger.warning(

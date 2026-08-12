@@ -356,7 +356,7 @@ class ToolRouter:
         """
         start = time.time()
         try:
-            result = tool.safe_execute(args)
+            result: Any = tool.safe_execute(args)
             duration = int((time.time() - start) * 1000)
             # 检查工具自身是否通过返回 dict 中的 error 字段报告失败
             # 仅当 error 字段存在且值为非空字符串时才判定失败

@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-08-12 — 类型债务清零（74→0）+ 真实 bug 修复
+
+- `fix(types)`: pyright 类型错误 **74 → 0** 全清零（pyright==1.1.411，src+web）；`scripts/type_baseline.py` 的 `TYPE_ERROR_BASELINE` 由 74 下调至 **0**，门禁变为「零新增」。所有修复均为零行为变更（类型收窄 / `assert` 守卫 / `cast` 标注 / 参数注解放宽），并顺带修复多处真实缺陷。
+- `fix(kb)`: `web/routers/kb.py` 网页抓取查重 `dup` 为 `None` 时下标崩溃（缺失 `assert dup is not None`，真实潜在线上 500）；`DocumentParser` 实例化传 `AppConfig | None` 改为先 `assert` 应用实例非空（真实潜在线上崩溃）。
+- `fix(persona)`: `web/routers/persona.py::_read_few_shot_for_platform` 在 `store is None` / 无 `_few_shot_repo` 时**无返回值**（missing return，真实潜在线上 500），补 `return []`。
+- `fix(memory)`: `web/routers/memories.py` `classify_memory_scope` 返回 3 元组 `(scope, reason, confidence)`，原 2 变量解包 `scope, _ =` 静默丢掉后两个值（真实潜在逻辑错误），改为 3 变量解包。
+- `fix(config)`: `web/routers/config.py` `AppConfig(web={"auth_enabled": ...})` 误传 dict（应为 `WebConfig`），真实类型不匹配，改为 `AppConfig(web=WebConfig(...))`。
+- `fix(agent)`: 为 `LLMAgent` 补 `_last_kb_citations_raw` 属性访问器（与既有 `_last_kb_*` 代理属性一致），修复 `prompt_builder` 每轮重置 RAG 侧信道时的属性缺失。
+- `fix(rag)`: `src/memory/embedding.py` `embed_batch` 调用 `_embed_local`（返回 `list[float] | list[list[float]]`）断言为 `list[list[float]]`；`snapshot_download` 的 `tqdm_class` 类型不匹配加精确 `# type: ignore`；`_model` / `_api_client` 空值守卫补 `assert`；`_EmbeddingTqdm.update` 的 `n` 由 `int(n or 0)` 收窄。
+- `fix(tools)`: `KBSearchTool.__init__` 的 `embedding_config` 注解由 `Optional[dict]` 放宽为 `EmbeddingConfig | dict | None`（运行时 L111-114 已兼容两者），消除 `runtime_setup` 热重载重建工具时的类型报错。
+- `fix(platform)`: `runtime_lifecycle` 四个平台隔离属性（`store`/`dws`/`poller`/`llm_agent`）返回加 `cast`（`_active_ctx` 运行时保证非空）；`web/dependencies.set_platform_context` 返回类型由 `object` 收敛为 `Token[str]`。
+
 ## 2026-08-11 — 发布前夜收尾（依赖冲突收敛 / 测试断言同步 / lint 清理）
 
 - `fix(deps)`: **tokenizers 版本冲突收敛**——Dependabot 升级引入解析冲突，经两轮调整（先降 `0.23.0`，再对齐 pyproject 锁定值）统一回 **`0.22.2`**，并重建 `requirements.lock` / `uv.lock`（后一轮仅动约束与锁文件，不改功能）。

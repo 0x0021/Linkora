@@ -483,8 +483,6 @@ rag:
   chunk_overlap: 50                                # 分块重叠大小（字符数）
   # chunk_hard_max: 1000                           # 安全天花板（字符数）；留空=chunk_size*2
   #                                                # 仅拦病态超长单元，建议 < embedding 模型字符容量
-  # llm_clean_enabled: true                        # 入库文档用 LLM 语义清洗（正则作预清洗/回退）
-  # llm_clean_max_chars: 8000                      # 单次 LLM 清洗字符上限；超长文档按段落分片
 
 # ============================================================
 # ⑩ 技能引擎配置（Skills）

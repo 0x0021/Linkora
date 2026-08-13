@@ -170,6 +170,24 @@ class InboundMixin(EngineMixinBase):
             return "DWS 判定会话已读"
         return None
 
+    def _record_gate_decision(self, message: Message, reason: str) -> None:
+        """记录被门控/已回复等原因跳过的消息到决策追踪。
+
+        保持「最近消息」与「决策追踪」同步：这些消息虽未进入 LLM/规则处理，
+        但同样是系统对入站消息的处置决策，应纳入追踪避免面板显示陈旧数据。
+        """
+        tracker.record(
+            sender_id=message.sender_id or "",
+            sender=message.sender_name or "",
+            conversation_id=message.chat_id or "",
+            chat=message.chat_name or message.chat_id,
+            content=(message.content or "")[:80],
+            intent="gate",
+            action="skip",
+            reply_preview=reason[:80],
+            platform_id=_active_platform_ctx.get(),
+        )
+
     def _should_reply_now(self, message: Message) -> bool:
         """发送前最后一刻的权威裁决（后置兜底）：此刻是否允许 AI 自动回复。
 
@@ -482,6 +500,7 @@ class InboundMixin(EngineMixinBase):
             if self._has_replied_after(message):
                 logger.info("[已回复] 我已在 %s 的消息之后回复过，AI 不再回复",
                             message.sender_name)
+                self._record_gate_decision(message, "消息已有回复")
                 return
 
             # === 门控前置：一次性算出接管/在场（H2-2026-08-08 避免重复查库），后续复用 ===
@@ -492,6 +511,7 @@ class InboundMixin(EngineMixinBase):
             if taken_over:
                 logger.info("[用户接管] %s 已手动回复 %s，跳过 AI 回复",
                             self.current_user_name, message.sender_name)
+                self._record_gate_decision(message, "人工已接管")
                 return
 
             # === 检查：真人是否正参与该会话（human-in-the-loop 防穿插） ===
@@ -499,6 +519,7 @@ class InboundMixin(EngineMixinBase):
             if owner_present:
                 logger.info("[真人在场] %s 最近在会话 %s 活跃，AI 暂不出声",
                             self.current_user_name, message.chat_name or message.chat_id[:20])
+                self._record_gate_decision(message, "真人在场")
                 return
 
             logger.info(
@@ -526,6 +547,7 @@ class InboundMixin(EngineMixinBase):
             if _gate_reason is not None:
                 logger.info("[门控] 前置过滤命中：%s，跳过 LLM 处理（来自 %s）",
                             _gate_reason, message.sender_name)
+                self._record_gate_decision(message, _gate_reason)
                 self._mark_inbound_processed(message)
                 return
 

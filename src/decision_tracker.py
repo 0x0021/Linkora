@@ -121,65 +121,64 @@ class DecisionTracker:
     def recent(self, n: int = 50, platform_id: str = "") -> list[dict]:
         """返回最近 n 条决策（按时间正序，便于前端顺序渲染）。
 
-        优先返回内存中的实时数据；内存为空（刚重启）时回退 SQLite 持久化数据，
-        确保首页「决策追踪」卡片重启后不空白。
+        优先返回内存中的实时数据；当 SQLite 中存在比内存更新的记录时自动刷新内存，
+        避免进程运行期间决策面板冻结在旧数据上。内存为空（刚重启）时回退 SQLite
+        持久化数据，确保首页「决策追踪」卡片重启后不空白。
 
         Args:
             n: 返回条数
             platform_id: 平台 ID（如 dingtalk/feishu），指定时从对应平台 store 读取；
                 为空时返回内存中所有数据（向后兼容）。
         """
+        # 先按平台取出当前内存数据，用于判断是否需要 DB 刷新
         recs = list(self._records)
-
         if platform_id:
             platform_recs = [r for r in recs if r.platform_id == platform_id]
         else:
             platform_recs = recs
 
-        if platform_recs:
-            return [asdict(r) for r in platform_recs[-n:]]
-
-        # 指定平台时从对应 store 读取；内存为空时也从默认 store 恢复
+        # 尝试从持久化层刷新：若 DB 有比内存更新的记录则回填
         store = self._store_for(platform_id)
         if store:
             try:
                 result = store._decisions_repo.get_decisions(page_size=n)
                 db_recs = result.get("items", []) if isinstance(result, dict) else []
                 if db_recs:
-                    # 构建内存中已存在记录的去重键（避免重复回填）
-                    existing_keys = set()
-                    for r in self._records:
-                        key = (r.ts, r.sender, r.content)
-                        existing_keys.add(key)
-                    # 回填内存队列，跳过已存在的记录
-                    for row in reversed(db_recs):
-                        key = (
-                            row.get("created_at", ""),
-                            row.get("sender_name", ""),
-                            row.get("content_preview", ""),
-                        )
-                        if key in existing_keys:
-                            continue
-                        self._records.append(DecisionRecord(
-                            ts=row.get("created_at", ""),
-                            sender=row.get("sender_name", ""),
-                            chat=row.get("conversation_name", ""),
-                            content=row.get("content_preview", ""),
-                            intent=row.get("intent", ""),
-                            action=row.get("action", ""),
-                            sender_id=row.get("sender_id", ""),
-                            platform_id=platform_id,
-                            routing_mode=row.get("routing_mode"),
-                            routed_tools=row.get("routed_tools"),
-                            skill_name=row.get("skill_name"),
-                            skill_source=row.get("skill_source"),
-                            reply_preview=row.get("reply_preview"),
-                        ))
-                    platform_recs = [r for r in self._records if r.platform_id == platform_id]
-                    return [asdict(r) for r in platform_recs[-n:]]
+                    newest_db_ts = db_recs[0].get("created_at", "")
+                    newest_mem_ts = platform_recs[-1].ts if platform_recs else ""
+                    # ISO 时间字符串可直接字典序比较
+                    if newest_db_ts > newest_mem_ts:
+                        existing_keys = set((r.ts, r.sender, r.content) for r in self._records)
+                        for row in reversed(db_recs):
+                            key = (
+                                row.get("created_at", ""),
+                                row.get("sender_name", ""),
+                                row.get("content_preview", ""),
+                            )
+                            if key in existing_keys:
+                                continue
+                            self._records.append(DecisionRecord(
+                                ts=row.get("created_at", ""),
+                                sender=row.get("sender_name", ""),
+                                chat=row.get("conversation_name", ""),
+                                content=row.get("content_preview", ""),
+                                intent=row.get("intent", ""),
+                                action=row.get("action", ""),
+                                sender_id=row.get("sender_id", ""),
+                                platform_id=platform_id,
+                                routing_mode=row.get("routing_mode"),
+                                routed_tools=row.get("routed_tools"),
+                                skill_name=row.get("skill_name"),
+                                skill_source=row.get("skill_source"),
+                                reply_preview=row.get("reply_preview"),
+                            ))
+                        # 重新计算平台过滤后的内存记录
+                        recs = list(self._records)
+                        platform_recs = [r for r in recs if r.platform_id == platform_id] if platform_id else recs
             except Exception:
-                logger.warning("从 SQLite 回填决策记录失败", exc_info=True)
-        return []
+                logger.warning("从 SQLite 刷新决策记录失败", exc_info=True)
+
+        return [asdict(r) for r in platform_recs[-n:]]
 
     def clear(self) -> None:
         self._records.clear()

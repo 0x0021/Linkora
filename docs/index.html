@@ -82,7 +82,7 @@
 
   <div class="container hero__inner">
     <div class="hero__copy">
-      <span class="hero__badge"><span class="tag">v0.2.0</span> 新增：人工接管双重校验</span>
+      <span class="hero__badge"><span class="tag">v0.3.0</span> 新增：JWT 认证与 RBAC 权限</span>
       <h1 class="hero__title">让 AI 分身，<br /><span class="grad">接管你的日常沟通</span></h1>
       <p class="hero__sub">群聊、私聊都在线 · 钉钉、飞书、企业微信全覆盖</p>
       <p class="hero__desc">灵桥把 AI 分身带到团队每天使用的沟通平台。它能理解企业知识、调用工具完成工作，并与真人无缝协作，让沟通和业务持续运转。</p>
@@ -172,7 +172,7 @@
       <div class="feature-card reveal" data-delay="2">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h8"/></svg></div>
         <h3 class="feature-card__title">Web 管理台</h3>
-        <p class="feature-card__desc">15 个页面、150+ 端点。会话、知识库、工具、审批全在浏览器里可查、可调、可观测。</p>
+        <p class="feature-card__desc">15 个页面、153 端点。会话、知识库、工具、审批全在浏览器里可查、可调、可观测。</p>
       </div>
       <div class="feature-card reveal" data-delay="3">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
@@ -349,7 +349,7 @@ python main.py</code></pre>
     <div class="section__head reveal">
       <span class="eyebrow">文档</span>
       <h2 class="section__title">把每一个细节都讲清楚</h2>
-      <p class="section__sub">架构、配置、工具、API、部署——开发者需要的信息都在这里。</p>
+      <p class="section__sub">架构、设计、工具、API、RAG、意图、部署与开发——开发者需要的信息都在这里。</p>
     </div>
     <div class="docs-grid">
       <a class="doc-card reveal" data-delay="1" href="./architecture.html">
@@ -366,7 +366,7 @@ python main.py</code></pre>
       </a>
       <a class="doc-card reveal" data-delay="1" href="./web-api.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>
-        <div><div class="doc-card__title">Web API</div><div class="doc-card__desc">管理台 150+ 端点与鉴权说明。</div></div>
+        <div><div class="doc-card__title">Web API</div><div class="doc-card__desc">管理台 153 端点与鉴权说明。</div></div>
       </a>
       <a class="doc-card reveal" data-delay="2" href="./deployment.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
@@ -375,6 +375,26 @@ python main.py</code></pre>
       <a class="doc-card reveal" data-delay="3" href="./faq.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg></span>
         <div><div class="doc-card__title">常见问题</div><div class="doc-card__desc">接入、权限与排障高频问答。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="1" href="./design.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.5-1.2-2-3.4-1.8.7a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.6A7.6 7.6 0 0 0 7 6.1l-1.8-.7-2 3.4 1.5 1.2a7.8 7.8 0 0 0 0 3L3.7 14.5l2 3.4 1.8-.7a7.6 7.6 0 0 0 2.6 1.5L10 21h4l.5-2.6a7.6 7.6 0 0 0 2.6-1.5l1.8.7 2-3.4z"/></svg></span>
+        <div><div class="doc-card__title">设计总览</div><div class="doc-card__desc">设计哲学、路由模式与决策追踪机制。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="2" href="./rag.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
+        <div><div class="doc-card__title">RAG 知识库</div><div class="doc-card__desc">格式支持、分块策略与混合检索重排序。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="3" href="./intent-model.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>
+        <div><div class="doc-card__title">意图分类</div><div class="doc-card__desc">两层意图体系与工具映射逻辑。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="1" href="./DEV_GUIDE.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></span>
+        <div><div class="doc-card__title">开发指南</div><div class="doc-card__desc">环境、构建、测试与贡献规范。</div></div>
+      </a>
+      <a class="doc-card reveal" data-delay="2" href="./memory.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg></span>
+        <div><div class="doc-card__title">长期记忆</div><div class="doc-card__desc">数据模型、写入与召回策略。</div></div>
       </a>
     </div>
   </div>
@@ -417,8 +437,11 @@ python main.py</code></pre>
       <div class="footer__col">
         <h4>文档</h4>
         <a href="./architecture.html">系统架构</a>
+        <a href="./design.html">设计总览</a>
         <a href="./configuration.html">配置指南</a>
         <a href="./tools.html">工具清单</a>
+        <a href="./rag.html">RAG 知识库</a>
+        <a href="./intent-model.html">意图分类</a>
         <a href="./web-api.html">Web API</a>
       </div>
       <div class="footer__col">

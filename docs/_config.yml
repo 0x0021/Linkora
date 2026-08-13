@@ -12,7 +12,18 @@ skip_config_check: true
 exclude:
   - "*.mermaid"
   - "audit/**/*"
+  - "refactor/**/*"
   - ".git"
   - "*.yaml"
   - "*.yml"
+  # 以下为内部设计 / 审计 / 路线图文档，仅留仓库内供开发参考，不对外发布
+  - "system_design.md"
+  - "phase0_hardening_design.md"
+  - "main_refactor_design.md"
+  - "phase2_citation_confidence_design.md"
+  - "tools_optimization_roadmap.md"
+  - "cost_quality_dashboard_design.md"
+  - "frontend_module_map.md"
+  - "frontend-perf-audit.md"
+  - "BINARY_PACKAGING_PLAN.md"
 destination: _site

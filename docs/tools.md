@@ -132,4 +132,4 @@ tools:
 | `all` | 每轮全量暴露所有已启用工具 |
 | `keyword` | 纯关键词过滤，无命中回退基础工具（send/recall_memory/web_search/weather） |
 
-详细路由逻辑见 `design.md` 的「LLM 智能层」与「意图分类体系」章节。
+详细路由逻辑见 `design.md` 的「路由模式详解」章节，意图分类体系见 `intent-model.md`。

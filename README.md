@@ -30,7 +30,7 @@
 | 接入平台 | **3 个**（钉钉 / 飞书 / 企业微信，数据物理隔离） |
 | 内置工具 | **38 个**（Tool Calling，单一真源 `BUILTIN_TOOL_MANIFEST`） |
 | 意图分类 | **39 个**（9 处置 + 7 动作 + 23 领域） |
-| Web 管理台 | **15 个页面（SPA）** / 31 个路由模块 / 150+ 端点 |
+| Web 管理台 | **15 个页面（SPA）** / 29 个路由模块 / 153 端点 |
 | 代码规模 | ~170 个 `src` Python 模块 / 200+ 测试文件 |
 
 ---
@@ -284,19 +284,6 @@ KMP_DUPLICATE_LIB_OK=TRUE .venv/bin/python -m pytest tests/ -q
 
 ---
 
-## 安全增强 (2026-08-14)
-
-本项目新增多项安全特性，提升企业级部署的安全性：
-
-- **JWT 认证**: 支持令牌认证和基于角色的访问控制 (RBAC)
-- **数据脱敏**: 日志中自动脱敏敏感信息 (CWE-532)
-- **输入验证**: IP 验证和平台 ID 校验，防止 SSRF
-- **速率限制**: 认证暴力破解防护
-
-## 近期更新
-
-完整变更记录见 [CHANGELOG.md](docs/CHANGELOG.md)。
-
 ---
 
 ## 文档索引
@@ -315,7 +302,7 @@ KMP_DUPLICATE_LIB_OK=TRUE .venv/bin/python -m pytest tests/ -q
 | 文档 | 说明 |
 | --- | --- |
 | [架构设计](docs/architecture.md) | 整体架构、分层、目录、处理流程 |
-| [设计总览](docs/design.md) | 项目定位、设计哲学、路由模式 |
+| [设计总览](docs/design.md) | 设计哲学、路由模式、决策追踪（系统结构见架构设计） |
 | [RAG 知识库](docs/rag.md) | 格式支持、分块、检索与重排序 |
 | [意图分类](docs/intent-model.md) | 意图体系、工具映射、决策追踪 |
 | [工具清单](docs/tools.md) | 内置工具详情 |

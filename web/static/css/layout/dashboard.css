@@ -6,6 +6,55 @@
     align-items: stretch;
 }
 
+/* 首页一屏布局：#page-dashboard 内所有行填满 .content-area，整体不滚动 */
+#page-dashboard.active {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+#page-dashboard.active > .page-header {
+    flex-shrink: 0;
+}
+
+#page-dashboard.active .dashboard-grid {
+    margin-bottom: 0.5rem;
+    min-height: 0;
+}
+
+#page-dashboard.active .dashboard-grid:last-child {
+    margin-bottom: 0;
+}
+
+#page-dashboard.active .dash-row-overview {
+    flex: 0 0 auto;
+    min-height: 0;
+}
+
+#page-dashboard.active .dash-row-middle {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+#page-dashboard.active .dash-row-log {
+    flex: 0 0 170px;
+    min-height: 0;
+}
+
+#page-dashboard.active .dash-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#page-dashboard.active .dash-row-middle .panel,
+#page-dashboard.active .dash-row-log .panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .dashboard-grid.full-width {
     grid-template-columns: 1fr;
 }

@@ -227,7 +227,7 @@
                     </div>
 
                     <!-- Row 1+2: Stats + Status combined -->
-                    <div class="dashboard-grid single-col">
+                    <div class="dashboard-grid single-col dash-row-overview">
                         <div class="panel ov-panel" id="panel-overview">
                             <div class="panel-header ov-head">
                                 <div class="ov-head-main">
@@ -315,12 +315,12 @@
                     </div>
 
                     <!-- Row 5b: Decision tracking + Recent messages (2 cols, 50% each) -->
-                    <div class="dashboard-grid">
+                    <div class="dashboard-grid dash-row-middle">
                         <div class="panel" id="panel-decisions-top">
                             <div class="panel-header">
                                 <h3>决策追踪</h3>
                             </div>
-                            <div class="panel-body" style="height:110px;overflow:hidden;">
+                            <div class="panel-body dash-panel-body">
                                 <div id="decisions-top-list" class="decisions-top-list">
                                     <div class="skeleton-card" style="padding:0.75rem">
                                         <div class="skeleton-kw-row"><div class="skeleton skeleton-rank"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div></div>
@@ -340,7 +340,7 @@
                                     <button type="button" class="link-btn" onclick="switchPage('messages')">查看全部 →</button>
                                 </div>
                             </div>
-                            <div class="panel-body" style="height:110px;overflow:hidden;">
+                            <div class="panel-body dash-panel-body">
                                 <div class="log-stream" id="recent-messages-stream">
                                     <div class="skeleton-log-list">
                                         <div class="skeleton-log-row"><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div></div>
@@ -353,7 +353,7 @@
                         </div>
                     </div>
                     <!-- Row 6: Realtime log (full width) -->
-                    <div class="dashboard-grid single-col">
+                    <div class="dashboard-grid single-col dash-row-log">
                         <div class="panel realtime-log-panel" id="panel-realtime-log">
                             <div class="panel-header">
                                 <h3>实时日志</h3>
@@ -372,7 +372,7 @@
                                     <button class="btn btn-ghost btn-sm" id="log-clear-btn" title="清空当前显示">清空</button>
                                 </div>
                             </div>
-                            <div class="panel-body realtime-log-body" style="max-height:300px;">
+                            <div class="panel-body realtime-log-body dash-panel-body">
                                 <div class="log-stream realtime-log-stream" id="realtime-log-stream">
                                     <div class="rt-log-skeleton" aria-busy="true">
                                         <div class="skeleton-log-row"><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line short"></div><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div></div>

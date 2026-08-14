@@ -722,7 +722,7 @@ async function loadRecentMessages() {
     const stream = document.getElementById('recent-messages-stream');
     if (!stream || currentPage !== 'dashboard') return;
     try {
-        const data = await api.getMessages('', 10);
+        const data = await api.getMessages('', 5);
         const messages = data.messages || [];
         if (messages.length === 0) {
             stream.innerHTML = '<div class="log-item" style="justify-content:center;color:var(--text-tertiary)">暂无消息</div>';

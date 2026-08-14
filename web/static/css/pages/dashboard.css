@@ -208,8 +208,8 @@
 .decision-item {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.35rem;
+    gap: 0.1rem;
+    padding: 0.28rem 0.35rem;
     background: var(--bg-subtle);
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-light);
@@ -245,15 +245,15 @@
 }
 
 .decision-content {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--text-primary);
-    line-height: 1.4;
+    line-height: 1.35;
 }
 
 .decision-preview {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     color: var(--text-tertiary);
-    margin-top: 0.1rem;
+    margin-top: 0.05rem;
 }
 
 .recent-messages {
@@ -265,8 +265,8 @@
 .recent-message-item {
     display: flex;
     align-items: flex-start;
-    gap: 0.4rem;
-    padding: 0.35rem;
+    gap: 0.35rem;
+    padding: 0.28rem 0.35rem;
     background: var(--bg-subtle);
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-light);
@@ -290,7 +290,7 @@
 }
 
 .recent-message-text {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -465,20 +465,20 @@
 
 /* --- 面板体：三层纵向节奏 --- */
 .ov-body {
-    padding: 0.2rem 1.1rem 1.1rem;
+    padding: 0.2rem 1.1rem 0.85rem;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.55rem;
 }
 
 /* --- 第一层：Hero 主指标（左 / 中 sparkline / 右 三段式） --- */
 .ov-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 1.6fr) auto;
+    grid-template-columns: minmax(160px, 1.05fr) minmax(200px, 1.5fr) auto;
     align-items: center;
-    gap: 1.1rem;
-    padding: 0.95rem 1.2rem;
+    gap: 1rem;
+    padding: 0.7rem 1rem;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-light);
@@ -527,9 +527,9 @@
     color: var(--brand-primary);
 }
 .ov-hero-value {
-    margin: 0.22rem 0 0.18rem;
-    min-height: 2rem;
-    font-size: 2.05rem;
+    margin: 0.18rem 0 0.14rem;
+    min-height: 1.7rem;
+    font-size: 1.7rem;
     font-weight: 800;
     line-height: 1.06;
     letter-spacing: -0.025em;
@@ -582,16 +582,16 @@
     position: relative;
     z-index: 1;
     min-width: 0;
-    height: 64px;
+    height: 52px;
     color: var(--brand-primary);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
 }
 .ov-hero-chart svg {
     width: 100%;
-    height: 48px;
+    height: 38px;
     display: block;
     overflow: visible;
 }
@@ -625,9 +625,9 @@
 .ov-hero-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.42rem 0.78rem;
-    font-size: 0.7rem;
+    gap: 0.4rem;
+    padding: 0.34rem 0.65rem;
+    font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.04em;
     color: #ffffff;
@@ -652,8 +652,8 @@
    结构：icon 左 / value + label 右，横向紧凑，降低整体高度，保留品牌渐变条 hover 高亮 */
 #panel-overview .stats-grid.ov-subs {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 0.7rem;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 0.55rem;
     margin: 0;
 }
 #panel-overview .stat-card {
@@ -662,8 +662,8 @@
     flex-direction: row;
     align-items: center;
     text-align: left;
-    gap: 0.65rem;
-    padding: 0.55rem 0.8rem;
+    gap: 0.55rem;
+    padding: 0.42rem 0.65rem;
     min-width: 0;
     box-sizing: border-box;
     background: var(--bg-surface);
@@ -703,13 +703,13 @@
 #panel-overview .stat-card:hover::before { opacity: 1; }
 
 #panel-overview .stat-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     /* 背景/颜色继承 theme.css 的 6 色区分，不覆盖 */
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -725,7 +725,7 @@
     gap: 0.08rem;
 }
 #panel-overview .stat-value {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 800;
     line-height: 1.1;
     letter-spacing: -0.02em;
@@ -738,7 +738,7 @@
     max-width: 100%;
 }
 #panel-overview .stat-label {
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;
@@ -769,17 +769,17 @@
 
 /* --- 第三层：运行状态胶囊流 --- */
 .ov-rail-wrap {
-    padding-top: 0.85rem;
+    padding-top: 0.55rem;
     border-top: 1px dashed var(--border-light);
 }
 .ov-rail-title {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
-    margin-bottom: 0.6rem;
-    font-size: 0.66rem;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.62rem;
     font-weight: 700;
-    letter-spacing: 0.11em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-tertiary);
 }
@@ -807,8 +807,8 @@
 .ov-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.38rem 0.72rem 0.38rem 0.42rem;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem 0.3rem 0.35rem;
     max-width: 100%;
     min-width: 0;
     background: var(--bg-subtle);
@@ -840,8 +840,8 @@
     border-color: rgba(37, 99, 235, 0.3);
 }
 .ov-chip-ico {
-    width: 21px;
-    height: 21px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -851,12 +851,12 @@
     color: var(--brand-primary);
 }
 .ov-chip-label {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--text-tertiary);
     white-space: nowrap;
 }
 .ov-chip-value {
-    font-size: 0.76rem;
+    font-size: 0.72rem;
     font-weight: 650;
     color: var(--text-primary);
     white-space: nowrap;
@@ -895,6 +895,38 @@
         grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     }
     .ov-chip-value { max-width: 120px; }
+}
+
+/* --- 首页一屏适配：进一步压实时时日志与中间行 --- */
+#page-dashboard.active .realtime-log-panel {
+    height: auto;
+}
+
+#page-dashboard.active .realtime-log-body {
+    max-height: 120px;
+}
+
+#page-dashboard.active #realtime-log-stream {
+    padding: 0.5rem 0.75rem;
+    overflow: hidden;
+}
+
+#page-dashboard.active #realtime-log-stream .rt-log-line {
+    padding: 2px 8px;
+    font-size: 0.68rem;
+}
+
+#page-dashboard.active #decisions-top-list,
+#page-dashboard.active #recent-messages-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+/* 面板头部在一屏下稍微紧凑 */
+#page-dashboard.active .dash-row-middle .panel-header,
+#page-dashboard.active .dash-row-log .panel-header {
+    padding: 0.65rem 0.85rem;
 }
 
 /* --- 无障碍：尊重系统减少动效偏好 --- */

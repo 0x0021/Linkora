@@ -23,6 +23,39 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# 本地时区：DB 落库用 datetime('now','localtime')（本地时间、无时区后缀），
+# 内存记录用 datetime.now(timezone.utc)（UTC、带 +00:00）。两者需统一为 UTC 再比较/去重，
+# 否则同一时刻的字符串字典序会因「空格 vs T」「有无 +00:00」而判错，导致刷新永不触发。
+_LOCAL_TZ = datetime.now().astimezone().tzinfo
+
+
+def _normalize_dt(ts: Optional[str]) -> datetime:
+    """把决策时间戳归一化为 UTC datetime，便于可靠比较/去重。
+
+    兼容：
+    - DB 落库值 ``2026-08-14 13:19:07``（本地时间、无时区）
+    - 内存值 ``2026-08-14T05:19:07+00:00``（UTC、带时区）
+    两者表示同一时刻，归一化后相等。解析失败返回最小时间（视为最旧）。
+    """
+    if not ts:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    s = ts.strip().replace("Z", "+00:00")
+    dt: Optional[datetime] = None
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                dt = datetime.strptime(s, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_LOCAL_TZ)
+    return dt.astimezone(timezone.utc)
+
 
 @dataclass
 class DecisionRecord:
@@ -137,21 +170,27 @@ class DecisionTracker:
         else:
             platform_recs = recs
 
-        # 尝试从持久化层刷新：若 DB 有比内存更新的记录则回填
+        # 尝试从持久化层刷新：若 DB 有比内存更新的记录则回填。
+        # 时间比较用 _normalize_dt 归一化（DB 本地时间 vs 内存 UTC 统一为 UTC 再比），
+        # 避免字符串字典序因「空格 vs T」「有无 +00:00」而失准，导致刷新分支永不触发
+        # （多进程下 Web 进程的决策面板因此冻结在启动快照上）。
         store = self._store_for(platform_id)
         if store:
             try:
-                result = store._decisions_repo.get_decisions(page_size=n)
+                result = store._decisions_repo.get_decisions(
+                    page_size=n, platform_id=platform_id or None)
                 db_recs = result.get("items", []) if isinstance(result, dict) else []
                 if db_recs:
-                    newest_db_ts = db_recs[0].get("created_at", "")
-                    newest_mem_ts = platform_recs[-1].ts if platform_recs else ""
-                    # ISO 时间字符串可直接字典序比较
-                    if newest_db_ts > newest_mem_ts:
-                        existing_keys = set((r.ts, r.sender, r.content) for r in self._records)
+                    newest_db_dt = _normalize_dt(db_recs[0].get("created_at", ""))
+                    newest_mem_dt = _normalize_dt(platform_recs[-1].ts) if platform_recs else None
+                    if newest_mem_dt is None or newest_db_dt > newest_mem_dt:
+                        # 用归一化时间 + sender + content 去重，避免 ts 格式差异导致重复回填
+                        existing_keys = set(
+                            (_normalize_dt(r.ts), r.sender, r.content) for r in self._records
+                        )
                         for row in reversed(db_recs):
                             key = (
-                                row.get("created_at", ""),
+                                _normalize_dt(row.get("created_at", "")),
                                 row.get("sender_name", ""),
                                 row.get("content_preview", ""),
                             )
@@ -165,7 +204,7 @@ class DecisionTracker:
                                 intent=row.get("intent", ""),
                                 action=row.get("action", ""),
                                 sender_id=row.get("sender_id", ""),
-                                platform_id=platform_id,
+                                platform_id=row.get("platform_id") or platform_id,
                                 routing_mode=row.get("routing_mode"),
                                 routed_tools=row.get("routed_tools"),
                                 skill_name=row.get("skill_name"),

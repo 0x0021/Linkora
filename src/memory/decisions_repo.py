@@ -314,8 +314,9 @@ class DecisionsRepo:
         intent: str | None = None,
         action: str | None = None,
         time_filter: str | None = None,
+        platform_id: str | None = None,
     ) -> dict:
-        """分页查询决策记录，支持按 sender_name / conversation_id / intent / action / time_filter 过滤。"""
+        """分页查询决策记录，支持按 sender_name / conversation_id / intent / action / time_filter / platform_id 过滤。"""
         import json as _json
         cur = self.store.conn.cursor()
         where, params = self._build_filter_clause(
@@ -325,6 +326,9 @@ class DecisionsRepo:
             action=action,
             time_filter=time_filter,
         )
+        if platform_id:
+            where = (where + " AND " if where else "WHERE ") + "platform_id = ?"
+            params.append(platform_id)
 
         cur.execute(f"SELECT COUNT(*) FROM decisions {where}", params)
         total = cur.fetchone()[0]

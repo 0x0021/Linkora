@@ -119,3 +119,73 @@ class TestDecisionRecord:
         assert record.routing_mode is None
         assert record.routed_tools is None
         assert record.skill_name is None
+
+
+class TestRefreshFromSqlite:
+    def test_refreshes_when_db_newer_than_memory(self):
+        """内存只有启动快照（旧，UTC 格式），DB 有更新的本地时间记录时，recent() 应刷新并合并。
+
+        回归：修复前因「空格 vs T」「有无 +00:00」字符串字典序比较，DB 永被判为更旧，
+        刷新分支永不触发，多进程下 Web 面板的决策追踪冻结在启动快照上。
+        """
+        mock_store = MagicMock()
+        mock_store._decisions_repo.get_decisions.return_value = {
+            "items": [{
+                "created_at": "2026-08-15 13:19:07",  # 本地时间，明显晚于内存快照
+                "sender_name": "新用户",
+                "conversation_name": "新群",
+                "content_preview": "新消息内容",
+                "intent": "business",
+                "action": "llm",
+                "sender_id": "su_new",
+                "routing_mode": "smart",
+                "routed_tools": ["tool_a"],
+                "skill_name": "sk",
+                "skill_source": "intent",
+                "reply_preview": "回复",
+                "platform_id": "dingtalk",
+            }],
+        }
+        dt = DecisionTracker(maxlen=50)
+        dt.set_sqlite_store(mock_store)
+        # 内存里只有一条更早的启动快照（UTC 格式）
+        dt._records.append(DecisionRecord(
+            ts="2026-08-14T01:00:00+00:00",
+            sender="旧用户", chat="旧群", content="旧消息", intent="social", action="skip",
+            platform_id="dingtalk",
+        ))
+        recs = dt.recent(50, "dingtalk")
+        # 应合并：旧快照 + 新 DB 记录
+        assert len(recs) == 2
+        # 最新一条应是 DB 的新记录
+        assert recs[-1]["sender"] == "新用户"
+        assert recs[-1]["content"] == "新消息内容"
+
+    def test_refreshes_only_requested_platform(self):
+        """DB 刷新应按传入 platform_id 过滤，避免多平台数据串台。"""
+        mock_store = MagicMock()
+        captured = {}
+
+        def fake_get(page_size=20, platform_id=None, **_kw):
+            captured["platform_id"] = platform_id
+            return {"items": []}
+
+        mock_store._decisions_repo.get_decisions.side_effect = fake_get
+        dt = DecisionTracker(maxlen=50)
+        dt.set_sqlite_store(mock_store)
+        dt._records.append(DecisionRecord(
+            ts="2026-08-14T01:00:00+00:00", sender="X", chat="C",
+            content="m", intent="social", action="skip", platform_id="feishu",
+        ))
+        dt.recent(50, "dingtalk")
+        assert captured["platform_id"] == "dingtalk"
+
+    def test_normalize_dt_compares_local_and_utc_same_instant(self):
+        """同一时刻的本地时间(无时区) 与 UTC(带+00:00) 应被归一化为相等，去重才不会误判。"""
+        from src.decision_tracker import _normalize_dt
+        # 本地 13:19:07 (UTC+8) 与 UTC 05:19:07 是同一时刻
+        a = _normalize_dt("2026-08-14 13:19:07")
+        b = _normalize_dt("2026-08-14T05:19:07+00:00")
+        assert a == b
+        # 方向：DB 本地 8/15 09:00（=UTC 8/15 01:00）晚于 内存 UTC 8/15 00:00
+        assert _normalize_dt("2026-08-15 09:00:00") > _normalize_dt("2026-08-15T00:00:00+00:00")

@@ -7,7 +7,6 @@ RAG 知识库搜索工具。
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from src.config import EmbeddingConfig
 from src.memory.sqlite_store import SQLiteStore

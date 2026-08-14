@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import copy
-import re
 import threading
 import warnings
 from dataclasses import dataclass

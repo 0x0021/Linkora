@@ -3216,6 +3216,7 @@ html {
     gap: 0.625rem;
     height: unset;
     overflow: visible;
+    padding: 0.75rem 1rem;
 }
 
 /* ── 汇总指标条：单一容器 + 内部细分割线，无独立边框 ── */

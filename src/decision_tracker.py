@@ -15,7 +15,7 @@
 import logging
 from collections import deque
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional, List, Dict
 
 if TYPE_CHECKING:
@@ -26,7 +26,10 @@ logger = logging.getLogger(__name__)
 # 本地时区：DB 落库用 datetime('now','localtime')（本地时间、无时区后缀），
 # 内存记录用 datetime.now(timezone.utc)（UTC、带 +00:00）。两者需统一为 UTC 再比较/去重，
 # 否则同一时刻的字符串字典序会因「空格 vs T」「有无 +00:00」而判错，导致刷新永不触发。
-_LOCAL_TZ = datetime.now().astimezone().tzinfo
+# 关键：必须用固定时区（服务部署在中国，落库本地时间即 UTC+8 墙钟），不能用
+# datetime.now().astimezone().tzinfo（取运行机本地时区）——在 UTC 机器（如 CI）上会把
+# DB 本地时间误当 UTC，导致归一化结果跨环境漂移、单测在 CI 上失败。
+_DB_LOCAL_TZ = timezone(timedelta(hours=8))
 
 
 def _normalize_dt(ts: Optional[str]) -> datetime:
@@ -53,7 +56,7 @@ def _normalize_dt(ts: Optional[str]) -> datetime:
     if dt is None:
         return datetime.min.replace(tzinfo=timezone.utc)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_LOCAL_TZ)
+        dt = dt.replace(tzinfo=_DB_LOCAL_TZ)
     return dt.astimezone(timezone.utc)
 
 

@@ -189,8 +189,9 @@ async function loadToolsToolStats() {
         setText('tools-ts-duration', Math.round(avgDuration) + 'ms');
         setText('tools-ts-count', String(tools.length));
         const maxCalls = tools[0].total_calls || 1;
-        // 多列小卡片网格：4列紧凑布局，左侧彩色边条 + 药丸成功率
-        let html = '<div class="ts-rank-grid">';
+        // 多列小卡片网格：自适应列数，左侧彩色边条 + 药丸成功率
+        // 注意：container 本身已是 .ts-rank-grid，不要嵌套 grid
+        let html = '';
         const displayCount = Math.min(tools.length, 10);
         for (let i = 0; i < displayCount; i++) {
             const tool = tools[i];
@@ -208,7 +209,6 @@ async function loadToolsToolStats() {
             html += '</div>';
             html += '</div>';
         }
-        html += '</div>';
         container.innerHTML = html;
     } catch (e) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><p>加载失败: ' + escapeHtml(e.message) + '</p></div>';

@@ -343,18 +343,18 @@ function renderDecisionsHistory(data) {
         return;
     }
 
-    let html = `<div class="table-wrap"><table class="table table-sm table-hover" style="font-size: 13px; margin: 0; width: 100%;">
+    let html = `<div class="table-wrap decisions-history-wrap"><table class="table table-sm table-hover decisions-history-table" style="font-size: 13px; margin: 0; width: 100%;">
         <thead><tr>
-            <th style="min-width: 100px;">时间</th>
-            <th style="min-width: 70px;">发送者</th>
-            <th style="min-width: 80px;">会话</th>
-            <th style="min-width: 50px;">动作</th>
-            <th style="min-width: 120px;">内容预览</th>
-            <th style="min-width: 80px;">意图</th>
-            <th style="min-width: 60px;">技能</th>
-            <th style="min-width: 70px;">路由模式</th>
-            <th style="min-width: 80px;">路由工具</th>
-            <th style="min-width: 80px;">回复预览</th>
+            <th style="width: 12%;">时间</th>
+            <th style="width: 9%;">发送者</th>
+            <th style="width: 10%;">会话</th>
+            <th style="width: 6%;">动作</th>
+            <th style="width: 16%;">内容预览</th>
+            <th style="width: 10%;">意图</th>
+            <th style="width: 8%;">技能</th>
+            <th style="width: 9%;">路由模式</th>
+            <th style="width: 10%;">路由工具</th>
+            <th style="width: 10%;">回复预览</th>
         </tr></thead><tbody>`;
 
     for (const d of items) {
@@ -365,16 +365,16 @@ function renderDecisionsHistory(data) {
         const actionPill = `<span class="pill pill-${escapeHtml(d.action)}">${actionLabel(d.action)}</span>`;
         const skillBadge = d.skill_name ? `<span class="pill pill-skill" title="来源: ${escapeHtml(d.skill_source || '')}">${escapeHtml(d.skill_name)}</span>` : '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
         html += `<tr>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--text-tertiary);" title="${escapeHtml(ts)}">${escapeHtml(ts)}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(d.sender_name || d.sender_id || '')}">${escapeHtml(d.sender_name || d.sender_id || '—')}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--text-tertiary);" title="${escapeHtml(d.conversation_name || d.conversation_id || '')}">${escapeHtml(d.conversation_name || d.conversation_id || '—')}</td>
-            <td style="white-space: nowrap;">${actionPill}</td>
-            <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(d.content_preview || '')}">${escapeHtml(d.content_preview || '')}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(d.intent || '')}">${intentPill}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${skillBadge}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(d.routing_mode || '')}">${modePill}</td>
-            <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px;" title="${escapeHtml((d.routed_tools || []).join(', '))}">${tools || '—'}</td>
-            <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-tertiary); font-style: italic;" title="${escapeHtml(d.reply_preview || '')}">${escapeHtml(d.reply_preview || '')}</td>
+            <td class="dec-hist-cell" style="font-size: 12px; color: var(--text-tertiary);" title="${escapeHtml(ts)}">${escapeHtml(ts)}</td>
+            <td class="dec-hist-cell" title="${escapeHtml(d.sender_name || d.sender_id || '')}">${escapeHtml(d.sender_name || d.sender_id || '—')}</td>
+            <td class="dec-hist-cell" style="font-size: 12px; color: var(--text-tertiary);" title="${escapeHtml(d.conversation_name || d.conversation_id || '')}">${escapeHtml(d.conversation_name || d.conversation_id || '—')}</td>
+            <td class="dec-hist-cell" style="overflow: visible;">${actionPill}</td>
+            <td class="dec-hist-cell" title="${escapeHtml(d.content_preview || '')}">${escapeHtml(d.content_preview || '')}</td>
+            <td class="dec-hist-cell" title="${escapeHtml(d.intent || '')}">${intentPill}</td>
+            <td class="dec-hist-cell" title="${escapeHtml(d.skill_name || '')}">${skillBadge}</td>
+            <td class="dec-hist-cell" title="${escapeHtml(d.routing_mode || '')}">${modePill}</td>
+            <td class="dec-hist-cell" style="font-size: 12px;" title="${escapeHtml((d.routed_tools || []).join(', '))}">${tools || '—'}</td>
+            <td class="dec-hist-cell" style="font-size: 12px; color: var(--text-tertiary); font-style: italic;" title="${escapeHtml(d.reply_preview || '')}">${escapeHtml(d.reply_preview || '')}</td>
         </tr>`;
     }
     html += '</tbody></table></div>';

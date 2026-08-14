@@ -233,6 +233,28 @@
     color: var(--brand-primary);
 }
 
+/* ── 决策历史表格（固定列宽，超长截断，无横向滚动） ── */
+.decisions-history-wrap {
+    overflow: visible;
+}
+
+.decisions-history-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.decisions-history-table th,
+.decisions-history-table td.dec-hist-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.decisions-history-table td.dec-hist-cell {
+    vertical-align: middle;
+}
+
 /* ── 决策记录行 ── */
 .decision-row {
     display: flex;

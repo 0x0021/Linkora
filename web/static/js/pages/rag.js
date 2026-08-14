@@ -1249,8 +1249,8 @@ async function sendRagChat() {
 
 // ============ RAG Memory Tab ============
 
-// 记忆筛选状态（按范围 / 对象类型 / 具体人 / 关键词）
-let memoryFilters = { scope: 'all', object_type: 'all', sender: '', keyword: '' };
+// 记忆筛选状态（按范围 / 具体人 / 关键词）
+let memoryFilters = { scope: 'all', sender: '', keyword: '' };
 let _memoryFilterInitialized = false;
 let _memoryModalMode = 'add';   // 'add' | 'edit'
 let _memoryModalEditId = null;
@@ -1261,13 +1261,11 @@ const _MEMORY_PAGE_SIZE = 20;   // 单页条数
 async function initMemoryFilters() {
     if (!_memoryFilterInitialized) {
         const scopeSel = document.getElementById('memory-filter-scope');
-        const typeSel = document.getElementById('memory-filter-type');
         const senderSel = document.getElementById('memory-filter-sender');
         const kwInput = document.getElementById('memory-filter-keyword');
         const applyBtn = document.getElementById('memory-filter-apply');
         const resetBtn = document.getElementById('memory-filter-reset');
         if (scopeSel) scopeSel.addEventListener('change', () => applyMemoryFilters());
-        if (typeSel) typeSel.addEventListener('change', () => applyMemoryFilters());
         if (senderSel) senderSel.addEventListener('change', () => applyMemoryFilters());
         if (kwInput) kwInput.addEventListener('keydown', e => { if (e.key === 'Enter') applyMemoryFilters(); });
         if (applyBtn) applyBtn.addEventListener('click', () => applyMemoryFilters());
@@ -1280,11 +1278,9 @@ async function initMemoryFilters() {
 
 function applyMemoryFilters() {
     const scopeSel = document.getElementById('memory-filter-scope');
-    const typeSel = document.getElementById('memory-filter-type');
     const senderSel = document.getElementById('memory-filter-sender');
     const kwInput = document.getElementById('memory-filter-keyword');
     memoryFilters.scope = scopeSel ? scopeSel.value : 'all';
-    memoryFilters.object_type = typeSel ? typeSel.value : 'all';
     memoryFilters.sender = senderSel ? senderSel.value : '';
     memoryFilters.keyword = kwInput ? kwInput.value.trim() : '';
     _memoryPage = 1;
@@ -1292,13 +1288,11 @@ function applyMemoryFilters() {
 }
 
 function resetMemoryFilters() {
-    memoryFilters = { scope: 'all', object_type: 'all', sender: '', keyword: '' };
+    memoryFilters = { scope: 'all', sender: '', keyword: '' };
     const scopeSel = document.getElementById('memory-filter-scope');
-    const typeSel = document.getElementById('memory-filter-type');
     const senderSel = document.getElementById('memory-filter-sender');
     const kwInput = document.getElementById('memory-filter-keyword');
     if (scopeSel) scopeSel.value = 'all';
-    if (typeSel) typeSel.value = 'all';
     if (senderSel) senderSel.value = '';
     if (kwInput) kwInput.value = '';
     _memoryPage = 1;
@@ -1358,7 +1352,6 @@ async function loadMemoryList() {
             limit: limit,
             offset: offset,
             scope: memoryFilters.scope,
-            object_type: memoryFilters.object_type,
             sender: memoryFilters.sender,
             keyword: memoryFilters.keyword,
         });

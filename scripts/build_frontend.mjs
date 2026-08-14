@@ -13,7 +13,8 @@
 //
 // 运行：npm run build:frontend  （需在项目根目录执行）
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, watch } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, watch, mkdtempSync, rmdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, join, sep } from 'node:path';
@@ -120,14 +121,22 @@ function minify(code, loader) {
     console.warn('[build] 未找到 esbuild，跳过压缩（仍输出未压缩 bundle）');
     return code;
   }
+  // 用临时文件而非 stdin 传递源码：超大拼接输入经 execFileSync 的 stdin 管道
+  // 易触发 esbuild 死锁（父进程写 stdin 与读 stdout 互锁），落盘后由 esbuild 直接读文件最稳。
+  const tmp = mkdtempSync(join(tmpdir(), 'lb-build-'));
+  const srcPath = join(tmp, `in.${loader}`);
+  writeFileSync(srcPath, code);
   try {
-    return execFileSync(ESBUILD, ['--minify', `--loader=${loader}`], {
-      input: code,
+    // 传文件路径时 esbuild 按扩展名推断 loader（in.css/in.js），无需 --loader
+    return execFileSync(ESBUILD, ['--minify', srcPath], {
       maxBuffer: 1 << 28,
     }).toString();
   } catch (e) {
     console.warn('[build] esbuild 压缩失败，回退未压缩：', e.message);
     return code;
+  } finally {
+    try { unlinkSync(srcPath); } catch { /* ignore */ }
+    try { rmdirSync(tmp); } catch { /* ignore */ }
   }
 }
 

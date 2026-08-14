@@ -1383,8 +1383,15 @@ async function loadMemoryList() {
             const chatId = escapeHtml((m.chat_id || '').substring(0, 12));
             const createdAt = escapeHtml(m.created_at || '-');
             const objType = m.object_type || 'other';
-            let objName = m.sender_name || m.chat_name || '';
-            if (!objName || objType === 'other') {
+            // 对象名优先显示真实人名/群名；只有确实没有名字时才回退到“其他”
+            let objName = '';
+            if (objType === 'group') {
+                objName = m.chat_name || m.sender_name || '';
+            } else {
+                // person / other 都优先用 sender_name，其次 chat_name
+                objName = m.sender_name || m.chat_name || '';
+            }
+            if (!objName) {
                 objName = '其他';
             }
             const objClass = objType === 'person' ? 'tag-blue' : objType === 'group' ? 'tag-green' : 'tag-gray';

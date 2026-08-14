@@ -897,23 +897,25 @@
     .ov-chip-value { max-width: 120px; }
 }
 
-/* --- 首页一屏适配：进一步压实时时日志与中间行 --- */
+/* --- 首页一屏适配：中间行给够高度，日志区填满剩余空间 --- */
 #page-dashboard.active .realtime-log-panel {
     height: auto;
 }
 
 #page-dashboard.active .realtime-log-body {
-    max-height: 120px;
+    max-height: none;
 }
 
 #page-dashboard.active #realtime-log-stream {
-    padding: 0.5rem 0.75rem;
-    overflow: hidden;
+    padding: 0.4rem 0.5rem;
+    overflow: auto;
+    height: 100%;
 }
 
 #page-dashboard.active #realtime-log-stream .rt-log-line {
     padding: 2px 8px;
     font-size: 0.68rem;
+    line-height: 1.45;
 }
 
 #page-dashboard.active #decisions-top-list,

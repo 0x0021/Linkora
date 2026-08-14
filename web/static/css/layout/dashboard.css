@@ -33,7 +33,7 @@
 }
 
 #page-dashboard.active .dash-row-middle {
-    flex: 0 0 170px;
+    flex: 0 0 260px;
     min-height: 0;
 }
 
@@ -42,7 +42,8 @@
     min-height: 0;
 }
 
-/* 实时日志面板变高后，内容区允许内部滚动 */
+/* 中间卡片与实时日志面板内容多时均允许内部滚动 */
+#page-dashboard.active .dash-row-middle .dash-panel-body,
 #page-dashboard.active .dash-row-log .dash-panel-body {
     overflow: auto;
 }

@@ -47,12 +47,15 @@ AUTO_UPDATE: bool = True
 # 是否未安装时自动安装 CLI（执行 install_cmd）。关闭后未安装仅记录、不安装。
 AUTO_INSTALL: bool = True
 
-# 版本号正则：提取第一个 X.Y.Z
+# 版本号正则：提取第一个 X.Y.Z（仅数值，用于大小对比）
 _VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
+
+# 语义化版本正则：保留可选的 pre-release 标签，如 1.0.58-beta.4
+_SEMVER_RE = re.compile(r"(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)")
 
 # 文本检查类（dws 等）判定"有更新"的关键词
 _UPDATE_KEYWORDS_RE = re.compile(
-    r"可升级|有新版本|可更新|有更新|有可用|update available|newer version|outdated",
+    r"可升级|有新版本可用|新版本可用|有新版本|可更新|有更新|有可用|update available|newer version|outdated",
     re.IGNORECASE,
 )
 
@@ -66,6 +69,8 @@ class CliSpec:
     update_cmd: Optional[list[str]] = None  # 后台更新命令（各 CLI 自带命令）
     install_cmd: Optional[list[str]] = None  # 未安装时的安装命令（如 npm i -g ...）
     check_kind: str = "text"  # json | text | npm：check_cmd 输出的解析方式
+    beta_check_cmd: Optional[list[str]] = None  # 预发布/ beta 通道检测命令
+    beta_update_cmd: Optional[list[str]] = None  # 预发布/ beta 通道更新命令
 
     def __post_init__(self) -> None:
         if self.version_args is None:
@@ -96,6 +101,8 @@ CLI_DEFINITIONS: dict[str, CliSpec] = {
         update_cmd=["dws", "upgrade", "-y"],
         install_cmd=["npm", "install", "-g", "dingtalk-workspace-cli"],
         check_kind="text",
+        beta_check_cmd=["dws", "upgrade", "--check", "--beta"],
+        beta_update_cmd=["dws", "upgrade", "-y", "--beta"],
     ),
 }
 
@@ -132,8 +139,30 @@ def _parse_version(text: str) -> Optional[tuple[int, ...]]:
         return None
 
 
+def _is_prerelease(version: Optional[str]) -> bool:
+    """判断版本字符串是否含预发布标签（如 1.0.58-beta.4）。"""
+    if not version:
+        return False
+    # 在 X.Y.Z 后紧跟 '-' 即视为预发布
+    return bool(re.search(r"\d+\.\d+\.\d+-", version))
+
+
+def _choose_check_cmd(spec: CliSpec, installed: Optional[str]) -> Optional[list[str]]:
+    """根据已装版本选择检测命令（dws 等带 beta 通道的 CLI 优先用 beta_check_cmd）。"""
+    if _is_prerelease(installed) and spec.beta_check_cmd:
+        return spec.beta_check_cmd
+    return spec.check_cmd
+
+
+def _choose_update_cmd(spec: CliSpec, installed: Optional[str]) -> Optional[list[str]]:
+    """根据已装版本选择更新命令（dws 等带 beta 通道的 CLI 优先用 beta_update_cmd）。"""
+    if _is_prerelease(installed) and spec.beta_update_cmd:
+        return spec.beta_update_cmd
+    return spec.update_cmd
+
+
 def fetch_version(spec: CliSpec, binary: str, timeout: int = 15) -> Optional[str]:
-    """调 ``<cli> --version`` 解析并返回版本字符串（如 '0.1.9'），失败返回 None。"""
+    """调 ``<cli> --version`` 解析并返回版本字符串（如 '0.1.9' 或 '1.0.58-beta.4'），失败返回 None。"""
     try:
         r = subprocess.run([binary, *spec.version_args], capture_output=True,
                            text=True, timeout=timeout)
@@ -141,8 +170,8 @@ def fetch_version(spec: CliSpec, binary: str, timeout: int = 15) -> Optional[str
     except Exception as e:  # noqa: BLE001
         logger.debug("版本检测 %s 失败: %s", spec.name, e)
         return None
-    v = _parse_version(out)
-    return ".".join(map(str, v)) if v else None
+    m = _SEMVER_RE.search(out or "")
+    return m.group(1) if m else None
 
 
 def _run_cmd(cmd: Optional[list[str]], timeout: int) -> Optional[subprocess.CompletedProcess]:
@@ -156,10 +185,14 @@ def _run_cmd(cmd: Optional[list[str]], timeout: int) -> Optional[subprocess.Comp
 
 
 def _has_upstream_update(spec: CliSpec, installed: str, timeout: int = 60) -> bool:
-    """通过 check_cmd 判断官方是否有更新，解析方式按 check_kind 区分。"""
-    if not spec.check_cmd:
+    """通过 check_cmd 判断官方是否有更新，解析方式按 check_kind 区分。
+
+    对 dws 等支持 beta 通道的 CLI，若已装版本带预发布标签，则走 beta_check_cmd。
+    """
+    check_cmd = _choose_check_cmd(spec, installed)
+    if not check_cmd:
         return False
-    r = _run_cmd(spec.check_cmd, timeout)
+    r = _run_cmd(check_cmd, timeout)
     if r is None:
         return False
     blob = (r.stdout or "") + (r.stderr or "")
@@ -214,8 +247,12 @@ def save_state(path: str, state: dict) -> None:
 
 def _apply_update(spec: CliSpec, entry: dict, timeout: int = 300) -> None:
     """后台执行更新命令，并刷新安装版本。"""
-    logger.info("[版本自检] 后台执行更新: %s", " ".join(spec.update_cmd or []))
-    r = _run_cmd(spec.update_cmd, timeout)
+    installed = entry.get("installed")
+    update_cmd = _choose_update_cmd(spec, installed)
+    channel = "beta" if _is_prerelease(installed) and spec.beta_update_cmd else "stable"
+    entry["channel"] = channel
+    logger.info("[版本自检] 后台执行更新 (%s): %s", channel, " ".join(update_cmd or []))
+    r = _run_cmd(update_cmd, timeout)
     if r is None:
         entry["update_status"] = "error"
         return

@@ -29,7 +29,7 @@ def _make_fake_run(upstream_names=(), upgrade_ok=True):
 
     - ``<bin> --version`` → 返回 VERSION_MAP 中对应版本
     - ``lark-cli update --check --json`` → JSON（含 outdated / latest）
-    - ``dws upgrade --check`` → 文本（关键词命中表示有更新）
+    - ``dws upgrade --check`` / ``dws upgrade --check --beta`` → 文本（关键词命中表示有更新）
     - ``npm view @wecom/cli version`` → 纯版本号
     - 各 CLI 的 update 命令 → returncode 0/1（按 upgrade_ok）
     """
@@ -45,10 +45,19 @@ def _make_fake_run(upstream_names=(), upgrade_ok=True):
                     cmd, 0, '{"current":"1.0.78","latest":"1.0.80","outdated":true}', "")
             return subprocess.CompletedProcess(
                 cmd, 0, '{"current":"1.0.78","latest":"1.0.78","outdated":false}', "")
-        # dws upgrade --check
+        # dws upgrade --check（支持 beta 通道）
         if name == "dws" and "upgrade" in c and "--check" in c:
-            if "dws" in upstream_names:
-                return subprocess.CompletedProcess(cmd, 0, "检查完成：发现有新版本可升级", "")
+            is_beta = "--beta" in c
+            if is_beta and "dws_beta" in upstream_names:
+                return subprocess.CompletedProcess(
+                    cmd, 0,
+                    "检查更新 (beta)...\n\n  新版本可用:  v1.0.58-beta.4 → v1.0.58-beta.6\n",
+                    "")
+            if not is_beta and "dws" in upstream_names:
+                return subprocess.CompletedProcess(
+                    cmd, 0,
+                    "检查更新...\n\n  新版本可用:  v1.0.55 → v1.0.58\n",
+                    "")
             return subprocess.CompletedProcess(cmd, 0, "已是最新版本", "")
         # npm view @wecom/cli version
         if c[:3] == ["npm", "view", "@wecom/cli"]:
@@ -116,6 +125,30 @@ def test_lark_json_check_parses_outdated(tmp_path, patched, monkeypatch):
     result = vc.run_checks(str(tmp_path))
     assert result["lark-cli"]["status"] == "update_available"
     assert result["lark-cli"]["update_status"] == "updated"
+
+
+def test_dws_beta_channel_update_detected(tmp_path, patched, monkeypatch):
+    from src.paths import set_data_dir
+    set_data_dir(str(tmp_path / "data"))
+    # 模拟已装 dws 为 beta 版本，官方 beta 通道有更新
+    orig_fetch = vc.fetch_version
+    def fake_fetch(spec, binary, timeout=15):
+        if spec.name == "dws":
+            return "1.0.58-beta.4"
+        return orig_fetch(spec, binary, timeout)
+    monkeypatch.setattr(vc, "fetch_version", fake_fetch)
+    monkeypatch.setattr(vc.subprocess, "run", _make_fake_run(upstream_names=("dws_beta",)))
+    result = vc.run_checks(str(tmp_path))
+    assert result["dws"]["installed"] == "1.0.58-beta.4"
+    assert result["dws"]["status"] == "update_available"
+    assert result["dws"]["update_status"] == "updated"
+    assert result["dws"]["channel"] == "beta"
+
+
+def test_update_keyword_regex_matches_dws_output():
+    # 修复前："新版本可用" 因缺少前导"有"而无法命中
+    text = "检查更新...\n\n  新版本可用:  v1.0.55 → v1.0.58\n"
+    assert vc._UPDATE_KEYWORDS_RE.search(text) is not None
 
 
 def test_local_upgrade_detected_as_changed(tmp_path, patched, monkeypatch):

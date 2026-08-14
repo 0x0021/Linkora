@@ -1350,7 +1350,7 @@ async function loadMemoryList() {
     const pager = document.getElementById('memory-pager');
     if (!tbody) return;
     if (pager) pager.innerHTML = '';
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">加载中…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">加载中…</td></tr>';
     try {
         const limit = _MEMORY_PAGE_SIZE;
         const offset = (_memoryPage - 1) * limit;
@@ -1363,7 +1363,7 @@ async function loadMemoryList() {
             keyword: memoryFilters.keyword,
         });
         if (!data || !data.memories) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">加载失败，请稍后重试</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">加载失败，请稍后重试</td></tr>';
             return;
         }
         _memoryTotal = (typeof data.total === 'number') ? data.total : data.memories.length;
@@ -1373,14 +1373,13 @@ async function loadMemoryList() {
                 _memoryPage = 1;
                 return loadMemoryList();
             }
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">暂无记忆数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">暂无记忆数据</td></tr>';
             if (pager) pager.innerHTML = '';
             return;
         }
         tbody.innerHTML = data.memories.map(m => {
             const content = escapeHtml(m.content || '').substring(0, 200);
             const source = escapeHtml(m.source || '-');
-            const chatId = escapeHtml((m.chat_id || '').substring(0, 12));
             const createdAt = escapeHtml(m.created_at || '-');
             const objType = m.object_type || 'other';
             // 对象名优先显示真实人名/群名；只有确实没有名字时才回退到“其他”
@@ -1408,7 +1407,6 @@ async function loadMemoryList() {
                 <td>${scopeTag}</td>
                 <td><span class="tag tag-gray">${source}</span></td>
                 <td>${objTag}</td>
-                <td>${chatId}</td>
                 <td>${createdAt}</td>
                 <td>
                     <div class="action-btns">
@@ -1421,7 +1419,7 @@ async function loadMemoryList() {
         if (pager) renderMemoryPager(_memoryTotal, limit, offset);
     } catch (e) {
         console.error('loadMemoryList failed:', e);
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">加载失败，请稍后重试</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">加载失败，请稍后重试</td></tr>';
     }
 }
 

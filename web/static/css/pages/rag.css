@@ -505,4 +505,37 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* 记忆列表：Excel 风格——冻结表头 + 单元格网格线 */
+#memory-table {
+    border-collapse: collapse;
+}
+
+#memory-table th,
+#memory-table td {
+    border: 1px solid var(--border-light);
+}
+
+#memory-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    /* 不透明底色，滚动时冻结表头不会透出下方内容 */
+    background: var(--bg-surface);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border-color);
+}
+
+#memory-table tbody tr:hover {
+    background: rgba(37, 99, 235, 0.05);
+}
+
+#memory-table tbody tr:last-child td {
+    border-bottom: 1px solid var(--border-light);
 }

@@ -2971,7 +2971,7 @@ html {
     flex: 1 1 auto;
     min-height: 0;
     justify-content: flex-start;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .decisions-top-list .decision-row {
@@ -2981,9 +2981,9 @@ html {
     padding: 0.25rem 0.35rem;
     box-sizing: border-box;
     min-height: 48px;
-    flex: 1 1 0;
+    flex: 0 0 auto;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .decisions-top-list .decision-row:hover {

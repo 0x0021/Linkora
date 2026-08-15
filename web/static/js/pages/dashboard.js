@@ -505,6 +505,10 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
             const embHint = cfg.embedding_enabled
                 ? `语义检索已启用，模型 ${cfg.embedding_model || '已加载'}`
                 : '语义检索未启用，只能做关键词检索';
+            const rerankValue = cfg.rerank_enabled ? (cfg.rerank_model || '已启用') : '未启用';
+            const rerankHint = cfg.rerank_enabled
+                ? `重排模型已启用：${cfg.rerank_model || '已加载'}，RAG 检索结果会经交叉编码器二次排序`
+                : '重排模型未启用，RAG 仅使用向量+关键词混合排序';
             const tripHint = trippedCount > 0
                 ? `熔断器跳闸：${trippedCount} 个工具被临时禁用（失败次数过多），冷却后自动恢复`
                 : '熔断器无跳闸，全部工具可用';
@@ -519,6 +523,7 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                 { ic: 'fa-circle-play', label: '运行模式', value: cfg.dry_run ? 'Dry Run' : '正常', tone: cfg.dry_run ? 'warn' : 'ok', hint: dryRunHint },
                 { ic: 'fa-microchip', label: 'LLM', value: llmModel, title: llmModel, hint: llmHint },
                 { ic: 'fa-cubes', label: 'Embedding', value: embValue, title: embValue, tone: cfg.embedding_enabled ? '' : 'warn', hint: embHint },
+                { ic: 'fa-sort-amount-down', label: '重排', value: rerankValue, title: rerankValue, tone: cfg.rerank_enabled ? '' : 'muted', hint: rerankHint },
                 { ic: 'fa-arrows-rotate', label: '轮询', value: cfg.poll_interval != null ? cfg.poll_interval + 's' : '-', hint: pollHint },
                 { ic: 'fa-shield-halved', label: '熔断', value: trippedCount > 0 ? trippedCount + ' 个' : '正常', tone: trippedCount > 0 ? 'warn' : 'ok', hint: tripHint },
                 // 「工具」与「配置自检」合并：注册数与白名单一致性是同一件事的两面，

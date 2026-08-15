@@ -227,6 +227,7 @@ function switchPage(page) {
         config: '系统配置',
         persona: '主人风格画像',
         metrics: '指标监控',
+        models: '模型状态',
         'cost-quality': '成本 / 质量',
         logs: '运行日志',
         simulate: '模拟测试',
@@ -237,6 +238,7 @@ function switchPage(page) {
     stopIntentPolling(); // 离开任意页时停掉意图页轮询
     stopRouteTracePolling(); // 离开任意页时停掉路由追踪轮询
     stopMetricsPolling(); // 离开任意页时停掉指标监控轮询
+    stopModelsPolling(); // 离开任意页时停掉模型状态轮询
     // 离开 RAG 页时强制隐藏关键词测试面板（已迁移到关键词页面）
 
     if (page === 'dashboard') {
@@ -270,6 +272,7 @@ function switchPage(page) {
     if (page === 'drafts') loadDraftsPage();
     if (page === 'persona') { window.loadPersonaPage && window.loadPersonaPage(); }
     if (page === 'metrics') { loadMetricsPage(); startMetricsPolling(); window.loadMetricsReliability && window.loadMetricsReliability(); }
+    if (page === 'models') { loadModelsPage(); startModelsPolling(); }
     if (page === 'cost-quality') { loadCostQualityPage(); startCostQualityPolling(); }
     else { stopCostQualityPolling(); }
     if (page === 'simulate') { window.loadSimulatePage && window.loadSimulatePage(); }
@@ -506,7 +509,7 @@ async function init() {
         // 注意：currentPage 初始为 'dashboard'，switchPage('dashboard') 会因页面未改变而短路返回，
         // 导致 loadDashboard/lodaDashboardData 不会被触发。因此对仪表盘场景需直接调用 loadDashboard。
         // 允许的页面白名单（与 switchPage 的 titles 保持一致）
-        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'cost-quality', 'logs', 'simulate'];
+        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate'];
         const saved = (() => { try { return sessionStorage.getItem('marvis_last_page'); } catch (_) { return null; } })();
         if (saved && ALLOWED_PAGES.includes(saved)) {
             if (saved === 'dashboard') {

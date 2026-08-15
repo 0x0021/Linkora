@@ -1,0 +1,237 @@
+/* ============ models.css ============ */
+/* 「模型状态」页：重排 / 嵌入模型卡片 + 实时资源仪表 */
+
+.models-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+@media (max-width: 860px) {
+    .models-cards { grid-template-columns: 1fr; }
+}
+
+/* ---- 模型卡片 ---- */
+.model-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.9rem 1rem 1rem;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+.model-card:hover { box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08); }
+
+.mc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-bottom: 0.75rem;
+}
+.mc-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.mc-title i { color: var(--brand-primary); }
+
+.mc-body { display: flex; flex-direction: column; gap: 0.4rem; }
+.mc-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    font-size: 0.82rem;
+}
+.mc-label { color: var(--text-secondary); white-space: nowrap; }
+.mc-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    text-align: right;
+    word-break: break-all;
+}
+.mc-msg { margin-top: 0.25rem; }
+.mc-msg .mc-value { text-align: left; color: var(--brand-danger); font-weight: 500; font-size: 0.78rem; }
+
+.mc-progress {
+    margin-top: 0.7rem;
+    height: 6px;
+    background: var(--bg-subtle);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.mc-progress-bar {
+    height: 100%;
+    background: var(--brand-primary);
+    border-radius: 999px;
+    transition: width 0.4s ease;
+}
+
+/* ---- 状态徽标（自包含，与 vector_status 页同款语义）---- */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.4;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.status-badge.success { color: #16a34a; background: rgba(22, 163, 74, 0.12); border-color: rgba(22, 163, 74, 0.28); }
+.status-badge.warning { color: #b45309; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.32); }
+.status-badge.error   { color: var(--brand-danger, #dc2626); background: rgba(220, 38, 38, 0.12); border-color: rgba(220, 38, 38, 0.28); }
+.status-badge.muted   { color: var(--text-tertiary); background: var(--bg-subtle); border-color: var(--border-color); }
+
+/* ---- 资源面板 ---- */
+.resource-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.1rem 1.1rem;
+    box-shadow: var(--shadow-sm);
+}
+.rp-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+.rp-title i { color: var(--brand-primary); }
+
+.rp-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+@media (max-width: 860px) { .rp-grid { grid-template-columns: 1fr; } }
+
+.meter-card {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 0.9rem;
+}
+
+.meter { display: flex; flex-direction: column; gap: 0.35rem; }
+.meter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+.meter-head i { color: var(--text-secondary); margin-right: 0.3rem; opacity: 0.7; }
+.meter-sub { font-size: 0.72rem; color: var(--text-tertiary); }
+
+.meter-track {
+    height: 9px;
+    background: rgba(100, 116, 139, 0.18);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.meter-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.45s ease, background-color 0.3s;
+}
+.meter-fill.lvl-ok        { background: #16a34a; }
+.meter-fill.lvl-mid       { background: #0ea5e9; }
+.meter-fill.lvl-warn      { background: #f59e0b; }
+.meter-fill.lvl-critical  { background: #dc2626; }
+.meter-fill.lvl-unknown   { background: #94a3b8; }
+
+/* ---- GPU ---- */
+.gpu-section { margin-bottom: var(--space-md); }
+.gpu-section-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+.gpu-card {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+.gpu-card:last-child { margin-bottom: 0; }
+.gpu-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.55rem;
+}
+.gpu-head i { color: var(--brand-primary); }
+.gpu-backend {
+    margin-left: auto;
+    font-size: 0.66rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+}
+.gpu-none {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    background: var(--bg-subtle);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.proc-line {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+.proc-line i { opacity: 0.7; margin-right: 0.1rem; }
+
+.models-error {
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    color: var(--brand-danger, #dc2626);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.2rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.models-foot {
+    margin-top: var(--space-md);
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    text-align: right;
+}

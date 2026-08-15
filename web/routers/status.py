@@ -160,6 +160,8 @@ async def status():
                 "llm_model": config.llm.model,
                 "embedding_enabled": config.embedding.enabled,
                 "embedding_model": config.embedding.model,
+                "rerank_enabled": config.llm.advanced.rerank_enabled,
+                "rerank_model": config.llm.advanced.rerank_model,
                 "tools_count": len(config.tools.available),
             },
             "stats": {

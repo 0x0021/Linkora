@@ -137,6 +137,10 @@
                         <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
                         <span class="nav-text">指标监控</span>
                     </a>
+                    <a href="#" class="nav-item" data-page="models">
+                        <span class="nav-icon"><i class="fa-solid fa-microchip"></i></span>
+                        <span class="nav-text">模型状态</span>
+                    </a>
                     <a href="#" class="nav-item" data-page="cost-quality">
                         <span class="nav-icon"><i class="fa-solid fa-sack-dollar"></i></span>
                         <span class="nav-text">成本 / 质量</span>
@@ -2393,6 +2397,25 @@
                 </div>
             </div><!-- /page-metrics -->
 
+
+            <!-- ============ 模型状态 ============ -->
+            <div class="page" id="page-models">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <div class="page-header-icon">
+                            <i class="fa-solid fa-microchip"></i>
+                        </div>
+                        <div>
+                            <h2 class="page-header-title">模型状态</h2>
+                            <p class="page-header-desc">本地重排（rerank）与嵌入（embedding）模型实时状态与资源占用</p>
+                        </div>
+                    </div>
+                    <div class="page-header-actions">
+                        <span class="models-refresh-hint"><i class="fa-solid fa-rotate"></i> 每 3 秒自动刷新</span>
+                    </div>
+                </div>
+                <div id="models-body" class="models-body"></div>
+            </div>
 
             <!-- ============ 成本 / 质量看板 ============ -->
             <div class="page" id="page-cost-quality">

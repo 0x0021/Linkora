@@ -522,7 +522,7 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
             const chips = [
                 { ic: 'fa-circle-play', label: '运行模式', value: cfg.dry_run ? 'Dry Run' : '正常', tone: cfg.dry_run ? 'warn' : 'ok', hint: dryRunHint },
                 { ic: 'fa-microchip', label: 'LLM', value: llmModel, title: llmModel, hint: llmHint },
-                { ic: 'fa-cubes', label: 'Embedding', value: embValue, title: embValue, tone: cfg.embedding_enabled ? '' : 'warn', hint: embHint },
+                { ic: 'fa-cubes', label: '嵌入', value: embValue, title: embValue, tone: cfg.embedding_enabled ? '' : 'warn', hint: embHint },
                 { ic: 'fa-sort-amount-down', label: '重排', value: rerankValue, title: rerankValue, tone: cfg.rerank_enabled ? '' : 'muted', hint: rerankHint },
                 { ic: 'fa-arrows-rotate', label: '轮询', value: cfg.poll_interval != null ? cfg.poll_interval + 's' : '-', hint: pollHint },
                 { ic: 'fa-shield-halved', label: '熔断', value: trippedCount > 0 ? trippedCount + ' 个' : '正常', tone: trippedCount > 0 ? 'warn' : 'ok', hint: tripHint },
@@ -727,7 +727,7 @@ async function loadRecentMessages() {
     const stream = document.getElementById('recent-messages-stream');
     if (!stream || currentPage !== 'dashboard') return;
     try {
-        const data = await api.getMessages('', 5);
+        const data = await api.getMessages('', 6);
         const messages = data.messages || [];
         if (messages.length === 0) {
             stream.innerHTML = '<div class="log-item" style="justify-content:center;color:var(--text-tertiary)">暂无消息</div>';

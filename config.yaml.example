@@ -288,7 +288,7 @@ llm:
     citation_low_threshold: 0.5                    # 相关度低于此值不追加页脚
     citation_max_items: 2                          # 页脚最多列几条引文
     # Phase 2 P2-6 BGE 本地离线重排（默认关；开启需本地已缓存 bge-reranker-base 权重）
-    rerank_enabled: false                          # 重排总开关（默认关；opt-in 高级特性：开启需本地 BGE 权重并引入推理开销，属有意默认关）
+    rerank_enabled: false                          # 重排总开关（默认关；opt-in 高级特性：开启需本地 BGE 权重并引入推理开销，属有意默认关；当前运行实例已开，效果见 docs/phase2_citation_confidence_design.md §6）
     rerank_model: BAAI/bge-reranker-base           # 重排模型
     rerank_offline: false                          # 纯离线加载（local_files_only）
     rerank_top_k: 10                               # 参与重排的候选窗口（0=全部）

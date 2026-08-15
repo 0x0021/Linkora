@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import psutil
 import time
 
-from src.config import load_config
+from src.config import AppConfig, load_config
 from src.paths import get_config_path
 from src.dws_adapter import DwsAdapter
 from src.tools.base import BaseTool
@@ -455,6 +456,12 @@ class ConfigManageTool(BaseTool):
                         sections[section][key] = int(sval)
                     elif isinstance(old_value, float):
                         sections[section][key] = float(sval)
+                    elif isinstance(old_value, list):
+                        # list 配置项（如 tools.available）若被误写成字符串会损坏 YAML，
+                        # 故按 JSON 解析（允许传 JSON 数组字符串）；解析失败由下方 except 拒绝。
+                        sections[section][key] = json.loads(sval)
+                    elif isinstance(old_value, dict):
+                        sections[section][key] = json.loads(sval)
                     else:
                         sections[section][key] = value
                 except (ValueError, TypeError):
@@ -462,6 +469,13 @@ class ConfigManageTool(BaseTool):
                         f"配置项 {section}.{key} 需要 {type(old_value).__name__} 类型，"
                         f"收到无法解析的值: {value!r}"
                     )}
+
+                # 预校验：避免把非法结构（如 list 被误写成字符串、缺必填字段等）写回
+                # config.yaml 导致下次 load_config 的 Pydantic 校验失败、进程启动崩溃。
+                try:
+                    AppConfig.model_validate(config_dict)
+                except Exception as ve:
+                    return {"error": f"配置校验失败，已取消写入以避免损坏配置文件: {ve}"}
 
                 # 原子写：先写临时文件再 os.replace 整体替换，避免写盘中途崩溃导致
                 # YAML 被截断、进程再也起不来；也避免并发两次 update 互相覆盖成半截文件。

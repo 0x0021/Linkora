@@ -159,6 +159,10 @@ class VectorIndex:
 
             vec = np.array([query_embedding], dtype=np.float32)
             vec = self._normalize(vec)
+            # 零范数查询向量（全零）归一化后仍是零向量，会与所有 chunk 算得 sim=0.0，
+            # 返回无意义的"最相似"。直接返回空。
+            if float(np.linalg.norm(vec[0])) == 0.0:
+                return []
 
             k = min(top_k, self._index.ntotal)
             scores, indices = self._index.search(vec, k)
@@ -287,35 +291,64 @@ class VectorIndex:
             logger.info("索引已保存到 %s", save_path)
 
     def load(self, path: str | None = None) -> bool:
-        """从磁盘加载索引。"""
+        """从磁盘加载索引。维度与本实例不一致时拒绝加载并返回 False。
+
+        维度校验是硬约束（F19）：换 embedding 模型后（如 1024 维 bge-m3/Qwen3 →
+        512 维 bge-small-zh），磁盘 .faiss 仍是旧维度残留。此前实现直接
+        `read_index` 覆盖 `_index`、并用 map.json 的 dim 反向改写 `self.dim`，
+        于是「请求 512 维却拿到 1024 维索引」被当成加载成功：
+          - add()    → faiss 裸 assert（str(e) 为空）→ 日志只剩 "Failed to add chunk N: "
+          - search() → 同样裸 assert → 静默降级暴力搜索，FAISS 形同废弃
+        且 update_chunk_embedding 的 remove 已生效、add 失败，索引被逐步掏空。
+        因此这里必须在「采纳前」校验，不一致就整体拒绝，交由调用方全量重建。
+        """
         with self._lock:
             load_path = path or self.index_path
             if not load_path or not os.path.exists(load_path):
                 return False
 
             import faiss
-            self._index = faiss.read_index(load_path)
+            loaded = faiss.read_index(load_path)
+
+            # faiss 索引自身的 d 是权威维度：不匹配则拒绝，且不污染当前实例状态
+            if loaded.d != self.dim:
+                logger.warning(
+                    "拒绝加载磁盘索引 %s：维度不匹配（磁盘 %d ≠ 期望 %d），回落全量重建",
+                    load_path, loaded.d, self.dim,
+                )
+                return False
 
             map_path = load_path + ".map.json"
+            meta: dict = {}
             if os.path.exists(map_path):
                 with open(map_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self._id_map = {int(k): v for k, v in data.get("id_map", {}).items()}
-                    self._reverse_map = {v: int(k) for k, v in self._id_map.items()}
-                    self.dim = data.get("dim", self.dim)
-                    # F18：恢复索引类型与 HNSW 参数（缺省回落安全默认）
-                    self.index_type = data.get("index_type", self.index_type)
-                    if self.index_type not in _VECTOR_INDEX_TYPES:
-                        self.index_type = "flat"
-                    self.hnsw_ef = max(1, int(data.get("hnsw_ef", self.hnsw_ef)))
-                    self.phantom_rebuild_ratio = float(data.get("phantom_rebuild_ratio", self.phantom_rebuild_ratio))
-                    self.cache_embeddings = bool(data.get("cache_embeddings", self.cache_embeddings))
-                    if self._emb_cache is not None and not self.cache_embeddings:
-                        self._emb_cache = None
-                    # HNSW 加载后 efSearch 不随序列化保存，需重新应用
-                    hnsw = getattr(self._index, "hnsw", None)
-                    if self.index_type == "hnsw" and hnsw is not None:
-                        hnsw.efSearch = max(self.hnsw_ef, 32)
+                    meta = json.load(f)
+                meta_dim = meta.get("dim", self.dim)
+                if meta_dim != self.dim:
+                    logger.warning(
+                        "拒绝加载磁盘索引 %s：映射元数据维度不匹配（%s ≠ %d），回落全量重建",
+                        load_path, meta_dim, self.dim,
+                    )
+                    return False
+
+            self._index = loaded
+
+            if meta:
+                self._id_map = {int(k): v for k, v in meta.get("id_map", {}).items()}
+                self._reverse_map = {v: int(k) for k, v in self._id_map.items()}
+                # F18：恢复索引类型与 HNSW 参数（缺省回落安全默认）
+                self.index_type = meta.get("index_type", self.index_type)
+                if self.index_type not in _VECTOR_INDEX_TYPES:
+                    self.index_type = "flat"
+                self.hnsw_ef = max(1, int(meta.get("hnsw_ef", self.hnsw_ef)))
+                self.phantom_rebuild_ratio = float(meta.get("phantom_rebuild_ratio", self.phantom_rebuild_ratio))
+                self.cache_embeddings = bool(meta.get("cache_embeddings", self.cache_embeddings))
+                if self._emb_cache is not None and not self.cache_embeddings:
+                    self._emb_cache = None
+                # HNSW 加载后 efSearch 不随序列化保存，需重新应用
+                hnsw = getattr(self._index, "hnsw", None)
+                if self.index_type == "hnsw" and hnsw is not None:
+                    hnsw.efSearch = max(self.hnsw_ef, 32)
 
             # 反推 embedding 缓存（支撑加载后自动重建）
             if self.cache_embeddings:

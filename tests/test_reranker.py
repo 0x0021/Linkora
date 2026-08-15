@@ -111,10 +111,11 @@ class TestKeywordScore:
         assert rr._keyword_score("", "") == 0.0
 
     def test_partial_overlap(self, rr):
-        # 单字 CJK tokenizer 下，"合同违约金" 与 "合同条款约定违约金" 大量单字重叠
-        # score 会被 clamp 到 1.0
+        # 2-gram 切词下，"合同违约金 支付" 与 "合同条款约定违约金比例" 部分重叠
+        # （合同/违约/约金 命中）。修复 len(d_tokens) 虚高 IDF 后，长文档不再被顶到 1.0，
+        # 得分较高但仍 < 1.0。
         score = rr._keyword_score("合同违约金 支付", "合同条款约定违约金比例")
-        assert score == 1.0  # 大量单字重叠 → 被 min(score, 1.0) clamp
+        assert 0.7 < score <= 1.0
 
     def test_all_query_tokens_match(self, rr):
         score = rr._keyword_score("人工智能", "人工智能")

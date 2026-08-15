@@ -466,29 +466,52 @@ async def reindex_all_kb():
 
             from src.memory.store_factory import get_store
             store = get_store()
-            docs, _ = store._kb_repo.list_kb_documents()
-
             embed_client = _api._get_embedding_client(config.embedding)
 
-            total_indexed = 0
-            for doc in docs:
-                # 获取该文档的所有分块
-                chunks = store._kb_repo.list_kb_chunks(doc["id"])
+            # 分页遍历全部文档：list_kb_documents 默认 limit=100，>100 篇会被静默漏掉
+            total_docs = 0
+            total_chunks = 0
+            total_embedded = 0
+            failed_docs = 0
+            offset = 0
+            PAGE = 100
+            while True:
+                docs, _ = store._kb_repo.list_kb_documents(limit=PAGE, offset=offset)
+                if not docs:
+                    break
+                for doc in docs:
+                    total_docs += 1
+                    # 获取该文档的所有分块
+                    chunks = store._kb_repo.list_kb_chunks(doc["id"])
 
-                # 重新生成 Embedding（带重试，覆盖冷启动/抖动导致的瞬时失败）
-                for chunk in chunks:
-                    emb = embed_client.embed_with_retry(chunk["content"])
-                    if emb:
-                        store._kb_repo.update_chunk_embedding(chunk["id"], emb)
-
-                store._kb_repo.update_kb_document(doc["id"], status="indexed")
-                total_indexed += len(chunks)
+                    # 重新生成 Embedding（带重试，覆盖冷启动/抖动导致的瞬时失败）
+                    doc_failed = 0
+                    for chunk in chunks:
+                        emb = embed_client.embed_with_retry(chunk["content"])
+                        if emb:
+                            store._kb_repo.update_chunk_embedding(chunk["id"], emb)
+                            total_embedded += 1
+                        else:
+                            doc_failed += 1
+                    total_chunks += len(chunks)
+                    # 仅当该文档全部 chunk 向量化成功才标 indexed；否则标 partial 便于排查
+                    if doc_failed:
+                        failed_docs += 1
+                        store._kb_repo.update_kb_document(doc["id"], status="partial")
+                    else:
+                        store._kb_repo.update_kb_document(doc["id"], status="indexed")
+                offset += PAGE
 
             return {
-                "success": True,
-                "docs": len(docs),
-                "chunks": total_indexed,
-                "message": f"重建索引完成：{len(docs)} 篇文档，共 {total_indexed} 个块"
+                "success": failed_docs == 0,
+                "docs": total_docs,
+                "chunks": total_chunks,
+                "embedded": total_embedded,
+                "failed_docs": failed_docs,
+                "message": (
+                    f"重建索引完成：{total_docs} 篇文档，{total_embedded}/{total_chunks} 个块向量化"
+                    + (f"，{failed_docs} 篇存在失败 chunk" if failed_docs else "")
+                ),
             }
         return await run_sync(_work)
     except HTTPException:

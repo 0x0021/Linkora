@@ -333,13 +333,22 @@ class PrimaryMixin(EngineMixinBase):
             try:
                 self_info = dws.contact_user_get_self()
                 if isinstance(self_info, dict):
-                    feishu_user_id = self_info.get("user_id") or self_info.get("id") or ""
+                    # 优先取 open_id：飞书入站消息的 sender 是 open_id(ou_xxx)，
+                    # 若此处取 user_id/员工号，会与消息 sender 永不匹配→自身消息漏检→回声循环。
+                    feishu_user_id = (self_info.get("open_id")
+                                      or self_info.get("union_id")
+                                      or self_info.get("user_id")
+                                      or self_info.get("id") or "")
                     if feishu_user_id:
                         platform_user_id = feishu_user_id
                         platform_user_user_id = feishu_user_id
                         logger.info("[%s] 已获取飞书用户 ID: %s", pcfg.id, feishu_user_id[:30])
                     else:
-                        logger.info("[%s] 飞书未返回 user_id，将使用 bot 应用 ID 进行自我消息过滤", pcfg.id)
+                        # 无可用 open_id/user_id：置空以让 poller 启用更宽松过滤，
+                        # 而非用钉钉 id 做永远不匹配的精确匹配（否则自身消息漏检→回声）。
+                        logger.info("[%s] 飞书未返回 open_id/user_id，将使用空 ID 进行自我消息过滤", pcfg.id)
+                        platform_user_id = ""
+                        platform_user_user_id = ""
                     # 聚合飞书侧的职位/岗位字段（飞书 user dict 含 title）
                     self._merge_platform_title(self_info.get("title") or "")
                 else:

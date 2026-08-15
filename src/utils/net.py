@@ -17,6 +17,20 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _ip_is_public(ip_str: str) -> bool:
+    """单 IP 是否允许出站：非私网/回环/链路本地/未指定/保留/组播。
+
+    供 ``is_ssrf_safe`` 与 ``ssrf_safe_get`` 复用，保证「校验」与「钉死 IP」使用
+    同一份解析结果，杜绝 DNS 重绑定 TOCTOU 窗口。
+    """
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+               or ip.is_unspecified or ip.is_reserved or ip.is_multicast)
+
+
 def is_ssrf_safe(url: str) -> bool:
     """SSRF 防护：仅允许 http/https，且解析后的所有 IP 不得为私网/回环/链路本地。
 
@@ -34,23 +48,11 @@ def is_ssrf_safe(url: str) -> bool:
         return False
     try:
         addr_info = socket.getaddrinfo(hostname, None)
-        resolved_ips = {info[4][0] for info in addr_info}
+        resolved_ips = {str(info[4][0]) for info in addr_info}
     except socket.gaierror as _exc:
         logger.warning(f"is_ssrf_safe: swallowed exception: {_exc}")
         return False
-    for ip_str in resolved_ips:
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError as _exc:
-            logger.debug(f"is_ssrf_safe: swallowed exception: {_exc}")
-            return False
-        # 禁止内网/回环/链路本地地址（10.x / 172.16-31.x / 192.168.x / 127.x / 169.254.x），
-        # 以及未指定地址（0.0.0.0 / ::）、保留段（含 0.0.0.0 之外的 IETF 保留）、组播地址。
-        # 防止 http://0.0.0.0:port 类 URL 绕过校验裸奔到本机任意服务。
-        if (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_unspecified or ip.is_reserved or ip.is_multicast):
-            return False
-    return True
+    return bool(resolved_ips) and all(_ip_is_public(ip) for ip in resolved_ips)
 
 
 def ssrf_safe_get(url: str, **kwargs):
@@ -70,10 +72,13 @@ def ssrf_safe_get(url: str, **kwargs):
         infos = socket.getaddrinfo(parsed.hostname, None)
     except socket.gaierror as e:
         raise ValueError("DNS 解析失败") from e
-    ips = {i[4][0] for i in infos}
-    if not ips or not is_ssrf_safe(url):
+    ips = {str(i[4][0]) for i in infos}
+    # 关键修复：校验与钉死使用「同一份」解析结果，杜绝两次解析间的 DNS 重绑定
+    # TOCTOU 窗口（旧实现先 is_ssrf_safe 内部二次解析、再 next(iter(ips)) 钉死，
+    # 攻击者可让两次解析返回不同 IP，使校验过公网却连到内网）。
+    if not ips or not all(_ip_is_public(ip) for ip in ips):
         raise ValueError("URL 指向内网/保留地址或解析失败")
-    dest_ip = next(iter(ips))
+    dest_ip = sorted(ips)[0]  # 确定性选取，避免 next(iter()) 顺序不确定
     # 惰性导入，避免非 Web 路径也拖入 requests/urllib3
     from requests import Session
     from requests.adapters import HTTPAdapter
@@ -140,7 +145,16 @@ def ssrf_safe_get(url: str, **kwargs):
     session.mount("https://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
     kwargs.setdefault("allow_redirects", False)
     kwargs.setdefault("verify", True)
-    return session.get(url, **kwargs)
+    try:
+        resp = session.get(url, **kwargs)
+        # 预读 body：无论是否 stream，都把连接释放回池，随后可安全关闭 Session，
+        # 避免每调用新建 Session 且从不关闭导致 socket/FD 累积泄漏（高频出站尤甚）。
+        _ = resp.content
+        return resp
+    finally:
+        # 成功/异常均关闭 Session 与底层连接池；resp.content 已缓冲，调用方
+        # 仍可安全读取 text/json（requests 会基于缓存内容迭代）。
+        session.close()
 
 
 def resolve_safe_ip(hostname: str) -> str | None:

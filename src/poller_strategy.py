@@ -604,31 +604,47 @@ class PollerStrategyMixin(PollerMixinBase):
             self._handle_fetch_errors(e, open_id, title, is_single, chat_type)
             return None
 
-        # 如果是单聊，从消息里提取对方 openDingTalkId 并更新会话缓存
-        if is_single and raw_msgs:
-            peer = self._resolve_single_chat_peer(open_id, title)
-            peer_oid_from_msgs = ""
-            for raw_msg in raw_msgs:
-                candidate_oid = raw_msg.get("senderOpenDingTalkId") or raw_msg.get("senderId") or ""
-                if candidate_oid and not self._is_self_sender(candidate_oid):
-                    peer_oid_from_msgs = candidate_oid
-                    break
-            if peer_oid_from_msgs:
-                logger.debug("[轮询器] 正在更新 %s 的对方信息：openDingTalkId=%s", mask_oid(open_id), mask_oid(peer_oid_from_msgs))
-                self.store._conversation_repo.upsert_conversation(
-                    open_id, title, "single",
-                    peer_open_dingtalk_id=peer_oid_from_msgs
-                )
-
         # 处理消息：过滤 + 转换 + 合并
-        merged, all_timestamps = self._process_conv_messages(
-            raw_msgs, open_id, chat_type, title, is_single, peer if is_single else None, is_first_poll
-        )
+        # I1-2026-08-15：单条消息解析/转换异常（字段缺失、时间戳非法、媒体结构异常等）
+        # 不应中断整轮轮询——否则一个会话的脏数据会拖垮本平台乃至其它平台的所有抓取。
+        # 包一层会话级 try/except：异常时记录并前移轮询游标（等同空轮保护），跳过该会话。
+        try:
+            # 如果是单聊，从消息里提取对方 openDingTalkId 并更新会话缓存
+            if is_single and raw_msgs:
+                peer = self._resolve_single_chat_peer(open_id, title)
+                peer_oid_from_msgs = ""
+                for raw_msg in raw_msgs:
+                    candidate_oid = raw_msg.get("senderOpenDingTalkId") or raw_msg.get("senderId") or ""
+                    if candidate_oid and not self._is_self_sender(candidate_oid):
+                        peer_oid_from_msgs = candidate_oid
+                        break
+                if peer_oid_from_msgs:
+                    logger.debug("[轮询器] 正在更新 %s 的对方信息：openDingTalkId=%s", mask_oid(open_id), mask_oid(peer_oid_from_msgs))
+                    self.store._conversation_repo.upsert_conversation(
+                        open_id, title, "single",
+                        peer_open_dingtalk_id=peer_oid_from_msgs
+                    )
 
-        # 更新 _last_poll_time 及 DB
-        self._update_poll_time_and_db(open_id, title, chat_type, all_timestamps, merged)
+            # 处理消息：过滤 + 转换 + 合并
+            merged, all_timestamps = self._process_conv_messages(
+                raw_msgs, open_id, chat_type, title, is_single, peer if is_single else None, is_first_poll
+            )
 
-        return merged, all_timestamps, skipped_throttle
+            # 更新 _last_poll_time 及 DB
+            self._update_poll_time_and_db(open_id, title, chat_type, all_timestamps, merged)
+
+            return merged, all_timestamps, skipped_throttle
+        except Exception as e:
+            logger.error(
+                "[轮询器] 会话 %s 消息处理异常，跳过本轮该会话（已前移轮询游标，避免脏数据拖垮轮询）: %s",
+                mask_oid(open_id), e,
+            )
+            # 前移游标，等价于空轮保护，避免下次轮询重复抓取同一批脏消息而无限崩溃
+            try:
+                self._update_poll_time_and_db(open_id, title, chat_type, [], [])
+            except Exception:
+                logger.debug("[轮询器] 处理异常后前移游标也失败，忽略: %s", open_id[:20])
+            return None
 
     def _process_conv_messages(self, raw_msgs, open_id: str, chat_type: str,
                                title: str, is_single: bool, peer,

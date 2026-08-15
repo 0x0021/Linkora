@@ -132,36 +132,40 @@ def validate_config_keys(raw: dict, config: AppConfig) -> list[str]:
 def _apply_env_overrides(config: "AppConfig") -> None:
     """把 .env 中的密钥/端点兜给 config 对象，使其与运行时（llm/client.py、embedding.py）一致。
 
-    规则：对应字段为空（None / 空串）时填 env 值；env 值非空则直接覆盖（与
-    ``os.environ.get(X) or config_val`` 的运行时语义一致，.env 始终优先）。
-    这样 config.yaml 可保持留空、不写任何明文密钥，RAG 状态判断也能拿到真 key。
+    规则（与 Embedding 段统一）：**config.yaml 中显式填写的值优先**，env 仅作兜底——
+    仅当对应字段为空（None / 空串）或仍是出厂默认时才用 env 覆盖。这样用户在
+    config.yaml 显式配置的密钥/端点不会被 .env 静默覆盖，restore-default 等操作也不会
+    把 env 值误写回 config.yaml（见 tests/test_web_api_endpoints.py 的回归护栏）。
     """
     env = os.environ
 
     llm = config.llm
-    # 主 LLM
-    if env.get("LLM_API_KEY"):
-        llm.api_key = env["LLM_API_KEY"]
-    if env.get("LLM_BASE_URL"):
-        llm.base_url = env["LLM_BASE_URL"]
+    # 主 LLM：config.yaml 显式值优先，env 仅兜底
+    if not llm.api_key:
+        llm.api_key = env.get("LLM_API_KEY") or llm.api_key
+    # base_url 出厂默认是 https://api.openai.com/v1，未显式配置（空或仍是默认）时才让 env 兜底
+    if not llm.base_url or llm.base_url == "https://api.openai.com/v1":
+        llm.base_url = env.get("LLM_BASE_URL") or llm.base_url
     # 跨服务商备用
-    if env.get("LLM_FALLBACK_API_KEY"):
-        llm.fallback_api_key = env["LLM_FALLBACK_API_KEY"]
-    if env.get("LLM_FALLBACK_BASE_URL"):
-        llm.fallback_base_url = env["LLM_FALLBACK_BASE_URL"]
-    if env.get("LLM_FALLBACK_MODEL"):
-        llm.fallback_model = env["LLM_FALLBACK_MODEL"]
+    if not llm.fallback_api_key:
+        llm.fallback_api_key = env.get("LLM_FALLBACK_API_KEY") or llm.fallback_api_key
+    if not llm.fallback_base_url:
+        llm.fallback_base_url = env.get("LLM_FALLBACK_BASE_URL") or llm.fallback_base_url
+    if not llm.fallback_model:
+        llm.fallback_model = env.get("LLM_FALLBACK_MODEL") or llm.fallback_model
     # 第二层备用（本地部署）
-    if env.get("LLM_SECONDARY_FALLBACK_API_KEY"):
-        llm.secondary_fallback_api_key = env["LLM_SECONDARY_FALLBACK_API_KEY"]
-    if env.get("LLM_SECONDARY_FALLBACK_BASE_URL"):
-        llm.secondary_fallback_base_url = env["LLM_SECONDARY_FALLBACK_BASE_URL"]
+    if not llm.secondary_fallback_api_key:
+        llm.secondary_fallback_api_key = env.get("LLM_SECONDARY_FALLBACK_API_KEY") or llm.secondary_fallback_api_key
+    if not llm.secondary_fallback_base_url:
+        llm.secondary_fallback_base_url = env.get("LLM_SECONDARY_FALLBACK_BASE_URL") or llm.secondary_fallback_base_url
 
-    # Embedding：独立密钥优先；未设则回退用 LLM_API_KEY（与 embedding.py 一致）
+    # Embedding：config.yaml 显式 key 优先；仅当未设置时才回退 env（与 embedding.py 运行时一致）
+    # 关键修复：.env 的 LLM_API_KEY 仅作兜底，不得覆盖 config.yaml 里显式填写的 embedding 密钥
     emb = config.embedding
-    emb_key = env.get("EMBEDDING_API_KEY") or env.get("LLM_API_KEY")
-    if emb_key:
-        emb.api_key = emb_key
+    if not emb.api_key:
+        emb_key = env.get("EMBEDDING_API_KEY") or env.get("LLM_API_KEY")
+        if emb_key:
+            emb.api_key = emb_key
 
 
 def load_config(path: str = "config.yaml", *, validate: bool = True) -> AppConfig:

@@ -68,10 +68,21 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             return True
         try:
             cur = self.conn.cursor()
-            cur.execute(
-                "SELECT COUNT(*) FROM kb_chunks "
-                "WHERE embedding != '' AND embedding IS NOT NULL"
-            )
+            if self._index_dim:
+                # 只统计与索引同维度的已索引 chunk：库里残留的异维向量（如旧模型 1024 维）
+                # 不应算入同步计数，否则 db_count 恒大于 index.count → 每次查询都误判失同步、
+                # 触发全量重建（H1）。
+                cur.execute(
+                    "SELECT COUNT(*) FROM kb_chunks "
+                    "WHERE embedding != '' AND embedding IS NOT NULL "
+                    "AND json_array_length(embedding) = ?",
+                    (self._index_dim,),
+                )
+            else:
+                cur.execute(
+                    "SELECT COUNT(*) FROM kb_chunks "
+                    "WHERE embedding != '' AND embedding IS NOT NULL"
+                )
             db_count = cur.fetchone()[0]
             if db_count != self._vector_index.count:
                 return False
@@ -87,10 +98,18 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             return False
         try:
             cur = self.conn.cursor()
-            cur.execute(
-                "SELECT COUNT(*) FROM kb_chunks "
-                "WHERE embedding != '' AND embedding IS NOT NULL"
-            )
+            if self._index_dim:
+                cur.execute(
+                    "SELECT COUNT(*) FROM kb_chunks "
+                    "WHERE embedding != '' AND embedding IS NOT NULL "
+                    "AND json_array_length(embedding) = ?",
+                    (self._index_dim,),
+                )
+            else:
+                cur.execute(
+                    "SELECT COUNT(*) FROM kb_chunks "
+                    "WHERE embedding != '' AND embedding IS NOT NULL"
+                )
             db_count = cur.fetchone()[0]
             return db_count == self._vector_index.count
         except Exception as _exc:

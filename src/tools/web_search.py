@@ -322,37 +322,36 @@ _HEADERS = {
 
 
 def _is_blocked_host(url: str) -> bool:
-    """拒绝访问保留/内网/回环地址，缓解 SSRF（如搜索结果 301 跳转到内网）。
+    """拒绝访问保留/内网/回环地址，缓解 SSRF（如搜索结果指向内网 IP）。
 
-    返回 True 表示应被拦截。DNS 解析失败时保守地判定为拦截。
+    仅对**字面量 IP** 与**已知回环主机名**做静态判定，不再做 DNS 解析——
+    这样既避免沙箱/离线环境下因 DNS 不可用而误杀合法公网域名，也避免
+    重复校验：真正的私网地址拦截由 ``ssrf_safe_get`` 在请求时解析并钉死
+    公网 IP 完成（见 src/utils/net.py），是 TOCTOU 安全的权威校验点。
+
+    返回 True 表示应被拦截。
     """
     from urllib.parse import urlparse
 
     import ipaddress
-    import socket
 
     try:
         host = urlparse(url).hostname
         if not host:
             return True
-        # 先按字面 IP 判断（如 http://169.254.169.254/）
+        host_l = host.lower()
+        # 已知回环主机名（不经 DNS，覆盖 http://localhost/ 等）
+        if host_l == "localhost" or host_l == "localhost.localdomain" or host_l.endswith(".localhost"):
+            return True
+        # 字面量 IP 直接判定（如 http://169.254.169.254/）
         try:
-            ip = ipaddress.ip_address(host)
-            return _ip_is_blocked(ip)
+            return _ip_is_blocked(ipaddress.ip_address(host_l))
         except ValueError:
-            pass  # host 非字面 IP（域名），继续走域名解析分支
-        # 域名：解析所有 A/AAAA 记录，任一落入保留段即拦截
-        for resolved in socket.getaddrinfo(host, None):
-            addr = resolved[4][0]
-            try:
-                if _ip_is_blocked(ipaddress.ip_address(str(addr).split("%")[0])):
-                    return True
-            except ValueError as _exc:
-                logger.warning("_is_blocked_host: 解析保留段判断失败，保守拦截: %s", _exc)
-                return True
+            pass  # host 非字面 IP（域名），交给 ssrf_safe_get 在请求时校验
+        # 其余域名默认放行：ssrf_safe_get 会解析并校验公网可达
         return False
     except Exception:
-        # 解析异常（含 IDN/编码/超时）保守拦截，避免把不可信主机当公网放行
+        # urlparse 等极偶发异常：保守拦截
         return True
 
 

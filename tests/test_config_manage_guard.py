@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import os as _real_os
 import tempfile as _real_tempfile
+from pathlib import Path as _real_path
 import yaml as _real_yaml
 from unittest.mock import MagicMock
 
@@ -52,11 +53,10 @@ class TestConfirmGate:
 
 class TestTypeCoercion:
     def test_json_bool_value(self, monkeypatch):
-        config_dict = {
-            "llm": {"temperature": 0.5},
-            "tools": {"enabled": True},
-            "embedding": {"enabled": True},
-        }
+        # 用仓库内完整且合法的 config.yaml.example 作基础配置：update 现在写入前会做
+        # AppConfig.model_validate 预校验以防损坏 config.yaml，字段不全的极简 dict 会被拒绝。
+        example_path = _real_path(__file__).parent.parent / "config.yaml.example"
+        config_dict = _real_yaml.safe_load(example_path.read_text(encoding="utf-8"))
         _patch_fs(monkeypatch, config_dict)
         t = ConfigManageTool()
         # LLM 传 JSON bool（非字符串）：旧代码 value.lower() 会崩，新代码应正确解析

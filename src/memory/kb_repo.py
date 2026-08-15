@@ -285,19 +285,33 @@ class KbRepo:
         if self.store._vector_index is None and embedding:
             self.store._init_vector_index(len(embedding))
         if self.store._vector_index:
-            if self.store._index_dim and len(embedding) != self.store._index_dim:
+            # 维度基准以「索引实例自身的 dim」为准，store._index_dim 仅作兜底：
+            # 两者可能不一致（磁盘残留索引被按新维度请求加载时），只信 store._index_dim
+            # 会让守卫误判通过，进而 remove 生效、add 触发 faiss 裸 assert（F19）。
+            index_dim = getattr(self.store._vector_index, "dim", 0) or self.store._index_dim
+            if index_dim and len(embedding) != index_dim:
                 # 维度漂移：强行 add 会抛错并破坏 DB/索引一致性（F7）。
                 # 跳过索引更新，留待下次 _ensure_index_loaded 全量重建时按维度族校正。
                 logger.warning(
                     "跳过向量索引更新：chunk %d embedding 维度(%d) 与索引维度(%d) 不一致",
-                    chunk_id, len(embedding), self.store._index_dim,
+                    chunk_id, len(embedding), index_dim,
                 )
             else:
                 try:
                     self.store._vector_index.remove(chunk_id)
                     self.store._vector_index.add(chunk_id, embedding)
                 except Exception as e:
-                    logger.warning("Failed to add chunk %d to vector index: %s", chunk_id, e)
+                    # add 失败时 remove 已生效 → 该 chunk 从索引中消失（逐条累积会
+                    # 掏空索引）。丢弃整个索引，交由 _ensure_index_loaded 全量重建，
+                    # 避免留下「DB 有向量、索引查不到」的静默残缺状态。
+                    # 用 %r：faiss 维度断言是裸 AssertionError，str(e) 为空字符串，
+                    # 只打 %s 会得到「... vector index: 」这种无法诊断的日志。
+                    logger.warning(
+                        "向量索引更新失败（chunk %d，已丢弃索引待全量重建）: %r",
+                        chunk_id, e,
+                    )
+                    self.store._vector_index = None
+                    self.store._index_dim = 0
         # 向量刷新（可能同计数异向量）→ 自增版本号，触常驻进程全量重建索引
         self.store.bump_kb_revision()
 
@@ -311,7 +325,9 @@ class KbRepo:
     def search_kb(self, query_embedding: list[float], top_k: int = 5,
                   doc_type: str = "", min_similarity: float = 0.0,
                   query_text: str = "") -> list[dict]:
-        if not query_embedding:
+        if not query_embedding or not any(query_embedding):
+            # 空向量或全零向量：归一化后仍是零向量，FAISS 会对所有 chunk 返回
+            # sim=0.0，误当成"匹配"返回不相关结果；直接短路返回空。
             return []
 
         # 尝试使用 faiss 索引加速检索
@@ -328,10 +344,11 @@ class KbRepo:
             self.store._vector_index = None
             self.store._ensure_index_loaded()
 
-        if self.store._vector_index and self.store._vector_index.count > 0:
+        vi = self.store._vector_index
+        if vi and vi.count > 0 and len(query_embedding) == vi.dim:
             try:
-                results = self.store._vector_index.search(
-                    query_embedding, top_k=top_k * (2 if min_similarity <= 0 else 10))
+                results = vi.search(
+                    query_embedding, top_k=top_k * (10 if (min_similarity > 0 or doc_type) else 2))
                 if results:
                     chunk_ids = [r[0] for r in results]
                     # 批量查询 chunk 详情
@@ -364,6 +381,10 @@ class KbRepo:
                                 "url": row["url"],
                                 "similarity": sim,
                             })
+                    if min_similarity > 0:
+                        # 在重排/截断前先按原始相似度过滤，避免高相似度结果被关键词分
+                        # 压到 top_k 之外而丢失（重排后的 final_score 含关键词权重）。
+                        output = [r for r in output if r["similarity"] >= min_similarity]
                     if query_text and len(output) > 1:
                         try:
                             from src.memory.reranker import SimpleReranker
@@ -371,11 +392,15 @@ class KbRepo:
                                                             top_k=max(top_k, len(output)))
                         except Exception as e:
                             logger.debug("[RAG] rerank 失败，跳过: %s", e)
-                    if min_similarity > 0:
-                        output = [r for r in output if r["similarity"] >= min_similarity]
                     return output[:top_k]
             except Exception as e:
-                logger.warning("FAISS 搜索失败: %s，降级使用暴力搜索", e)
+                # 用 %r：faiss 维度断言是裸 AssertionError，str(e) 为空字符串，
+                # 只打 %s 会得到「FAISS 搜索失败: ，降级...」这种无法诊断的日志。
+                # 并丢弃索引：维度错配等结构性问题不会自愈，若不失效则每次查询都
+                # 永久降级为全表暴力搜索（结果正确但 FAISS 形同废弃）。
+                logger.warning("FAISS 搜索失败（已丢弃索引待重建）: %r，本次降级暴力搜索", e)
+                self.store._vector_index = None
+                self.store._index_dim = 0
 
         # 兜底：全表扫描
         cur = self.store.conn.cursor()

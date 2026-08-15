@@ -356,9 +356,14 @@ class EmbeddingClient:
         仍失败则如实返回 ``[]``，由调用方记录失败数。
         """
         last: list[float] = []
-        # 【修复#4】模型禁用或尚未加载完成（_model 为 None）属稳定状态，非瞬时异常，
+        # 【修复#4】模型禁用或尚未加载完成属稳定状态，非瞬时异常，
         # 直接返回空，避免做无谓的 3 次重试（退避远短于模型后台加载耗时）并掩盖问题。
-        if not self.is_enabled or self._model is None:
+        if not self.is_enabled:
+            return []
+        # local 模式依赖本地模型实例；api 模式依赖 OpenAI 客户端
+        if self._provider == "local" and self._model is None:
+            return []
+        if self._provider == "api" and self._api_client is None:
             return []
         for attempt in range(max(1, retries)):
             try:
@@ -407,12 +412,16 @@ class EmbeddingClient:
         """
         if not self.is_enabled:
             return None
-        # 等待后台加载完成（最多 120s）
-        deadline = time.time() + 120
-        while self._model is None and time.time() < deadline:
-            time.sleep(0.3)
-        if self._model is None:
-            logger.warning("[嵌入] 预热跳过：模型在等待时间内未就绪")
+        # local 模式等待后台模型加载完成；api 模式无需等待模型文件
+        if self._provider == "local":
+            deadline = time.time() + 120
+            while self._model is None and time.time() < deadline:
+                time.sleep(0.3)
+            if self._model is None:
+                logger.warning("[嵌入] 预热跳过：模型在等待时间内未就绪")
+                return None
+        elif self._api_client is None:
+            logger.warning("[嵌入] 预热跳过：API 客户端未初始化")
             return None
         t0 = time.time()
         try:

@@ -76,17 +76,24 @@ class ReplyGuardMixin(EngineMixinBase):
         return False
     @staticmethod
     def _is_followup_message(content: str) -> bool:
-        """判断是否为追问/澄清类短消息，放行冷却旁路。"""
-        stripped = content.strip()
-        if len(stripped) > 15:
+        """判断是否为追问/澄清类短消息，放行冷却旁路。
+
+        倾向「宁放勿错杀」：用关键词子串 + 问号后缀匹配，覆盖「能再详细说说吗」
+        「说人话」「举个例子」等真实追问，避免冷却内被精确匹配吞掉导致"发消息不回"。
+        """
+        s = content.strip()
+        if not s:
             return False
-        followup_patterns = (
-            "？", "?", "展开", "详细", "继续说", "然后呢", "为什么",
-            "详细点", "具体点", "再展开", "展开说说", "展开一下",
-            "多说点", "接着说", "然后", "继续", "细节", "再详细",
-            "能展开吗", "详细说说", "具体说说", "什么意思",
+        if s in ("？", "?"):
+            return True
+        if s.endswith(("？", "?")):
+            return True
+        followup_cues = (
+            "展开", "详细", "继续", "然后呢", "为什么", "具体", "再说说",
+            "多说点", "接着说", "细节", "什么意思", "说人话", "举例",
+            "没懂", "搞错", "重新查", "讲讲", "解释", "再查", "确认",
         )
-        return stripped in followup_patterns
+        return len(s) <= 30 and any(cue in s for cue in followup_cues)
     def _handle_sensitive_blocked_reply(self, message: Message, reply_text: str) -> None:
         """敏感词命中处理：发兜底回复、记死信、标记入站消息已处理（永久跳过）。"""
         logger.info("回复被敏感词过滤器屏蔽了")

@@ -107,10 +107,31 @@ def _get_store(platform: str | None = None):
 
 
 def _save_and_reload(new_config: AppConfig) -> None:
-    """把更新后的 config 落盘 + 触发热重载（清 agent._style_prompt_cache）。"""
-    from web.api import _write_config
-    _write_config(new_config.model_dump(),
-                  changed_keys={"llm"})
+    """把更新后的 config 落盘 + 触发热重载（清 agent._style_prompt_cache）。
+
+    最小化落盘 diff：直接读盘原始 YAML dict，只改写 ``llm.persona_style_prompt`` /
+    ``llm.persona_style_prompts`` 两个目标字段，其余 key 原样保留，避免
+    ``new_config.model_dump()`` 把 Pydantic 默认值（如整个 poller 段）静默注入
+    配置文件——用户 live 配置本无这些段，全量 dump 会擅自改变文件形态（历史事故区）。
+    """
+    import os
+
+    import yaml
+    from web.api import CONFIG_PATH, _write_config
+
+    disk: dict = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                disk = yaml.safe_load(f) or {}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[persona] 读取磁盘配置失败，回退全量 dump: %s", e)
+            disk = new_config.model_dump()
+    llm_section = disk.setdefault("llm", {})
+    # 仅覆写目标字段；其余 llm 子字段（api_key / model 等）与全盘其他 key 保持原样。
+    llm_section["persona_style_prompt"] = new_config.llm.persona_style_prompt
+    llm_section["persona_style_prompts"] = new_config.llm.persona_style_prompts
+    _write_config(disk, changed_keys={"llm"})
     try:
         from src.shared_state import get_config_reload_callback
         cb = get_config_reload_callback()

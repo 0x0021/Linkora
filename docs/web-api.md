@@ -1,6 +1,6 @@
 # Web API 概览
 
-`web/api.py` 提供 153 个端点（含 29 个路由模块），均为 HTTP JSON 接口。默认端口 8080，可通过 `config.web.port` 调整。
+`web/api.py` 提供 161 个端点（含 31 个路由模块），均为 HTTP JSON 接口。默认端口 8080，可通过 `config.web.port` 调整。
 
 ## 认证
 
@@ -15,12 +15,16 @@ Authorization: Basic base64(username:password)
 | 路径前缀 | 功能 |
 |---|---|
 | `/api/status` · `/api/health` · `/api/config-drift` | 引擎状态 / 健康检查 / 配置漂移检测 |
+| `/api/auth/login` · `/api/auth/me` | 登录（返回 JWT）/ 当前登录用户态 |
+| `/api/dashboard` · `/api/dashboard/stream-data` | 实时仪表盘数据流（SSE 推送） |
+| `/api/models` · `/api/models/status` | 模型状态 / 健康检查 |
+| `/api/skill-icons/{slug}` | 技能图标静态资源（前端 `<img>` 直链，免 Basic Auth） |
 | `/api/platforms` · `/api/system/paths` · `/api/platforms/health` | 多平台状态与运行时路径 |
 | `/api/kb` | 知识库文档 CRUD、上传、URL 导入、检索、重排、钉钉/飞书文档同步 |
 | `/api/skills`（含技能市场） | 技能管理 / 安装 / 市场排行 |
 | `/api/departments` | 部门架构（懒加载） |
 | `/api/conversations` · `/api/messages` | 会话与消息记录查询、导出 |
-| `/api/image` | 图片 / OCR 代理与令牌 |
+| `/api/image/{path}` · `/api/image-token` · `/api/proxy/image` | 图片 / OCR 代理与签名令牌（前端 `<img>` 直链，免 Basic Auth） |
 | `/api/routing-quality` | 路由质量统计与聚合 |
 | `/api/memories` | 长期记忆 CRUD 与分类 |
 | `/api/dead-letters` | 死信队列重放 / 丢弃 / 导出 |
@@ -40,7 +44,7 @@ Authorization: Basic base64(username:password)
 | `/api/intents` | 意图分类体系（处置层+行动层） |
 | `/api/dingtalk-docs` | 钉钉文档搜索 / 同步 / 导入 |
 | `/api/config` · `/api/llm/prompt` | 配置读写、导入导出、系统提示词 |
-| `/api/sync-history` · `/api/history/import` · `/api/messages/sync-history` | 历史消息导入 |
+| `/api/history/import` · `/api/messages/sync-history` | 历史消息导入（POST 导入 / 同步；GET 查状态与日志） |
 | `/api/metrics` · `/api/debounce-metrics` · `/api/backpressure-metrics` · `/api/embedding-status` · `/api/poller-status` · `/api/llm-metrics` | 可观测性指标（含按 request_id 追溯） |
 
 ## 核心数据表（SQLite）

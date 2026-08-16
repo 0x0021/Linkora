@@ -1,3 +1,5 @@
+> ⚠️ **本文档已归档。** 最新部署说明请以 [`deployment.md`](../deployment.md) 为准。
+
 # Linkora 部署验证指南 (2026-08-14)
 
 ## 一、Staging 环境验证清单

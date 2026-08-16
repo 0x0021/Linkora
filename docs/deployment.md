@@ -1,3 +1,5 @@
+> 📌 **本文档是 Linkora 部署的唯一规范入口。** 历史文档 `deployment-guide.md` 与 `DEPLOY.md` 已归档至 `docs/archive/`，请以本文件为准。
+
 # 部署指南
 
 ## 本地运行

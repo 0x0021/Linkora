@@ -13,7 +13,7 @@
 | `llm.advanced` | `max_chars_daily_chat` / `max_chars_tech_issue` / `hard_truncation_chars` / `rag_auto_inject` / `rag_min_similarity` / `rag_max_results` / `rag_max_content_chars` / `low_confidence_handoff_enabled` / `low_confidence_threshold` / `history_tiering_recent` / `summary_async_enabled` / `summary_max_age_seconds` / `summary_min_coverage_ratio` / `summary_min_older` | 长度控制；RAG 自动注入门控（默认 `rag_min_similarity=0.6`、`rag_max_results=1`、`rag_max_content_chars=800`）与条数限制；低置信度转人工开关与阈值；历史分层阈值；异步摘要配置 |
 | `llm_throttle` | `enabled` / `background_min_interval_seconds` / `idle_min_interval_seconds` / `rate_limit_backoff_seconds` / `extract_memory_*` / `max_summaries_per_cycle` | 后台 LLM 任务（摘要/记忆提取）限速与空闲降频，保护免费额度 |
 | `embedding` | `enabled` / `provider` / `model` / `top_k` / `base_url` / `api_key` / `hf_token` / `offline` | BGE 向量模型（local / openai 两种 provider） |
-| `memory.cleanup` / `memory.retrieval` / `memory.conversation_summary` | `max_age_days` / `min_similarity_*` / `max_messages_per_conversation` / `summary_interval_hours` / `summary_ratio` | 记忆清理 / 检索 / 对话摘要压缩 |
+| `memory.cleanup` / `memory.retrieval` / `memory.conversation_summary` / `memory.vector_*` | `max_age_days` / `min_similarity_*` / `max_messages_per_conversation` / `summary_interval_hours` / `summary_ratio` / `vector_index_type` / `vector_index_hnsw_ef` / `vector_phantom_rebuild_ratio` / `vector_cache_embeddings` | 记忆清理 / 检索 / 对话摘要压缩 / 向量索引类型与幽灵向量清理 |
 | `rules` | `enabled` / `blacklist` / `whitelist` / `keywords` / `stop_words` / `keyword_denylist` / `intent_filter` / `regex_timeout_seconds` | 规则引擎 + 意图过滤（跳过无业务价值消息）+ ReDoS 防护 |
 | `tools` | `enabled` / `available` / `rate_limit` / `allow_skill_tools` / `expose_all_tools` / `kb_search_enabled` / `tool_routing_mode` / `semantic_routing` / `semantic_tool_threshold` / `block_outbound_to_third_party` | 工具白名单、速率限制与按需暴露（smart/all/keyword）；`kb_search_enabled`（默认 true）控制是否注册 RAG 检索工具 `kb_search`；`block_outbound_to_third_party`（默认 true）硬拦截 AI 主动联系第三方 |
 | `rag` | `chunk_size` / `chunk_overlap` | 知识库分块（默认 500 / 50）；检索走向量 0.6 + BM25 0.4 混合重排序 |
@@ -23,6 +23,9 @@
 | `storage` | `type` / `path` / `backup_enabled` / `backup_*` / `decisions_retention_days` / `messages_retention_days` / `doc_sync_interval_hours` | SQLite 路径与自动备份（legacy 兼容段，**运行期以 platforms.dingtalk.storage 为准**） |
 | `logging` | `level` / `file` / `max_size_mb` / `max_backups` | 日志 |
 | `web` | `port` / `host` / `auth_enabled` / `auth_username` / `auth_password` | 管理后台（安全默认仅本机回环 + 认证开启；密码为空且认证开启会启动报错） |
+| `oa_approval` | `enabled` / `urge_reply_text` / `question_markers` / `action_markers` | 钉钉 OA 审批转发处理策略（别人转给你的审批 msgType=oa 默认回催办话术；含问号/动作标记则转 LLM 或审批工具） |
+| `ocr_postprocess` | `enabled` / `min_chars` / `enabled_steps` | OCR 文本后处理管线（去不可见字符 / 压缩重复标点 / 去口语填充词 / 合并空行 / CJK 加空格） |
+| `skillhub` | `auto_install` | SkillHub 市场（skill 榜单）安装脚本自动拉取开关（默认关，安全） |
 
 ## 多平台隔离（platforms）
 
@@ -67,6 +70,62 @@ platforms:
 - **向后兼容**：若 `config.yaml` 无 `platforms` 段，`load_config` 会用全局 `dws` / `storage` / `poller` 自动 seed 出一个 `dingtalk` 平台（数据库路径与行为完全不变）。
 - **legacy 段保留**：顶层的 `dws` / `poller` / `storage` 由 `config_manage` 工具读取状态，请与 `platforms` 中对应平台的值保持一致。
 - **新增平台**：在 `platforms` 列表内追加条目，`adapter_type` 设为 `feishu` / `wecom`，并将 `adapter.cli_path` 指向已安装的 CLI（`lark-cli` / `wecom-cli`）即可。
+
+### 平台级覆盖（platforms[].rag / llm / tools）
+
+> 字段定义见 `src/config_models.py` 的 `PlatformConfig`（`model_config = {"extra": "forbid"}`，故这些字段是**正式受支持**能力，而非残留配置）。
+
+每个平台块（与 `storage` / `poller` / `adapter` 同级）可内嵌 **三个可选覆盖块** `rag` / `llm` / `tools`，用于**单独覆盖该平台的全局对应配置**：
+
+- **不配置该块（或字段留空）** → 该平台**完全沿用全局** `rag` / `llm` / `tools`，无任何行为差异。
+- **配置了该块** → 该平台**独立生效**自己的值；未填的字段仍继承全局。
+
+**典型用途**
+
+| 用途 | 覆盖块 | 示例 |
+|---|---|---|
+| 按平台分模型控成本 | `llm` | 飞书用便宜模型（`gpt-4o-mini`）、钉钉用主力模型 |
+| 按平台隔离知识库 | `rag` | 不同平台挂不同 `embedding_model` 或 `chunk_size` 策略 |
+| 按平台收窄工具集 | `tools` | 某平台关闭 `file_ops_enabled` 等 |
+
+**可用字段（全部可选；省略 = 继承全局）**
+
+- `rag`（`PlatformRagConfig`）：`chunk_size` / `chunk_overlap` / `chunk_hard_max`（安全天花板，字符数；`None`=派生为 `chunk_size*2`）/ `embedding_model`
+- `llm`（`PlatformLLMConfig`）：`provider` / `base_url` / `api_key` / `model` / `temperature` / `max_tokens` / `timeout` / `fallback_model` / `fallback_api_key` / `fallback_base_url`
+- `tools`（`PlatformToolsConfig`）：`search_enabled` / `file_ops_enabled` / `enabled`
+
+**示例**（飞书单独用便宜模型 + 单独 KB 配置；其余平台不配即继承全局）：
+
+```yaml
+platforms:
+  - id: feishu
+    display_name: 飞书
+    enabled: true
+    adapter_type: feishu
+    adapter: { cli_path: lark-cli }
+    rag:
+      embedding_model: BAAI/bge-base-zh-v1.5
+      chunk_size: 800
+      chunk_overlap: 120
+      chunk_hard_max: 1600
+    llm:
+      provider: openai
+      base_url: https://api.openai.com/v1
+      api_key: sk-xxx
+      model: gpt-4o-mini
+      temperature: 0.3
+      max_tokens: 2000
+      timeout: 60
+      fallback_model: gpt-4o
+      fallback_api_key: sk-xxx
+      fallback_base_url: https://api.openai.com/v1
+    tools:
+      search_enabled: true
+      file_ops_enabled: false
+      enabled: true
+```
+
+> 默认 `config.yaml.example` 中三个平台均未配置这些覆盖块；`config.yaml.example` 的 `platforms:` 段末尾另附一份**保持注释态**的参考示例，取消注释即可启用。
 
 ## 消息防抖
 
@@ -132,8 +191,7 @@ rules:
 **防御机制**：
 
 1. **本地文件优先**：所有认证状态检测优先读取 `~/.dws/profiles.json`，不调用 dws 命令
-2. **提前续期**：`auth_monitor.token_refresh_threshold_minutes`（默认 120 分钟）提前触发静默登录
-3. **设备流静默登录**：登录时使用 `--device --no-browser`，不弹出浏览器窗口，而是在终端显示 userCode 和短链接供用户在其他设备上完成授权
+2. **设备流静默登录**：登录时使用 `--device --no-browser`，不弹出浏览器窗口，而是在终端显示 userCode 和短链接供用户在其他设备上完成授权
 
 启动时 `AuthMonitor` 会立即检查一次认证状态，若失效或即将过期则自动触发静默登录。
 
@@ -143,7 +201,7 @@ rules:
 
 ## 低置信度转人工与风格人格
 
-- **低置信度转人工**：`llm.advanced.low_confidence_handoff_enabled`（默认 `true`）开启后，当 RAG 最佳相似度低于 `low_confidence_threshold`（默认 `0.5`）时，机器人不强行编造答案，而是转人工接管或生成草稿待确认。适合对"答错代价高"的场景。
+- **低置信度转人工**：`llm.advanced.low_confidence_handoff_enabled`（默认 `true`）开启后，当 RAG 最佳相似度低于 `low_confidence_threshold`（默认 `0.35`）时，机器人不强行编造答案，而是转人工接管或生成草稿待确认。适合对"答错代价高"的场景。
 - **风格人格**：`llm.persona_style_prompt` 留空时，系统启动时自动从主人的历史消息抽取语气 / 表达习惯画像（写入 `style_profiles` 表）并注入回复；如需固定人设，可在此显式填写系统级语气说明，覆盖自动画像。
 - **动态 few-shot（按场景检索主人原话，提升口吻还原度）**：`llm.dynamic_few_shot`（默认 `false`）。开启后，每次生产回复基于当前消息做场景相似检索，从主人历史里取最像的 `llm.dynamic_few_shot_n`（默认 `4`）条 `(user→assistant)` 配对注入 system prompt，替代原本固定且被截断的静态样例（`build_system_prompt` 仅取 `[:1]` 且截断 40/60 字，近乎无效）。检索算法由 `llm.dynamic_few_shot_method` 控制：`trigram`（纯文本粗筛，零延迟）/ `embedding`（embedding 余弦精排，需向量）/ `hybrid`（默认，trigram 粗筛 + embedding 精排，embedding 复用 agent 已算好的 `query_vec`，无额外开销）。**默认关闭**，对现有回复行为零影响，可随时开关回退。
 - **回测还原度评委口径**：`llm.backtest_judge_loose`（默认 `false`）。主人真实口吻多为口语 / 极简，与克隆回复字面重合度低，严格评委给分保守（约 10/100），难以反映真实还原度。开启后评委改为评「意图匹配 + 风格类别一致」，容忍措辞差异，回测分更贴近真实观感。**仅影响 `/api/persona/backtest` 打分，不影响真实回复。**
@@ -154,6 +212,55 @@ rules:
 - **后台 LLM 限速（`llm_throttle`）**：对话摘要与记忆提取属于后台 LLM 任务。免费 LLM 额度有严格频次限制，`llm_throttle` 对其实行节流——`background_min_interval_seconds`（活跃最小间隔）/ `idle_min_interval_seconds`（空闲降频间隔）/ `rate_limit_backoff_seconds`（触发 429 后暂停时长），并设有 `extract_memory_cooldown_seconds`（同会话记忆提取冷却）与 `max_summaries_per_cycle`（单周期摘要上限）。主模型触发 429/超时后后台任务自动暂停，保护免费额度。
 - **技能引擎（`skills`）**：技能文件位于 `data/skills/{name}/SKILL.md`，声明 `intent_keywords` 与 `weight`，由智能引擎按意图自动调度激活。`auto_activate` 控制关键词自动激活；`semantic_routing` + `semantic_skill_threshold` 启用语义路由覆盖口语/同义改写；`combo_enabled` + `combo_gap` 支持复合意图组合激活多个 `composable` 技能；`hot_reload` 热加载新技能无需重启；`ai_intent_generation_enabled` 默认关闭（避免意外消耗 LLM 额度）。
 - **死信队列（`dead_letter`）**：当主模型重试耗尽且备用模型也失败时，原始消息落库（而非静默丢弃），管理台可查看并重放（replay），避免消息石沉大海。关闭则退回旧行为（仅回 fallback 文本）。
+
+## OA 审批 / OCR 后处理 / SkillHub / 向量索引（进阶配置组）
+
+### OA 审批（`oa_approval`）
+
+别人在钉钉里转给你的审批（`msgType=oa`）默认视为「催审批」，直接回固定话术、不调 LLM（省 token）。含问号 /「怎么 / 为什么」等标记的视为「提问」转交 LLM；含「转给 / 转交 / 离职」等动作的视为「动作指令」调用审批工具（`transfer_approval` 等）处理。
+
+```yaml
+oa_approval:
+  enabled: true
+  urge_reply_text: "请稍候，审批正在处理中，请耐心等待。"
+  question_markers: ["?", "？", "怎么", "为什么", "为何", "什么情况", "什么意思", "合理吗", "对吗", "对不对", "帮我看", "帮我分析", "分析一下", "查一下", "看看", "哪", "如何"]
+  action_markers: ["转给", "转交", "转由", "移交", "交接", "离职", "换人", "代批", "帮忙批", "改成", "转移给"]
+```
+
+### OCR 后处理（`ocr_postprocess`）
+
+`poller.image_ocr_enabled = true` 下载截图 OCR 后，投喂 LLM 前执行文本清洗管线。各步骤可独立开关。
+
+```yaml
+ocr_postprocess:
+  enabled: true
+  min_chars: 5                       # 有效字符数阈值，低于此值跳过不投喂 LLM
+  enabled_steps:
+    remove_invisible: true           # 零宽/不可见控制字符剔除
+    dedup_punctuation: true          # 连续重复标点压缩（>2 → 1）
+    remove_fillers: true             # 口语填充词/语气词剔除
+    normalize_layout: true           # 合并空行、去除首尾空白
+    cjk_spacing: false               # 中文/英文/数字间加空格（默认关，避免改变原文排版）
+```
+
+### SkillHub 市场（`skillhub`）
+
+```yaml
+skillhub:
+  auto_install: false                # 是否允许 Web 运行时自动拉取并执行 skillhub 安装脚本（默认关，安全）
+```
+
+### 记忆向量索引（`memory.vector_*`）
+
+记忆向量索引类型与幽灵向量自动清理（规模增长时显式切 `hnsw` 提速）：
+
+```yaml
+memory:
+  vector_index_type: flat            # flat=精确暴力检索(默认)；hnsw=近似检索，规模增长时提速显著
+  vector_index_hnsw_ef: 64           # HNSW efConstruction/efSearch（仅 hnsw 生效）
+  vector_phantom_rebuild_ratio: 0.3  # 幽灵向量占比超此阈值时自动重建回收空间（0=禁用自动重建）
+  vector_cache_embeddings: true      # 索引内缓存归一化 embedding，支撑精确重建
+```
 
 ## 环境变量
 

@@ -50,6 +50,9 @@ platforms:
       max_processed_msg_ids: 500                     # 跨轮次去重内存缓存上限（LRU）
       first_run_ignore_older_than_minutes: 5         # 首次运行/重启后忽略超过 N 分钟的老消息（0=不忽略）
       reply_cooldown_seconds: 10                     # 同一会话回复冷却时间（秒），防止短时间反复回复
+      reply_shard_limit: 4000                         # 单条回复分片上限（字符），超长自动分片发送
+      reply_send_min_interval: 0.2                    # 两条回复最小发送间隔（秒），防刷屏
+      reply_send_rate_limit_backoff_seconds: 60.0    # 发送被限流后的退避时长（秒）
       owner_present_cooldown_seconds: 600            # 真人在场冷却（秒）：窗口内真人活跃则 AI 不插嘴，离场超时后接管
       suppress_when_owner_read: true                 # 已读闸门：DWS 判定会话已读(无未读)则 AI 不回；新未读消息仍照常回。失真漏回时设 false
       mark_read_after_process: true                  # 处理完后将该会话消息标记为已读
@@ -238,6 +241,40 @@ platforms:
   #     profile: ''
   #     retries: 2
   #     timeout: 30
+  # ── 平台级覆盖（可选 · 进阶）─────────────────────────────────────
+  # 每个平台块（与 storage / poller / adapter 同级）可内嵌 rag / llm / tools
+  # 三个可选覆盖块，用于覆盖全局对应配置。全部字段可选；省略该块或字段留空
+  # 均表示「沿用全局值」，无行为差异（代码见 src/config_models.py 的 PlatformConfig）。
+  # 典型用途：
+  #   ① 按平台分模型控成本（如飞书用便宜模型、钉钉用主力模型）
+  #   ② 按平台隔离知识库（不同 embedding 模型或 chunk 策略）
+  #   ③ 按平台收窄工具集（如某平台关闭文件操作）
+  # 下方为「参考示例」（已注释，取消注释并填入即生效；只需保留要覆盖的字段）：
+  # - id: feishu
+  #   display_name: 飞书
+  #   enabled: true
+  #   adapter_type: feishu
+  #   adapter: { cli_path: lark-cli }                # 飞书 CLI（lark-cli v1.0.72+）
+  #   rag:                                          # 平台级 KB 覆盖（不配则沿用全局 rag）
+  #     embedding_model: BAAI/bge-base-zh-v1.5
+  #     chunk_size: 800
+  #     chunk_overlap: 120
+  #     chunk_hard_max: 1600
+  #   llm:                                          # 平台级 LLM 覆盖（不配则沿用全局 llm）
+  #     provider: openai
+  #     base_url: https://api.openai.com/v1
+  #     api_key: sk-xxx
+  #     model: gpt-4o-mini
+  #     temperature: 0.3
+  #     max_tokens: 2000
+  #     timeout: 60
+  #     fallback_model: gpt-4o
+  #     fallback_api_key: sk-xxx
+  #     fallback_base_url: https://api.openai.com/v1
+  #   tools:                                        # 平台级 Tools 覆盖（不配则沿用全局 tools）
+  #     search_enabled: true
+  #     file_ops_enabled: false
+  #     enabled: true
 
 # ============================================================
 # ① DWS 适配器配置（钉钉 CLI 接口）—— legacy 兼容段（config_manage 读取）
@@ -287,6 +324,12 @@ llm:
     citation_high_threshold: 0.75                  # ≥此值标「依据」，[low,high) 标「参考」
     citation_low_threshold: 0.5                    # 相关度低于此值不追加页脚
     citation_max_items: 2                          # 页脚最多列几条引文
+    citation_show_score: false                     # 引文页脚是否显示相关度分数
+    citation_hide_generated: true                  # 隐藏「由 AI 生成」标记
+    max_input_tokens: 12000                        # 单次请求最大输入 Token 数
+    rag_fallback_min_similarity: 0.2               # RAG 兜底最小相似度
+    rag_fallback_max_results: 2                    # RAG 兜底最大返回条数
+    rag_max_retry_rounds: 1                        # RAG 检索最大重试轮次
     # Phase 2 P2-6 BGE 本地离线重排（默认关；开启需本地已缓存 bge-reranker-base 权重）
     rerank_enabled: false                          # 重排总开关（默认关；opt-in 高级特性：开启需本地 BGE 权重并引入推理开销，属有意默认关；当前运行实例已开，效果见 docs/phase2_citation_confidence_design.md §6）
     rerank_model: BAAI/bge-reranker-base           # 重排模型
@@ -306,6 +349,10 @@ llm:
   fallback_base_url: ''                            # 备用 API Base URL
   fallback_model: ''                               # 备用模型（单模型，旧）：主模型+主池全部失败时使用
   fallback_model_pool: []                          # 备用模型池（跨服务商兜底）：主模型+主池全失败按列表顺序逐个尝试；401/403 立即终止
+  secondary_fallback_model: ''                       # 二级备用模型（主模型+主池+备用池全失败后的最后兜底）
+  secondary_fallback_model_pool: []                  # 二级备用模型池（跨服务商，按列表顺序尝试；401/502 立即终止）
+  secondary_fallback_api_key: ''                      # 二级备用 API Key
+  secondary_fallback_base_url: ''                     # 二级备用 API Base URL
   model: gpt-4o                                    # * 使用的模型名称（如 deepseek-chat / gpt-4o / 本地 llama3）
   model_pool: []                                   # 同服务商模型池（免费额度轮换）：与主模型共用 base_url/api_key 的备选模型
   provider: openai-compatible                      # * 提供商类型（openai-compatible = OpenAI 兼容接口）
@@ -320,6 +367,13 @@ llm:
   few_shot_examples: []                            # 本人语气 few-shot 样例（让数字分路口吻更像本人）
   persona_style_prompt: ''                         # 主人沟通风格覆盖（留空则由历史消息自动画像兜底）
   persona_history_max_versions: 10                # 画像历史版本最大保留数（超量滚动删除旧版本）
+  model_pricing: {}                                  # 模型计费（如 {"gpt-4o": {"input": 0.005, "output": 0.015}}），用于成本看板
+  persona_style_prompts: {}                          # 多场景语气覆盖（覆盖单一 persona_style_prompt），如 {"正式": "...", "轻松": "..."}
+  dynamic_few_shot: false                            # 动态 few-shot：按场景检索主人原话注入 system prompt（提升口吻还原度）
+  dynamic_few_shot_n: 4                              # 检索注入的最像原话条数
+  dynamic_few_shot_method: hybrid                   # trigram / embedding / hybrid（默认 hybrid，零额外开销）
+  backtest_judge_loose: false                        # 回测还原度评委宽松口径（仅影响 /api/persona/backtest 打分，不影响真实回复）
+  brevity_hard_cap: 0                                # 回复硬截断上限（0=沿用 hard_truncation_chars；正数覆盖普通回复截断）
 
 # ============================================================
 # ③b 后台 LLM 任务限速（对话摘要 / 记忆提取）—— 保护免费额度
@@ -360,6 +414,12 @@ memory:
     max_messages_per_conversation: 50              # 单会话参与摘要的最大消息数
     summary_interval_hours: 24                      # 摘要间隔（小时）
     summary_ratio: 0.4                             # 摘要压缩比
+
+  # 向量索引（F18 RAG 检索规模化）：类型与幽灵向量自动清理
+  vector_index_type: flat                           # flat=精确暴力检索(默认)；hnsw=近似检索，规模增长时提速显著
+  vector_index_hnsw_ef: 64                          # HNSW efConstruction/efSearch（仅 hnsw 生效）
+  vector_phantom_rebuild_ratio: 0.3                # 幽灵向量占比超此阈值自动重建回收空间（0=禁用自动重建）
+  vector_cache_embeddings: true                     # 索引内缓存归一化 embedding，支撑精确重建
 
 
 # ============================================================
@@ -499,6 +559,8 @@ skills:
   hot_reload: false                                # 生产默认关闭：避免运行时自动加载 skills 目录新文件（供应链风险）；开发态显式开启
   hot_reload_interval: 15.0                        # 热加载轮询间隔（秒）
   ai_intent_generation_enabled: false             # AI 意图词生成（默认关闭，避免意外消耗 LLM 额度）
+  module_hot_reload: false                             # 技能模块运行时热重载（自动重载 skills 模块）
+  module_hot_reload_interval: 5.0                      # 模块热重载轮询间隔（秒）
 
 # ============================================================
 # ⑩½ SkillHub 市场（skill 榜单）配置
@@ -509,6 +571,56 @@ skillhub:
   # 并做 SHA256 钉值校验后以非 shell 方式执行（钉值经环境变量 SKILLHUB_INSTALL_SHA256 注入，
   # 或钉死在 web/dependencies.py）。生产环境建议由 Dockerfile/部署脚本预装 CLI，保持关闭。
   auto_install: false
+
+# ============================================================
+# ⑩¾ OA 审批转发处理策略（钉钉专属）
+# ============================================================
+oa_approval:
+  enabled: true                                   # 是否启用 OA 审批转发处理
+  urge_reply_text: 请稍候，审批正在处理中，请耐心等待。  # 催审批固定回复话术（不调 LLM）
+  question_markers:                               # 含以下标记视为「提问」转交 LLM 正常处理
+    - "?"
+    - "？"
+    - 怎么
+    - 为什么
+    - 为何
+    - 什么情况
+    - 什么意思
+    - 合理吗
+    - 对吗
+    - 对不对
+    - 帮我看
+    - 帮我分析
+    - 分析一下
+    - 查一下
+    - 看看
+    - 哪
+    - 如何
+  action_markers:                                 # 含以下标记视为「动作指令」调用审批工具（transfer_approval 等）
+    - 转给
+    - 转交
+    - 转由
+    - 移交
+    - 交接
+    - 离职
+    - 换人
+    - 代批
+    - 帮忙批
+    - 改成
+    - 转移给
+
+# ============================================================
+# ⑩⅔ OCR 后处理管线
+# ============================================================
+ocr_postprocess:
+  enabled: true                                   # 是否启用 OCR 后处理
+  min_chars: 5                                    # 有效字符数阈值，低于此值跳过不投喂 LLM
+  enabled_steps:                                  # 各清洗步骤独立开关
+    remove_invisible: true                        # 零宽/不可见控制字符剔除
+    dedup_punctuation: true                       # 连续重复标点压缩（>2 → 1）
+    remove_fillers: true                          # 口语填充词/语气词剔除
+    normalize_layout: true                        # 合并空行、去除首尾空白
+    cjk_spacing: false                            # 中文/英文/数字间加空格（默认关，避免改变原文排版）
 
 # ============================================================
 # ⑪ 死信队列（Dead Letter）—— LLM/发消息彻底失败时落库而非静默丢弃
@@ -538,6 +650,7 @@ tools:
   semantic_routing: true                           # 语义路由：substring 未命中时用 embedding 兜底补充相关工具
   semantic_tool_threshold: 0.42                    # 工具语义命中阈值（余弦相似度，0~1）
   kb_search_enabled: true                          # 是否注册 RAG 检索工具 kb_search（false = 彻底关闭 RAG 检索能力）
+  block_outbound_to_third_party: true                 # 硬拦截 AI 主动联系第三方（安全默认开）
                                                    #   注意：从下方 available 里删掉 kb_search 只是不向 LLM 暴露 schema，
                                                    #   工具本身仍会被注册；要完全不注册必须用本开关。
   available:                                       # 启用的工具列表

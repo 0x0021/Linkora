@@ -1,3 +1,5 @@
+> ⚠️ **本文档已归档。** 最新部署说明请以 [`deployment.md`](../deployment.md) 为准。
+
 # 灵桥 (Linkora) — 部署指南
 
 ## 各平台部署前置条件

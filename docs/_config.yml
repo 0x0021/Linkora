@@ -26,4 +26,5 @@ exclude:
   - "frontend_module_map.md"
   - "frontend-perf-audit.md"
   - "BINARY_PACKAGING_PLAN.md"
+  - "archive/**/*"
 destination: _site

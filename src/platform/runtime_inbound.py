@@ -501,6 +501,10 @@ class InboundMixin(EngineMixinBase):
                 logger.info("[已回复] 我已在 %s 的消息之后回复过，AI 不再回复",
                             message.sender_name)
                 self._record_gate_decision(message, "消息已有回复")
+                # 终态标记：该 msg_id 已被记录为「最后回复过的消息」→ _has_replied_after
+                # 永久返回 True，再叠加 poller._mark_msg_processed 这层去重，真正止住轮询
+                # 反复拉取→重复处理/重复入死信刷屏。
+                self._mark_inbound_processed(message)
                 return
 
             # === 门控前置：一次性算出接管/在场（H2-2026-08-08 避免重复查库），后续复用 ===
@@ -512,10 +516,18 @@ class InboundMixin(EngineMixinBase):
                 logger.info("[用户接管] %s 已手动回复 %s，跳过 AI 回复",
                             self.current_user_name, message.sender_name)
                 self._record_gate_decision(message, "人工已接管")
+                # 终态标记：接管判定单调且一旦成立永不回退，标记后 _has_replied_after
+                # 对该 msg_id 永久返回 True，叠加 poller 去重，止住重复投递。
+                self._mark_inbound_processed(message)
                 return
 
             # === 检查：真人是否正参与该会话（human-in-the-loop 防穿插） ===
             # 区别于上面的被动接管：只要窗口内有真人消息即抑制 AI，真人离场超时后 AI 接管。
+            # 注意：此处刻意不标记入站已处理（不调 _mark_inbound_processed）。原因：
+            # _mark_inbound_processed 会 update_last_replied_msg_id，使 _has_replied_after
+            # 对该 msg_id 永久返回 True，从而让 AI 永远不再回复这条消息；而真人在场是「时间窗」
+            # 态（owner_present_cooldown_seconds 内真人活跃才抑制），真人离场超过窗口后 AI 应当
+            # 接管。若在此标记，会直接掐死已文档化的「离场后接管」行为，故不可补。
             if owner_present:
                 logger.info("[真人在场] %s 最近在会话 %s 活跃，AI 暂不出声",
                             self.current_user_name, message.chat_name or message.chat_id[:20])

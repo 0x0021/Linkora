@@ -1,9 +1,25 @@
-"""Linkora 统一异常体系。
+"""Linkora 统一异常体系（根类 + 各族族根）。
 
-所有业务异常均继承自 LinkoraError，便于：
+所有业务异常均继承自 ``LinkoraError``，便于：
 1. 在入口处统一 catch 并转换为用户友好的 HTTP 错误
 2. 在日志中按层级过滤（只记录业务异常，忽略系统异常）
 3. 在监控指标中按异常类型统计
+
+**归属规则（ownership）**——本模块只持有根类 ``LinkoraError`` 与各族「族根」，
+具体子类由各族 owner 模块单一持有，本模块**不得**另立同名具体类：
+
+- 数据库层 ``DB*``            → 本模块（owner 即本模块）
+- LLM 层 ``LLM*``             → ``src/llm/exceptions.py``
+- IM 适配器层 ``IMAdapter*``   → ``src/im_adapter/errors.py``（本模块仅留族根 ``IMAdapterError``）
+- 工具层 ``Tool*``            → 本模块
+- 配置层 ``Config*``          → 本模块
+- 消息层 ``Message*``         → 本模块
+- 路由层 ``Routing*``         → 本模块
+
+历史教训：曾有一套与 ``src/im_adapter/errors.py`` 同名的 ``IMAdapter*`` 具体子类并列
+存在于本模块，导致 ``from src.exceptions import IMAdapterTimeoutError`` 拿到一个
+**永不 raise** 的类，对应 ``except`` 子句在求值时即抛 ``NameError``、并击穿整个 try
+（参见 ``src/im_adapter/wecom.py`` 的生产事故）。具体异常唯一 owner 化后，杜绝此类复发。
 """
 from __future__ import annotations
 
@@ -77,27 +93,19 @@ class LLMTimeoutError(LLMNetworkError):
 
 
 class IMAdapterError(LinkoraError):
-    """IM 适配器错误的基类。"""
+    """IM 适配器错误的基类（IM 族根）。
 
+    本模块只持有各族「族根」与根类 ``LinkoraError``；IM 族的具体子类（权限/限频/
+    超时/资源不存在/不支持等）由 ``src/im_adapter/errors.py`` 单一 owner 持有。
 
-class IMAdapterPermissionError(IMAdapterError):
-    """IM 权限不足（token 失效、账号被禁等）。"""
-
-
-class IMAdapterRateLimitError(IMAdapterError):
-    """IM 平台限流。"""
-
-
-class IMAdapterTimeoutError(IMAdapterError):
-    """IM 调用超时。"""
-
-
-class IMAdapterNotFoundError(IMAdapterError):
-    """IM 资源不存在（用户、群组、文档等）。"""
-
-
-class IMAdapterNotSupportedError(IMAdapterError):
-    """IM 功能不支持（如企微富媒体降级）。"""
+    归属规则（防「同名不同族」事故）：
+    - DB/LLM/Tool/Config/Message/Routing 各族的具体子类由各族 owner 模块定义；
+    - IM 族具体子类 → ``src/im_adapter/errors.py``；
+    - LLM 族具体子类 → ``src/llm/exceptions.py``；
+    新增具体异常**不得**在本模块另立同名类，否则会与 owner 模块的同名类分居两处，
+    导致从错误模块导入到永不 raise 的类、except 子句永久静默失效
+    （参见 ``src/im_adapter/wecom.py`` 的历史生产事故）。
+    """
 
 
 # ── 工具层 ────────────────────────────────────────────────────────────

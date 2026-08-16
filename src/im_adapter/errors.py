@@ -11,11 +11,20 @@
       ├─ IMAdapterRetryableError       (网络超时/限频等，基类 run() 会自动退避重试)
       └─ IMAdapterNonRetryableError    (认证失败/参数错误/资源不存在，立即抛出不重试)
             └─ IMAdapterPermissionError (token 过期/无会话权限/组织未授权)
+
+继承说明（2026-08-15 收敛）：
+本模块的 ``IMAdapterError`` 现继承 ``src.exceptions.IMAdapterError``（即 ``LinkoraError`` 的
+IM 族根），使 IM 适配器异常正式并入统一异常体系，入口可统一 catch、日志可分层过滤。
+为避免与 ``src.exceptions`` 中的同名族根互相遮蔽，这里用别名 ``_LinkoraIMAdapterError`` 导入
+族根，再让本模块的 ``IMAdapterError`` 继承之。7 个具体子类（Retryable/NonRetryable 及其
+下游）的继承关系保持不变。
 """
 from __future__ import annotations
 
+from src.exceptions import IMAdapterError as _LinkoraIMAdapterError
 
-class IMAdapterError(Exception):
+
+class IMAdapterError(_LinkoraIMAdapterError):
     """IM 适配器基础异常：所有平台 CLI 错误的基类。"""
     pass
 

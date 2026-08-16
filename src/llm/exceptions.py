@@ -3,13 +3,27 @@
 - LLMProcessingError：LLM 调用（含主模型 + 备用模型）彻底失败，且无法就地恢复。
   由 agent.process_message 在 chat 抛 RuntimeError（主+备均失败）时抛出，
   供 main 层捕获并落死信队列（DLQ），而非静默丢弃。
+
+继承说明（2026-08-15 收敛）：
+本模块原有两类异常直接继承裸 ``Exception``，与 ``src/exceptions.py`` 的统一异常
+体系（``LinkoraError`` 根）脱节，导致入口无法统一 catch、日志无法按层级过滤。
+现将二者收敛为继承 ``src.exceptions.LLMError``（其根为 ``LinkoraError``），
+构造签名保持不变、``__str__`` 仍直接返回 ``self.message``（与裸 ``Exception`` 行为一致）。
+
+注意：``LLMRateLimitExhaustedError`` 与 ``LLMProcessingError`` 同为 ``LLMError`` 的
+**平级**子类，**不**继承 ``LLMProcessingError``——保持独立语义：限频是
+「可恢复、待重放」，真崩溃是「需兜底」。若继承，会被 main 的
+``isinstance(e, LLMProcessingError)`` 通用分支在 DLQ 关闭时套用
+default_fallback 回复，违背「限频不回复」的诉求。
 """
 from __future__ import annotations
 
 from typing import Optional
 
+from src.exceptions import LLMError
 
-class LLMProcessingError(Exception):
+
+class LLMProcessingError(LLMError):
     """LLM 推理彻底失败，需要上层（main）决定是否落 DLQ。"""
 
     def __init__(self, message: str, *, original: Optional[Exception] = None,
@@ -24,7 +38,7 @@ class LLMProcessingError(Exception):
         return self.message
 
 
-class LLMRateLimitExhaustedError(Exception):
+class LLMRateLimitExhaustedError(LLMError):
     """主模型池 + 跨服务商备用池全部因限频（429 / rate_limit）耗尽。
 
     与 LLMProcessingError 的关键区别：这是「临时性、可恢复」的故障，

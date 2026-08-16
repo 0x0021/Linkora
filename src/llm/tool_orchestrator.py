@@ -69,6 +69,40 @@ class ToolOrchestrator:
 
             logger.info("工具调用: %s(%s)", tool_name, args)
 
+            # —— 平台门控兜底（防幻觉/历史上下文调用被门控工具）——
+            # schema 层已过滤平台不可用工具（router.filter_schemas_by_platform），但若 LLM
+            # 凭历史上下文或幻觉直接吐出被过滤的工具名，执行链不能静默放行：基类适配器
+            # （如企微 mark_read/chat_conversation_info）是空实现返回 {}，一旦执行就是
+            # 「成功但空结果」且无任何错误痕迹。此处兜底为显式失败，语义与
+            # router.is_tool_for_platform 完全一致：platform_id 为假值或工具 platforms
+            # 为空列表（全平台）时放行。
+            # 防御：仅在工具真实注册于 router 时门控——_tools 里查不到的工具（未注册/测试
+            # stub 注入的假 router）不由本层拦截，交给 ToolRouter.execute 的既有「not
+            # registered」错误路径；_is_tool_for_platform 缺失的 stub agent 同样放行。
+            gate = getattr(agent, "_is_tool_for_platform", None)
+            tool_obj = (agent.tool_router._tools or {}).get(tool_name) if agent.tool_router else None
+            if gate is not None and tool_obj is not None and not gate(tool_name):
+                supported = list(getattr(tool_obj, "platforms", None) or [])
+                reason = (
+                    f"工具 '{tool_name}' 在当前平台（{agent.platform_id}）不可用，请勿重试；"
+                    f"该能力仅在 {supported} 平台可用" if supported
+                    else f"工具 '{tool_name}' 在当前平台（{agent.platform_id}）不可用，请勿重试"
+                )
+                logger.warning("[平台门控] 拦截 %s（platform=%s）: 工具不在当前平台白名单",
+                               tool_name, agent.platform_id)
+                results.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": json.dumps({
+                        "success": False,
+                        "result": None,
+                        "error": reason,
+                        "_tool": tool_name,
+                        "_ts": _dt.now().isoformat(),
+                    }, ensure_ascii=False),
+                })
+                continue
+
             # session_key 用于确认门控的会话隔离（同一会话的确认令牌不可跨会话使用）
             session_key = message.chat_id or message.sender_id or ""
             result = agent.tool_router.execute(tool_name, args, session_key=session_key)

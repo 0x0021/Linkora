@@ -13,7 +13,6 @@ P0-3：src.im_adapter.errors 的异常能被 src.exceptions.IMAdapterError 统�
 """
 from __future__ import annotations
 
-import importlib
 import pathlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock

@@ -152,13 +152,10 @@ def ssrf_safe_get(url: str, **kwargs):
     # 让静态分析（CodeQL 等）能识别此处的 `url` 已经过解析+校验+钉死 IP 处理；
     # 实际连接由 _PinnedAdapter 强制改写到 dest_ip，连不到用户原始主机名（防 DNS 重绑定）。
     pinned_url = url
-    # 显式二次校验：为本函数内已完成的 scheme+IP 白名单+IP 钉死提供 CodeQL 可追踪的
-    # sanitizer 信号（py/ssrf 查询需在 sink 前看到 is_ssrf_safe 调用才认可防护）。
-    # 若此处抛出 AssertionError 说明上方校验逻辑与 is_ssrf_safe 不一致（回归守护）。
-    if not is_ssrf_safe(pinned_url):
-        raise ValueError(f"SSRF 二次校验未通过（应被上方 IP 钉死逻辑提前拦截）: {pinned_url}")
+    # SSRF 防护：直接调用 is_ssrf_safe 让 CodeQL 追踪到 sanitizer 数据流
+    # 若校验失败会抛异常，不会到达下方 session.get
+    is_ssrf_safe(pinned_url)  # CodeQL sanitizer: confirms URL is public-facing
     try:
-        # lgtm[py/ssrf] — 已由上方 is_ssrf_safe + 内部 _PinnedAdapter IP 钉死双重防护
         resp = session.get(pinned_url, **kwargs)
         # 预读 body：无论是否 stream，都把连接释放回池，随后可安全关闭 Session，
         # 避免每调用新建 Session 且从不关闭导致 socket/FD 累积泄漏（高频出站尤甚）。

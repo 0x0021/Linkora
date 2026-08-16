@@ -138,6 +138,25 @@ class WecomCliAdapter(BaseIMAdapter):
         self._auth_expired_log_ts = 0.0
         self._aibot_id_cache: str | None = None
 
+    def warn_read_signal_unsupported(self, poller_config: Any) -> None:
+        """启动期一次性告警：企微 CLI 不支持已读回执，依赖对方「已读」信号的回复门控 /
+        标记已读在企微静默失效。
+
+        - ``suppress_when_owner_read``（已读闸门：会话被判定已读则抑制 AI 回复）
+        - ``mark_read_after_process``（处理后标记会话已读，消除未读红点）
+        二者都依赖平台已读回执能力；企微 CLI 无对应实现（基类 ``mark_read`` 为空操作，
+        ``chat_message_list_unread_conversations`` 仅返回近期活跃会话近似替代），开关开启时
+        用户会误以为「老板已读就不抢答」的保护在生效，实际不生效。此处显式告警使其可见，
+        不在轮询热路径里每轮刷日志（启动期调用一次即可）。
+        """
+        suppress = getattr(poller_config, "suppress_when_owner_read", False)
+        mark_read = getattr(poller_config, "mark_read_after_process", False)
+        if suppress or mark_read:
+            logger.warning(
+                "[wecom] 当前平台不支持已读回执，"
+                "suppress_when_owner_read / mark_read_after_process 将不生效"
+            )
+
     # ------------------------------------------------------------------
     # 引擎覆写：JSON-RPC 信封解析
     # ------------------------------------------------------------------

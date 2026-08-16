@@ -459,16 +459,20 @@ class PrimaryMixin(EngineMixinBase):
             cli_path = adapter_cfg.cli_path or shutil.which("wecom-cli") or "wecom-cli"
             if not os.path.isfile(cli_path) and not shutil.which("wecom-cli"):
                 logger.warning("[%s] wecom-cli 未找到（%s），适配器将以 dry_run 降级运行", pcfg.id, cli_path)
-                return WecomCliAdapter(
+                adapter = WecomCliAdapter(
                     cli_path=cli_path, timeout=adapter_cfg.timeout or dws_cfg.timeout,
                     retries=adapter_cfg.retries if adapter_cfg.retries > 0 else dws_cfg.retries,
                     dry_run=True, profile=adapter_cfg.profile or dws_cfg.profile,
                 )
-            return WecomCliAdapter(
-                cli_path=cli_path, timeout=adapter_cfg.timeout or dws_cfg.timeout,
-                retries=adapter_cfg.retries if adapter_cfg.retries > 0 else dws_cfg.retries,
-                dry_run=adapter_cfg.dry_run,
-                profile=adapter_cfg.profile or dws_cfg.profile,
-            )
+            else:
+                adapter = WecomCliAdapter(
+                    cli_path=cli_path, timeout=adapter_cfg.timeout or dws_cfg.timeout,
+                    retries=adapter_cfg.retries if adapter_cfg.retries > 0 else dws_cfg.retries,
+                    dry_run=adapter_cfg.dry_run,
+                    profile=adapter_cfg.profile or dws_cfg.profile,
+                )
+            # 启动期显式告警：企微 CLI 无已读回执，依赖对方已读信号的门控/标记在企微静默失效
+            adapter.warn_read_signal_unsupported(self.config.poller)
+            return adapter
         # 默认 dingtalk
         return self._build_dws()

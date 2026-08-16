@@ -128,44 +128,6 @@ class TokenManager:
 _token_manager = TokenManager()
 
 
-def require_auth(f: Callable) -> Callable:
-    """认证装饰器。"""
-    @wraps(f)
-    async def wrapper(request: Request, *args: Any, **kwargs: Any) -> Any:
-        auth_header = request.headers.get("Authorization", "")
-
-        if not auth_header:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        if auth_header.startswith("Basic "):
-            # Basic Auth（向后兼容）
-            try:
-                creds = base64.b64decode(auth_header[6:]).decode("utf-8")
-                username, password = creds.split(":", 1)
-                # TODO: 验证用户名密码
-                request.state.username = username
-                request.state.role = ROLE_ADMIN
-            except Exception as e:
-                raise HTTPException(status_code=401, detail=f"Invalid credentials: {e}") from e
-        elif auth_header.startswith("Bearer "):
-            # Bearer Token (JWT)
-            token = auth_header[7:]
-            try:
-                payload = _token_manager.verify_token(token)
-                request.state.username = payload.get("sub", "unknown")
-                request.state.role = payload.get("role", ROLE_VIEWER)
-            except HTTPException:
-                raise
-            except Exception as e:
-                raise HTTPException(status_code=401, detail=f"Token error: {e}") from e
-        else:
-            raise HTTPException(status_code=401, detail="Unsupported auth type")
-
-        return await f(request, *args, **kwargs)
-
-    return wrapper
-
-
 def require_role(*roles: str) -> Callable:
     """角色检查装饰器。"""
     def decorator(f: Callable) -> Callable:

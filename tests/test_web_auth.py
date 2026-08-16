@@ -4,8 +4,9 @@
 """
 from __future__ import annotations
 
+import asyncio
+
 import pytest
-from unittest.mock import MagicMock
 
 
 class TestTokenManager:
@@ -70,24 +71,89 @@ class TestTokenManager:
             mgr.verify_token(tampered)
 
 
-class TestRequireAuth:
-    """测试 require_auth 装饰器。"""
+class TestWebAuthMiddleware:
+    """测试真实生产鉴权路径 web.api.web_auth_middleware。
 
-    def test_missing_auth_header(self):
-        """缺少认证头时应拒绝访问。"""
-        from web.auth_middleware import require_auth
+    替代已删除的 require_auth 死代码测试——后者对任意 Basic 凭据直接赋 ROLE_ADMIN，
+    是潜在管理员绕过，且生产鉴权实际走 web_auth_middleware。此处保持等价语义覆盖：
+    无 Authorization → 401、无效 token → 401、有效凭据 → 放行。
+    """
 
-        @require_auth
-        async def dummy_handler(request):
-            return {"status": "ok"}
+    def _make_request(self, path: str, headers: dict | None = None,
+                      method: str = "GET", client_host: str = "203.0.113.7"):
+        from starlette.requests import Request
 
-        # 模拟无 Authorization 头的请求
-        request = MagicMock()
-        request.headers.get.return_value = ""
+        hdrs = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
+        scope = {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "headers": hdrs,
+            "query_string": b"",
+            "scheme": "http",
+            "server": ("127.0.0.1", 8000),
+            "client": (client_host, 54321),
+        }
+        return Request(scope)
 
-        with pytest.raises(Exception):  # noqa: B017
-            import asyncio
-            asyncio.run(dummy_handler(request))
+    def _fake_cfg(self, auth_enabled: bool):
+        enabled = auth_enabled
+
+        class _Web:
+            auth_enabled = enabled
+            auth_username = "admin"
+            auth_password = "secret"
+
+        class _Cfg:
+            web = _Web()
+
+        return _Cfg()
+
+    def _call_next(self):
+        async def _next(request):
+            return "PASSED"
+        return _next
+
+    def test_no_auth_header_returns_401(self, monkeypatch):
+        """无 Authorization 头 → 401。"""
+        from web.api import web_auth_middleware
+
+        monkeypatch.setattr(
+            "web.api._get_cfg", lambda: self._fake_cfg(auth_enabled=True))
+        req = self._make_request("/api/persona", client_host="203.0.113.7")
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp.status_code == 401
+
+    def test_invalid_bearer_token_returns_401(self, monkeypatch):
+        """无效 JWT token → 401。"""
+        from web.api import web_auth_middleware
+
+        monkeypatch.setattr(
+            "web.api._get_cfg", lambda: self._fake_cfg(auth_enabled=True))
+        req = self._make_request(
+            "/api/persona",
+            headers={"Authorization": "Bearer not.a.valid.jwt"},
+            client_host="203.0.113.8",
+        )
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp.status_code == 401
+
+    def test_valid_basic_credentials_pass(self, monkeypatch):
+        """有效 Basic 凭据 → 放行（call_next 被执行）。"""
+        import base64
+
+        from web.api import web_auth_middleware
+
+        monkeypatch.setattr(
+            "web.api._get_cfg", lambda: self._fake_cfg(auth_enabled=True))
+        token = base64.b64encode(b"admin:secret").decode()
+        req = self._make_request(
+            "/api/persona",
+            headers={"Authorization": f"Basic {token}"},
+            client_host="203.0.113.9",
+        )
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp == "PASSED"
 
 
 class TestLoginLogout:

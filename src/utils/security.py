@@ -88,52 +88,6 @@ def sanitize_log_message(msg: str) -> str:
     return msg
 
 
-def is_safe_ip(ip: str) -> bool:
-    """检查 IP 是否为安全的公网地址（非内网/保留地址）。
-
-    Args:
-        ip: IPv4 地址字符串
-
-    Returns:
-        True 如果是安全的公网 IP
-    """
-    if not ip:
-        return False
-    parts = ip.split('.')
-    if len(parts) != 4:
-        return False
-    try:
-        first_octet = int(parts[0])
-        second_octet = int(parts[1])
-    except ValueError:
-        return False
-    # 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 0.0.0.0
-    if first_octet == 10:
-        return False
-    if first_octet == 172 and 16 <= second_octet <= 31:
-        return False
-    if first_octet == 192 and second_octet == 168:
-        return False
-    if first_octet == 127:
-        return False
-    if first_octet == 0:
-        return False
-    return True
-
-
-def validate_platform_id(platform_id: str) -> bool:
-    """校验平台 ID 是否合法。
-
-    Args:
-        platform_id: 平台标识符
-
-    Returns:
-        True 如果是已知的合法平台
-    """
-    known_platforms = {"dingtalk", "feishu", "wecom"}
-    return platform_id in known_platforms
-
-
 def safe_get_dict(obj: Any, *keys: str, default: Any = None) -> Any:
     """安全地从嵌套字典中取值，避免 KeyError。
 

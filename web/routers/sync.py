@@ -33,6 +33,7 @@ from pydantic import BaseModel
 from web.dependencies import get_app_instance, get_current_platform, logger
 from web.errors import SAFE_OPERATION_FAILED
 from src.paths import data_path, get_config_path, get_log_dir
+from src.constants import SUPPORTED_PLATFORMS
 
 router = APIRouter()
 
@@ -90,8 +91,8 @@ def _is_running_stale(status: dict) -> bool:
         return False
     return not _thread_alive(status.get("job_id"))
 
-# 允许的合法平台（与 web/api.py 中间件一致）
-_KNOWN_PLATFORMS = {"dingtalk", "feishu", "wecom"}
+# 允许的合法平台——单一真源见 src/constants.SUPPORTED_PLATFORMS
+# （不再在 web 层另持副本，避免加平台时漏改一处导致漂移）。
 
 
 def _read_sync_status() -> dict:
@@ -120,7 +121,7 @@ async def sync_history(req: SyncHistoryRequest, platform: str = Query(default=""
     request_platform = (platform or get_current_platform()).strip()
     if not request_platform:
         request_platform = "dingtalk"
-    if request_platform not in _KNOWN_PLATFORMS:
+    if request_platform not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=400, detail=f"未知平台: {request_platform}")
     # 平台启用性校验（仅做轻量前置检查，真正的 DWS/适配器错误由 worker 回报状态文件）
     app_instance = get_app_instance()

@@ -9,10 +9,14 @@ from src.utils.security import (
     mask_oid,
     mask_token,
     sanitize_log_message,
-    is_safe_ip,
-    validate_platform_id,
     safe_get_dict,
 )
+# T-B3：is_safe_ip / validate_platform_id 已从 src.utils.security 删除（死代码），
+# 其断言重指到真正跑生产的实现：
+#   - IP 公网安全判定 → src.utils.net.is_ssrf_safe（SSRF 权威校验点）
+#   - 平台白名单       → src.constants.SUPPORTED_PLATFORMS（单一真源）
+from src.utils.net import is_ssrf_safe
+from src.constants import SUPPORTED_PLATFORMS
 
 
 class TestMaskOID:
@@ -82,39 +86,43 @@ class TestSanitizeLogMessage:
 
 
 class TestIsSafeIP:
-    """检查 IP 是否为安全的公网地址。"""
+    """IP 安全判定：断言重指到真正跑生产的 SSRF 权威校验点 src.utils.net.is_ssrf_safe。
+
+    原 is_safe_ip 与 net._ip_is_public 逻辑重复且生产零调用（死代码），
+    这里改为覆盖 is_ssrf_safe（被 weather.py / web_search.py 真实使用）。
+    """
 
     def test_public_ip(self):
-        assert is_safe_ip("8.8.8.8") is True
-        assert is_safe_ip("1.1.1.1") is True
+        assert is_ssrf_safe("http://8.8.8.8") is True
+        assert is_ssrf_safe("http://1.1.1.1") is True
 
     def test_private_ips(self):
-        assert is_safe_ip("10.0.0.1") is False
-        assert is_safe_ip("172.16.0.1") is False
-        assert is_safe_ip("192.168.1.1") is False
-        assert is_safe_ip("127.0.0.1") is False
-        assert is_safe_ip("0.0.0.0") is False
+        assert is_ssrf_safe("http://10.0.0.1") is False
+        assert is_ssrf_safe("http://172.16.0.1") is False
+        assert is_ssrf_safe("http://192.168.1.1") is False
+        assert is_ssrf_safe("http://127.0.0.1") is False
+        assert is_ssrf_safe("http://0.0.0.0") is False
 
     def test_invalid_ip(self):
-        assert is_safe_ip("") is False
-        assert is_safe_ip("not-an-ip") is False
-        # 注意：256.256.256.256 在某些实现中可能不被校验为无效
-        # 这里验证基本逻辑即可
-        assert is_safe_ip("0.0.0.0") is False
+        # 空串/非 IP 主机名：URL 解析即判不安全
+        assert is_ssrf_safe("") is False
+        assert is_ssrf_safe("http://not-an-ip") is False
+        # 0.0.0.0 同时覆盖 unspecified 场景
+        assert is_ssrf_safe("http://0.0.0.0") is False
 
 
 class TestValidatePlatformId:
-    """校验平台 ID 合法性。"""
+    """平台白名单：断言重指到单一真源 src.constants.SUPPORTED_PLATFORMS。"""
 
     def test_known_platforms(self):
-        assert validate_platform_id("dingtalk") is True
-        assert validate_platform_id("feishu") is True
-        assert validate_platform_id("wecom") is True
+        assert "dingtalk" in SUPPORTED_PLATFORMS
+        assert "feishu" in SUPPORTED_PLATFORMS
+        assert "wecom" in SUPPORTED_PLATFORMS
 
     def test_unknown_platform(self):
-        assert validate_platform_id("wechat") is False
-        assert validate_platform_id("") is False
-        assert validate_platform_id("invalid") is False
+        assert "wechat" not in SUPPORTED_PLATFORMS
+        assert "" not in SUPPORTED_PLATFORMS
+        assert "invalid" not in SUPPORTED_PLATFORMS
 
 
 class TestSafeGetDict:

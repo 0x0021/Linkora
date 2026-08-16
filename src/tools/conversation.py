@@ -75,6 +75,8 @@ class GetConversationInfoTool(BaseTool):
     description = "查询指定会话（群聊或单聊）的详细信息"
     # 场景关键词统一维护在 IntentRegistry 的 domain.conversation_info（单一真源）
     intent_categories = ["domain.conversation_info"]
+    # 企微适配器无 chat_conversation_info，仅钉钉/飞书可用
+    platforms = ["dingtalk", "feishu"]
     parameters = {
         "type": "object",
         "properties": {

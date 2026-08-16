@@ -15,6 +15,8 @@ class GetCalendarEventsTool(BaseTool):
     description = "查询日程事件（今天或指定时间段）"
     # 场景关键词统一维护在 IntentRegistry 的 domain.calendar（单一真源）
     intent_categories = ["domain.calendar"]
+    # 飞书适配器无 calendar_event_list，仅钉钉/企微可用
+    platforms = ["dingtalk", "wecom"]
     parameters = {
         "type": "object",
         "properties": {
@@ -63,6 +65,8 @@ class CreateTodoTool(BaseTool):
     description = "创建待办任务"
     # 场景关键词统一维护在 IntentRegistry 的 domain.todo（单一真源）
     intent_categories = ["domain.todo"]
+    # 飞书适配器无 todo_task_create，仅钉钉/企微可用
+    platforms = ["dingtalk", "wecom"]
     parameters = {
         "type": "object",
         "properties": {

@@ -23,6 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from web.errors import SAFE_INTERNAL_ERROR
+from web.auth_middleware import ROLE_ADMIN
 
 from src.config import load_config
 from src.dws_adapter import DwsAdapter
@@ -379,6 +380,25 @@ def _is_sensitive_request(request: Request) -> bool:
     return request.url.path in _SENSITIVE_GET_PATHS
 
 
+def _require_admin_role(request: Request) -> JSONResponse | None:
+    """敏感请求的角色二次校验：仅 admin 可访问（RBAC 授权分级）。
+
+    与认证解耦：任何认证成功后的请求（Basic 或 Bearer）都会先经此处判断。
+    - 非敏感请求（普通 GET/只读）→ None（放行），不引入额外开销；
+    - 敏感请求且角色非 admin → 403。role 缺失按非 admin 处理（fail-closed）。
+    """
+    if not _is_sensitive_request(request):
+        return None
+    # 防御：假 request（测试直调）可能无 state 属性；缺失按非 admin 处理（fail-closed）。
+    role = getattr(getattr(request, "state", None), "role", None)
+    if role != ROLE_ADMIN:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": f"Requires role: {ROLE_ADMIN}"},
+        )
+    return None
+
+
 def _require_basic_auth(request: Request) -> JSONResponse | None:
     """校验 Basic Auth；通过返回 None，失败返回错误响应（已含限流）。
 
@@ -442,6 +462,14 @@ def _require_basic_auth(request: Request) -> JSONResponse | None:
                 status_code=401,
                 content={"detail": "Invalid username or password"},
             )
+        # 角色分级：与 JWT 登录（auth_middleware.login）同规则——配置的用户名=admin，
+        # 其余（预留多账号场景）=operator。此赋值使 request.state.role 在 Basic 路径
+        # 同样可用，敏感端点据此做「仅 admin」二次校验（_require_admin_role）。
+        # 防御：测试/直调场景的假 request 可能无 state 属性，缺失则跳过赋值（不影响鉴权）。
+        if not hasattr(request, "state"):
+            return None
+        request.state.username = username  # type: ignore[attr-defined]
+        request.state.role = ROLE_ADMIN if username == config.web.auth_username else "operator"  # type: ignore[attr-defined]
         return None
     else:
         return JSONResponse(
@@ -504,12 +532,22 @@ async def web_auth_middleware(request: Request, call_next):
                 auth_err = _require_basic_auth(request)
                 if auth_err is not None:
                     return auth_err
+                # RBAC 授权分级同样生效：敏感请求仅 admin 放行。
+                # （未配置凭据 → 维持「由网络边界负责隔离」的既有语义，不强制角色。）
+                role_err = _require_admin_role(request)
+                if role_err is not None:
+                    return role_err
         return await call_next(request)
 
     # 全局鉴权开启：所有非白名单端点强制 Basic Auth
     auth_err = _require_basic_auth(request)
     if auth_err is not None:
         return auth_err
+    # RBAC 授权分级：认证通过后，敏感请求（写操作 / 配置导出 / 日志）仅 admin 放行。
+    # Basic 路径的角色在 _require_basic_auth 内赋值，Bearer 路径在 JWT 分支赋值。
+    role_err = _require_admin_role(request)
+    if role_err is not None:
+        return role_err
     return await call_next(request)
 
 

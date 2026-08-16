@@ -155,6 +155,88 @@ class TestWebAuthMiddleware:
         resp = asyncio.run(web_auth_middleware(req, self._call_next()))
         assert resp == "PASSED"
 
+    def test_sensitive_get_blocked_for_operator(self):
+        """RBAC：operator 角色访问敏感只读端点（/api/config/export）→ 403。
+
+        Basic 认证路径的角色判定与 jwt_login 同规则（配置用户名=admin、其余=operator），
+        此处直接驱动 _require_admin_role 验证分级生效（operator 是预留多账号场景的角色，
+        当前单账号配置下由 Bearer 令牌路径可达，见 test_bearer_operator_token_blocked）。
+        """
+        from web.api import _require_admin_role
+
+        req = self._make_request("/api/config/export", client_host="203.0.113.10")
+        req.state.role = "operator"  # type: ignore[attr-defined]
+        resp = _require_admin_role(req)
+        assert resp is not None and resp.status_code == 403
+        assert "admin" in bytes(resp.body).decode()
+
+    def test_require_admin_role_allows_admin(self):
+        """RBAC：admin 角色访问敏感端点 → 放行（返回 None）。"""
+        from web.api import _require_admin_role
+
+        req = self._make_request("/api/logs", client_host="203.0.113.11")
+        req.state.role = "admin"  # type: ignore[attr-defined]
+        resp = _require_admin_role(req)
+        assert resp is None
+
+    def test_require_admin_role_skips_regular_get(self):
+        """RBAC：普通只读请求（非敏感）不做角色检查，任意角色放行。"""
+        from web.api import _require_admin_role
+
+        req = self._make_request("/api/persona", client_host="203.0.113.12")
+        req.state.role = "viewer"  # type: ignore[attr-defined]
+        resp = _require_admin_role(req)
+        assert resp is None
+
+    def test_sensitive_get_allowed_for_admin(self, monkeypatch):
+        """RBAC：admin 角色访问敏感端点（/api/logs）→ 放行。"""
+        import base64
+
+        from web.api import web_auth_middleware
+
+        monkeypatch.setattr(
+            "web.api._get_cfg", lambda: self._fake_cfg(auth_enabled=True))
+        token = base64.b64encode(b"admin:secret").decode()
+        req = self._make_request(
+            "/api/logs",
+            headers={"Authorization": f"Basic {token}"},
+            client_host="203.0.113.13",
+        )
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp == "PASSED"
+
+    def test_bearer_operator_token_blocked_on_sensitive(self, monkeypatch):
+        """RBAC：Bearer 携带 operator 角色的 JWT 访问敏感端点 → 403。"""
+        from web.api import web_auth_middleware
+        from web.auth_middleware import _token_manager
+
+        monkeypatch.setattr(
+            "web.api._get_cfg", lambda: self._fake_cfg(auth_enabled=True))
+        token = _token_manager.generate_token("boss", "operator")
+        req = self._make_request(
+            "/api/config/export",
+            headers={"Authorization": f"Bearer {token}"},
+            client_host="203.0.113.14",
+        )
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp.status_code == 403
+
+    def test_bearer_admin_token_allowed_on_sensitive(self, monkeypatch):
+        """RBAC：Bearer 携带 admin 角色的 JWT 访问敏感端点 → 放行。"""
+        from web.api import web_auth_middleware
+        from web.auth_middleware import _token_manager
+
+        monkeypatch.setattr(
+            "web.api._get_cfg", lambda: self._fake_cfg(auth_enabled=True))
+        token = _token_manager.generate_token("admin", "admin")
+        req = self._make_request(
+            "/api/logs",
+            headers={"Authorization": f"Bearer {token}"},
+            client_host="203.0.113.14",
+        )
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp == "PASSED"
+
 
 class TestLoginLogout:
     """测试登录登出功能。"""

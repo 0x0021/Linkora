@@ -271,8 +271,20 @@ def test_logs_endpoint_honors_platform():
     buf._buffer.append(_mk("src.llm.router", rid=start_id + 4))        # 中性
     buf._next_id = start_id + 5
 
-    # 仅验证平台过滤行为，鉴权逻辑不在本测试范围（patch 掉 Basic Auth 校验）
-    with patch("web.api._auth_check", return_value=True):
+    # 仅验证平台过滤行为，鉴权/RBAC 不在本测试范围：
+    # - _auth_check 恒真跳过凭据校验；
+    # - _get_cfg 返回与请求头凭据（test:test）匹配的配置，使 RBAC 角色判定为 admin，
+    #   敏感端点 /api/logs 的「仅 admin」检查放行（RBAC 行为由 test_web_auth 覆盖）。
+    class _Web:
+        auth_enabled = True
+        auth_username = "test"
+        auth_password = "test"
+
+    class _Cfg:
+        web = _Web()
+
+    with patch("web.api._auth_check", return_value=True), \
+            patch("web.api._get_cfg", return_value=_Cfg()):
         # feishu 视图：飞书专属 + 中性，无 dingtalk/wecom
         resp = client.get(
             f"/api/logs?platform=feishu&since={start_id}",

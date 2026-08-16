@@ -207,11 +207,13 @@ def _fake_config(auth_enabled, username="", password=""):
 
 
 def _fake_request(path, method="GET", headers=None, host="10.0.0.5"):
+    # state 对齐 Starlette Request（真实中间件会在 Basic 认证通过后写 request.state.role）
     return SimpleNamespace(
         url=SimpleNamespace(path=path),
         method=method,
         headers=headers or {},
         client=SimpleNamespace(host=host),
+        state=SimpleNamespace(),
     )
 
 

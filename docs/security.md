@@ -24,6 +24,17 @@
 - 所有非 GET 写操作（`POST/PUT/PATCH/DELETE`）；
 - 显式敏感只读：`/api/config/export`、`/api/logs`。
 
+### RBAC 角色分级
+
+认证通过后按角色二次校验（Basic 与 Bearer 两条路径同规则，赋值于 `request.state.role`）：
+- **admin**：配置的用户名（`web.auth_username`）登录所得，全量权限；
+- **operator**：预留多账号场景（非配置用户名），可读写普通业务端点；
+- **viewer**：JWT 兜底角色（token 未携带 role 声明时）。
+
+**敏感请求（写操作 + `/api/config/export` + `/api/logs`）仅 admin 可访问**，operator / viewer 访问返回 `403`；角色缺失按非 admin 处理（fail-closed）。前端以配置用户名登录自动获得 admin，功能不受影响。
+
+> 例外：`auth_enabled=false` 且**未配置任何凭据**时，敏感端点维持「由网络边界负责隔离」的既有语义，不强制角色（配置了凭据则仍强制 Basic + admin，见上）。
+
 ### 白名单路径（免认证）
 
 `/`、`/health`、`/api/platforms`、`/api/auth/login`、`/api/auth/me`，以及前缀 `/static/`、`/api/image/`、`/api/skill-icons/`（后两者供前端 `<img>` 直链免 Basic Auth，内部已有签名 token / 二次校验）。

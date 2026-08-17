@@ -394,8 +394,8 @@
 /* --- 面板头 --- */
 .ov-head {
     align-items: center;
-    padding-top: 0.95rem;
-    padding-bottom: 0.8rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.6rem;
 }
 .ov-head-main {
     display: flex;
@@ -465,10 +465,10 @@
 
 /* --- 面板体：三层纵向节奏 --- */
 .ov-body {
-    padding: 0.2rem 1.1rem 0.85rem;
+    padding: 0.15rem 1.1rem 0.65rem;
     display: flex;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.4rem;
 }
 
 /* --- 第一层：Hero 主指标（左 / 中 sparkline / 右 三段式） --- */
@@ -478,7 +478,7 @@
     grid-template-columns: minmax(160px, 1.05fr) minmax(200px, 1.5fr) auto;
     align-items: center;
     gap: 1rem;
-    padding: 0.7rem 1rem;
+    padding: 0.55rem 1rem;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-light);
@@ -897,13 +897,18 @@
     .ov-chip-value { max-width: 120px; }
 }
 
-/* --- 首页一屏适配：中间行给够高度，日志区填满剩余空间 --- */
+/* --- 首页一屏适配：三行等高紧凑布局 --- */
 #page-dashboard.active .realtime-log-panel {
-    height: auto;
+    height: 220px;
+    max-height: 220px;
+    overflow: hidden;
 }
 
+/* 日志 body 撑满面板剩余空间（减去 header 后），内部滚动 */
 #page-dashboard.active .realtime-log-body {
-    max-height: none;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 #page-dashboard.active #realtime-log-stream {

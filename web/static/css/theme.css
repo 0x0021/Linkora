@@ -1147,7 +1147,7 @@ html {
    ========================================== */
 .realtime-log-panel {
     grid-column: 1 / -1;
-    height: 360px;
+    height: 220px;
     display: flex;
     flex-direction: column;
 }

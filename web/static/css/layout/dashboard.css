@@ -6,12 +6,13 @@
     align-items: stretch;
 }
 
-/* 首页一屏布局：#page-dashboard 内所有行填满 .content-area，整体不滚动 */
+/* 首页紧凑布局：三行等高固定高度，内容各自内部滚动；视口过矮时整页可滚动兜底，绝不裁切 */
 #page-dashboard.active {
     display: flex;
     flex-direction: column;
     height: 100%;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 #page-dashboard.active > .page-header {
@@ -27,46 +28,39 @@
     margin-bottom: 0;
 }
 
+/* 三行紧凑布局：概览稍高（内容多），中/下两行等高；行级不裁切，由 body 内部滚动 */
 #page-dashboard.active .dash-row-overview {
     flex: 0 0 auto;
+    height: 280px;
+    max-height: 280px;
     min-height: 0;
 }
 
-#page-dashboard.active .dash-row-middle {
-    /* DYNAMIC HEIGHT: 决策追踪与最近消息按内容撑高，最少保留 260px */
-    flex: 0 0 auto;
-    min-height: 260px;
-}
-
+#page-dashboard.active .dash-row-middle,
 #page-dashboard.active .dash-row-log {
-    flex: 1 1 0;
+    flex: 0 0 auto;
+    height: 220px;
+    max-height: 220px;
     min-height: 0;
 }
 
-/* 中间卡片随内容自然撑高；实时日志面板仍保持内部滚动 */
-#page-dashboard.active .dash-row-middle .dash-panel-body {
-    overflow: visible;
-}
-
-#page-dashboard.active .dash-row-log .dash-panel-body {
-    overflow: auto;
-}
-
-#page-dashboard.active .dash-panel-body {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
+/* 行内 panel 撑满行高，flex 列布局；不设 overflow（由 body 内部滚动接管） */
+#page-dashboard.active .dash-row-overview .panel,
 #page-dashboard.active .dash-row-middle .panel,
 #page-dashboard.active .dash-row-log .panel {
     display: flex;
     flex-direction: column;
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
 }
 
-#page-dashboard.active .dash-row-middle .panel {
-    height: auto;
+#page-dashboard.active .dash-row-overview .panel-body,
+#page-dashboard.active .dash-row-middle .dash-panel-body,
+#page-dashboard.active .dash-row-log .dash-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 .dashboard-grid.full-width {

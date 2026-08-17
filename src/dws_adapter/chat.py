@@ -526,3 +526,158 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             title=title, text=text, uuid=uuid,
             msg_type=msg_type, media_id=media_id, file_path=file_path,
         )
+
+    # === 消息搜索（v1.0.59+）：替代全量拉取后本地过滤 ===
+
+    def chat_message_search(self, *, query: str,
+                            conversation_id: str | None = None,
+                            start: str | None = None, end: str | None = None,
+                            limit: int = 100, cursor: str = "0",
+                            page_all: bool = False,
+                            max_items: int = 0, page_limit: int = 50,
+                            page_delay: int = 200) -> dict:
+        """在用户会话中按关键词搜索消息（dws ``chat message search``）。
+
+        服务端关键词检索，替代 ``chat_message_list_all`` 全量拉取后在本地 grep 的低效路径。
+        返回结构含顶层 ``messages``（稳定字段 ``messageId`` / ``text``，兼容保留
+        ``openMessageId`` / ``content`` / 原始 ``result``）。
+
+        默认时间窗最近 7 天到当前；不传 ``conversation_id`` 则搜索所有会话。
+        未指定会话默认只读单页；``page_all=True`` 自动翻页并合并跨页结果。
+
+        RAG / 历史回填场景：用本方法按 query 检索候选消息，再交给 LLM 做语义精排，
+        比拉全量再过滤省 90%+ 的 API 调用量。
+        """
+        if not query:
+            raise ValueError("chat_message_search 需提供 query")
+        args = [
+            "chat", "message", "search",
+            "--query", query,
+            "--limit", str(limit),
+            "--cursor", cursor,
+        ]
+        if conversation_id:
+            args.extend(["--conversation-id", conversation_id])
+        if start:
+            args.extend(["--start", start])
+        if end:
+            args.extend(["--end", end])
+        if page_all:
+            args.append("--page-all")
+            args.extend([
+                "--max-items", str(max_items),
+                "--page-limit", str(page_limit),
+                "--page-delay", str(page_delay),
+            ])
+        data = self.run(args, operation="chat_message_search", force_no_dry_run=True)
+        return self._get_result(data)
+
+    def chat_message_search_advanced(self, *, query: str | None = None,
+                                     user: str | None = None,
+                                     users: str | None = None,
+                                     sender_ids: str | None = None,
+                                     at_ids: str | None = None,
+                                     at_me: bool = False,
+                                     conversation_ids: str | None = None,
+                                     start: str | None = None, end: str | None = None,
+                                     limit: int = 100, cursor: str = "0",
+                                     page_all: bool = False,
+                                     max_items: int = 0, page_limit: int = 50,
+                                     page_delay: int = 200) -> dict:
+        """多维搜索消息（dws ``chat message search-advanced``）。
+
+        支持关键词 / 发送者 / @我 / @指定人 / 指定会话 / 时间范围组合检索。
+        发送者 userId 用 ``user`` / ``users``；发送者或 @人 的 openDingTalkId 用
+        ``sender_ids`` / ``at_ids``。
+
+        至少指定一个搜索条件（否则 dws 拒绝执行）。
+        """
+        if not any([query, user, users, sender_ids, at_ids, at_me, conversation_ids]):
+            raise ValueError("search_advanced 至少指定一个搜索条件（query/user/users/"
+                             "sender_ids/at_ids/at_me/conversation_ids）")
+        args = [
+            "chat", "message", "search-advanced",
+            "--limit", str(limit),
+            "--cursor", cursor,
+        ]
+        if query:
+            args.extend(["--query", query])
+        if user:
+            args.extend(["--user", user])
+        if users:
+            args.extend(["--users", users])
+        if sender_ids:
+            args.extend(["--sender-ids", sender_ids])
+        if at_ids:
+            args.extend(["--at-ids", at_ids])
+        if at_me:
+            args.append("--at-me")
+        if conversation_ids:
+            args.extend(["--conversation-ids", conversation_ids])
+        if start:
+            args.extend(["--start", start])
+        if end:
+            args.extend(["--end", end])
+        if page_all:
+            args.append("--page-all")
+            args.extend([
+                "--max-items", str(max_items),
+                "--page-limit", str(page_limit),
+                "--page-delay", str(page_delay),
+            ])
+        data = self.run(args, operation="chat_message_search_advanced", force_no_dry_run=True)
+        return self._get_result(data)
+
+    # === 流式卡片（v1.0.59+）：交互式卡片消息，可多次 update ===
+
+    def chat_message_send_card(self, *, group: str | None = None,
+                               open_dingtalk_id: str | None = None,
+                               at_all: bool = False,
+                               at_open_dingtalk_ids: str | None = None) -> dict:
+        """创建流式卡片（``dws chat message send-card``），返回 bizId 供 ``update_card`` 续填内容。
+
+        群聊传 ``group``（openConversationId），单聊传 ``open_dingtalk_id``，二者互斥。
+        创建时无需传入卡片内容，后续通过 ``chat_message_update_card`` 更新内容；
+        最后一次更新必须将 ``flow_status`` 设为 3（finish），否则卡片一直显示"生成中"。
+
+        适合长内容生成场景（如会议纪要/审批结论）：先占卡片位，再流式 patch 内容，
+        避免先发占位文本再追发造成的消息碎片。
+        """
+        if group:
+            target = ["--conversation-id", group]
+        elif open_dingtalk_id:
+            target = ["--open-dingtalk-id", open_dingtalk_id]
+        else:
+            raise ValueError("send_card 需提供 group（群）或 open_dingtalk_id（单聊）之一")
+        args = ["chat", "message", "send-card"] + target
+        if at_all:
+            args.append("--at-all")
+        if at_open_dingtalk_ids:
+            args.extend(["--at-open-dingtalk-ids", at_open_dingtalk_ids])
+        data = self.run(args, operation="chat_message_send_card", force_no_dry_run=True)
+        return self._get_result(data)
+
+    def chat_message_update_card(self, *, biz_id: str, content: str,
+                                 flow_status: int = 3) -> dict:
+        """更新已发送的流式卡片内容（``dws chat message update-card``）。
+
+        Args:
+            biz_id: send_card 返回的业务 ID（必填）
+            content: 卡片消息内容（必填）
+            flow_status: 流式状态，1=处理中 2=输入中 3=完成 4=执行中 5=错误；
+                最后一次更新必须设 3（finish），否则卡片一直处于"生成中"加载态
+
+        典型用法：生成过程中多次 ``flow_status=2`` 增量更新，结束时 ``flow_status=3`` 收尾。
+        """
+        if not biz_id:
+            raise ValueError("update_card 需提供 biz_id")
+        if content is None:
+            raise ValueError("update_card 需提供 content")
+        args = [
+            "chat", "message", "update-card",
+            "--biz-id", biz_id,
+            "--content", content,
+            "--flow-status", str(flow_status),
+        ]
+        data = self.run(args, operation="chat_message_update_card", force_no_dry_run=True)
+        return self._get_result(data)

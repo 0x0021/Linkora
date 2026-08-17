@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import queue
 from collections import OrderedDict
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
@@ -14,6 +15,7 @@ from src.config import PollerConfig
 from src.im_adapter.base_adapter import BaseIMAdapter
 from src.memory.sqlite_store import SQLiteStore
 from src.models import Message
+from src.dws_adapter.event_stream import EventStreamConsumer
 from src.poller_core_ocr import OcrMixin
 from src.poller_core_parse import ParseMixin
 from src.poller_core_dedup import DedupMixin
@@ -125,6 +127,10 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         # 飞书全量扫描（完整 +chat-list 翻页发现新会话）上次执行时间；
         # 每轮主通道默认走白名单模式，仅在间隔到期时做一次全量扫描。
         self._last_full_scan_time: datetime | None = None
+        # === P0 Stream 长连接（v1.0.59+，默认关闭，由 config.stream_enabled 启用）===
+        self._stream_consumer = None          # EventStreamConsumer 实例
+        self._stream_queue: "queue.Queue" = queue.Queue()  # stream 消息入队，run_loop 每轮 drain 派发
+        self._stream_handler: Callable | None = None
         # 注意：不再设置「全局权限退避」。组织级权限错误（TOKEN_VERIFIED_FAILED 等）
         # 只会导致单个操作失败，按 key 去重后仅警告一次，绝不阻断整轮轮询——
         # 否则会让机器人完全停止收发消息。重登无效的组织配置问题由 AuthMonitor
@@ -223,6 +229,10 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
     def run_loop(self, handler: Callable[[Message], None]) -> None:
         self._running = True
         logger.debug("轮询，间隔 %d 秒", self.config.interval_seconds)
+        # P0 Stream 长连接（默认关闭，config.stream_enabled 启用）：启动后收到的消息
+        # 实时入队，下方每轮 drain 派发，去除 5s 全量轮询的 API 开销。
+        if self.config.stream_enabled and self._stream_consumer is None:
+            self.start_stream(handler)
         while self._running:
             try:
                 from src.memory.platform_context import set_current_platform, reset_current_platform
@@ -232,6 +242,9 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
                     # per-conversation 同步抓取（可能挂死的 dws 调用）之前，经 handler
                     # 即时派发（快通道），避免整条派发链被阻塞的 dws 调用冻结。
                     messages = self.poll_once(handler=handler)
+                    # 并入 Stream 长连接实时收到的消息（线程安全：queue.Queue）
+                    while not self._stream_queue.empty():
+                        messages.append(self._stream_queue.get())
                     # P1-E 背压：最旧优先 + 单轮限速，避免重启/突发一次性派发打爆接口
                     is_cold_start = self._first_poll
                     self._queue_depth = len(messages)
@@ -279,8 +292,84 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
 
     def stop(self) -> None:
         self._running = False
+        self.stop_stream()
         # 关闭线程池，避免线程泄漏（重启/热重载时累积）
         try:
             self._image_executor.shutdown(wait=True)
         except Exception as e:
             logger.warning("[轮询器] 关闭线程池时异常: %s", e)
+
+    # === P0 Stream 长连接接入（v1.0.59+）===
+
+    def start_stream(self, handler: Callable[[Message], None]) -> None:
+        """启动 DWS 个人事件长连接消费器（替代 5s 轮询的实时通道）。"""
+        if self._stream_consumer is not None:
+            return
+        self._stream_handler = handler
+        self._stream_consumer = EventStreamConsumer(
+            kinds=getattr(self.config, "stream_kinds", None) or ["all-direct", "all-group"],
+            profile=self.config.target_org_corp_id or "",
+            on_message=self._on_stream_message,
+            on_status=lambda s, p: logger.info("[Stream] 状态 %s: %s", s, p),
+        )
+        self._stream_consumer.start()
+        logger.info("[Stream] 已启动（kinds=%s）", self._stream_consumer.kinds)
+
+    def stop_stream(self) -> None:
+        """停止并释放长连接消费器（SIGTERM 优雅停，自动取消个人订阅）。"""
+        if self._stream_consumer is not None:
+            try:
+                self._stream_consumer.stop()
+            except Exception as e:
+                logger.warning("[Stream] 停止异常: %s", e)
+            self._stream_consumer = None
+            self._stream_handler = None
+
+    def _on_stream_message(self, d: dict) -> None:
+        """Stream 事件 → 跨轮去重 → 入队（run_loop 每轮 drain 派发，线程安全）。"""
+        mid = d.get("message_id")
+        if not mid:
+            return
+        if mid in self._processed_msg_ids:  # 跨轮去重：避免与轮询重复处理
+            return
+        msg = self._build_stream_message(d)
+        if msg is None:
+            return
+        self._processed_msg_ids[mid] = True
+        if len(self._processed_msg_ids) > self.config.max_processed_msg_ids:
+            self._processed_msg_ids.popitem(last=False)
+        self._stream_queue.put(msg)
+
+    def _build_stream_message(self, d: dict) -> "Message | None":
+        """把 Stream 归一化 dict 构造为 Message 对象。"""
+        try:
+            ts = d.get("timestamp")
+            if ts is None:
+                dt = datetime.now()
+            else:
+                ts_f = float(ts)
+                if ts_f > 1e12:  # 毫秒时间戳 → 秒
+                    ts_f /= 1000
+                dt = datetime.fromtimestamp(ts_f)
+        except (TypeError, ValueError, OSError):
+            dt = datetime.now()
+        event_type = d.get("event_type") or ""
+        chat_type = "group" if "group" in event_type else "direct"
+        try:
+            return Message(
+                msg_id=str(d.get("message_id")),
+                chat_id=str(d.get("conversation_id") or d.get("message_id")),
+                chat_type=chat_type,
+                chat_name=None,
+                sender_id=str(d.get("sender_open_dingtalk_id") or ""),
+                sender_name="",
+                content=str(d.get("text") or ""),
+                msg_type=str(d.get("msg_type") or "text"),
+                timestamp=dt,
+                raw=d.get("raw", {}) or {},
+                role="user",
+                is_bot=False,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[Stream] 构造 Message 失败: %s", e)
+            return None

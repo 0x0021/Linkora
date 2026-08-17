@@ -118,6 +118,10 @@ class PollerConfig(BaseModel):
     # 回复会自动切成多片、带「（i/n）」续发标记顺序发出。默认 4000 留余量；
     # 0 或负数回落到代码内置默认值（不是「不分片」）。
     reply_shard_limit: int = 4000
+    # P0 Stream 长连接（v1.0.59+）：启用后以 dws event +listen-im 实时接收消息，
+    # 替代 5s 全量轮询，API 调用量降 90%+。默认关闭（保留轮询为主通道，兼容存量行为）。
+    stream_enabled: bool = False
+    stream_kinds: list[str] = Field(default_factory=lambda: ["all-direct", "all-group"])
     # F14 回复发送退避（防平台高频限流）：
     # 连续两条回复发送之间的最小间隔（秒）。同一轮轮询若连发多条回复，平台
     # （钉钉/飞书/企业微信）会按频率流控，超阈值被静默丢弃。设最小间隔后，两条

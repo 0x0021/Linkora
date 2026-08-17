@@ -41,6 +41,14 @@ platforms:
     poller:
       # —— 基础轮询 ——
       interval_seconds: 10                           # 轮询间隔（秒）
+      # P0 Stream 长连接（v1.0.59+，需 dws event 子命令支持）：true 启用 dws event
+      # +listen-im 实时接收消息，替代 5s 全量轮询，API 调用量降 90%+。默认 false（保留
+      # 轮询为主通道，兼容存量行为）。启用后轮询仍运行（兜底/历史回填），stream 消息
+      # 实时入队、每轮 drain 派发。stream_kinds 可选 all-direct(单聊)/all-group(群)/at-me(@我)。
+      stream_enabled: false
+      stream_kinds:
+        - all-direct
+        - all-group
       unread_conversation_count: 50                  # 单轮拉取的未读会话数上限
       messages_per_conversation: 16                  # 每个会话单次拉取的最大消息数
       merge_window_seconds: 5                        # 同会话多条消息在此时间内合并处理

@@ -104,11 +104,45 @@ class TestIsSafeIP:
         assert is_ssrf_safe("http://0.0.0.0") is False
 
     def test_invalid_ip(self):
-        # 空串/非 IP 主机名：URL 解析即判不安全
+        # 空串：URL 解析即判不安全
         assert is_ssrf_safe("") is False
-        assert is_ssrf_safe("http://not-an-ip") is False
         # 0.0.0.0 同时覆盖 unspecified 场景
         assert is_ssrf_safe("http://0.0.0.0") is False
+        # 非 IP 主机名且 DNS 解析失败 → 不安全。用 mock 固定，避免依赖真实 DNS：
+        # 本地透明代理 fake-IP 模式会把任意主机名都解成 198.18.0.0/15，若走真实 DNS
+        # 会让本用例误判为「安全」。
+        import socket
+        from unittest import mock
+
+        def _gai_fail(host, port):
+            raise socket.gaierror("no resolve")
+
+        with mock.patch("socket.getaddrinfo", _gai_fail):
+            assert is_ssrf_safe("http://not-an-ip") is False
+
+    def test_proxy_fakeip_range_allowed(self):
+        """本地透明代理 fake-IP 模式（Clash/ClashX/Surge 等）拦截 DNS，把公网域名
+        解成 198.18.0.0/15（TEST-NET-2 保留段，仅作代理转发占位，绝非真实内网）。
+        SSRF 校验须放行该段，否则所有经代理的出站请求被整批误判为「内网/保留地址」。
+        真实内网仍由 test_private_ips / test_reserved_ips 覆盖拦截。"""
+        import socket
+        from unittest import mock
+
+        def _fake_getaddrinfo(host, port):
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("198.18.0.206", 0))]
+
+        with mock.patch("socket.getaddrinfo", _fake_getaddrinfo):
+            assert is_ssrf_safe("https://nominatim.openstreetmap.org/search") is True
+            assert is_ssrf_safe("https://wttr.in/Beijing") is True
+
+    def test_reserved_ips_still_blocked(self):
+        """保留段（非代理 fake-IP）仍须拦截：防止将来误放宽白名单。"""
+        # TEST-NET-3 / 文档示例保留段，非 198.18.0.0/15
+        assert is_ssrf_safe("http://203.0.113.5") is False
+        assert is_ssrf_safe("http://198.51.100.7") is False
+        # 组播 / 链路本地
+        assert is_ssrf_safe("http://224.0.0.1") is False
+        assert is_ssrf_safe("http://169.254.169.254/latest") is False
 
 
 class TestValidatePlatformId:

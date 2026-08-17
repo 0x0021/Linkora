@@ -16,9 +16,16 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# 本地透明代理（Clash / ClashX / Surge 等 fake-IP 模式）拦截 DNS，把公网域名解析成
+# 198.18.0.0/15（TEST-NET-2，RFC 2544 保留段，仅作代理转发占位，绝非真实内网）。
+# 该段无法寻址任何真实内网 / 云元数据（169.254.169.254 等），连接会被代理转回真实
+# 公网目的，故在此放行——否则所有经代理的出站请求都会被误判为「内网/保留地址」整批失败。
+# 真实内网（10/8、172.16/12、192.168/16、127/8、169.254/16 等）仍照常拦截。
+_PROXY_FAKEIP_NETS = [ipaddress.ip_network("198.18.0.0/15")]
+
 
 def _ip_is_public(ip_str: str) -> bool:
-    """单 IP 是否允许出站：非私网/回环/链路本地/未指定/保留/组播。
+    """单 IP 是否允许出站：非私网/回环/链路本地/未指定/保留/组播，且非代理 fake-IP 段。
 
     供 ``is_ssrf_safe`` 与 ``ssrf_safe_get`` 复用，保证「校验」与「钉死 IP」使用
     同一份解析结果，杜绝 DNS 重绑定 TOCTOU 窗口。
@@ -27,6 +34,8 @@ def _ip_is_public(ip_str: str) -> bool:
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return False
+    if any(ip in net for net in _PROXY_FAKEIP_NETS):
+        return True
     return not (ip.is_private or ip.is_loopback or ip.is_link_local
                or ip.is_unspecified or ip.is_reserved or ip.is_multicast)
 
@@ -180,13 +189,7 @@ def resolve_safe_ip(hostname: str) -> str | None:
         return None
     for info in infos:
         ip_str = str(info[4][0])
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError as _exc:
-            logger.debug(f"resolve_safe_ip: swallowed exception: {_exc}")
-            continue
-        if not (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_unspecified or ip.is_reserved or ip.is_multicast):
+        if _ip_is_public(ip_str):
             return ip_str
     return None
 

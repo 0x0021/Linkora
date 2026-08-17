@@ -46,9 +46,18 @@ function renderMsgContent(raw, imagePathMap) {
         while ((cm = cardRe.exec(s)) !== null) {
             const before = s.slice(lastIndex, cm.index).trim();
             if (before) html += _renderText(before);
-            const title = escapeHtml(cm[1]);
+            const rawTitle = cm[1];
+            const isWeather = /🌤|天气/.test(rawTitle);
+            const title = escapeHtml(rawTitle);
             const body = _renderCardBody(cm[2].trim(), imagePathMap);
-            html += `<div class="msg-card"><div class="msg-card-title">📋 ${title}</div><div class="msg-card-body">${body}</div></div>`;
+            const cls = 'msg-card' + (isWeather ? ' msg-card--weather' : '');
+            // 天气卡片：从标题析出「定位地点」并醒目展示（city 已是街道/楼栋级细粒度）
+            let locRow = '';
+            if (isWeather) {
+                const city = rawTitle.replace(/^🌤\s*/, '').replace(/\s*天气[\s·]*.*$/, '').trim();
+                if (city) locRow = `<div class="msg-card-loc">📍 定位地点：${escapeHtml(city)}</div>`;
+            }
+            html += `<div class="${cls}"><div class="msg-card-title">📋 ${title}</div>${locRow}<div class="msg-card-body">${body}</div></div>`;
             lastIndex = cardRe.lastIndex;
         }
         const after = s.slice(lastIndex).trim();

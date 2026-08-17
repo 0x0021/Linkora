@@ -2605,6 +2605,46 @@ html {
     gap: 5px;
 }
 
+/* 天气卡片：定位地点醒目 + 回退提示条 */
+.msg-card--weather {
+    max-width: 460px;
+    border-color: #93c5fd;
+}
+.msg-card--weather .msg-card-title {
+    background: linear-gradient(90deg, #eff6ff, #f8fafc);
+    color: #1d4ed8;
+}
+.msg-card--weather .msg-card-loc {
+    padding: 6px 12px 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #1d4ed8;
+}
+.msg-card--weather blockquote {
+    margin: 2px 0 0;
+    padding: 6px 10px;
+    border-left: 3px solid #f59e0b;
+    background: #fffbeb;
+    color: #92400e;
+    border-radius: 4px;
+    font-size: 0.78rem;
+}
+[data-theme="dark"] .msg-card--weather {
+    border-color: #1e40af;
+}
+[data-theme="dark"] .msg-card--weather .msg-card-title {
+    background: linear-gradient(90deg, #1e3a8a, #0f172a);
+    color: #bfdbfe;
+}
+[data-theme="dark"] .msg-card--weather .msg-card-loc {
+    color: #93c5fd;
+}
+[data-theme="dark"] .msg-card--weather blockquote {
+    background: #422006;
+    color: #fcd34d;
+    border-left-color: #d97706;
+}
+
 /* 卡片内链接按钮 [查看详情](url) */
 .msg-link-btn {
     display: inline-flex;

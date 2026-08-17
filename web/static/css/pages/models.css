@@ -4,8 +4,8 @@
 .models-cards {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-md);
-    margin-bottom: var(--space-md);
+    gap: var(--space-sm);
+    margin-bottom: 0.7rem;
 }
 
 @media (max-width: 860px) {
@@ -17,7 +17,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0.9rem 1rem 1rem;
+    padding: 0.7rem 0.9rem 0.85rem;
     box-shadow: var(--shadow-sm);
     transition: box-shadow 0.15s, transform 0.15s;
 }
@@ -28,7 +28,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm);
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.55rem;
 }
 .mc-title {
     font-size: 0.95rem;
@@ -40,13 +40,13 @@
 }
 .mc-title i { color: var(--brand-primary); }
 
-.mc-body { display: flex; flex-direction: column; gap: 0.4rem; }
+.mc-body { display: flex; flex-direction: column; gap: 0.28rem; }
 .mc-row {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-sm);
-    font-size: 0.82rem;
+    font-size: 0.8rem;
 }
 .mc-label { color: var(--text-secondary); white-space: nowrap; }
 .mc-value {
@@ -95,25 +95,25 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 1rem 1.1rem 1.1rem;
+    padding: 0.8rem 1rem 0.9rem;
     box-shadow: var(--shadow-sm);
 }
 .rp-title {
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     font-weight: 700;
     color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.65rem;
 }
 .rp-title i { color: var(--brand-primary); }
 
 .rp-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-md);
-    margin-bottom: var(--space-md);
+    gap: var(--space-sm);
+    margin-bottom: 0.7rem;
 }
 @media (max-width: 860px) { .rp-grid { grid-template-columns: 1fr; } }
 
@@ -121,10 +121,10 @@
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.75rem 0.9rem;
+    padding: 0.6rem 0.75rem;
 }
 
-.meter { display: flex; flex-direction: column; gap: 0.35rem; }
+.meter { display: flex; flex-direction: column; gap: 0.28rem; }
 .meter-head {
     display: flex;
     align-items: center;
@@ -154,22 +154,22 @@
 .meter-fill.lvl-unknown   { background: #94a3b8; }
 
 /* ---- GPU ---- */
-.gpu-section { margin-bottom: var(--space-md); }
+.gpu-section { margin-bottom: 0.7rem; }
 .gpu-section-title {
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 700;
     color: var(--text-secondary);
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    margin-bottom: 0.6rem;
+    margin-bottom: 0.45rem;
 }
 .gpu-card {
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.7rem 0.9rem;
-    margin-bottom: 0.6rem;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.45rem;
 }
 .gpu-card:last-child { margin-bottom: 0; }
 .gpu-head {
@@ -204,17 +204,27 @@
     gap: 0.45rem;
 }
 
-.proc-line {
+/* GPU 设备存在但无占用指标时（如 Apple Silicon MPS），折叠为单行 */
+.gpu-compact {
     font-size: 0.76rem;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.gpu-compact i { opacity: 0.6; }
+
+.proc-line {
+    font-size: 0.74rem;
     color: var(--text-secondary);
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.55rem 0.85rem;
+    padding: 0.45rem 0.75rem;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.3rem;
 }
 .proc-line i { opacity: 0.7; margin-right: 0.1rem; }
 
@@ -230,8 +240,8 @@
     gap: 0.5rem;
 }
 .models-foot {
-    margin-top: var(--space-md);
-    font-size: 0.72rem;
+    margin-top: 0.6rem;
+    font-size: 0.7rem;
     color: var(--text-tertiary);
     text-align: right;
 }

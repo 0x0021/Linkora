@@ -164,7 +164,8 @@ class request_id_scope:
         # 调用方传入 trace_id 时用于跨消息的会话级关联。
         self.trace_id = self._trace_id or self.rid
         self._token_tid = _current_trace_id.set(self.trace_id)
-        logger.debug("[rid] 进入作用域: %s (trace=%s)", self.rid, self.trace_id)
+        # 进/出作用域不再打 DEBUG 日志：高频 Web 请求（5s 轮询）会在实时日志面板刷屏。
+        # 需要调试请求链路时临时恢复即可。
         return self.rid
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -174,7 +175,7 @@ class request_id_scope:
             _safe_reset(_current_request_start_ms, self._token_ts, "request_start_ms")
         if self._token_tid is not None:
             _safe_reset(_current_trace_id, self._token_tid, "trace_id")
-        logger.debug("[rid] 退出作用域: %s (err=%s)", self.rid, exc_type.__name__ if exc_type else None)
+        # 退出作用域日志同上，已移除（高频请求刷屏）
 
     def __call__(self, fn):
         """装饰器形态。"""

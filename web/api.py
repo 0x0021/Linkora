@@ -439,7 +439,8 @@ def _require_basic_auth(request: Request) -> JSONResponse | None:
         try:
             creds = base64.b64decode(auth_header[6:]).decode("utf-8")
             username, password = creds.split(":", 1)
-            logger.debug("Basic auth 尝试: user=%s", mask_oid(username[:3] if len(username) > 3 else username))
+            # 成功的 Basic auth 不打日志（轮询场景每 5s 一次会刷屏）；
+            # 失败已在下方 _auth_check 未通过时记录。
         except Exception as e:
             logger.warning("basic auth 凭据解码失败: %s", sanitize_log_message(str(e)))
             _auth_record_fail(ip)

@@ -106,12 +106,17 @@ function renderResourcePanel(sys) {
 
     let gpuHtml;
     if (gpu.available && gpu.devices && gpu.devices.length) {
-        gpuHtml = gpu.devices.map(dev => {
-            const lvl = usageLevel(dev.utilization_percent);
-            const util = dev.utilization_percent != null ? `${dev.utilization_percent}%` : 'N/A';
-            const memPct = (dev.memory_total_bytes) ? Math.round((dev.memory_used_bytes || 0) / dev.memory_total_bytes * 100) : null;
-            const memLvl = usageLevel(memPct);
-            return `
+        // 过滤出有实际数据的设备；全部无数据时折叠为单行提示
+        const devicesWithData = gpu.devices.filter(dev =>
+            dev.utilization_percent != null || (dev.memory_total_bytes && dev.memory_total_bytes > 0)
+        );
+        if (devicesWithData.length) {
+            gpuHtml = devicesWithData.map(dev => {
+                const lvl = usageLevel(dev.utilization_percent);
+                const util = dev.utilization_percent != null ? `${dev.utilization_percent}%` : 'N/A';
+                const memPct = (dev.memory_total_bytes) ? Math.round((dev.memory_used_bytes || 0) / dev.memory_total_bytes * 100) : null;
+                const memLvl = usageLevel(memPct);
+                return `
             <div class="gpu-card">
                 <div class="gpu-head"><i class="fa-solid fa-microchip"></i> ${escapeHtml(dev.name || ('GPU ' + dev.index))}
                     <span class="gpu-backend">${escapeHtml(gpu.backend || '')}</span></div>
@@ -124,7 +129,12 @@ function renderResourcePanel(sys) {
                     <div class="meter-track"><div class="meter-fill lvl-${memLvl}" style="width:${memPct != null ? memPct : 0}%"></div></div>
                 </div>
             </div>`;
-        }).join('');
+            }).join('');
+        } else {
+            // 设备存在但无可读指标（如 Apple Silicon MPS），折叠为一行
+            const names = gpu.devices.map(d => escapeHtml(d.name || ('GPU ' + d.index))).join('、');
+            gpuHtml = `<div class="gpu-compact"><i class="fa-solid fa-microchip"></i> GPU：${names}（${escapeHtml(gpu.backend || '')}，暂无占用指标）</div>`;
+        }
     } else {
         gpuHtml = `<div class="gpu-none"><i class="fa-solid fa-circle-info"></i> 未检测到 GPU（${escapeHtml(gpu.reason || '当前环境无可用 GPU 库')}）</div>`;
     }

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import urllib.parse
 from unittest import mock
 
 import pytest
@@ -20,6 +21,9 @@ from src.tools.weather import (
     _geocode_nominatim,
     _geocode_open_meteo,
     _compose_display_name,
+    _extract_location_from_query,
+    _relaxed_location_candidates,
+    _nominatim_score,
     WMO_CODES,
 )
 
@@ -628,3 +632,135 @@ class TestWMOCodes:
         assert 0 in WMO_CODES
         assert 99 in WMO_CODES
         assert len(WMO_CODES) >= 20
+
+
+# ── 地点抽取（自由文本 -> 完整地点） ─────────────────────────
+
+class TestExtractLocation:
+    @pytest.mark.parametrize("query,expected", [
+        ("帮我查一下某城市明天天气怎么样", "某城市"),
+        ("帮我查一下杭州市西湖区文三路明天天气", "杭州市西湖区文三路"),
+        ("北京国贸三期今天下雨吗", "北京国贸三期"),
+        ("上海中心大厦天气", "上海中心大厦"),
+        ("周口店天气", "周口店"),          # 「周」不能误切
+        ("周末深圳天气", "深圳"),            # 地点在日期之后
+        ("下周一到周五某城市天气怎么样", "某城市"),
+        ("明天北京下雨吗", "北京"),
+        ("下周杭州天气", "杭州"),
+        ("本周三上海天气", "上海"),
+        ("未来三天杭州天气", "杭州"),
+        ("查一下某城市", "某城市"),
+        ("请问杭州的天气", "杭州"),
+        ("后天西湖区天气", "西湖区"),
+    ])
+    def test_extract(self, query, expected):
+        assert _extract_location_from_query(query) == expected
+
+    def test_empty_query(self):
+        assert _extract_location_from_query("") == ""
+        assert _extract_location_from_query("   ") == ""
+
+
+# ── Nominatim 细粒度（楼栋/街道优先 + 门牌号 + 回退） ────────
+
+class TestNominatimFineGrained:
+    def _resp(self, payload):
+        class _R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return payload
+        return _R()
+
+    def test_building_name_and_house_number(self):
+        # 楼栋 POI：用专有名称，道路带门牌号；详细 query 时 building 优先于 city
+        payload = [
+            {"lat": "31.2336", "lon": "121.5055", "importance": "0.510",
+             "type": "commercial", "addresstype": "building", "name": "上海中心大厦",
+             "address": {"road": "银城中路", "house_number": "501",
+                         "building": "上海中心大厦", "city": "浦东新区", "state": "上海市"}},
+            {"lat": "31.2304", "lon": "121.4737", "importance": "0.753",
+             "type": "city", "addresstype": "city", "name": "上海市",
+             "address": {"city": "上海市", "state": "上海市"}},
+        ]
+        with mock.patch("src.tools.weather.ssrf_safe_get", return_value=self._resp(payload)):
+            geo = _geocode_nominatim("上海中心大厦", 10)
+        assert geo["name"] == "上海中心大厦"
+        assert geo["feature_type"] == "building"
+        assert geo["latitude"] == 31.2336
+
+    def test_road_with_house_number(self):
+        # 道路结果带门牌号：展示名应为『文三路88号』
+        payload = [{
+            "lat": "30.2741", "lon": "120.1551", "importance": "0.3",
+            "type": "secondary", "addresstype": "road", "name": "文三路",
+            "address": {"road": "文三路", "house_number": "88",
+                        "city_district": "西湖区", "city": "杭州市", "state": "浙江省"},
+        }]
+        with mock.patch("src.tools.weather.ssrf_safe_get", return_value=self._resp(payload)):
+            geo = _geocode_nominatim("文三路88号", 10)
+        assert geo["name"] == "文三路88号"
+
+    def test_relaxed_fallback_to_city(self):
+        # 详细楼栋名在 OSM 缺数据（n=0）：逐级回退到城市，而非整条失败
+        calls = []
+
+        def _fake_get(url, headers=None, timeout=None, **kwargs):
+            calls.append(url)
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
+            # 精确查询返回空，城市回退返回结果
+            if q == "北京国贸三期":
+                return self._resp([])
+            return self._resp([{"lat": "39.9042", "lon": "116.4074",
+                                 "importance": "0.796", "type": "city",
+                                 "addresstype": "city", "name": "北京市",
+                                 "address": {"city": "北京市", "state": "北京市"}}])
+
+        with mock.patch("src.tools.weather.ssrf_safe_get", side_effect=_fake_get):
+            geo = _geocode_nominatim("北京国贸三期", 10)
+        assert geo["name"] == "北京市"
+        # 触发了回退候选请求（北京国贸 / 北京国 / 北京）
+        assert any("q=%E5%8C%97%E4%BA%AC" in c for c in calls)
+
+    def test_score_prefers_building_for_detailed_query(self):
+        city = {"importance": "0.9", "addresstype": "city", "address": {}}
+        bldg = {"importance": "0.5", "addresstype": "building",
+                "address": {"building": "X"}}
+        # 详细 query：楼栋分数高
+        assert _nominatim_score(bldg, "北京国贸三期") > _nominatim_score(city, "北京国贸三期")
+        # 纯城市 query：按 importance，不被 specificity 干扰
+        assert _nominatim_score(city, "北京") > _nominatim_score(bldg, "北京")
+
+    def test_relaxed_candidates(self):
+        assert _relaxed_location_candidates("北京国贸三期") == ["北京国贸", "北京国"]
+        assert _relaxed_location_candidates("杭州市西湖区文三路") == [
+            "杭州市西湖区文", "杭州市西湖区", "杭州市西"]
+
+
+# ── execute 直接坐标 ────────────────────────────────────────
+
+class TestExecuteCoords:
+    def test_direct_lat_lon_skips_geocode(self):
+        from src.tools.weather import WeatherTool
+        calls = []
+
+        def _fake_fetch(lat, lon, days, timeout):
+            calls.append((lat, lon))
+            return {"daily": {"time": ["2026-08-18"], "weather_code": [0],
+                              "temperature_2m_max": [30], "temperature_2m_min": [22]},
+                    "hourly": {"time": [], "precipitation_probability": [],
+                               "relative_humidity_2m": []},
+                    "current": {"weather_code": 0, "temperature_2m": 26,
+                                "apparent_temperature": 27, "relative_humidity_2m": 60,
+                                "wind_speed_10m": 8}}
+
+        with mock.patch("src.tools.weather._fetch_forecast", side_effect=_fake_fetch), \
+             mock.patch("src.tools.weather._geocode") as geocode_mock:
+            r = WeatherTool().execute({"location": "我的坐标", "lat": 39.9087,
+                                       "lon": 116.3975, "query": "这里天气"})
+        assert r["source"] == "open-meteo.com"
+        assert r["city"] == "我的坐标"
+        geocode_mock.assert_not_called()  # 直接坐标不应触发地理解析
+        assert calls[0] == (39.9087, 116.3975)
+

@@ -178,52 +178,190 @@ def _close_wet_window(run):
     return {"start": min(hours), "end": max(hours), "max_prob": max(probs)}
 
 
+# ── 地点抽取与细粒度地理解析 ─────────────────────────────────
+# 用户常把「城市/区/街道/楼栋/POI」混在一句话里（如『杭州市西湖区文三路明天天气』、
+# 『北京国贸三期今天下雨吗』）。下面这组正则把尽量完整的地点从原始问句中切出来，
+# 而非只抓 2~5 个汉字当城市——这是「能搜具体街道/楼栋」的关键第一步。
+_LOC_LEADING_FILLER = re.compile(
+    r"^(帮我查一下|帮我查|查一下|查查|帮我看一下|帮我看|问一下|询问|请问|"
+    r"我想(知道|查|看|了解)?|看看|搜(索|一下|索)?|了解|告诉我|知道|"
+    r"给(我)?(查|看)|帮)\s*"
+)
+# 终止词：天气/日期/疑问等，切到首个终止词之前即为地点。
+# 注意「周」必须后接星期/末才终止，避免误切「周口店」等地名。
+_LOC_TERMINATOR = re.compile(
+    r"(天气|气温|温度|下雨|降雨|降水|刮风|台风|大风|暴风|打雷|雷电|下雪|下霜|起雾|"
+    r"紫外线|带伞|通勤|穿衣|穿|冷|热|怎么样|如何|怎样|情况|"
+    r"吗|呢|？|\?|"
+    r"今天|明天|后天|大后天|昨天|前天|周末|"
+    r"下周|本周|这周|"
+    r"下?个?星期|下?个?礼拜|这(个)?星期|这(个)?礼拜|"
+    r"周\s*[一二三四五六日天末几]|"
+    r"星期\s*[一二三四五六日天末几]|"
+    r"礼拜\s*[一二三四五六日天末几]|"
+    r"\d+\s*[号日])"
+)
+# 位于句首的日期短语（地点可能在日期之后，如『周末深圳天气』『下周一到周五某城市天气』）。
+# 先从开头剥掉它，再按终止词切地点，避免把日期当成地点或把地点吞掉。
+_LOC_LEADING_DATE = re.compile(
+    r"^(?:"
+    r"今天|明天|后天|大后天|昨天|前天|周末|"
+    r"(?:下|本|这)(?:个)?(?:周|星期|礼拜)"
+    r"(?:\s*[一二三四五六日天末几]"
+    r"(?:\s*(?:到|至|[-—~])\s*(?:周|星期|礼拜)?\s*[一二三四五六日天末几])?)?|"
+    r"(?:周|星期|礼拜)\s*[一二三四五六日天末几]"
+    r"(?:\s*(?:到|至|[-—~])\s*(?:周|星期|礼拜)?\s*[一二三四五六日天末几])?|"
+    r"(?:未来|今后|接下来|近)\s*[一二两三四五六七八九十\d]+\s*天"
+    r")\s*"
+)
+
+# 地名中暗示「细粒度」的后缀：街道/楼栋/POI/行政区等。命中即视为用户给了具体地点，
+# 地理解析时优先选 specific feature（楼栋/街道/POI）而非笼统的城市/省。
+_DETAIL_HINT = re.compile(
+    r"(路|街|道|大道|号|弄|里|期|幢|栋|楼|大厦|大楼|广场|中心|园|苑|城|花园|"
+    r"小区|公寓|大学|学院|学校|医院|站|机场|港口|码头|商场|市场|公园|校区|基地)"
+)
+
+# 地理 feature 的语义粒度（来自 Nominatim 的 addresstype）。数值越大越具体，
+# 仅当 query 含细粒度提示时才用来抬升 specific feature 的排序权重。
+_SPECIFIC_TYPES = {
+    "building", "road", "house", "amenity", "shop", "tourism", "leisure",
+    "office", "railway", "bus_stop", "aeroway", "historic", "natural",
+}
+
+
+def _extract_location_from_query(query: str) -> str:
+    """从原始天气问句中切出尽量完整的地点（城市/区/街道/楼栋/POI 均可）。
+
+    仅作「未显式传 location」时的兜底：先去口语填充词（帮我查/请问…），
+    再剥掉句首日期短语（地点可能在日期之后，如『周末深圳天气』），
+    最后截到首个天气/日期/疑问终止词之前，并清掉尾部『的/，/空格』。
+    仍抽空（罕见）则全局去掉关键词、取首个含中文的片段。
+    """
+    q = (query or "").strip()
+    if not q:
+        return ""
+    q = _LOC_LEADING_FILLER.sub("", q, count=1)
+    q = _LOC_LEADING_DATE.sub("", q)
+    m = _LOC_TERMINATOR.search(q)
+    loc = q[: m.start()] if m else q
+    loc = loc.strip("的，, 。.、；; ")
+    if not loc:
+        # 兜底：全局去关键词，取首个含中文片段（如『周末深圳』日期被吞后剩『深圳』）
+        cleaned = _LOC_TERMINATOR.sub(" ", q)
+        for tok in re.split(r"[\s,，。.、；;？?！!]+", cleaned):
+            tok = tok.strip()
+            if tok and re.search(r"[\u4e00-\u9fa5]", tok):
+                return tok
+    return loc
+
+
+def _nominatim_score(d: dict, query: str) -> float:
+    """地理候选取舍：默认按 Nominatim importance；当 query 含细粒度提示时，
+    给 specific feature（楼栋/街道/POI）加权，避免『上海市』类 query 退化为无名道路、
+    也避免『北京国贸三期』被城市 importance 压住。纯城市 query（无细粒度提示）不受影响。
+    """
+    imp = float(d.get("importance") or 0.0)
+    if not _DETAIL_HINT.search(query):
+        return imp
+    f_type = (d.get("addresstype") or d.get("type") or "").lower()
+    addr = d.get("address") or {}
+    if f_type in _SPECIFIC_TYPES:
+        return imp + 1.0
+    if addr.get("road") or addr.get("building") or addr.get("house_number"):
+        return imp + 0.4
+    return imp
+
+
+def _pick_nominatim_name(top: dict, fallback: str) -> str:
+    """由 Nominatim 结果挑展示名：specific feature（楼栋/街道/POI）优先用其专有名称，
+    道路带门牌号（如『文三路 88号』）；非 specific（城市/区）按层级取最具体非空项。
+    """
+    top_name = top.get("name")
+    f_type = (top.get("addresstype") or top.get("type") or "").lower()
+    addr = top.get("address") or {}
+    if top_name and f_type in _SPECIFIC_TYPES:
+        name = top_name
+        if f_type == "road" and addr.get("house_number"):
+            name = f"{name}{addr['house_number']}号"
+        return name
+    for key in ("road", "building", "neighbourhood", "suburb",
+                "city_district", "district", "city", "town", "village"):
+        v = addr.get(key)
+        if v:
+            return v
+    return top_name or fallback
+
+
+def _relaxed_location_candidates(q: str) -> list[str]:
+    """详细地点（楼栋/POI）未在 OSM 精确命中时的回退候选：逐级缩短尾串，
+    优先保留前缀（城市/区），直到能解析出某个上级地点，避免整条请求失败。"""
+    cands: list[str] = []
+    if len(q) > 3:
+        cands.append(q[:-2])
+    if len(q) > 4:
+        cands.append(q[:-3])
+    cands.append(q[: max(2, len(q) // 2)])
+    seen: set[str] = set()
+    out: list[str] = []
+    for c in cands:
+        c = c.strip()
+        if c and c not in seen and c != q:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
 def _geocode_nominatim(city: str, timeout: int) -> dict | None:
-    """用 OpenStreetMap Nominatim 做细粒度地理解析（可到街道/社区）。
+    """用 OpenStreetMap Nominatim 做细粒度地理解析（可到街道/楼栋/POI）。
 
     OSM 与 Open-Meteo 预报同源，保证解析出的经纬度与预报数据网格一致。
-    限定中国范围（countrycodes=cn）排除海外同名地点；多候选时按 importance
-    降序取最相关结果，规避模糊 query 命中邻近路名而非用户意图地点。
+    限定中国范围（countrycodes=cn）排除海外同名地点；多候选时按 ``_nominatim_score``
+    排序：默认 importance 降序，query 含细粒度提示（路/楼/大厦…）时给 specific feature
+    （楼栋/街道/POI）加权，优先命中用户意图的具体地点而非邻近路名或笼统城市。
+    详细 query 未精确命中（如 OSM 缺数据的楼栋名）时，逐级缩短回退到城市/区。
     返回最具体的经纬度 + 层级化地名（road/suburb/district/city/state/country）。
     """
     try:
-        params = urllib.parse.urlencode({
-            "q": city,
-            "format": "jsonv2",
-            "addressdetails": "1",
-            "limit": "5",
-            "accept-language": "zh-CN,zh",
-            "countrycodes": "cn",
-        })
-        url = "https://nominatim.openstreetmap.org/search?" + params
-        # Nominatim 对 UA 敏感，用专用 header 且单次请求（不重试轰炸）
-        # 出站经 ssrf_safe_get：校验公网可达并钉死 IP（SSRF 防护下沉自 src.utils.net）
-        resp = ssrf_safe_get(url, headers=_NOMINATIM_HEADERS, timeout=timeout, allow_redirects=True)
-        resp.raise_for_status()
-        data = resp.json() or []
+        def _search(q: str) -> list[dict]:
+            params = urllib.parse.urlencode({
+                "q": q,
+                "format": "jsonv2",
+                "addressdetails": "1",
+                "extratags": "1",
+                "namedetails": "1",
+                "limit": "8",
+                "accept-language": "zh-CN,zh",
+                "countrycodes": "cn",
+            })
+            url = "https://nominatim.openstreetmap.org/search?" + params
+            # Nominatim 对 UA 敏感，用专用 header 且单次请求（不重试轰炸）
+            # 出站经 ssrf_safe_get：校验公网可达并钉死 IP（SSRF 防护下沉自 src.utils.net）
+            resp = ssrf_safe_get(url, headers=_NOMINATIM_HEADERS, timeout=timeout, allow_redirects=True)
+            resp.raise_for_status()
+            return resp.json() or []
+
+        data = _search(city)
+        # 详细地点未精确命中：逐级回退（如『北京国贸三期』→ 『北京』）
+        if not data and _DETAIL_HINT.search(city):
+            for cand in _relaxed_location_candidates(city):
+                data = _search(cand)
+                if data:
+                    break
         if not data:
             return None
-        # 显式按 importance 降序取最相关结果，避免模糊 query 命中邻近路名
-        # 而非用户意图地点（海外同名地点已被 countrycodes=cn 排除）
-        data.sort(key=lambda d: float(d.get("importance") or 0.0), reverse=True)
+        # 按取舍分数降序取最相关结果
+        data.sort(key=lambda d: _nominatim_score(d, city), reverse=True)
         top = data[0]
         lat = top.get("lat")
         lon = top.get("lon")
         if not lat or not lon:
             return None
         addr = top.get("address") or {}
-        # 由细到粗挑选地名组件，取第一个非空作为 name
-        name_parts = [
-            addr.get("road"),
-            addr.get("neighbourhood") or addr.get("suburb"),
-            addr.get("city_district") or addr.get("district"),
-            addr.get("city") or addr.get("town") or addr.get("village"),
-            addr.get("county"),
-            addr.get("state"),
-        ]
-        name = next((p for p in name_parts if p), top.get("name", city))
+        name = _pick_nominatim_name(top, city)
         return {
             "name": name,
+            "feature_type": (top.get("addresstype") or top.get("type") or ""),
             "admin1": addr.get("state", ""),
             "admin2": addr.get("city") or addr.get("town") or addr.get("village", ""),
             "admin3": addr.get("county")
@@ -254,8 +392,18 @@ def _geocode_open_meteo(city: str, timeout: int) -> dict | None:
         results = (resp.json() or {}).get("results") or []
         if results:
             r = results[0]
+            # 由最深的 admin 层级推断 feature 粒度（仅用于「粗匹配」提示）
+            if r.get("admin4"):
+                ftype = "district"
+            elif r.get("admin3"):
+                ftype = "district"
+            elif r.get("admin2"):
+                ftype = "city"
+            else:
+                ftype = "state"
             return {
                 "name": r.get("name", city),
+                "feature_type": ftype,
                 "admin1": r.get("admin1", ""),
                 "admin2": r.get("admin2", ""),
                 "admin3": r.get("admin3", ""),
@@ -779,9 +927,9 @@ def _build_markdown(city: str, range_label: str, cards: list[dict],
 class WeatherTool(BaseTool):
     name = "get_weather"
     display_name = "查询天气"
-    short_description = "查询天气与多日预报（结构化数据，含温度/降水概率(%)/降雨量(mm)/体感温度/湿度/风力/紫外线/逐小时降水概率/日出日落；地理定位可细至街道/社区，与预报数据源一致）"
+    short_description = "查询天气与多日预报（结构化数据，含温度/降水概率(%)/降雨量(mm)/体感温度/湿度/风力/紫外线/逐小时降水概率/日出日落；支持城市/区/街道/楼栋/地标等细粒度定位，与预报数据源一致）"
     description = (
-        "查询指定城市的天气与多日预报。基于 Open-Meteo 提供未来最多 16 天的预报，"
+        "查询指定地点的天气与多日预报。基于 Open-Meteo 提供未来最多 16 天的预报，"
         "返回结构化数据：每日天气、最高/最低温、体感温度(feels_like_max/min)、"
         "降水概率(precip_prob_max, 百分比数值)、平均降水概率(precip_prob_mean)、"
         "降雨量(rain_sum, 毫米)、降水量(precip_sum)、降水时长(precip_hours, 小时)、"
@@ -790,8 +938,10 @@ class WeatherTool(BaseTool):
         "并打上通用极端值信号（高温/低温/大风/强降水/强紫外线）。"
         "重要：precip_prob_max 是降水概率百分比（如 \"65%\"），rain_sum 是累计降雨量毫米数（如 \"4.4mm\"），"
         "两者是不同维度，回复时请分别报告，不要把降雨量当作概率来报。"
-        "地理定位尽量细（街道/社区优先，区/县/市兜底），且解析数据源与预报同源"
-        "（OpenStreetMap -> Open-Meteo），保证返回的地名与经纬度一致，不会张冠李戴。"
+        "地理定位尽量细：支持城市、区、街道、楼栋、地标、POI 等自由文本（如'杭州市西湖区文三路'、"
+        "'上海中心大厦'、'北京国贸三期'），也可直接传 lat/lon 精确坐标。解析数据源与预报同源"
+        "（OpenStreetMap -> Open-Meteo），保证返回的地名与经纬度一致，不会张冠李戴；"
+        "若给出的具体楼栋/POI 在地图数据中缺覆盖，会自动回退到其所在城市并在返回 note 中说明。"
         "覆盖'今天/明天/周X/下周X到Y/未来N天/周末/X号'等中文日期表达。"
         "当用户询问天气、气温、下雨、刮风、带伞、通勤、某天天气、冷不冷、热不热、台风、紫外线、出游、户外运动时使用。"
         "注意：本工具只提供数据与极端值信号，不预设任何场景（例如不再固定提醒通勤），"
@@ -807,16 +957,30 @@ class WeatherTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "city": {
+            "location": {
                 "type": "string",
-                "description": "城市名称，例如'北京'、'上海'、'杭州'、'某城市'。从用户消息中自动提取，无需询问用户",
+                "description": (
+                    "地点（自由文本，越具体越好）：城市、区、街道、楼栋、地标、POI 均可，"
+                    "例如'北京'、'杭州市西湖区文三路'、'上海中心大厦'、'某城市市广阳区'，"
+                    "甚至'北京国贸三期'。从用户消息中自动提取完整地点传入，无需询问用户。"
+                    "（兼容旧字段 city，二选一即可）"
+                ),
+            },
+            "lat": {
+                "type": "number",
+                "description": "可选。直接给定纬度（如 30.2741），与 lon 同时提供时跳过地理解析、精确命中该坐标。适用于用户给出精确坐标的场景。",
+            },
+            "lon": {
+                "type": "number",
+                "description": "可选。直接给定经度（如 120.1551），与 lat 同时提供时跳过地理解析。",
             },
             "query": {
                 "type": "string",
                 "description": (
                     "用户的原始天气问题（可选但强烈建议传入），用于判断日期范围与具体需求，"
-                    "例如'下周一到周五某城市天气怎么样，上下班需不需要带伞'、'明天北京下雨吗'、'周末深圳天气'。"
-                    "工具会自动解析'今天/明天/周X/下周X到Y/未来N天/周末/X号'等中文日期表达。"
+                    "例如'下周一到周五某城市天气怎么样，上下班需不需要带伞'、'明天北京国贸三期下雨吗'、'周末深圳天气'。"
+                    "工具会自动解析'今天/明天/周X/下周X到Y/未来N天/周末/X号'等中文日期表达；"
+                    "若未显式传 location，也会尝试从 query 中切出完整地点。"
                 ),
             },
         },
@@ -827,15 +991,14 @@ class WeatherTool(BaseTool):
         self.timeout = timeout
 
     def execute(self, args: dict) -> str | dict:
-        city = (args.get("city") or "").strip()
+        # location 优先，兼容旧字段 city
+        location = (args.get("location") or args.get("city") or "").strip()
         query = (args.get("query") or "").strip()
-        # 若未给 city 但 query 里含城市名，尝试从 query 提取（简单兜底）
-        if not city and query:
-            m = re.search(r"([\u4e00-\u9fa5]{2,5}?)(的|市|天气|气温|温度|下雨|降雨|降水|怎么样|如何|怎样)", query)
-            if m:
-                city = m.group(1)
-        if not city:
-            city = "北京"
+        # 未显式传 location 时，从 query 切出尽量完整的地点（而非只截 2~5 字当城市）
+        if not location and query:
+            location = _extract_location_from_query(query)
+        if not location:
+            location = "北京"
 
         today = datetime.date.today()
         dates, range_label = _parse_date_range(query, today)
@@ -843,12 +1006,28 @@ class WeatherTool(BaseTool):
         max_days = (dates[-1] - today).days + 1
         max_days = max(1, min(max_days, 16))
 
-        geo = _geocode(city, self.timeout)
+        # 直接坐标：跳过地理解析，精确命中
+        lat = args.get("lat")
+        lon = args.get("lon")
+        if lat is not None and lon is not None:
+            try:
+                geo = {
+                    "name": location or "指定坐标",
+                    "feature_type": "coords",
+                    "admin1": "", "admin2": "", "admin3": "", "admin4": "",
+                    "country": "",
+                    "latitude": float(lat), "longitude": float(lon),
+                    "source": "coords",
+                }
+            except (TypeError, ValueError):
+                geo = None
+        else:
+            geo = _geocode(location, self.timeout)
         if not geo:
-            return self._fallback(city, query)
+            return self._fallback(location, query)
         fc = _fetch_forecast(geo["latitude"], geo["longitude"], max_days, self.timeout)
         if not fc:
-            return self._fallback(city, query)
+            return self._fallback(location, query)
 
         daily = fc.get("daily") or {}
         d_times = daily.get("time", [])
@@ -877,7 +1056,16 @@ class WeatherTool(BaseTool):
             else:
                 cards.append({"label": _label(d), "_past": True, "date": ds})
 
-        display_city = _compose_display_name(geo, city)
+        display_city = _compose_display_name(geo, location)
+
+        # 细粒度地点（含路/楼/大厦等提示）却只解析到城市/省级：OSM 缺该楼栋/POI 数据，
+        # 已回退到上级地点，给出透明提示，避免用户误以为命中了具体楼栋。
+        note = ""
+        if (_DETAIL_HINT.search(location)
+                and geo.get("source") in ("nominatim", "open-meteo")
+                and geo.get("feature_type") in ("city", "state", "administrative",
+                                                "county", "region", "province")):
+            note = f"未找到精确楼栋/POI，已按城市级定位：{display_city}"
 
         # 当前实况（若今天在范围内）
         current_block = None
@@ -893,10 +1081,12 @@ class WeatherTool(BaseTool):
 
         return {
             "city": display_city,
+            "location": location,
             "range": range_label,
             "resolved_dates": resolved,
             "current": current_block,
             "days": [c for c in cards if not c.get("_past")],
+            "note": note,
             "source": "open-meteo.com",
         }
 

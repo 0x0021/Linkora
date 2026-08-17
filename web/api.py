@@ -29,7 +29,7 @@ from src.config import load_config
 from src.dws_adapter import DwsAdapter
 from src.shared_state import get_app_instance, get_config as _get_shared_config
 from src.utils.request_id import request_id_scope
-from src.utils.security import mask_oid, sanitize_log_message
+from src.utils.security import sanitize_log_message
 from src.paths import (
     get_config_path, get_data_dir, get_log_dir, get_static_dir,
     get_templates_dir, get_user_data_dir, is_frozen, data_path,

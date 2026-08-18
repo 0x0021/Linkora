@@ -15,3 +15,15 @@ repos:
         pass_filenames: false
         # 与 CI 保持一致：失败即阻断提交
         fail_fast: true
+  # 配置漂移本地预警（F22 配套）：改动 config.yaml(.example) 时，提示
+  # 「cp example config.yaml 会整段删掉哪些 live 独有非密钥 key」（即 2026-08-17 事故本质）。
+  # 仅预警、不阻断提交（--no-block），真正的覆盖操作仍需人工确认。
+  - repo: local
+    hooks:
+      - id: config-drift-guard
+        name: config drift guard (warn-only)
+        entry: bash -c '.venv/bin/python scripts/check_config_drift.py --no-block 2>&1 || true'
+        language: system
+        pass_filenames: false
+        files: ^config\.yaml(\.example)?$
+        description: 改动 config 时预警「cp example 会丢参数」（不阻断提交）

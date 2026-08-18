@@ -118,6 +118,11 @@ jobs:
         # tests, so no real credentials are required.
         run: cp config.yaml.example config.yaml
 
+      - name: 配置漂移防护（脚本守卫）
+        # 本地 config.yaml 由上一行 cp example 生成，与模板恒等 → 应无漂移；
+        # 该步骤同时守护检查脚本自身可用性，并验证 example 内部自洽（无 live 独有非密钥 key）。
+        run: python scripts/check_config_drift.py
+
       - name: 运行测试（含覆盖率）
         run: pytest --cov=src --cov-report=term-missing --cov-report=xml
 

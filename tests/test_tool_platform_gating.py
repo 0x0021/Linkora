@@ -5,8 +5,8 @@ platforms，且 is_tool_for_platform 在对应平台上正确暴露/隐藏，避
 工具暴露给 LLM 导致运行时报错。
 
 钉钉/飞书/企微适配器方法支持矩阵（已实测）：
-- calendar_event_list  : 钉钉 ✅ / 飞书 ❌ / 企微 ✅
-- todo_task_create     : 钉钉 ✅ / 飞书 ❌ / 企微 ✅
+- calendar_event_list  : 钉钉 ✅ / 飞书 ❌ / 企微 ❌（CLI 不支持，门控隐藏）
+- todo_task_create     : 钉钉 ✅ / 飞书 ❌ / 企微 ❌（CLI 不支持，门控隐藏）
 - chat_conversation_info: 钉钉 ✅ / 飞书 ✅ / 企微 ❌
 """
 from __future__ import annotations
@@ -43,8 +43,8 @@ def _build_tools() -> dict:
 
 def test_tool_platforms_declared():
     """三个工具已声明正确的 platforms 列表。"""
-    assert GetCalendarEventsTool.platforms == ["dingtalk", "wecom"]
-    assert CreateTodoTool.platforms == ["dingtalk", "wecom"]
+    assert GetCalendarEventsTool.platforms == ["dingtalk"]
+    assert CreateTodoTool.platforms == ["dingtalk"]
     assert GetConversationInfoTool.platforms == ["dingtalk", "feishu"]
 
 
@@ -59,11 +59,11 @@ def test_feishu_cannot_see_dingtalk_wecom_only_tools():
     assert is_tool_for_platform(agent, "search_messages") is True
 
 
-def test_wecom_cannot_see_dingtalk_feishu_only_tool():
-    """企微 agent 拿不到 get_conversation_info，但能拿到 get_calendar_events / create_todo。"""
+def test_wecom_cannot_see_dingtalk_only_tools():
+    """企微 agent 拿不到 get_conversation_info（飞书专属），也拿不到 get_calendar_events / create_todo（仅钉钉）。"""
     agent = _make_agent("wecom", _build_tools())
-    assert is_tool_for_platform(agent, "get_calendar_events") is True
-    assert is_tool_for_platform(agent, "create_todo") is True
+    assert is_tool_for_platform(agent, "get_calendar_events") is False
+    assert is_tool_for_platform(agent, "create_todo") is False
     assert is_tool_for_platform(agent, "get_conversation_info") is False
 
 

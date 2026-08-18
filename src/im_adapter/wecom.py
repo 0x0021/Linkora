@@ -24,8 +24,11 @@
   抽取真实错误文本交给 ``_classify_error`` 分类（权限 / 可重试 / 基础）。
 
 已实现：认证 / 组织 / 联系人 / 会话消息拉取 / 发送 / 媒体下载 的 IM 核心闭环。
-未实现（保持 NotImplementedError 桩，待后续补全）：``doc_search`` / ``doc_read`` /
-``calendar_event_list`` / ``todo_task_create`` / ``mark_read``（企微 CLI 无对应能力）。
+未实现（企微 CLI 无对应能力）：
+- ``doc_search`` / ``doc_read`` / ``mark_read``：空实现（经工具层门控对飞书/企微隐藏，不会暴露）。
+- ``calendar_event_list`` / ``todo_task_create``：显式抛出 ``IMAdapterUnsupportedTypeError``，
+  落实「门控工具应显式报错」决策——get_calendar_events / create_todo 在工具层已对企微
+  门控隐藏（platforms=["dingtalk"]），此处仅防御性兜底，避免静默返回空结果被误判为成功。
 """
 from __future__ import annotations
 
@@ -44,7 +47,7 @@ from typing import Any
 MAX_BACKOFF_SECONDS = 30
 
 from .base_adapter import BaseIMAdapter
-from .errors import IMAdapterError
+from .errors import IMAdapterError, IMAdapterUnsupportedTypeError
 from .markdown_fix import normalize_markdown_for_platform
 
 logger = logging.getLogger(__name__)
@@ -897,10 +900,19 @@ class WecomCliAdapter(BaseIMAdapter):
         return {}
 
     def calendar_event_list(self, start: str = "", end: str = "") -> list[dict]:
-        """企微 CLI 不支持日历事件。"""
-        return []
+        """企微 CLI 不支持日历事件查询（无对应子命令）。
+
+        显式报错而非返回空列表，落实「门控工具应显式报错」决策——
+        get_calendar_events 在工具层已对企微门控隐藏（platforms=["dingtalk"]），
+        此处仅防御性兜底：被直接调用适配器时给出明确错误而非静默空结果。
+        """
+        raise IMAdapterUnsupportedTypeError("企微 CLI 不支持日历事件查询")
 
     def todo_task_create(self, title: str, executors: str,
                          due: str = "", priority: str = "") -> dict:
-        """企微 CLI 不支持待办。"""
-        return {}
+        """企微 CLI 不支持待办创建（无对应子命令）。
+
+        显式报错而非返回空 dict，落实「门控工具应显式报错」决策——
+        create_todo 在工具层已对企微门控隐藏（platforms=["dingtalk"]）。
+        """
+        raise IMAdapterUnsupportedTypeError("企微 CLI 不支持待办创建")

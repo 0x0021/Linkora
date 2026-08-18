@@ -40,16 +40,16 @@ Linkora 可同时接入**钉钉、飞书、企业微信**三大 IM 平台。三�
 | **主动发消息**（2） | `send_ding` / `send_message` | ✓ | ✗ | ✗ |
 | **媒体 / 图片**（1） | `upload_image` | ✓ | ✗ | ✗ |
 | **知识库 Wiki**（4） | `wiki_space_list` / `wiki_space_search` / `wiki_node_list` / `wiki_node_search` | ✓ | ✗ | ✗ |
-| **日历 / 待办**（2） | `get_calendar_events` / `create_todo` | ✓ | ✗ | ✓ |
+| **日历 / 待办**（2） | `get_calendar_events` / `create_todo` | ✓ | ✗ | ✗ |
 | **会话信息**（1） | `get_conversation_info` | ✓ | ✓ | ✗ |
 
 **根因（适配器级，已逐一核对代码）**：
 
-- 飞书适配器（`feishu.py`）**未实现** `calendar_event_list` / `todo_task_create` / `doc_list` → 故日历、待办、文档类工具在飞书不可用。
-- 企业微信适配器（`wecom.py`）**未实现** `chat_conversation_info` / `chat_list_top_conversations` / `mark_read` / `doc_list` → 故会话信息、文档类工具在企微不可用；但企微**已实现** `calendar_event_list` / `todo_task_create`，故日历 / 待办可用。
+- 飞书适配器（`feishu.py`）**未实现** `calendar_event_list` / `todo_task_create` / `doc_list` → 故日历、待办、文档类工具在飞书不可用（工具层门控已隐藏）。
+- 企业微信适配器（`wecom.py`）：`calendar_event_list` / `todo_task_create` / `doc_search` / `doc_read` 因企微 CLI 无对应能力而显式报错 / 空实现，故 `get_calendar_events` / `create_todo` 已对企微门控隐藏（`platforms=["dingtalk"]`）；`chat_conversation_info` / `chat_list_top_conversations` / `mark_read` 未实现 → 会话信息类工具在企微不可用。
 - 钉钉（DWS）适配器能力最完整，上述全部支持。
 
-> 工具门控与适配器能力完全对应：被门控到 `["dingtalk","wecom"]` 的 `get_calendar_events` / `create_todo` 恰好是飞书适配器缺的方法；门控到 `["dingtalk","feishu"]` 的 `get_conversation_info` 恰好是企微适配器缺的方法。Web 管理台会按当前平台过滤意图与工具映射，不会向不可用的平台暴露对应工具。
+> 工具门控与适配器能力完全对应：`get_calendar_events` / `create_todo` 因企微 CLI 不支持，门控为 `["dingtalk"]`（仅钉钉）；`get_conversation_info` 因企微适配器缺 `chat_conversation_info`，门控为 `["dingtalk","feishu"]`。Web 管理台会按当前平台过滤意图与工具映射，不会向不可用的平台暴露对应工具。
 
 ---
 

@@ -100,12 +100,16 @@ def test_falsy_platform_id_skips_gate():
 
 
 def test_mixed_batch_gates_only_blocked_tool_and_keeps_call_ids():
-    """混合批次：被门控的工具返回错误、其余照常执行，tool_call_id 一一对应不错位。"""
+    """混合批次：被门控的工具返回错误、其余照常执行，tool_call_id 一一对应不错位。
+
+    企微平台上 get_conversation_info（platforms=[dingtalk,feishu]）与 get_calendar_events
+    （platforms=[dingtalk]，企微 CLI 不支持）均被门控，仅 get_unread（全平台）照常执行。
+    """
     agent = _make_agent("wecom", _build_tools(), {})
     orch = ToolOrchestrator(agent)
     calls = [
         _call("get_conversation_info", "call-a"),  # 企微被门控
-        _call("get_calendar_events", "call-b"),    # 企微可用
+        _call("get_calendar_events", "call-b"),    # 企微被门控（仅钉钉可用）
         _call("get_unread", "call-c"),             # 全平台
     ]
     results, _ = orch.execute_tool_calls(calls, _msg())
@@ -113,9 +117,10 @@ def test_mixed_batch_gates_only_blocked_tool_and_keeps_call_ids():
     assert len(results) == 3
     by_id = {r["tool_call_id"]: r for r in results}
     assert set(by_id) == {"call-a", "call-b", "call-c"}
-    # call-a 被门控：失败且未执行
+    # call-a / call-b 被门控：失败且未执行
     assert '"success": false' in by_id["call-a"]["content"]
-    # call-b / call-c 真实执行（router.execute 收到两次调用）
-    assert agent.tool_router.execute.call_count == 2
+    assert '"success": false' in by_id["call-b"]["content"]
+    # 仅 call-c 真实执行（router.execute 收到一次调用）
+    assert agent.tool_router.execute.call_count == 1
     executed = [c.args[0] for c in agent.tool_router.execute.call_args_list]
-    assert set(executed) == {"get_calendar_events", "get_unread"}
+    assert set(executed) == {"get_unread"}

@@ -110,7 +110,7 @@ def main() -> int:
     if args.json:
         print(json.dumps({
             "risk_live_only": risk_keys,
-            "secret_live_only": secret_only,
+            "secret_live_only_count": len(secret_only),
             "example_only": example_only,
             "summary": {
                 "example_key_count": len(example_keys),
@@ -133,11 +133,7 @@ def main() -> int:
         print("✅ 无数据丢失风险：live 的独有 key 均为密钥/运行时项，覆盖不会丢业务参数。")
 
     if secret_only:
-        print(f"\n🔒 [{len(secret_only)}] live 独有密钥项（预期，不计入风险）：")
-        for k in secret_only[:20]:
-            print(f"     ~ {k}")
-        if len(secret_only) > 20:
-            print(f"     …（其余 {len(secret_only) - 20} 项省略）")
+        print(f"\n🔒 [{len(secret_only)}] live 独有密钥项（预期，不计入风险，明细略）：")
 
     if example_only:
         print(f"\nℹ️  [{len(example_only)}] example 独有 key（模板比 live 新，同步会补进 live）：")

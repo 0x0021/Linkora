@@ -637,6 +637,24 @@ dead_letter:
   enabled: true                                    # 是否启用 DLQ（关闭则退回旧行为：仅回 fallback 文本）
 
 # ============================================================
+# ⑪-B 主动触达（P4-13）：每日定时把近期对话摘要主动推送给主人
+# ============================================================
+# 默认关闭。开启后由后台 daemon 线程在每日 hour:minute（本地时区）触发一次：
+# 汇总最近 lookback_hours 内、至多 max_conversations 个有缓存摘要的对话，生成中文
+# 摘要经钉钉推送给主人（1:1）。复用既有对话缓存摘要，不额外消耗 LLM。
+# 发送目标二选一：owner_user_id（钉钉 user_id）或 owner_open_dingtalk_id（open_id）；
+# 两者皆空则调度器不启动（fail-safe）。
+proactive:
+  enabled: false                                   # 主动触达总开关（默认关）
+  hour: 9                                          # 每日触发小时（0-23，本地时区）
+  minute: 0                                        # 每日触发分钟（0-59）
+  owner_user_id: ""                                # 钉钉 user_id（与下面 open_dingtalk_id 二选一）
+  owner_open_dingtalk_id: ""                       # 钉钉 open_dingtalk_id；两者皆空则不启动
+  lookback_hours: 24                               # 回溯窗口（小时），仅纳入窗口内有更新的对话
+  max_conversations: 10                            # 单次摘要最多纳入的对话数
+  max_summary_chars: 200                           # 单条对话摘要截断长度（字符）
+
+# ============================================================
 # ⑫ Web 管理后台配置
 # ============================================================
 web:

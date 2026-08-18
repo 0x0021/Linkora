@@ -248,6 +248,18 @@ class SetupMixin(EngineMixinBase):
         self.platforms["dingtalk"].summary_scheduler = dingtalk_scheduler
         logger.info("[H2-A] 主平台 dingtalk 后台异步摘要调度器已启动")
 
+        # P4-13：主平台(dingtalk)接线每日主动摘要推送（默认关闭，enabled 才启动）。
+        from src.llm.proactive_digest import ProactiveDigestScheduler
+        proactive_scheduler = ProactiveDigestScheduler(
+            agent=self.platforms["dingtalk"].llm_agent,
+            store=self.store,
+            adapter=self.dws,
+            config=self.config.proactive,
+            platform="dingtalk",
+        )
+        self.platforms["dingtalk"].proactive_digest_scheduler = proactive_scheduler
+        proactive_scheduler.start()
+
         # 启动期：从主人历史消息抽取沟通风格画像（Feature B，best-effort 非阻塞）
         self._refresh_style_profile()
     def _should_handoff_low_confidence(self, message, reply_text) -> bool:

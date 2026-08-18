@@ -210,7 +210,9 @@ async function loadKbDocs() {
     try {
         const status = document.getElementById('kb-status-filter').value;
         const docType = document.getElementById('kb-type-filter').value;
-        const data = await api.getKbDocs(status, docType, _KB_PAGE_SIZE, (_kbPage - 1) * _KB_PAGE_SIZE);
+        const searchEl = document.getElementById('kb-search');
+        const q = searchEl ? searchEl.value.trim() : '';
+        const data = await api.getKbDocs(status, docType, _KB_PAGE_SIZE, (_kbPage - 1) * _KB_PAGE_SIZE, q);
         if (!data) return;
         _kbTotal = data.total || 0;
 
@@ -260,6 +262,23 @@ function reloadKbDocs() {
     _kbPage = 1;
     loadKbDocs();
 }
+
+// 搜索框防抖：300ms 内连续输入只触发一次，搜索必重置到第 1 页
+// —— 用 window.* 是因为 HTML 用 oninput="debouncedLoadKbDocs()" 内联调用，
+// 需保持全局可访问性（app.js 定义的 debounce 同理）。
+let _kbSearchDebounced = null;
+function debouncedLoadKbDocs() {
+    if (!_kbSearchDebounced) {
+        if (typeof window.debounce !== 'function') {
+            // 极端兜底：app.js 异常未加载时直接同步重载，避免搜索完全失效
+            reloadKbDocs();
+            return;
+        }
+        _kbSearchDebounced = window.debounce(reloadKbDocs, 300);
+    }
+    _kbSearchDebounced();
+}
+window.debouncedLoadKbDocs = debouncedLoadKbDocs;
 
 function renderKbPager() {
     renderPager('kb-pagination', {

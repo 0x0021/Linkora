@@ -522,10 +522,11 @@ class ApiClient {
         return await this.fetch(`/api/stats/messages?days=${days}`, 'GET', null, { useCache: true });
     }
 
-    async getKbDocs(status = '', docType = '', limit = 50, offset = 0) {
+    async getKbDocs(status = '', docType = '', limit = 50, offset = 0, q = '') {
         let url = `/api/kb/documents?limit=${limit}&offset=${offset}`;
-        if (status) url += `&status=${status}`;
-        if (docType) url += `&doc_type=${docType}`;
+        if (status) url += `&status=${encodeURIComponent(status)}`;
+        if (docType) url += `&doc_type=${encodeURIComponent(docType)}`;
+        if (q) url += `&q=${encodeURIComponent(q)}`;
         return await this.fetch(url);
     }
 

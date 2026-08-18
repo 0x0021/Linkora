@@ -7308,6 +7308,7 @@ td .action-btns .btn i,
   padding-bottom: 0;
 }
 .marketplace-tabs::-webkit-scrollbar { display: none; }
+.section-tabs::-webkit-scrollbar { display: none; }
 
 /* ============ 技能管理：子页面分段导航 ============ */
 .skill-subnav {

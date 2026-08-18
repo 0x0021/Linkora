@@ -7,18 +7,18 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import logging
 import secrets
 import time
 from functools import wraps
 from typing import Any, Callable
 
+import jwt as _pyjwt
 from fastapi import Request, HTTPException
 
 logger = logging.getLogger(__name__)
 
-# JWT 配置（简单实现，生产环境建议使用 pyjwt）
+# JWT 配置（基于 pyjwt 的 HS256 标准实现）
 # 安全：源码中不存在任何硬编码密钥。TokenManager 默认用哨兵标记 __NOT_SET__，
 # 运行时由 _resolve_jwt_secret() 优先读取 config.web.jwt_secret，否则生成本进程唯一的
 # 随机密钥（重启失效），从而让任何用旧占位值伪造的令牌在校验时失效。
@@ -77,48 +77,42 @@ class TokenManager:
         return _resolve_jwt_secret()
 
     def generate_token(self, username: str, role: str = ROLE_VIEWER) -> str:
-        """生成 JWT 风格的令牌。"""
+        """生成 JWT 令牌（HS256，与 pyjwt 标准格式兼容）。
+
+        等价于 ``jwt.encode``：header 固定 ``{"alg":"HS256","typ":"JWT"}``，
+        payload 含 sub/role/iat/exp。保留手工签发语义以便旧令牌可被标准库继续校验。
+        """
         if role not in VALID_ROLES:
             raise ValueError(f"Invalid role: {role}")
 
-        header = base64.urlsafe_b64encode(b'{"alg":"HS256","typ":"JWT"}').decode()
-        payload = base64.urlsafe_b64encode(
-            f'{{"sub":"{username}","role":"{role}","iat":{int(time.time())},"exp":{int(time.time()) + _TOKEN_EXPIRE_SECONDS}}}'.encode()
-        ).decode()
-
-        signature = self._sign(f"{header}.{payload}")
-        return f"{header}.{payload}.{signature}"
+        now = int(time.time())
+        payload = {
+            "sub": username,
+            "role": role,
+            "iat": now,
+            "exp": now + _TOKEN_EXPIRE_SECONDS,
+        }
+        # pyjwt>=2 返回 str；headers 显式锁定，确保与历史令牌 header 字节一致
+        return _pyjwt.encode(
+            payload, self._secret(), algorithm="HS256",
+            headers={"alg": "HS256", "typ": "JWT"},
+        )
 
     def verify_token(self, token: str) -> dict[str, Any]:
-        """验证令牌并返回 payload。"""
+        """验证令牌并返回 payload；非法/过期统一抛 401。"""
         try:
-            parts = token.split(".")
-            if len(parts) != 3:
-                raise ValueError("Invalid token format")
-
-            header, payload, signature = parts
-
-            # 验证签名
-            expected_signature = self._sign(f"{header}.{payload}")
-            if not hmac.compare_digest(signature, expected_signature):
-                raise HTTPException(status_code=401, detail="Invalid signature")
-
-            # 解码 payload（JSON，绝不使用 eval）
-            decoded_payload = base64.urlsafe_b64decode(payload).decode()
-            data = json.loads(decoded_payload)
-
-            # 检查过期
-            if data.get("exp", 0) < time.time():
-                raise HTTPException(status_code=401, detail="Token expired")
-
-            return data
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Token verification failed: {e}") from e
+            return _pyjwt.decode(token, self._secret(), algorithms=["HS256"])
+        except _pyjwt.ExpiredSignatureError as exc:
+            raise HTTPException(status_code=401, detail="Token expired") from exc
+        except _pyjwt.InvalidTokenError as exc:
+            raise HTTPException(status_code=401, detail=f"Token verification failed: {exc}") from exc
 
     def _sign(self, data: str) -> str:
-        """计算 HMAC-SHA256 签名。"""
+        """HMAC-SHA256 签名（保留给历史单测手工构造 token 用）。
+
+        与 ``generate_token`` 走同一密钥，故产出的签名可被 ``verify_token`` 正常验过，
+        测例据此验证「过期 / 篡改」场景。
+        """
         return base64.urlsafe_b64encode(
             hmac.new(self._secret().encode(), data.encode(), hashlib.sha256).digest()
         ).decode()

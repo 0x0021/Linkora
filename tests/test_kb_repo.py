@@ -181,6 +181,44 @@ class TestListDocuments:
         _, total = repo.list_kb_documents(doc_type="note", limit=1)
         assert total == 1
 
+    def test_search_by_title_substring(self, repo):
+        """q 关键词匹配 title 子串（大小写不敏感由 SQL COLLATE 决定，保留原样）。"""
+        _add_doc(repo, title="公司内 VPN 远程访问使用指南")
+        _add_doc(repo, title="无线网络")
+        _add_doc(repo, title="打印机连接配置指南")
+        items, total = repo.list_kb_documents(q="VPN")
+        assert total == 1
+        assert items[0]["title"] == "公司内 VPN 远程访问使用指南"
+
+    def test_search_by_chunk_content_substring(self, repo):
+        """q 关键词匹配任一 chunk content 子串（不在 title 里也能命中）。"""
+        d1 = _add_doc(repo, title="常规运维手册")
+        d2 = _add_doc(repo, title="网络设备清单")
+        _add_doc(repo, title="行政报销流程")
+        # 给 d1 写入包含「SSH 密钥」的 chunk，d2 不含
+        repo.add_kb_chunks(d1, ["登录堡垒机使用 SSH 密钥认证", "禁止密码登录"])
+        repo.add_kb_chunks(d2, ["防火墙规则", "VLAN 划分"])
+        items, total = repo.list_kb_documents(q="SSH 密钥")
+        assert total == 1
+        assert items[0]["title"] == "常规运维手册"
+
+    def test_search_empty_returns_all(self, repo):
+        """q 为空字符串 = 不过滤（保持向后兼容）。"""
+        for i in range(3):
+            _add_doc(repo, title=f"X{i}")
+        _, total = repo.list_kb_documents(q="")
+        assert total == 3
+
+    def test_search_combines_with_other_filters(self, repo):
+        """q 与 status/doc_type 可叠加，取交集。"""
+        d1 = _add_doc(repo, title="VPN 故障排查", doc_type="markdown")
+        _add_doc(repo, title="VPN 升级说明", doc_type="markdown")  # 保持默认 status（pending），不应命中
+        _add_doc(repo, title="会议室预订", doc_type="markdown")
+        repo.update_kb_document(d1, status="indexed")
+        items, total = repo.list_kb_documents(q="VPN", doc_type="markdown", status="indexed")
+        assert total == 1
+        assert items[0]["title"] == "VPN 故障排查"
+
 
 # ── 分块生命周期 ──
 

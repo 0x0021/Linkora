@@ -50,14 +50,14 @@ router = APIRouter()
 
 @router.get("/api/kb/documents")
 async def list_kb_documents(status: str = "", doc_type: str = "",
-                            limit: int = 50, offset: int = 0):
+                            limit: int = 50, offset: int = 0, q: str = ""):
     try:
         def _work():
             store = _api.get_store()
             limit_ = max(1, min(limit, 500))
             offset_ = max(0, offset)
             docs, total = store._kb_repo.list_kb_documents(status=status, doc_type=doc_type,
-                                           limit=limit_, offset=offset_)
+                                           limit=limit_, offset=offset_, q=q.strip())
             stats = store._kb_repo.kb_stats()
             return {"documents": docs, "stats": stats, "total": total}
         return await run_sync(_work)

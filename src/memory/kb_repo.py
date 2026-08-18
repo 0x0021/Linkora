@@ -143,8 +143,17 @@ class KbRepo:
         self.store.conn.commit()
 
     def list_kb_documents(self, status: str = "", doc_type: str = "",
-                          limit: int = 100, offset: int = 0) -> tuple[list[dict], int]:
-        """列出知识库文档（支持分页 + 按状态/类型筛选）。
+                          limit: int = 100, offset: int = 0,
+                          q: str = "") -> tuple[list[dict], int]:
+        """列出知识库文档（支持分页 + 按状态/类型/关键词筛选）。
+
+        Args:
+            status:  按状态精确过滤（空字符串=不过滤）。
+            doc_type: 按 doc_type 精确过滤。
+            limit:    单页条数。
+            offset:   偏移。
+            q:        关键词（空字符串=不过滤），匹配 title OR 任一 chunk.content
+                      子串（LIKE）。子查询走 kb_chunks.doc_id，不引入额外表连接。
 
         Returns:
             (items, total) —— items 为当前页，total 为「过滤后」的总数（用于翻页，
@@ -152,13 +161,19 @@ class KbRepo:
         """
         cur = self.store.conn.cursor()
         where = " WHERE 1=1"
-        params = []
+        params: list = []
         if status:
             where += " AND status = ?"
             params.append(status)
         if doc_type:
             where += " AND doc_type = ?"
             params.append(doc_type)
+        if q:
+            # 标题或正文任一 chunk 子串匹配；走子查询避免与 chunks 表做 DISTINCT 排序
+            where += (" AND (title LIKE ? "
+                      "OR id IN (SELECT DISTINCT doc_id FROM kb_chunks WHERE content LIKE ?))")
+            like = f"%{q}%"
+            params.extend([like, like])
         # 过滤后总数
         cur.execute(f"SELECT COUNT(*) FROM kb_documents{where}", params)
         total = cur.fetchone()[0]

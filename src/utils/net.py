@@ -25,7 +25,11 @@ _PROXY_FAKEIP_NETS = [ipaddress.ip_network("198.18.0.0/15")]
 
 
 def _ip_is_public(ip_str: str) -> bool:
-    """单 IP 是否允许出站：非私网/回环/链路本地/未指定/保留/组播，且非代理 fake-IP 段。
+    """单 IP 是否允许出站：仅「全球单播」可放行，其余一律拒绝（egress 默认拒绝）。
+
+    默认拒绝一切非全球可路由地址——私网/回环/链路本地/未指定/保留/组播/CGNAT
+    (100.64.0.0/10)/文档段(TEST-NET) 等均拒绝；代理 fake-IP 段（198.18.0.0/15）
+    作为显式白名单放行。这比「黑名单枚举」更稳：新增保留段不会漏放。
 
     供 ``is_ssrf_safe`` 与 ``ssrf_safe_get`` 复用，保证「校验」与「钉死 IP」使用
     同一份解析结果，杜绝 DNS 重绑定 TOCTOU 窗口。
@@ -36,8 +40,10 @@ def _ip_is_public(ip_str: str) -> bool:
         return False
     if any(ip in net for net in _PROXY_FAKEIP_NETS):
         return True
-    return not (ip.is_private or ip.is_loopback or ip.is_link_local
-               or ip.is_unspecified or ip.is_reserved or ip.is_multicast)
+    # 仅「全球单播」可放行；多播(is_global 为 True 但绝不能出站)显式拒绝，
+    # 其余非全球可路由地址（私网/回环/链路本地/未指定/保留/CGNAT/文档段）由
+    # is_global 统一兜底拒绝。比「黑名单枚举」更稳：新增保留段不会漏放。
+    return ip.is_global and not ip.is_multicast
 
 
 def is_ssrf_safe(url: str) -> bool:

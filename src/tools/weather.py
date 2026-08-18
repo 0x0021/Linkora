@@ -245,7 +245,7 @@ def _extract_location_from_query(query: str) -> str:
     q = _LOC_LEADING_DATE.sub("", q)
     m = _LOC_TERMINATOR.search(q)
     loc = q[: m.start()] if m else q
-    loc = loc.strip("的，, 。.、；; ")
+    loc = re.sub(r"^[的，, 。.、；; ]+|[的，, 。.、；; ]+$", "", loc)
     if not loc:
         # 兜底：全局去关键词，取首个含中文片段（如『周末深圳』日期被吞后剩『深圳』）
         cleaned = _LOC_TERMINATOR.sub(" ", q)

@@ -5,7 +5,7 @@
   关闭或 owner 未配置时「不启动」，对线上零行为影响。
 - 触发：每日本地时区 hour:minute 一次。复用 ``SummaryScheduler`` 已产出的
   对话缓存摘要（conversation_summaries.summary_text），仅做滚动汇总，**不额外消耗 LLM**。
-- 发送：经 ``DingTalkAdapter.chat_message_send`` 推给 owner 的 1:1（user_id 或 open_dingtalk_id）。
+- 发送：经 ``DwsAdapter.chat_message_send`` 推给 owner 的 1:1（user_id 或 open_dingtalk_id）。
 - 失败全部非致命：收集/发送异常仅记日志，绝不拖垮主回复链路。
 
 与 SummaryScheduler 同构的后台单线程模型，但本调度器「按墙钟时间触发」而非「事件驱动」。
@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # 仅类型标注，避免运行时循环导入
     from src.config_models import ProactiveConfig
-    from src.dws_adapter.chat import DingTalkAdapter
+    from src.dws_adapter import DwsAdapter
     from src.llm.agent import LLMAgent
     from src.memory.sqlite_store import SQLiteStore
 
@@ -61,7 +61,7 @@ class ProactiveDigestScheduler:
     """每日定时把近期对话摘要主动推送给主人的后台调度器（默认关闭）。"""
 
     def __init__(self, agent: "LLMAgent", store: "SQLiteStore",
-                 adapter: "DingTalkAdapter", config: "ProactiveConfig",
+                 adapter: "DwsAdapter", config: "ProactiveConfig",
                  platform: str = "dingtalk") -> None:
         self._agent = agent
         self._store = store
@@ -155,13 +155,13 @@ class ProactiveDigestScheduler:
     def _run_once(self) -> None:
         items = self.collect_items()
         digest = build_digest(items, self._cfg.max_summary_chars)
-        target: dict[str, str] = {}
-        if self._cfg.owner_user_id:
-            target["user"] = self._cfg.owner_user_id
-        else:
-            target["open_dingtalk_id"] = self._cfg.owner_open_dingtalk_id
         try:
-            self._adapter.chat_message_send(title="每日对话摘要", text=digest, **target)
+            if self._cfg.owner_user_id:
+                self._adapter.chat_message_send(title="每日对话摘要", text=digest,
+                                                user=self._cfg.owner_user_id)
+            else:
+                self._adapter.chat_message_send(title="每日对话摘要", text=digest,
+                                                open_dingtalk_id=self._cfg.owner_open_dingtalk_id)
             logger.info("[主动触达] 已推送（%d 段）", len(items))
         except Exception as e:  # noqa: BLE001
             logger.warning("[主动触达] 推送失败: %s", e)

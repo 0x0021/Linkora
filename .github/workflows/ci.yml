@@ -100,7 +100,7 @@ jobs:
       # 版本钉死：与 ruff/pyright 同策略，避免 action 大版本浮动导致「昨天绿今天红」。
       # 注意 setup-uv 自 v8 起不再发布 v8/v9 这类浮动大版本别名标签，必须写全版本号。
       - name: 安装 uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           # 默认 glob 只匹配 *requirements*.txt，不含本项目的 requirements.lock，显式补上。
@@ -155,7 +155,7 @@ jobs:
           python-version: "3.14.6"
 
       - name: 安装 uv
-        uses: astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           cache-dependency-glob: |

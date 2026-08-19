@@ -844,15 +844,19 @@ def enforce_brevity(agent: Any, reply: str) -> str:
     )
     rag_empty = getattr(agent, "_last_rag_empty", False) if hasattr(agent, "_last_rag_empty") else False
     # 是否剥离 LLM 自生成引文（默认开，防自污染回灌 + 双引文）
-    hide_citation = (
-        getattr(getattr(agent.config, "advanced", None), "citation_hide_generated", True)
-        if hasattr(agent.config, "advanced") else True
-    )
+    hide_citation = True
+    if agent is not None and hasattr(agent, "config"):
+        hide_citation = (
+            getattr(getattr(agent.config, "advanced", None), "citation_hide_generated", True)
+            if hasattr(getattr(agent, "config", None), "advanced") else True
+        )
     reply = sanitize_reply(
         reply, kb_context=kb_context, rag_empty=rag_empty, hide_citation=hide_citation
     )
-    adv = getattr(agent.config, 'advanced', None)
-    cfg_cap = getattr(getattr(agent.config, 'llm', None), 'brevity_hard_cap', 0) if hasattr(agent.config, 'llm') else 0
+    adv = None
+    if agent is not None and hasattr(agent, "config"):
+        adv = getattr(agent.config, 'advanced', None)
+    cfg_cap = getattr(getattr(agent.config, 'llm', None), 'brevity_hard_cap', 0) if (agent is not None and hasattr(agent, "config")) else 0
     max_chars = cfg_cap if (cfg_cap and cfg_cap > 0) else (adv.hard_truncation_chars if adv else 150)
 
     if not reply or len(reply) <= max_chars:

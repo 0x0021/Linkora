@@ -1110,3 +1110,17 @@ ul { list-style: none; }
   .reveal { opacity: 1; transform: none; }
   .hero__bg::before, .hero__bg::after { animation: none; }
 }
+
+/* ---------- 品牌横幅（深浅主题自动切换） ---------- */
+.brand-showcase { margin-top: 2.5rem; }
+.brand-showcase--inner { margin-top: 2.5rem; }
+.brand-showcase img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--hair);
+  box-shadow: var(--shadow-md);
+}
+.brand-showcase__dark { display: none; }
+[data-theme="dark"] .brand-showcase__light { display: none; }
+[data-theme="dark"] .brand-showcase__dark { display: block; }

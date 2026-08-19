@@ -10,6 +10,9 @@
 ![Python](https://img.shields.io/badge/Python-%E2%89%A53.14-3776AB?logo=python&logoColor=white)![FastAPI](https://img.shields.io/badge/Web-FastAPI-009688?logo=fastapi&logoColor=white)![Platforms](https://img.shields.io/badge/平台-钉钉%20%7C%20飞书%20%7C%20企微-4a86e8)![Docker](https://img.shields.io/badge/部署-Docker%20Compose-2496ED?logo=docker&logoColor=white)
 ![CI](https://github.com/0x0021/Linkora/actions/workflows/ci.yml/badge.svg)![Release](https://img.shields.io/github/v/release/0x0021/Linkora?label=Release&color=blue)![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)
 
+![Linkora · 灵桥](docs/assets/brand/linkora-hero-light.png#gh-light-mode-only)
+![Linkora · 灵桥](docs/assets/brand/linkora-hero-dark.png#gh-dark-mode-only)
+
 <br>
 
 [快速开始](#快速开始) · [核心能力](#核心能力) · [配置](#配置速查) · [项目结构](#项目结构) · [贡献指南](#贡献指南) · [文档索引](#文档索引)
@@ -36,6 +39,9 @@
 ---
 
 ## 架构总览
+
+![Linkora Scenarios](docs/assets/brand/linkora-scenarios-light.png#gh-light-mode-only)
+![Linkora Scenarios](docs/assets/brand/linkora-scenarios-dark.png#gh-dark-mode-only)
 
 ```mermaid
 flowchart TB
@@ -102,6 +108,9 @@ flowchart TB
 ---
 
 ## 核心能力
+
+![Linkora Core Capabilities](docs/assets/brand/linkora-features-light.png#gh-light-mode-only)
+![Linkora Core Capabilities](docs/assets/brand/linkora-features-dark.png#gh-dark-mode-only)
 
 ### 多平台接入
 钉钉 / 飞书 / 企微各自独立适配器、独立数据库、独立轮询器，可按平台独立启停；物理隔离到不同 SQLite 库。自动区分单聊 / 群聊 / 系统推送，消息编辑 / 撤回实时同步，同一发送者短时间多条消息防抖合并。Web 与后台轮询器（worker）进程分离，改 Web 代码只重启 web 进程不打断 ingestion。

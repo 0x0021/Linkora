@@ -149,16 +149,12 @@ class DwsAdapterChatMixin(DwsAdapterBase):
 
     def chat_message_list(self, group: str, time_str: str,
                           limit: int = 50,
-                          cached_result: dict | None = None,
                           timeout: int | None = None) -> list[dict]:
         """拉取指定群聊的消息（按时间正序）。
 
         群消息走用户级逐群接口 ``chat message list --group``（见 ``chat_message_list_group``），
         绕过 list-all 的「消息搜索权益」群聊限制；旧实现经 list-all 按 openConversationId 过滤，
         但 list-all 对群返回业务错误，导致群消息长期拉不到。
-
-        ``cached_result`` 保留为兼容参数（历史 batch-prefetch 快路径），当前实现不再依赖它，
-        直接按群逐拉。
         """
         return self.chat_message_list_group(group, time_str, limit, timeout)
 

@@ -592,14 +592,8 @@ class WecomCliAdapter(BaseIMAdapter):
         return [self._normalize_message(m) for m in msgs[:limit]]
 
     def chat_message_list(self, group: str, time_str: str,
-                          limit: int = 50,
-                          cached_result: dict | None = None) -> list[dict]:
-        """拉取群聊消息（按时间正序）。``group`` 即 chat_id。
-
-        ``cached_result`` 为可选预取合并字典，仅 DwsAdapter 用于群消息快路径；
-        企微逐群独立拉取，忽略该参数（保持跨适配器接口一致，避免 poller 无差别
-        传参时报 TypeError）。
-        """
+                          limit: int = 50) -> list[dict]:
+        """拉取群聊消息（按时间正序）。``group`` 即 chat_id。"""
         if not group:
             raise ValueError("chat_message_list 需提供 group(chat_id)")
         begin, end = self._time_window(time_str)

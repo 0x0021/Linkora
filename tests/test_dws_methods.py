@@ -78,32 +78,21 @@ class TestChatMessageList:
             r = adapter.chat_message_list(group="g1", time_str="now")
         assert r == []
 
-    def test_chat_message_list_cached_result_ignored(self, adapter):
-        """cached_result 参数保留为兼容接口，当前实现不读取它（已废弃）。"""
-        cached = {
-            "conversationMessagesList": [
-                {"openConversationId": "g1", "messages": [{"msgId": "m1"}, {"msgId": "m2"}]},
-                {"openConversationId": "g2", "messages": [{"msgId": "m3"}]},
-            ]
-        }
+    def test_chat_message_list_group_call(self, adapter):
+        """chat_message_list 委托到 chat_message_list_group，不传 cached_result。"""
         with patch.object(adapter, "chat_message_list_group") as m_group:
             m_group.return_value = []
             adapter.chat_message_list(
-                group="g1", time_str="2026-07-11 00:00:00", cached_result=cached
+                group="g1", time_str="2026-07-11 00:00:00"
             )
-        # cached_result 不再被消费，走逐群接口
-        assert m_group.called
         m_group.assert_called_once_with("g1", "2026-07-11 00:00:00", 50, None)
 
-    def test_chat_message_list_cached_result_missing_group_ignored(self, adapter):
-        """群不在缓存中时同样忽略 cached_result，直接调逐群接口返回空列表。"""
-        cached = {"conversationMessagesList": [
-            {"openConversationId": "g_other", "messages": [{"msgId": "x"}]}
-        ]}
+    def test_chat_message_list_missing_group_returns_empty(self, adapter):
+        """群不存在时逐群接口返回空列表。"""
         with patch.object(adapter, "chat_message_list_group") as m_group:
             m_group.return_value = []
             r = adapter.chat_message_list(
-                group="g_missing", time_str="2026-07-11 00:00:00", cached_result=cached
+                group="g_missing", time_str="2026-07-11 00:00:00"
             )
         assert r == []
         assert m_group.called

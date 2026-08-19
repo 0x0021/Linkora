@@ -273,11 +273,8 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
 
     @abc.abstractmethod
     def chat_message_list(self, group: str, time_str: str,
-                          limit: int = 50,
-                          cached_result: dict | None = None) -> list[dict]:
-        """拉取群聊消息。``cached_result`` 为可选预取合并字典（仅 DwsAdapter 优化用，
-        其它适配器忽略）。加入该参数以保持跨适配器接口一致，避免 poller 无差别传参时
-        非 dws 适配器报 TypeError。"""
+                          limit: int = 50) -> list[dict]:
+        """拉取群聊消息（按时间正序）。子类按需覆写。"""
         ...
 
     @abc.abstractmethod

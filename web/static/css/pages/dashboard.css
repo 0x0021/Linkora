@@ -897,10 +897,10 @@
     .ov-chip-value { max-width: 120px; }
 }
 
-/* --- 首页一屏适配：三行等高紧凑布局 --- */
+/* --- 首页一屏适配：日志面板随 flex 行高自然撑满，不再写死 220px --- */
 #page-dashboard.active .realtime-log-panel {
-    height: 220px;
-    max-height: 220px;
+    height: 100%;
+    max-height: none;
     overflow: hidden;
 }
 

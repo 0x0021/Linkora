@@ -6,13 +6,15 @@
     align-items: stretch;
 }
 
-/* 首页紧凑布局：三行等高固定高度，内容各自内部滚动；视口过矮时整页可滚动兜底，绝不裁切 */
+/* 首页响应式布局：按视口比例分配三行高度，内容各自内部滚动；
+   视口过矮时整页可滚动兜底，绝不裁切 */
 #page-dashboard.active {
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
+    gap: 0.67rem;
 }
 
 #page-dashboard.active > .page-header {
@@ -20,31 +22,28 @@
 }
 
 #page-dashboard.active .dashboard-grid {
-    margin-bottom: 0.5rem;
-    min-height: 0;
-}
-
-#page-dashboard.active .dashboard-grid:last-child {
     margin-bottom: 0;
+    min-height: 0;
 }
 
-/* 三行紧凑布局：概览稍高（内容多），中/下两行等高；行级不裁切，由 body 内部滚动 */
+/* 三行 flex 比例布局：概览权重稍高（内容多），中/下两行均分剩余空间。
+   flex-basis: 0 让三行完全按权重分配 .content-area 的剩余高度；
+   min-height 保证内容过少/视口过矮时不会压成一条线；
+   max-height 取消，避免大屏底部出现多余空白。 */
 #page-dashboard.active .dash-row-overview {
-    flex: 0 0 auto;
-    height: 280px;
-    max-height: 280px;
-    min-height: 0;
+    flex: 1.4 1 0;
+    min-height: 220px;
+    max-height: none;
 }
 
 #page-dashboard.active .dash-row-middle,
 #page-dashboard.active .dash-row-log {
-    flex: 0 0 auto;
-    height: 220px;
-    max-height: 220px;
-    min-height: 0;
+    flex: 1 1 0;
+    min-height: 180px;
+    max-height: none;
 }
 
-/* 行内 panel 撑满行高，flex 列布局；不设 overflow（由 body 内部滚动接管） */
+/* 行内 panel 撑满行高，flex 列布局 */
 #page-dashboard.active .dash-row-overview .panel,
 #page-dashboard.active .dash-row-middle .panel,
 #page-dashboard.active .dash-row-log .panel {
@@ -326,3 +325,59 @@
 #metrics-ps-last-error.ok   { color: var(--brand-success, #10b981); }
 #metrics-ps-running        { font-weight: 700; color: var(--text-primary); }
 #metrics-ps-running.ok     { color: var(--brand-success, #10b981); }
+
+/* ═══════════════════ 仪表盘响应式适配 ═══════════════════ */
+
+/* 平板/小桌面：中栏两列仍保持，但缩小最小高度以适配较矮视口 */
+@media (max-width: 1024px), (max-height: 700px) {
+    #page-dashboard.active .dash-row-overview {
+        min-height: 200px;
+    }
+    #page-dashboard.active .dash-row-middle,
+    #page-dashboard.active .dash-row-log {
+        min-height: 160px;
+    }
+}
+
+/* 移动端：三行改为垂直堆叠，每行占满宽度；
+   中栏两列变成单列，避免内容被压扁 */
+@media (max-width: 768px) {
+    #page-dashboard.active .dashboard-grid.dash-row-middle {
+        grid-template-columns: 1fr;
+    }
+
+    #page-dashboard.active .dash-row-overview,
+    #page-dashboard.active .dash-row-middle,
+    #page-dashboard.active .dash-row-log {
+        flex: 0 0 auto;
+        min-height: auto;
+    }
+
+    /* 移动端给每行一个合适的最小高度，保证可读性 */
+    #page-dashboard.active .dash-row-overview {
+        min-height: 280px;
+    }
+    #page-dashboard.active .dash-row-middle {
+        min-height: 320px;
+    }
+    #page-dashboard.active .dash-row-log {
+        min-height: 240px;
+    }
+}
+
+/* 超小屏/横屏过矮：取消 flex 比例，允许整页自然滚动 */
+@media (max-height: 500px) and (min-width: 769px) {
+    #page-dashboard.active {
+        display: block;
+        height: auto;
+    }
+
+    #page-dashboard.active .dash-row-overview,
+    #page-dashboard.active .dash-row-middle,
+    #page-dashboard.active .dash-row-log {
+        flex: none;
+        height: auto;
+        min-height: 160px;
+        margin-bottom: 0.67rem;
+    }
+}

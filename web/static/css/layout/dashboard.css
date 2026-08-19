@@ -26,17 +26,23 @@
     min-height: 0;
 }
 
-/* 三行 flex 比例布局：概览权重稍高（内容多），中/下两行均分剩余空间。
-   flex-basis: 0 让三行完全按权重分配 .content-area 的剩余高度；
-   min-height 保证内容过少/视口过矮时不会压成一条线；
-   max-height 取消，避免大屏底部出现多余空白。 */
-#page-dashboard.active .dash-row-overview {
-    flex: 1.4 1 0;
-    min-height: 220px;
+/* 中栏两面板按各自内容高度，避免一边内容少时被拉高产生留白 */
+#page-dashboard.active .dashboard-grid.dash-row-middle {
+    align-items: start;
+}
+
+/* 三行 flex 布局：
+   - 概览、中栏按内容自然高度（不拉伸），避免卡片内部出现大块留白；
+   - 实时日志撑满剩余空间，保证底部无留白；
+   - min-height 保证内容过少/视口过矮时不会压成一条线；
+   - 视口过矮时整页滚动兜底。 */
+#page-dashboard.active .dash-row-overview,
+#page-dashboard.active .dash-row-middle {
+    flex: 0 0 auto;
+    min-height: 0;
     max-height: none;
 }
 
-#page-dashboard.active .dash-row-middle,
 #page-dashboard.active .dash-row-log {
     flex: 1 1 0;
     min-height: 180px;
@@ -339,29 +345,22 @@
     }
 }
 
-/* 移动端：三行改为垂直堆叠，每行占满宽度；
-   中栏两列变成单列，避免内容被压扁 */
+/* 移动端：三行改为垂直堆叠，中栏两列变成单列；
+   概览、中栏按内容自然高度，实时日志继续撑满剩余空间 */
 @media (max-width: 768px) {
     #page-dashboard.active .dashboard-grid.dash-row-middle {
         grid-template-columns: 1fr;
     }
 
     #page-dashboard.active .dash-row-overview,
-    #page-dashboard.active .dash-row-middle,
-    #page-dashboard.active .dash-row-log {
+    #page-dashboard.active .dash-row-middle {
         flex: 0 0 auto;
         min-height: auto;
     }
 
-    /* 移动端给每行一个合适的最小高度，保证可读性 */
-    #page-dashboard.active .dash-row-overview {
-        min-height: 280px;
-    }
-    #page-dashboard.active .dash-row-middle {
-        min-height: 320px;
-    }
     #page-dashboard.active .dash-row-log {
-        min-height: 240px;
+        flex: 1 1 0;
+        min-height: 180px;
     }
 }
 

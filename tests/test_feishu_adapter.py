@@ -271,12 +271,11 @@ class TestCapabilityArgs(unittest.TestCase):
         self.assertIn("--page-size", cmd)
         self.assertIn("10", cmd)
 
-    def test_chat_message_list_accepts_cached_result(self):
-        """poller 对群聊无差别传 cached_result；飞书忽略该参数（不报 TypeError）。"""
+    def test_chat_message_list_without_cached_result(self):
+        """chat_message_list 不接受 cached_result；参数移除后调用正常。"""
         a, cap = self._adapter(json.dumps({"ok": True, "data": {"messages": [
             {"message_id": "m1"}]}}))
-        # 传 cached_result 不应抛异常，且正常返回消息
-        msgs = a.chat_message_list("oc_g", "2024-01-01", cached_result={"conversationMessagesList": []})
+        msgs = a.chat_message_list("oc_g", "2024-01-01")
         self.assertEqual(len(msgs), 1)
         self.assertEqual(msgs[0]["message_id"], "m1")
 

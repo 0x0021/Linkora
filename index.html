@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>灵桥 Linkora · 企业 AI 智能分身</title>
+<meta name="description" content="把 AI 分身接进钉钉、飞书、企业微信——读得懂公司知识、会调用工具办事、懂得何时请真人接手。" />
+<meta property="og:title" content="灵桥 Linkora · 企业 AI 智能分身" />
+<meta property="og:description" content="读得懂公司知识、会调用工具办事、懂得何时请真人接手。" />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#0a0f1e" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0f1e;
+  --bg-2: #111833;
+  --bg-3: #1a2144;
+  --surface: rgba(255,255,255,0.04);
+  --surface-hi: rgba(255,255,255,0.08);
+  --border: rgba(255,255,255,0.08);
+  --border-hi: rgba(255,255,255,0.15);
+  --text: #e8eaf6;
+  --text-sec: #9aa0c4;
+  --text-muted: #5c6388;
+  --cyan: #00e5ff;
+  --cyan-dim: rgba(0,229,255,0.15);
+  --violet: #7c4dff;
+  --violet-dim: rgba(124,77,255,0.15);
+  --green: #00e676;
+  --green-dim: rgba(0,230,118,0.15);
+  --amber: #ffab00;
+  --amber-dim: rgba(255,171,0,0.15);
+  --grad: linear-gradient(135deg, var(--cyan), var(--violet));
+  --font: 'Inter', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f5f7ff;
+  --bg-2: #eef1fb;
+  --bg-3: #e4e8f5;
+  --surface: rgba(0,0,0,0.03);
+  --surface-hi: rgba(0,0,0,0.06);
+  --border: rgba(0,0,0,0.08);
+  --border-hi: rgba(0,0,0,0.15);
+  --text: #1a1a2e;
+  --text-sec: #4a4a6a;
+  --text-muted: #8a8aaa;
+  --cyan: #0097a7;
+  --violet: #651fff;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* === NAV === */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  background: rgba(10,15,30,0.75);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.3s;
+}
+[data-theme="light"] nav { background: rgba(245,247,255,0.85); }
+.nav-inner {
+  max-width: 1200px; margin: 0 auto;
+  padding: 0 2rem; height: 64px;
+  display: flex; align-items: center; gap: 2rem;
+}
+.brand {
+  display: flex; align-items: center; gap: 0.6rem;
+  text-decoration: none; color: var(--text);
+  font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em;
+}
+.brand-mark {
+  width: 32px; height: 32px;
+  background: var(--grad);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 0.75rem; font-weight: 900; color: #0a0f1e;
+  box-shadow: 0 0 20px var(--cyan-dim);
+}
+.nav-links { display: flex; gap: 1.5rem; flex: 1; }
+.nav-links a {
+  color: var(--text-sec); text-decoration: none;
+  font-size: 0.875rem; font-weight: 500;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--cyan); }
+.nav-actions { display: flex; align-items: center; gap: 1rem; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 1rem; border-radius: 8px;
+  font-size: 0.875rem; font-weight: 600;
+  text-decoration: none; cursor: pointer; border: none;
+  transition: all 0.2s;
+}
+.btn--ghost {
+  background: transparent; color: var(--text-sec);
+  border: 1px solid var(--border);
+}
+.btn--ghost:hover { color: var(--text); border-color: var(--border-hi); background: var(--surface); }
+.btn--primary {
+  background: var(--grad); color: #fff;
+  box-shadow: 0 4px 20px var(--cyan-dim);
+}
+.btn--primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px var(--cyan-dim); }
+.btn--lg { padding: 0.75rem 1.5rem; font-size: 1rem; border-radius: 12px; }
+
+.theme-toggle {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-sec); cursor: pointer;
+  display: grid; place-items: center; transition: all 0.2s;
+}
+.theme-toggle:hover { border-color: var(--cyan); color: var(--cyan); }
+.theme-toggle svg { width: 18px; height: 18px; }
+
+/* === HERO === */
+.hero {
+  position: relative; min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 6rem 2rem 4rem;
+  overflow: hidden;
+}
+.hero-canvas {
+  position: absolute; inset: 0; z-index: 0;
+  opacity: 0.6;
+}
+.hero-glow {
+  position: absolute;
+  width: 800px; height: 800px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--cyan-dim) 0%, transparent 70%);
+  top: -200px; left: 50%; transform: translateX(-50%);
+  pointer-events: none;
+  filter: blur(60px);
+}
+.hero-glow-2 {
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--violet-dim) 0%, transparent 70%);
+  bottom: -100px; right: -100px;
+  pointer-events: none;
+  filter: blur(80px);
+}
+.hero-content {
+  position: relative; z-index: 1;
+  max-width: 900px; text-align: center;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 1rem; border-radius: 100px;
+  background: var(--surface-hi); border: 1px solid var(--border);
+  font-size: 0.8rem; color: var(--text-sec); margin-bottom: 2rem;
+  animation: fadeInDown 0.8s ease both;
+}
+.hero-badge .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.hero h1 {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 800; line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.5rem;
+  animation: fadeInUp 0.8s ease 0.1s both;
+}
+.hero h1 .grad {
+  background: var(--grad); -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero-sub {
+  font-size: 1.25rem; color: var(--text-sec);
+  margin-bottom: 0.5rem; animation: fadeInUp 0.8s ease 0.2s both;
+}
+.hero-desc {
+  font-size: 1.1rem; color: var(--text-muted);
+  max-width: 600px; margin: 0 auto 2.5rem;
+  animation: fadeInUp 0.8s ease 0.25s both;
+}
+.hero-cta {
+  display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+  animation: fadeInUp 0.8s ease 0.3s both;
+}
+.hero-stats {
+  display: flex; gap: 3rem; justify-content: center; margin-top: 4rem;
+  animation: fadeInUp 0.8s ease 0.4s both;
+}
+.hero-stat { text-align: center; }
+.hero-stat-num {
+  font-size: 2rem; font-weight: 800; color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+.hero-stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === SECTION === */
+section { padding: 6rem 2rem; }
+.container { max-width: 1100px; margin: 0 auto; }
+.section-label {
+  display: inline-block;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--cyan);
+  margin-bottom: 1rem;
+}
+.section-title {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 800; letter-spacing: -0.02em;
+  margin-bottom: 1rem; line-height: 1.2;
+}
+.section-desc {
+  font-size: 1.1rem; color: var(--text-sec);
+  max-width: 600px; margin-bottom: 3rem;
+}
+
+/* === FEATURES GRID === */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+.feature-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 2rem;
+  transition: all 0.3s;
+  position: relative; overflow: hidden;
+}
+.feature-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--grad);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.3s;
+}
+.feature-card:hover {
+  border-color: var(--border-hi);
+  background: var(--surface-hi);
+  transform: translateY(-4px);
+}
+.feature-card:hover::before { transform: scaleX(1); }
+.feature-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: grid; place-items: center;
+  margin-bottom: 1.25rem;
+  font-size: 1.4rem;
+}
+.feature-icon--cyan { background: var(--cyan-dim); color: var(--cyan); }
+.feature-icon--violet { background: var(--violet-dim); color: var(--violet); }
+.feature-icon--green { background: var(--green-dim); color: var(--green); }
+.feature-icon--amber { background: var(--amber-dim); color: var(--amber); }
+.feature-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+.feature-card p { color: var(--text-sec); font-size: 0.9rem; line-height: 1.6; }
+
+/* === PIPELINE === */
+.pipeline {
+  display: flex; align-items: center; gap: 0;
+  overflow-x: auto; padding: 2rem 0;
+  scrollbar-width: thin;
+}
+.pipeline-node {
+  flex: 0 0 auto; width: 160px; text-align: center;
+  padding: 1.5rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin-right: 1rem;
+  position: relative;
+}
+.pipeline-node:last-child { margin-right: 0; }
+.pipeline-num {
+  font-size: 0.7rem; font-weight: 800; color: var(--cyan);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+.pipeline-icon { font-size: 1.8rem; margin-bottom: 0.75rem; }
+.pipeline-title { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.25rem; }
+.pipeline-desc { font-size: 0.75rem; color: var(--text-muted); }
+
+/* === PLATFORMS === */
+.platforms-row {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
+}
+@media (max-width: 768px) {
+  .platforms-row { grid-template-columns: 1fr; }
+  .hero-stats { gap: 1.5rem; }
+  .nav-links { display: none; }
+}
+.platform-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 2.5rem 2rem;
+  text-align: center;
+  transition: all 0.3s;
+}
+.platform-card:hover {
+  border-color: var(--cyan);
+  background: var(--surface-hi);
+  transform: translateY(-4px);
+}
+.platform-logo {
+  width: 64px; height: 64px; border-radius: 16px;
+  display: grid; place-items: center;
+  font-size: 1.8rem; font-weight: 900;
+  margin: 0 auto 1.25rem;
+}
+.platform-card--dingtalk .platform-logo { background: var(--cyan-dim); color: var(--cyan); }
+.platform-card--feishu .platform-logo { background: var(--violet-dim); color: var(--violet); }
+.platform-card--wecom .platform-logo { background: var(--green-dim); color: var(--green); }
+.platform-card h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; }
+.platform-card p { color: var(--text-sec); font-size: 0.9rem; }
+
+/* === CTA === */
+.cta-section {
+  text-align: center;
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.cta-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem; }
+
+/* === FOOTER === */
+footer {
+  padding: 3rem 2rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.footer-inner {
+  max-width: 1100px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 1rem;
+}
+.footer a { color: var(--text-sec); text-decoration: none; }
+.footer a:hover { color: var(--cyan); }
+
+/* === GLOW ORB DECORATIONS === */
+.orb {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  filter: blur(80px); opacity: 0.4;
+}
+.orb--1 { width: 300px; height: 300px; background: var(--cyan); top: 10%; left: -100px; }
+.orb--2 { width: 200px; height: 200px; background: var(--violet); bottom: 20%; right: -50px; }
+
+/* === SCROLL REVEAL === */
+.reveal {
+  opacity: 0; transform: translateY(40px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark">桥</span>
+      <span>灵桥 <span style="font-weight:400;color:var(--text-sec);margin-left:4px;">Linkora</span></span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">核心能力</a>
+      <a href="#pipeline">工作原理</a>
+      <a href="#platforms">多平台</a>
+      <a href="#gate">人工接管</a>
+      <a href="https://github.com/0x0021/Linkora" target="_blank">GitHub</a>
+    </div>
+    <div class="nav-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
+        </svg>
+      </button>
+      <a class="btn btn--primary" href="#start">快速开始</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <canvas class="hero-canvas" id="heroCanvas"></canvas>
+  <div class="hero-glow"></div>
+  <div class="hero-glow-2"></div>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      v0.4.0 · 多平台接入 · RAG · 人工接管
+    </div>
+    <h1>让 AI 分身<br /><span class="grad">接管你的日常沟通</span></h1>
+    <p class="hero-sub">群聊、私聊都在线 · 钉钉、飞书、企业微信全覆盖</p>
+    <p class="hero-desc">灵桥把 AI 分身带到团队每天使用的沟通平台。它能理解企业知识、调用工具完成工作，并与真人无缝协作。</p>
+    <div class="hero-cta">
+      <a class="btn btn--primary btn--lg" href="#start">
+        免费部署
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a class="btn btn--ghost btn--lg" href="https://github.com/0x0021/Linkora" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        查看源码
+      </a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="hero-stat-num" data-count="38">0</div><div class="hero-stat-label">内置工具</div></div>
+      <div class="hero-stat"><div class="hero-stat-num" data-count="39">0</div><div class="hero-stat-label">意图分类</div></div>
+      <div class="hero-stat"><div class="hero-stat-num" data-count="3">0</div><div class="hero-stat-label">接入平台</div></div>
+      <div class="hero-stat"><div class="hero-stat-num" data-count="15">0</div><div class="hero-stat-label">管理台页面</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-label reveal">核心能力</div>
+    <h2 class="section-title reveal">一个分身，办成企业里的事</h2>
+    <p class="section-desc reveal">不是只会聊天的机器人。灵桥把知识、工具、规则与真人协作编织进同一次对话。</p>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon--cyan">📚</div>
+        <h3>企业知识 RAG</h3>
+        <p>通读公司文档与历史会话，向量检索命中即注入上下文，回答有出处、可引用。</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon--violet">🔧</div>
+        <h3>工具调用 · 38 个</h3>
+        <p>查考勤、建待办、发通知、搜消息……真的动手办事，而非只给建议。</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon--green">⚡</div>
+        <h3>规则 / 意图引擎</h3>
+        <p>39 类意图分流，规则命中直接走确定性路径，LLM 只处理该它处理的模糊部分。</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon--amber">🛡️</div>
+        <h3>人工接管与审核</h3>
+        <p>写操作需确认、敏感动作可审批。双重校验门控确保真人沟通期间 AI 绝不穿插。</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon--cyan">📊</div>
+        <h3>Web 管理台</h3>
+        <p>15 个页面、161 端点。会话、知识库、工具、审批全在浏览器里可查、可调、可观测。</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon--violet">🔒</div>
+        <h3>多平台物理隔离</h3>
+        <p>钉钉 / 飞书 / 企微各自独立数据库、独立轮询器，数据不串台，可按平台独立启停。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline" style="background:var(--bg-2);">
+  <div class="container">
+    <div class="section-label reveal">工作原理</div>
+    <h2 class="section-title reveal">一条消息的完整旅程</h2>
+    <p class="section-desc reveal">从消息进来到回复发回，每一步都可观测、可干预。</p>
+    <div class="pipeline reveal">
+      <div class="pipeline-node">
+        <div class="pipeline-num">01</div>
+        <div class="pipeline-icon">💬</div>
+        <div class="pipeline-title">消息到达</div>
+        <div class="pipeline-desc">IM 平台轮询拉取<br/>按账号隔离入库</div>
+      </div>
+      <div class="pipeline-node">
+        <div class="pipeline-num">02</div>
+        <div class="pipeline-icon">🎯</div>
+        <div class="pipeline-title">规则分流</div>
+        <div class="pipeline-desc">命中规则走确定性路径<br/>否则进 LLM</div>
+      </div>
+      <div class="pipeline-node">
+        <div class="pipeline-num">03</div>
+        <div class="pipeline-icon">🔍</div>
+        <div class="pipeline-title">RAG / 工具</div>
+        <div class="pipeline-desc">检索知识库<br/>调用工具补齐事实</div>
+      </div>
+      <div class="pipeline-node">
+        <div class="pipeline-num">04</div>
+        <div class="pipeline-icon">🧠</div>
+        <div class="pipeline-title">LLM 生成</div>
+        <div class="pipeline-desc">门控前置过滤<br/>省 Token</div>
+      </div>
+      <div class="pipeline-node">
+        <div class="pipeline-num">05</div>
+        <div class="pipeline-icon">📨</div>
+        <div class="pipeline-title">原路发回</div>
+        <div class="pipeline-desc">发送前复核兜底<br/>回 IM 同一会话</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLATFORMS -->
+<section id="platforms">
+  <div class="container">
+    <div class="section-label reveal">多平台</div>
+    <h2 class="section-title reveal">同一个大脑，三套 IM 外壳</h2>
+    <p class="section-desc reveal">钉钉、飞书、企业微信分别适配、独立数据库、独立轮询器——数据物理隔离，互不影响。</p>
+    <div class="platforms-row reveal">
+      <div class="platform-card platform-card--dingtalk">
+        <div class="platform-logo">钉</div>
+        <h3>钉钉</h3>
+        <p>深度适配钉钉机器人 / 工作通知，支持单聊、群聊与审批流。</p>
+      </div>
+      <div class="platform-card platform-card--feishu">
+        <div class="platform-logo">飞</div>
+        <h3>飞书</h3>
+        <p>对接飞书机器人能力与通讯录，知识检索与工具调用原生打通。</p>
+      </div>
+      <div class="platform-card platform-card--wecom">
+        <div class="platform-logo">微</div>
+        <h3>企业微信</h3>
+        <p>企业微信应用消息收发，适配内部协作场景与私有部署。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GATE -->
+<section id="gate" style="background:var(--bg-2);">
+  <div class="container">
+    <div class="section-label reveal">人工接管</div>
+    <h2 class="section-title reveal" style="text-align:center;">人工沟通时，bot 绝不插嘴</h2>
+    <p class="section-desc reveal" style="text-align:center;margin-left:auto;margin-right:auto;">这是灵桥和「会抢话的机器人」最大的区别。两层门控确保真人介入的对话里，AI 不再重复回复。</p>
+    <div class="features-grid reveal">
+      <div class="feature-card">
+        <div class="feature-icon feature-icon--green">✅</div>
+        <h3>前置过滤</h3>
+        <p>进入 LLM 前先判消息是否已读 / 已回复，命中即跳过生成，省下整段 Token。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon--amber">🔍</div>
+        <h3>发送前复核</h3>
+        <p>真正投递前再判一次，兜住「生成期间人工状态变化」的竞态。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon--cyan">👁️</div>
+        <h3>已读 / 接管识别</h3>
+        <p>接回 DWS 已读信号 + 人工接管标志，保守策略不漏回追问。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- START -->
+<section id="start">
+  <div class="container" style="max-width:700px;">
+    <div class="section-label reveal">快速开始</div>
+    <h2 class="section-title reveal">十分钟，接起你的第一个 AI 分身</h2>
+    <p class="section-desc reveal">克隆仓库、填好配置、一条命令拉起。数据全部留在你自己的机器或内网。</p>
+    <div class="feature-card reveal" style="padding:1.5rem;">
+      <pre style="font-family:var(--mono);font-size:0.82rem;line-height:2;color:var(--text);overflow-x:auto;white-space:pre;">$ git clone https://github.com/0x0021/Linkora.git
+$ cd Linkora
+$ python -m venv .venv && source .venv/bin/activate
+$ pip install -r requirements.lock
+$ cp config.yaml.example config.yaml   # 填入凭证
+$ python main.py</pre>
+    </div>
+    <div class="cta-btns reveal" style="margin-top:2rem;">
+      <a class="btn btn--primary btn--lg" href="https://github.com/0x0021/Linkora" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        在 GitHub 看完整项目
+      </a>
+      <a class="btn btn--ghost btn--lg" href="https://github.com/0x0021/Linkora/blob/main/docs/configuration.md" target="_blank">配置指南</a>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2 class="section-title reveal" style="text-align:center;">把 AI 分身，接进你的团队</h2>
+    <p class="section-desc reveal" style="text-align:center;margin-left:auto;margin-right:auto;">开源、可私有化、数据物理隔离。让灵桥替你接住那些琐碎重复的对话，把时间还给真正要紧的事。</p>
+    <div class="cta-btns reveal">
+      <a class="btn btn--primary btn--lg" href="#start">立即部署</a>
+      <a class="btn btn--ghost btn--lg" href="https://github.com/0x0021/Linkora" target="_blank">GitHub 上加星</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <a class="brand" href="#top" style="margin-bottom:0.5rem;display:inline-flex;">
+        <span class="brand-mark">桥</span>
+        <span>灵桥 <span style="font-weight:400;color:var(--text-sec);margin-left:4px;">Linkora</span></span>
+      </a>
+      <p style="margin-top:0.5rem;">多平台 AI 智能连接中枢 · 基于 GPL-3.0 开源</p>
+    </div>
+    <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:0.5rem;">产品</div>
+        <a href="#features" style="display:block;margin-bottom:0.25rem;">核心能力</a>
+        <a href="#pipeline" style="display:block;margin-bottom:0.25rem;">工作原理</a>
+        <a href="#platforms" style="display:block;margin-bottom:0.25rem;">多平台</a>
+      </div>
+      <div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:0.5rem;">资源</div>
+        <a href="https://github.com/0x0021/Linkora" target="_blank" style="display:block;margin-bottom:0.25rem;">GitHub</a>
+        <a href="https://github.com/0x0021/Linkora/releases" target="_blank" style="display:block;margin-bottom:0.25rem;">发行版本</a>
+        <a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" style="display:block;margin-bottom:0.25rem;">更新日志</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// === PARTICLE CANVAS ===
+(function() {
+  const canvas = document.getElementById('heroCanvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, particles = [], mouse = { x: -1000, y: -1000 };
+
+  function resize() {
+    w = canvas.width = canvas.offsetWidth;
+    h = canvas.height = canvas.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  document.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - r.left;
+    mouse.y = e.clientY - r.top;
+  });
+
+  class Particle {
+    constructor() { this.reset(); }
+    reset() {
+      this.x = Math.random() * w;
+      this.y = Math.random() * h;
+      this.vx = (Math.random() - 0.5) * 0.4;
+      this.vy = (Math.random() - 0.5) * 0.4;
+      this.r = Math.random() * 1.5 + 0.5;
+      this.alpha = Math.random() * 0.5 + 0.2;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > w) this.vx *= -1;
+      if (this.y < 0 || this.y > h) this.vy *= -1;
+      // Mouse repulsion
+      const dx = this.x - mouse.x, dy = this.y - mouse.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 120) {
+        this.x += dx / dist * 0.8;
+        this.y += dy / dist * 0.8;
+      }
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,229,255,${this.alpha})`;
+      ctx.fill();
+    }
+  }
+
+  const count = Math.min(80, Math.floor(w * h / 15000));
+  for (let i = 0; i < count; i++) particles.push(new Particle());
+
+  function connectParticles() {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 140) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(0,229,255,${0.08 * (1 - dist/140)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, w, h);
+    particles.forEach(p => { p.update(); p.draw(); });
+    connectParticles();
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+// === COUNTER ANIMATION ===
+function animateCounters() {
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count);
+    const duration = 1500;
+    const start = performance.now();
+    function tick(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.floor(target * ease);
+      if (progress < 1) requestAnimationFrame(tick);
+      else el.textContent = target;
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// === SCROLL REVEAL ===
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      if (entry.target.querySelector('[data-count]')) animateCounters();
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// === THEME TOGGLE ===
+(function() {
+  const btn = document.getElementById('themeToggle');
+  const html = document.documentElement;
+  const stored = localStorage.getItem('linkora-theme');
+  if (stored) {
+    html.setAttribute('data-theme', stored === 'dark' ? 'dark' : 'light');
+  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    html.setAttribute('data-theme', 'dark');
+  }
+  btn.addEventListener('click', () => {
+    const current = html.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('linkora-theme', next);
+  });
+})();
+</script>
+</body>
+</html>

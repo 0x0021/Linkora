@@ -231,14 +231,13 @@ class TestMessages(unittest.TestCase):
         payload = json.loads(cap.last_cmd[3 + 1])
         self.assertEqual(payload["chat_type"], 2)
 
-    def test_chat_message_list_accepts_cached_result(self):
-        """poller 对群聊无差别传 cached_result；企微忽略该参数（不报 TypeError）。"""
+    def test_chat_message_list_without_cached_result(self):
+        """chat_message_list 不接受 cached_result；参数移除后调用正常。"""
         msgs = {"errcode": 0, "messages": [{"msgid": "1"}]}
         cap = _RunCapture(_fake(_env(msgs)))
         a = WecomCliAdapter()
         with patch("src.im_adapter.wecom.subprocess.run", cap):
-            res = a.chat_message_list(group="grp_123", time_str="",
-                                     cached_result={"conversationMessagesList": []})
+            res = a.chat_message_list(group="grp_123", time_str="")
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["msgid"], "1")
 

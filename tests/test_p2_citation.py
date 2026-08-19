@@ -254,6 +254,28 @@ def test_footer_exception_falls_back():
     assert out == "正文"
 
 
+def test_footer_dedup_self_generated_citation():
+    """LLM 已在正文末尾自生成引文时，追加官方页脚前需去重，避免双引文。"""
+    app = _app(_adv())
+    reply = _reply([Citation("Windows共享访问教程", 0.62, "检查网络")])
+    text = "如果连不上，检查网络是否通内网 —— 参考来源：《Windows共享访问教程》"
+    out = _footer(app, text, reply, _msg())
+    assert out.count("参考来源") == 1
+    assert out.count("《Windows共享访问教程》") == 1
+    assert "—— 参考来源：《Windows共享访问教程》" in out
+
+
+def test_footer_dedup_repeated_self_generated_citation():
+    """LLM 重复自生成多段引文时，应全部剥离后再追加官方页脚。"""
+    app = _app(_adv())
+    reply = _reply([Citation("Windows共享访问教程", 0.62, "检查网络")])
+    text = "正文—— 参考来源：《Windows共享访问教程》—— 参考来源：《Windows共享访问教程》"
+    out = _footer(app, text, reply, _msg())
+    assert out.count("参考来源") == 1
+    assert out.count("《Windows共享访问教程》") == 1
+    assert out.startswith("正文")
+
+
 # --------------------- 语义相关性过滤（修复引用不相关 + 滥用追加） ---------------------
 
 def test_footer_unrelated_citation_rejected():

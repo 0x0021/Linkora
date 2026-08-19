@@ -4,8 +4,17 @@ from .engine_mixins_base import EngineMixinBase
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
 import logging
+import re as _re
 
 logger = logging.getLogger(__name__)
+
+#: 兜底剥离 LLM 自生成引文（与 src.llm.reply._RE_CITATION_FULL 同语义）。
+#: 即使 sanitize_reply 因配置/路径原因未剥离，追加官方页脚前再做一次去重，
+#: 避免「—— 参考来源：《X》—— 参考来源：《X》」重复。
+_RE_SELF_CITATION = _re.compile(
+    r'\n{0,3}\s*——\s*(?:依据|参考来源)\s*[：:]\s*'
+    r'(?:《[^》\n]+》\s*(?:（相关度\s*\d+%?）)?(?:\s*[、,]\s*)?)+'
+)
 
 
 def _citation_relevant_to_reply(citation, reply_text: str) -> bool:
@@ -166,6 +175,10 @@ class ReplyHelpersMixin(EngineMixinBase):
             elig = [c for c in elig if _citation_relevant_to_reply(c, text)]
             if not elig:
                 return text
+
+            # 追加官方页脚前，兜底剥离 LLM 自生成引文，避免双引文重复。
+            # 默认 sanitize_reply 已做剥离；此处作为最后一道防线覆盖配置/路径遗漏。
+            text = _RE_SELF_CITATION.sub('', text).rstrip()
 
             best = elig[0].score or 0
             # 高置信标「依据」，低置信标「参考来源」；低置信不再追加"供参考"。

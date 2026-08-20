@@ -209,7 +209,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         """列出已登录的 profile（基于 ``lark-cli auth list``）。"""
         try:
             profiles = self.run(["auth", "list"])
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             logger.warning("[resilience] silent exception in profile_list (e)", exc_info=True)
             return {"authenticated": False, "error": str(e)}
         if isinstance(profiles, list):
@@ -231,7 +231,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         """飞书单租户，返回当前 App 作为唯一组织。"""
         try:
             info = self.run(["whoami"])
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in list_orgs", exc_info=True)
             return []
         return [{
@@ -247,7 +247,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         """获取当前登录用户自身信息（``lark-cli contact +get-user``，省略 user_id 即自己）。"""
         try:
             resp = self.run(["contact", "+get-user"])
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in contact_user_get_self", exc_info=True)
             return {}
         d = self._payload(resp)
@@ -260,7 +260,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         try:
             resp = self.run(
                 ["contact", "+search-user", "--query", keyword, "--as", "user"])
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in contact_user_search", exc_info=True)
             return []
         return self._items(resp)
@@ -307,7 +307,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 "im", "+chat-list", "--types", "p2p,group",
                 "--page-size", str(min(count, 100)),
             ])
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in chat_message_list_unread_conversations", exc_info=True)
             return []
         return [self._normalize_chat(c) for c in self._items(resp)]
@@ -319,7 +319,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 "im", "+chat-list", "--types", "p2p,group",
                 "--sort", "active_time", "--page-size", str(min(limit, 100)),
             ])
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in chat_list_top_conversations", exc_info=True)
             return []
         return [self._normalize_chat(c) for c in self._items(resp)]
@@ -406,7 +406,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
             resp = self.run(args)
         except IMAdapterPermissionError:
             raise  # 权限错误（跨租户/跨 app/已退群）需传递到调用方处理拉黑
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in chat_message_list_direct", exc_info=True)
             return []
         return [self._normalize_message(m) for m in self._items(resp)]
@@ -424,7 +424,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
             resp = self.run(args)
         except IMAdapterPermissionError:
             raise  # 权限错误（跨租户/跨 app/已退群）需传递到调用方处理拉黑
-        except Exception:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in chat_message_list", exc_info=True)
             return []
         return [self._normalize_message(m) for m in self._items(resp)]
@@ -435,7 +435,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
             return {}
         try:
             resp = self.run(["im", "chats", "get", "--chat-id", chat_id])
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             # 跨租户/跨 app/已退群等永久权限错误属正常业务边界，降为 debug 避免刷屏；
             # 其余瞬时错误仍按 WARNING 记录便于排查。
             if isinstance(e, IMAdapterPermissionError):
@@ -587,7 +587,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 return self.run(args)
             try:
                 return self.run(args)
-            except Exception as first_err:
+            except (IMAdapterError, subprocess.CalledProcessError) as first_err:
                 # 主从身份降级：user 身份发失败时（230027/230002 通常意味着「user 不在
                 # 会话」或「跨租户外部」），自动用 bot 身份重试一次。bot 身份在 lark-cli
                 # 里的权限范围比 user 小（仅企业内），但当 user 不被允许发言时它是
@@ -682,7 +682,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 return self.run(args)
             try:
                 return self.run(args)
-            except Exception as first_err:
+            except (IMAdapterError, subprocess.CalledProcessError) as first_err:
                 first_msg = str(first_err) if str(first_err) else ""
                 first_msg_lower = first_msg.lower()
                 _user_ineligible = (
@@ -746,7 +746,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         try:
             self.run(args, force_no_dry_run=True)
             return True
-        except Exception as exc:  # 吞掉一切异常，绝不向上抛  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as exc:  # 吞掉一切异常，绝不向上抛  # noqa: BLE001
             logger.warning("[飞书] 撤回消息失败 message_id=%s: %s",
                            message_id[:32], exc)
             return False
@@ -808,7 +808,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                     break
             logger.info(
                 "飞书 sync_external_contacts: 路径1(+search-user --has-chatted) 完成")
-        except Exception as e:
+        except (IMAdapterError, subprocess.CalledProcessError) as e:
             logger.debug("飞书 sync_external_contacts 路径1失败: %s", e)
 
         # --- 路径 2: im +chat-list --types p2p 补充 ---
@@ -849,7 +849,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                     break
             logger.info(
                 "飞书 sync_external_contacts: 路径2(+chat-list p2p) 完成")
-        except Exception as e:
+        except (IMAdapterError, subprocess.CalledProcessError) as e:
             logger.debug("飞书 sync_external_contacts 路径2失败: %s", e)
 
         # --- 为缺少 chat_id 的联系人补全 ---
@@ -861,7 +861,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 cid = info.get("chat_id") or info.get("id") or ""
                 if cid:
                     item["chat_id"] = cid
-            except Exception:
+            except (IMAdapterError, subprocess.CalledProcessError):
                 logger.debug(
                     "飞书 sync_external_contacts: 无法获取 %s 的 chat_id",
                     item.get("name", oid))

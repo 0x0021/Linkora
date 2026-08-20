@@ -51,6 +51,7 @@
     <link rel="stylesheet" href="/static/css/pages/drafts.css?v={{ drafts_css_v }}">
     <link rel="stylesheet" href="/static/css/pages/tools.css?v={{ tools_css_v }}">
     <link rel="stylesheet" href="/static/css/pages/intent.css?v={{ intent_css_v }}">
+    <link rel="stylesheet" href="/static/css/pages/summaries.css?v={{ summaries_css_v }}">
     <!-- 微交互与动效体系 -->
     <link rel="stylesheet" href="/static/css/motion.css?v={{ motion_v }}">
     {% endif %}
@@ -100,6 +101,10 @@
                         <span class="nav-icon"><i class="fa-solid fa-file-pen"></i></span>
                         <span class="nav-text">草稿审阅</span>
                         <span class="nav-badge" id="draft-pending-badge" style="display:none;">0</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="summaries">
+                        <span class="nav-icon"><i class="fa-solid fa-clipboard-list"></i></span>
+                        <span class="nav-text">对话摘要</span>
                     </a>
                 </div>
                 <div class="nav-section">
@@ -2084,7 +2089,26 @@
                         </div>
                     </div>
                 </div>
-                <div class="page" id="page-tools">
+                <!-- ============ 对话摘要 ============ -->
+            <div class="page" id="page-summaries">
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <div class="page-header-icon">
+                            <i class="fa-solid fa-clipboard-list"></i>
+                        </div>
+                        <div>
+                            <h2 class="page-header-title">对话摘要</h2>
+                            <p class="page-header-desc">近期各会话的 AI 摘要明细，以及每日聚合摘要（与钉钉 17:30 主动推送同源）</p>
+                        </div>
+                    </div>
+                    <div class="page-header-actions">
+                        <span class="summaries-refresh-hint"><i class="fa-solid fa-rotate"></i> 每 30 秒自动刷新</span>
+                    </div>
+                </div>
+                <div id="summaries-body" class="summaries-body"></div>
+            </div>
+
+            <div class="page" id="page-tools">
                     <div class="page-header">
                         <div class="page-header-text">
                             <div class="page-header-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
@@ -3496,6 +3520,7 @@
     <script src="/static/js/pages/metrics.js?v={{ metrics_js_v }}"></script>
     <script src="/static/js/pages/cost_quality.js?v={{ cost_quality_js_v }}"></script>
     <script src="/static/js/pages/logs.js?v={{ logs_js_v }}"></script>
+    <script src="/static/js/pages/summaries.js?v={{ summaries_js_v }}"></script>
     <script src="/static/js/core/app.js?v={{ core_app_js_v }}"></script>
     <script src="/static/js/core/onboarding.js?v={{ core_onboarding_js_v }}"></script>
     <script src="/static/js/pages/simulate.js?v={{ simulate_js_v }}"></script>

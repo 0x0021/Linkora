@@ -59,6 +59,7 @@ const CSS_ORDER = [
   'css/pages/drafts.css',
   'css/pages/tools.css',
   'css/pages/intent.css',
+  'css/pages/summaries.css',
   'css/motion.css',
 ];
 
@@ -96,6 +97,7 @@ const JS_ORDER = [
   'js/pages/models.js',
   'js/pages/cost_quality.js',
   'js/pages/logs.js',
+  'js/pages/summaries.js',
   'js/core/app.js',
   'js/core/onboarding.js',
   'js/pages/simulate.js',

@@ -231,6 +231,7 @@ function switchPage(page) {
         'cost-quality': '成本 / 质量',
         logs: '运行日志',
         simulate: '模拟测试',
+        summaries: '对话摘要',
     };
     document.getElementById('page-title').textContent = titles[page] || page;
     currentPage = page;
@@ -276,6 +277,8 @@ function switchPage(page) {
     if (page === 'cost-quality') { loadCostQualityPage(); startCostQualityPolling(); }
     else { stopCostQualityPolling(); }
     if (page === 'simulate') { window.loadSimulatePage && window.loadSimulatePage(); }
+    if (page === 'summaries') { loadSummariesPage(); startSummariesPolling(); }
+    else { stopSummariesPolling(); }
 
     // 可访问性：切换页面后将焦点移到目标页面容器，避免键盘/屏幕阅读器用户丢失位置（WCAG 2.4.3）
     const _pageEl = document.getElementById(`page-${page}`);

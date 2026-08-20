@@ -1,0 +1,100 @@
+/* ============ summaries.css ============ */
+/* 「对话摘要」页：每日聚合摘要 + 各会话摘要明细 */
+
+.summaries-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+/* 刷新提示（与模型页同款语义） */
+.summaries-refresh-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    color: var(--text-tertiary);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+}
+.summaries-refresh-hint i { opacity: 0.7; }
+
+/* 每日聚合摘要面板：强调色左侧条 */
+.summary-digest-panel { border-left: 3px solid var(--brand-primary); }
+.summary-digest {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.summary-digest strong { color: var(--text-primary); }
+
+/* 各会话摘要明细列表 */
+.summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.summary-item {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.7rem 0.9rem 0.8rem;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+.summary-item:hover { box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08); }
+
+.summary-item-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-bottom: 0.4rem;
+}
+.summary-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+}
+.summary-name i { color: var(--brand-primary); }
+.summary-meta {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.summary-text {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.summary-text strong { color: var(--text-primary); }
+
+.summaries-foot {
+    margin-top: 0.2rem;
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    text-align: right;
+}
+
+.summaries-error {
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    color: var(--brand-danger, #dc2626);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.2rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}

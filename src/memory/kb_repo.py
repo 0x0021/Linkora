@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -83,7 +84,7 @@ class KbRepo:
                         if sim > best_sim:
                             best_sim = sim
                             best_doc = dict(r)
-                except Exception as e:
+                except (ValueError, TypeError) as e:  # faiss 搜索失败 / 嵌入为空 / 维度不匹配
                     logger.debug("查重相似度计算失败: %s", e)
                     continue
             if best_sim >= similarity_threshold and best_doc:
@@ -119,7 +120,7 @@ class KbRepo:
             # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
             assert cur.lastrowid is not None
             return cur.lastrowid
-        except Exception:
+        except sqlite3.Error:
             logger.warning("[resilience] silent exception in add_kb_document", exc_info=True)
             self.store.conn.rollback()
             raise
@@ -198,7 +199,7 @@ class KbRepo:
             cur.execute("DELETE FROM kb_chunks WHERE doc_id = ?", (doc_id,))
             cur.execute("DELETE FROM kb_documents WHERE id = ?", (doc_id,))
             self.store.conn.commit()
-        except Exception:
+        except sqlite3.Error:
             logger.warning("[resilience] silent exception in delete_kb_document", exc_info=True)
             self.store.conn.rollback()
             raise
@@ -207,8 +208,8 @@ class KbRepo:
         # WAL checkpoint: 将 WAL 日志写回主数据库，避免 WAL 无限增长
         try:
             self.store.conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-        except Exception:
-            logger.warning("[resilience] silent exception in delete_kb_document", exc_info=True)
+        except sqlite3.Error:
+            logger.warning("[resilience] silent exception in delete_kb_document (WAL checkpoint)", exc_info=True)
         # KB 内容变更 → 自增版本号，触常驻进程重建 FAISS 索引
         self.store.bump_kb_revision()
 
@@ -228,7 +229,7 @@ class KbRepo:
                     (doc_id,),
                 )
             self.store.conn.commit()
-        except Exception:
+        except sqlite3.Error:
             logger.warning("[resilience] silent exception in delete_kb_chunk", exc_info=True)
             self.store.conn.rollback()
             raise
@@ -252,13 +253,13 @@ class KbRepo:
             try:
                 if vi.remove(cid):
                     removed += 1
-            except Exception as e:
-                logger.warning("从向量索引移除 chunk %d 失败: %s", cid, e)
+            except (ValueError, TypeError):  # FAISS 向量维度不匹配 / 索引已被丢弃
+                logger.warning("从向量索引移除 chunk %d 失败", cid)
         if removed and getattr(vi, "index_path", None):
             try:
                 vi.save(vi.index_path)
-            except Exception as e:
-                logger.warning("删除后保存向量索引失败: %s", e)
+            except (OSError, ValueError):  # 磁盘 I/O 失败 / 索引格式损坏
+                logger.warning("删除后保存向量索引失败")
 
     def add_kb_chunks(self, doc_id: int, chunks: list[str]) -> None:
         cur = self.store.conn.cursor()
@@ -277,8 +278,8 @@ class KbRepo:
             self.store.conn.commit()
             # KB 内容变更 → 自增版本号，触常驻进程重建 FAISS 索引
             self.store.bump_kb_revision()
-        except Exception:
-            # 中途异常时回滚，避免残留部分 chunk 与 doc 状态不一致（F6）
+        except sqlite3.Error:
+            # 中途 DB 异常时回滚，避免残留部分 chunk 与 doc 状态不一致（F6）
             self.store.conn.rollback()
             raise
 
@@ -315,15 +316,13 @@ class KbRepo:
                 try:
                     self.store._vector_index.remove(chunk_id)
                     self.store._vector_index.add(chunk_id, embedding)
-                except Exception as e:
+                except (ValueError, TypeError) as _exc:  # FAISS add/remove 失败（维度错配 / 索引已丢弃）
                     # add 失败时 remove 已生效 → 该 chunk 从索引中消失（逐条累积会
                     # 掏空索引）。丢弃整个索引，交由 _ensure_index_loaded 全量重建，
                     # 避免留下「DB 有向量、索引查不到」的静默残缺状态。
-                    # 用 %r：faiss 维度断言是裸 AssertionError，str(e) 为空字符串，
-                    # 只打 %s 会得到「... vector index: 」这种无法诊断的日志。
                     logger.warning(
                         "向量索引更新失败（chunk %d，已丢弃索引待全量重建）: %r",
-                        chunk_id, e,
+                        chunk_id, _exc,
                     )
                     self.store._vector_index = None
                     self.store._index_dim = 0
@@ -405,15 +404,15 @@ class KbRepo:
                             from src.memory.reranker import SimpleReranker
                             output = SimpleReranker().rerank(query_text, output,
                                                             top_k=max(top_k, len(output)))
-                        except Exception as e:
-                            logger.debug("[RAG] rerank 失败，跳过: %s", e)
+                        except (ValueError, TypeError):  # rerank 模型加载失败 / 输入格式错误
+                            logger.debug("[RAG] rerank 失败，跳过")
                     return output[:top_k]
-            except Exception as e:
+            except (ValueError, TypeError):  # FAISS 搜索失败（维度错配 / 索引已损坏）
                 # 用 %r：faiss 维度断言是裸 AssertionError，str(e) 为空字符串，
                 # 只打 %s 会得到「FAISS 搜索失败: ，降级...」这种无法诊断的日志。
                 # 并丢弃索引：维度错配等结构性问题不会自愈，若不失效则每次查询都
                 # 永久降级为全表暴力搜索（结果正确但 FAISS 形同废弃）。
-                logger.warning("FAISS 搜索失败（已丢弃索引待重建）: %r，本次降级暴力搜索", e)
+                logger.warning("FAISS 搜索失败（已丢弃索引待重建），本次降级暴力搜索")
                 self.store._vector_index = None
                 self.store._index_dim = 0
 
@@ -450,8 +449,8 @@ class KbRepo:
                         "url": row["url"],
                         "similarity": sim,
                     })
-            except Exception as e:
-                logger.debug("知识库搜索单条记录处理失败: %s", e)
+            except (ValueError, TypeError):  # 相似度计算 / 记录结构不匹配
+                logger.debug("知识库搜索单条记录处理失败")
                 continue
         results.sort(key=lambda x: x["similarity"], reverse=True)
         if query_text and len(results) > 1:
@@ -459,8 +458,8 @@ class KbRepo:
                 from src.memory.reranker import SimpleReranker
                 results = SimpleReranker().rerank(query_text, results,
                                                  top_k=max(top_k, len(results)))
-            except Exception as e:
-                logger.debug("[RAG] rerank 失败，跳过: %s", e)
+            except (ValueError, TypeError):  # rerank 模型加载失败 / 输入格式错误
+                logger.debug("[RAG] rerank 失败，跳过")
         if min_similarity > 0:
             results = [r for r in results if r["similarity"] >= min_similarity]
         return results[:top_k]
@@ -592,7 +591,8 @@ class KbRepo:
             logger.info("[RAG] 全文检索返回 %d 条结果", len(results))
             return results
 
-        except Exception as e:
-            logger.error("[RAG] 全文检索失败: %s", e)
+        except (sqlite3.Error, ValueError, TypeError):
+            # DB 层失败 / 全文检索内部处理失败
+            logger.error("[RAG] 全文检索失败")
             return []
 

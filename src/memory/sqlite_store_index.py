@@ -7,6 +7,7 @@ from .sqlite_store_mixins_base import SQLiteStoreBase
 
 import json
 import logging
+import sqlite3
 from pathlib import Path
 
 from src.memory.index_lock import with_index_lock
@@ -25,7 +26,7 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
         try:
             from src.shared_state import get_config
             cfg = get_config()
-        except Exception:
+        except (KeyError, AttributeError):  # shared_state 未就绪或配置对象结构不匹配时兜底
             cfg = None
         mem = getattr(cfg, "memory", None) if cfg is not None else None
         if mem is None:
@@ -50,7 +51,9 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                 logger.info("没有找到现有的faiss索引，重新开始")
             self._index_dim = dim
             self._index_revision = self.get_kb_revision()
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底（表不存在 / 损坏 / 锁冲突）；向量索引构建本身的逻辑
+            # 错误（如维度错配、JSON 解析失败）仍向上抛，避免静默吞掉配置问题。
             logger.warning("初始化向量索引失败：%s", e)
             self._vector_index = None
 
@@ -88,7 +91,7 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                 return False
             db_rev = self.get_kb_revision()
             return db_rev == self._index_revision
-        except Exception:
+        except sqlite3.Error:
             logger.warning("[resilience] silent exception in _index_in_sync", exc_info=True)
             return True
 
@@ -112,7 +115,7 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                 )
             db_count = cur.fetchone()[0]
             return db_count == self._vector_index.count
-        except Exception as _exc:
+        except sqlite3.Error as _exc:
             logger.warning(f"_index_count_matches_db: swallowed exception: {_exc}")
             return False
 
@@ -135,7 +138,8 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             cur.execute("SELECT value FROM kb_meta WHERE key = 'revision'")
             row = cur.fetchone()
             return int(row["value"]) if row else 0
-        except Exception:
+        except sqlite3.Error:
+            # 仅 DB 层失败（表不存在 / 损坏 / 锁冲突）才兜底；共享状态加载错误仍向上抛
             logger.warning("[resilience] get_kb_revision failed", exc_info=True)
             return 0
 
@@ -161,7 +165,8 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             cur.execute("SELECT value FROM kb_meta WHERE key = 'revision'")
             row = cur.fetchone()
             return int(row["value"]) if row else 1
-        except Exception:
+        except sqlite3.Error:
+            # 仅 DB 层失败（表不存在 / 损坏 / 锁冲突）才兜底；非 DB 错误仍向上抛
             logger.warning("[resilience] bump_kb_revision failed", exc_info=True)
             return 0
 
@@ -236,7 +241,8 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             if not dim_counts:
                 return None
             return max(dim_counts.keys(), key=lambda d: (dim_counts[d], d))
-        except Exception:
+        except (sqlite3.Error, ValueError, TypeError):
+            # DB 层失败 / 向量数据异常（坏 JSON 已按条跳过，此处兜底其余解析错误）
             logger.warning("[resilience] _get_best_embedding_dim failed", exc_info=True)
             return None
 
@@ -254,7 +260,8 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                     "FAISS 索引从磁盘加载：%d 向量，dim=%d", vi.count, dim
                 )
                 return True
-        except Exception as e:
+        except (sqlite3.Error, OSError, ValueError) as e:
+            # DB 读取失败 / 文件系统 I/O 失败 / 向量数据损坏
             logger.warning("从磁盘加载 FAISS 索引失败: %s", e)
         return False
 
@@ -315,11 +322,11 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                     "FAISS 增量更新：+%d 向量（坏JSON %d, 维度不匹配 %d），总计 %d",
                     len(new_items), bad_json, dim_mismatch, vi.count,
                 )
-            except Exception as save_err:
+            except (sqlite3.Error, OSError, ValueError) as save_err:
                 logger.warning("FAISS 增量后保存失败: %s", save_err)
             return True
 
-        except Exception as e:
+        except (sqlite3.Error, OSError, ValueError) as e:
             logger.warning("FAISS 增量更新失败: %s", e)
             return False
 
@@ -363,7 +370,7 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             try:
                 self._vector_index.save()
                 saved_note = "，已持久化"
-            except Exception as save_err:
+            except (sqlite3.Error, OSError, ValueError) as save_err:
                 logger.warning("向量索引重建后保存失败: %s", save_err)
                 saved_note = "，保存失败（下次启动将重建）"
             logger.info(
@@ -371,6 +378,6 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                 best_dim, len(items), skipped, len(dim_groups), saved_note,
             )
             self._index_revision = self.get_kb_revision()
-        except Exception as e:
+        except (sqlite3.Error, OSError, ValueError) as e:
             logger.warning("Failed to load vector index: %s", e)
             self._vector_index = None

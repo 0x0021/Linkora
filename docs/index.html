@@ -82,7 +82,7 @@
 
   <div class="container hero__inner">
     <div class="hero__copy">
-      <span class="hero__badge"><span class="tag">v0.4.0</span> 新增：主动触达 · 认证与出站安全加固</span>
+      <span class="hero__badge"><span class="tag">v0.4.2</span> 新增：对话摘要实时页 · 主动触达 · 公共记忆注入</span>
       <h1 class="hero__title">让 AI 分身，<br /><span class="grad">接管你的日常沟通</span></h1>
       <p class="hero__sub">群聊、私聊都在线 · 钉钉、飞书、企业微信全覆盖</p>
       <p class="hero__desc">灵桥把 AI 分身带到团队每天使用的沟通平台。它能理解企业知识、调用工具完成工作，并与真人无缝协作，让沟通和业务持续运转。</p>
@@ -136,7 +136,7 @@
     <div class="stat"><div class="stat__num" data-count="38">0</div><div class="stat__label">内置工具</div></div>
     <div class="stat"><div class="stat__num" data-count="39">0</div><div class="stat__label">意图分类</div></div>
     <div class="stat"><div class="stat__num" data-count="3">0</div><div class="stat__label">接入平台</div></div>
-    <div class="stat"><div class="stat__num" data-count="15">0</div><div class="stat__label">管理台页面</div></div>
+    <div class="stat"><div class="stat__num" data-count="16">0</div><div class="stat__label">管理台页面</div></div>
   </div>
 </div>
 
@@ -180,12 +180,17 @@
       <div class="feature-card reveal" data-delay="2">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h8"/></svg></div>
         <h3 class="feature-card__title">Web 管理台</h3>
-        <p class="feature-card__desc">15 个页面、161 端点。会话、知识库、工具、审批全在浏览器里可查、可调、可观测。</p>
+        <p class="feature-card__desc">16 个页面、162 端点。会话、知识库、工具、审批、实时对话摘要全在浏览器里可查、可调、可观测。</p>
       </div>
       <div class="feature-card reveal" data-delay="3">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
         <h3 class="feature-card__title">多平台物理隔离</h3>
         <p class="feature-card__desc">钉钉 / 飞书 / 企微各自独立数据库、独立轮询器，数据不串台，可按平台独立启停。</p>
+      </div>
+      <div class="feature-card reveal" data-delay="1">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 11v4"/><path d="M9 11v4"/><path d="M15 11v4"/></svg></div>
+        <h3 class="feature-card__title">主动触达 & 对话摘要</h3>
+        <p class="feature-card__desc">每日定时把近期会话摘要主动推送给主人（钉钉 1:1），Web 后台「对话摘要」页实时查看同源汇总；默认关闭，按需启用。</p>
       </div>
     </div>
   </div>
@@ -347,8 +352,8 @@ pip install -r requirements.lock
 # 3. 配置平台凭证
 cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
 
-# 4. 启动
-python main.py</code></pre>
+# 4. 启动（双进程：web + worker）
+.venv/bin/python scripts/run_linkora.py</code></pre>
       <div style="margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap;">
         <a class="btn btn--primary" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">查看仓库</a>
         <a class="btn btn--glass" href="./configuration.html">配置指南</a>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import psutil
 import time
 
@@ -51,8 +52,9 @@ class SystemStatusTool(BaseTool):
             cur.execute("SELECT COUNT(*) as cnt FROM kb_documents")
             kb_count = cur.fetchone()["cnt"]
             db_status = "正常"
-        except Exception as e:
-            logger.exception("获取数据库状态失败: %s", e)
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底；非 DB 错误（如配置结构变化）仍向上抛
+            logger.warning("获取数据库状态失败: %s", e)
             db_status = f"异常: {e}"
             msg_count = conv_count = kw_count = kb_count = 0
 
@@ -67,16 +69,18 @@ class SystemStatusTool(BaseTool):
             else:
                 user_name = corp_name = expires_at = ""
                 auth_status = "未配置"
-        except Exception as e:
-            logger.debug("get profile failed: %s", e)
+        except (OSError, ValueError):
+            # DWS 本地配置读取失败 → 容错返回空值
+            logger.debug("get profile failed")
             user_name = corp_name = expires_at = ""
             auth_status = "未知"
 
         try:
             mem = psutil.virtual_memory()
             cpu = psutil.cpu_percent(interval=0.1)
-        except Exception as e:
-            logger.debug("psutil failed: %s", e)
+        except Exception:
+            # psutil 调用可能因权限/平台差异失败，静默容错
+            logger.debug("psutil failed")
             mem = None
             cpu = 0
 
@@ -85,8 +89,9 @@ class SystemStatusTool(BaseTool):
         if cfg is None:
             try:
                 cfg = load_config(str(get_config_path()))
-            except Exception as e:
-                logger.debug("load_config failed: %s", e)
+            except (OSError, TypeError):
+                # 配置文件读取失败 / YAML 解析失败 → 容错回退 None
+                logger.debug("load_config failed")
                 cfg = None
 
         if cfg is not None:
@@ -223,9 +228,10 @@ class MessageStatsTool(BaseTool):
                 "days": days,
             }
 
-        except Exception as e:
-            logger.error("消息统计查询失败: %s", e)
-            return {"error": f"查询失败: {e}"}
+        except (sqlite3.Error, ValueError):
+            # 仅 DB 层或数据格式错误才兜底
+            logger.error("消息统计查询失败")
+            return {"error": "查询失败"}
 
 
 class KeywordRulesTool(BaseTool):
@@ -323,9 +329,10 @@ class KeywordRulesTool(BaseTool):
             else:
                 return {"error": f"未知操作: {action}"}
 
-        except Exception as e:
-            logger.error("关键词规则操作失败: %s", e)
-            return {"error": f"操作失败: {e}"}
+        except (sqlite3.Error, ValueError):
+            # 仅 DB 层或数据格式错误才兜底
+            logger.error("关键词规则操作失败")
+            return {"error": "操作失败"}
 
 
 class ConfigManageTool(BaseTool):
@@ -474,8 +481,9 @@ class ConfigManageTool(BaseTool):
                 # config.yaml 导致下次 load_config 的 Pydantic 校验失败、进程启动崩溃。
                 try:
                     AppConfig.model_validate(config_dict)
-                except Exception as ve:
-                    return {"error": f"配置校验失败，已取消写入以避免损坏配置文件: {ve}"}
+                except (TypeError, ValueError):
+                    # 配置结构错误 → 立即返回，不写盘
+                    return {"error": "配置校验失败，已取消写入以避免损坏配置文件"}
 
                 # 原子写：先写临时文件再 os.replace 整体替换，避免写盘中途崩溃导致
                 # YAML 被截断、进程再也起不来；也避免并发两次 update 互相覆盖成半截文件。
@@ -488,7 +496,8 @@ class ConfigManageTool(BaseTool):
                     with os.fdopen(fd, "w", encoding="utf-8") as f:
                         yaml.dump(config_dict, f, default_flow_style=False, allow_unicode=True)
                     os.replace(tmp_path, config_path)  # 原子：要么完整新文件，要么旧文件不变
-                except Exception:
+                except (OSError, IOError, yaml.YAMLError):
+                    # 文件系统 I/O 错误或 YAML 序列化失败 → 清理临时文件后重抛
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
                     raise
@@ -505,6 +514,7 @@ class ConfigManageTool(BaseTool):
             else:
                 return {"error": f"未知操作: {action}"}
 
-        except Exception as e:
-            logger.error("配置管理操作失败: %s", e)
-            return {"error": f"操作失败: {e}"}
+        except (sqlite3.Error, OSError, ValueError):
+            # 仅 DB 层、文件 I/O 错误或数据格式错误才兜底
+            logger.error("配置管理操作失败")
+            return {"error": "操作失败"}

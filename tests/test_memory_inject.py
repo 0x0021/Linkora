@@ -151,3 +151,44 @@ def test_reuse_query_embedding():
         query_embedding=q_emb,
     )
     assert emb.calls == 0  # 复用传入向量，零额外 embed
+
+
+def test_block_contains_high_priority_preamble():
+    """v6 权重提升：返回 block 必须含「最高优先级」「覆盖声明」等指令前缀，
+    避免 LLM 被 KB 文档/网络信息覆盖公共记忆里的事实（2026-08-20 事故：8800 资源站）。
+    """
+    mem = {"content": "内网 10.0.4.18:8800 互联网 sw.rokae.com:8800", "similarity": 0.7}
+    agent = _make_agent([mem])
+    new_content, result = inject_public_memories(
+        query="8800 打不开", system_content="SYSTEM", agent=agent,
+    )
+    assert result.injected is True
+    assert result.block, "v6 必须返回完整 block 供 prompt_builder 抽出独立消息"
+    # 高优先级声明必须出现
+    assert "最高优先级" in result.block
+    assert "覆盖声明" in result.block
+    assert "直接给出" in result.block
+    # block 块必须含记忆内容
+    assert "10.0.4.18" in result.block
+    # block 已追加到 system_content 末尾（去除尾部空白后内容等价）
+    assert new_content.rstrip() == ("SYSTEM" + result.block).rstrip()
+
+
+def test_block_appears_in_system_content_for_prompt_builder_extraction():
+    """v6 prompt_builder 权重提升：从 system_content 末尾能完整定位并抽离 block。"""
+    mem = {"content": "公司年假 10 天", "similarity": 0.9}
+    agent = _make_agent([mem])
+    new_content, result = inject_public_memories(
+        query="公司年假几天", system_content="SYSTEM_BEFORE", agent=agent,
+    )
+    # 模拟 prompt_builder 的抽出逻辑：用 PUBLIC_MEMORY_BLOCK_MARK 定位起点
+    from src.llm.memory_inject import PUBLIC_MEMORY_BLOCK_MARK
+    assert PUBLIC_MEMORY_BLOCK_MARK in new_content
+    idx = new_content.rindex(PUBLIC_MEMORY_BLOCK_MARK)
+    extracted = new_content[idx:]
+    remaining = new_content[:idx].rstrip()
+    # 抽出后 system_content 不再含 block
+    assert PUBLIC_MEMORY_BLOCK_MARK not in remaining
+    # 抽出后 system_content 保留原文 + 末尾无 block 残留
+    assert remaining == "SYSTEM_BEFORE"
+    assert extracted.startswith(PUBLIC_MEMORY_BLOCK_MARK)

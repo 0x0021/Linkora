@@ -54,7 +54,8 @@ class ReplyDispatchMixin(EngineMixinBase):
                     )
                     logger.info("[发送] 原生引用回复 DWS 返回: %s", native_result)
                     return True, native_result
-                except Exception as e:
+                except (sqlite3.Error, RuntimeError) as e:
+                    # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送
                     logger.warning("[发送] 原生引用回复（群聊）失败，降级为分片发送: %s", e)
                     # 落到下方 _send_possibly_sharded 分支
             result = self._send_possibly_sharded(
@@ -124,7 +125,8 @@ class ReplyDispatchMixin(EngineMixinBase):
                     "single",
                     peer_open_dingtalk_id=sender_id,
                 )
-            except Exception as e:
+            except sqlite3.Error as e:
+                # 仅 DB 层失败才兜底；非 DB 错误（如存储配置变化）仍向上抛
                 logger.warning("[纠错] DB 修复失败（不影响发送）: %s", e)
 
         logger.info("[发送] 单聊回复: chat_id=%s, chat_name=%s, peer_user_id=%s, peer_oid=%s, sender_id=%s",
@@ -149,8 +151,9 @@ class ReplyDispatchMixin(EngineMixinBase):
                 )
                 logger.info("[发送] 原生引用回复 DWS 返回: %s", native_result)
                 return True, native_result
-            except Exception as e:
-                logger.warning("[发送] 原生引用回复失败，降级为分片发送: %s", e)
+            except (sqlite3.Error, RuntimeError):
+                # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送
+                logger.warning("[发送] 原生引用回复失败，降级为分片发送")
                 # 落到下方 _send 分支
 
         # 外部好友（跨租户）必须用 --chat-id oc_xxx 发送，而不能用
@@ -160,7 +163,7 @@ class ReplyDispatchMixin(EngineMixinBase):
             try:
                 ef = self.store._external_friend_repo.get_external_friend_by_id(peer_oid)
                 is_external = bool(ef)
-            except Exception:
+            except (sqlite3.Error, RuntimeError):
                 logger.warning("[resilience] silent exception in _send_reply", exc_info=True)
         _send = functools.partial(
             self._send_possibly_sharded,
@@ -206,13 +209,14 @@ class ReplyDispatchMixin(EngineMixinBase):
                 try:
                     self.poller._mark_msg_processed(real_msg_id, message.chat_id)
                     logger.info("[去重] 已标记 AI 回复为已处理: %s", real_msg_id[:30])
-                except Exception as me:
+                except (sqlite3.Error, RuntimeError) as me:
                     logger.warning("[去重] 标记失败: %s", me)
 
         # 更新最后回复时间（用于回复冷却）
         try:
             self.store._conversation_repo.update_last_reply_time(message.chat_id, message.chat_type)
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底；非 DB 错误仍向上抛
             logger.warning("[冷却] 更新回复时间失败: %s", e)
 
         # 记录「最后回复过的用户消息 msg_id」（基于消息 ID 的防重复回复）
@@ -224,9 +228,10 @@ class ReplyDispatchMixin(EngineMixinBase):
                 try:
                     self.poller._mark_msg_processed(msg_key, message.chat_id)
                     logger.info("[去重] 回复成功后已标记用户消息为已处理: %s", msg_key[:30])
-                except Exception as de:
+                except (sqlite3.Error, RuntimeError) as de:
                     logger.warning("[去重] 标记用户消息失败: %s", de)
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底；非 DB 错误仍向上抛
             logger.warning("[防重复] 更新已回复消息 ID 失败: %s", e)
 
         # 【H4修复】移除 time.sleep(2) 阻塞验证。原逻辑在发送后 sleep 2s 再查消息列表验证，
@@ -255,7 +260,8 @@ class ReplyDispatchMixin(EngineMixinBase):
         try:
             self.poller._mark_msg_processed(reply_uuid, message.chat_id)
             logger.info("[去重] 已标记 AI 回复为已处理: %s", reply_uuid[:20])
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底；非 DB 错误仍向上抛
             logger.warning("[去重] 标记 AI 回复为已处理失败: %s", e)
 
         # 【合并消息修复】如果是合并消息，仅 message.msg_id（最后一条）会被
@@ -271,7 +277,7 @@ class ReplyDispatchMixin(EngineMixinBase):
                 if oid:
                     try:
                         self.poller._mark_msg_processed(oid, message.chat_id)
-                    except Exception as e:
+                    except (sqlite3.Error, RuntimeError) as e:
                         logger.warning("[去重] 标记合并消息原始ID失败: %s", e)
             logger.info("[去重] 合并消息已批量标记 %d 条原始消息为已处理", len(original_ids))
     def _send_reply(self, message: Message, reply_text: str) -> bool:

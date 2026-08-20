@@ -6,7 +6,9 @@ self.store.conn for per-thread connection access. Zero behavior change.
 
 from __future__ import annotations
 
+import json
 import logging
+import sqlite3
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -156,13 +158,13 @@ class DecisionsRepo:
                 return 0
             self.store.conn.commit()
             return cur.rowcount
-        except Exception as e:
-
+        except sqlite3.Error as e:
+            # 仅 DB 层失败兜底（表不存在 / 损坏 / 锁冲突 / 约束违反）
             logger.warning(f"mark_cited: swallowed exception: {e}")
             logger.debug("[resilience] 回填 cited 标记失败: %s", e)
             try:
                 self.store.conn.rollback()
-            except Exception:
+            except sqlite3.Error:
                 pass
             return 0
 
@@ -204,7 +206,8 @@ class DecisionsRepo:
                 "rag_grounded_rate": round(rag / total, 4) if total else 0.0,
                 "cited_rate": round(cited / total, 4) if total else 0.0,
             }
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败兜底；非 DB 错误（如配置对象结构变化）仍向上抛
             logger.debug("[resilience] 质量统计读取失败: %s", e)
             return {
                 "total": 0, "handoff_count": 0, "rag_grounded_count": 0, "cited_count": 0,
@@ -233,11 +236,11 @@ class DecisionsRepo:
                     (excess,),
                 )
             self.store.conn.commit()
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("数据库提交失败: %s", e)
             try:
                 self.store.conn.rollback()
-            except Exception as re:
+            except sqlite3.Error as re:
                 logger.error("数据库回滚也失败: %s", re)
 
     def cleanup_old_records(self, decisions_retention_days: int | None = None) -> dict:
@@ -264,11 +267,11 @@ class DecisionsRepo:
             cur.execute("SELECT COUNT(*) FROM decisions")
             result["decisions_remaining"] = cur.fetchone()[0]
             self.store.conn.commit()
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("数据库提交失败: %s", e)
             try:
                 self.store.conn.rollback()
-            except Exception as re:
+            except sqlite3.Error as re:
                 logger.error("数据库回滚也失败: %s", re)
         return result
 
@@ -345,7 +348,7 @@ class DecisionsRepo:
             if tools:
                 try:
                     tools = _json.loads(tools)
-                except Exception as e:
+                except (json.JSONDecodeError, TypeError) as e:
                     logger.debug("工具列表 JSON 解析失败: %s", e)
                     tools = []
             else:
@@ -391,7 +394,7 @@ class DecisionsRepo:
         for r in rows:
             try:
                 tools = _json.loads(r[9]) if r[9] else []
-            except Exception as _exc:
+            except (json.JSONDecodeError, TypeError) as _exc:
                 logger.debug(f"query_decisions_by_rid: swallowed exception: {_exc}")
                 tools = []
             items.append({
@@ -498,7 +501,7 @@ class DecisionsRepo:
                 }
                 for r in cur.fetchall()
             ]
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.debug("[resilience] 引文决策读取失败: %s", e)
             return []
 

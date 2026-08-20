@@ -29,7 +29,7 @@ PUBLIC_MEMORY_TOP_K: int = 3          # 每轮最多注入几条公共记忆
 PUBLIC_MEMORY_MIN_SIMILARITY: float = 0.55  # 低于该相似度不注入（防噪音）
 
 # 注入块的锚点标记（供 sanitize_reply / 测试定位）
-PUBLIC_MEMORY_BLOCK_MARK = "【★公共记忆（团队共享知识，参考使用）★】"
+PUBLIC_MEMORY_BLOCK_MARK = "【★公共记忆（团队/用户已录入的事实，最高优先级）★】"
 
 
 @dataclass
@@ -40,12 +40,14 @@ class PublicMemoryInjectResult:
     - memories: 注入的记忆条目列表（未注入为 []）
     - best_score: 命中最高相似度（未注入为 None）
     - skipped_reason: 仅 debug 用，便于日志/单测观察分支选择
+    - block: 完整注入块文本（含高优先级指令前缀），供 prompt_builder 抽出为独立消息
     """
 
     injected: bool
     memories: list[dict] = field(default_factory=list)
     best_score: float | None = None
     skipped_reason: str = ""  # "disabled" | "short" | "no-embed" | "no-hit" | ""
+    block: str = ""  # v6：完整块文本，供 prompt_builder 抽出为独立消息提升权重
 
 
 def inject_public_memories(
@@ -127,11 +129,23 @@ def inject_public_memories(
         "[公共记忆] 注入成功: best_score=%.3f top=%d query=%.60s",
         best_score, len(memories), query,
     )
+    # v6：与 RAG 对齐——加高优先级指令前缀 + 降级兜底声明，提示 LLM 当
+    # 公共记忆直接包含用户提到的地址/术语时优先采用，避免被 KB/网络信息
+    # 覆盖（2026-08-20 真实事故：8800 资源站地址已在公共记忆，KB 文档却说
+    # "不在内部系统列表"，LLM 据此回复忽略记忆里的事实）。
     _mem_block = (
         f"\n{PUBLIC_MEMORY_BLOCK_MARK}\n"
-        "以下为系统已检索到的团队公共记忆（公司/部门级共享知识）。"
-        "若与用户问题相关，请直接引用其中的地址/IP/制度/流程等事实作答；"
-        "若与用户问题无关，请忽略本区块。\n"
+        "以下内容是系统已从团队公共记忆库检索到的事实（用户/团队明确录入）。\n"
+        "**当下方内容直接包含用户提到的地址/术语/系统名/工号时，"
+        "你必须直接基于本区块回答**，而不是引用其他来源（KB 文档/网络）。\n"
+        "⚠️ 覆盖声明：若本区块与知识库(RAG)内容冲突，优先采用本区块——"
+        "公共记忆是显式录入的事实，KB 可能过时。\n"
+        "⚠️ 回答要求：直接给出具体地址/IP/配置/流程/工号等信息，"
+        "不要说「不在系统列表」「需要查证」「信息不足」——"
+        "若下方已明确写出该信息，视为已知事实直接回答。\n"
+        "⚠️ 若用户问题与下方内容不相关（如问天气却注入了 VPN 文档），"
+        "则忽略本区块正常回答。\n"
+        "\n"
     )
     for m in memories:
         content = str(m.get("content", "")).strip()
@@ -144,4 +158,5 @@ def inject_public_memories(
         memories=memories,
         best_score=best_score,
         skipped_reason="",
+        block=_mem_block,  # v6：完整块文本，供 prompt_builder 抽出为独立消息
     )

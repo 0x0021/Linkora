@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.llm.history import _RE_CHINESE, estimate_cost as _history_estimate_cost
-from src.llm.memory_inject import inject_public_memories
+from src.llm.memory_inject import PUBLIC_MEMORY_BLOCK_MARK, inject_public_memories
 from src.llm.message_wrap import wrap_incoming_message
 from src.llm.rag_inject import inject_rag_knowledge
 from src.llm.timeline import format_time_label, gap_notice, incoming_gap_notice
@@ -334,8 +334,32 @@ class PromptBuilder:
                             len(_rag_block))
             rag_standalone_msg = {"role": "system", "content": _rag_block}
 
+        # v6 公共记忆权重提升：与 RAG 同等机制——抽出为独立消息紧跟 RAG 之后。
+        # 原问题：公共记忆仅追加到 system 末尾，被 RAG 高优先级块+护栏压在注意力死角，
+        # LLM 给出"不在系统列表"等忽略回复（2026-08-20 真实事故：8800 资源站地址已在
+        # 公共记忆，KB 文档说"不在列表"，LLM 据此回复完全无视记忆里的事实）。
+        public_memory_standalone_msg = None
+        if _mem_result.injected and _mem_result.block:
+            _mem_block = _mem_result.block
+            _extracted_mem = False
+            if system_content.endswith(_mem_block):
+                system_content = system_content[:-len(_mem_block)].rstrip()
+                _extracted_mem = True
+            elif PUBLIC_MEMORY_BLOCK_MARK in system_content:
+                # 兜底：通过标记定位起始位置（容忍尾部空白差异）
+                _idx = system_content.rindex(PUBLIC_MEMORY_BLOCK_MARK)
+                system_content = system_content[:_idx].rstrip()
+                _extracted_mem = True
+            if _extracted_mem:
+                messages[0]["content"] = system_content  # 同步主 system
+                logger.info("[公共记忆] 权重提升：公共记忆块从主 system prompt 抽出 → 独立消息（%d 字符）",
+                            len(_mem_block))
+            public_memory_standalone_msg = {"role": "system", "content": _mem_block}
+
         if rag_standalone_msg is not None:
             messages.append(rag_standalone_msg)
+        if public_memory_standalone_msg is not None:
+            messages.append(public_memory_standalone_msg)
         messages.append({"role": "user", "content": incoming})
 
         # Token 超限截断
@@ -354,6 +378,8 @@ class PromptBuilder:
             messages.append({"role": "system", "content": final_guard})
             if rag_standalone_msg is not None:
                 messages.append(rag_standalone_msg)
+            if public_memory_standalone_msg is not None:
+                messages.append(public_memory_standalone_msg)
             messages.append({"role": "user", "content": incoming})
 
         if total_tokens > max_input_tokens:
@@ -374,6 +400,8 @@ class PromptBuilder:
                 ]
                 if rag_standalone_msg is not None:
                     messages.append(rag_standalone_msg)
+                if public_memory_standalone_msg is not None:
+                    messages.append(public_memory_standalone_msg)
                 messages.append({"role": "user", "content": incoming})
             if total_tokens > max_input_tokens:
                 # 极端兜底：即便砍光用户消息仍超阈值（主 system 本身极长），才降级比例砍 system

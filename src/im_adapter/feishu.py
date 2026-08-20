@@ -745,7 +745,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         try:
             self.run(args, force_no_dry_run=True)
             return True
-        except Exception as exc:  # 吞掉一切异常，绝不向上抛
+        except Exception as exc:  # 吞掉一切异常，绝不向上抛  # noqa: BLE001
             logger.warning("[飞书] 撤回消息失败 message_id=%s: %s",
                            message_id[:32], exc)
             return False

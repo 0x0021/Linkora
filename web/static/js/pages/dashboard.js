@@ -389,20 +389,12 @@ function injectDashboardSkeletons() {
     ['stat-messages', 'stat-keywords', 'stat-kb-docs', 'stat-ddocs', 'stat-memories'].forEach(id => {
         set(id, '<span class="stat-skeleton skeleton skeleton-line tall"></span>');
     });
-    // 决策追踪 TOP10 / 活跃发送者 TOP5
+    // 决策追踪 TOP10
     set('decisions-top-list', skKwRows(10));
-    set('top-senders-list', skKwRows(5));
     // 系统状态网格
     set('status-list', skStatusTiles(6));
     // 最近消息
     set('recent-messages-stream', skLogRows(6));
-    // 工具调用统计：排行列表（3列网格）+ 4 个汇总值
-    set('tool-stats-container', skToolRanking(20));
-    // 调度可靠性（背压 + 防抖 inline-bar 值）
-    const relSk = '<span class="rel-skeleton skeleton"></span>';
-    ['bp-max-dispatch','bp-max-concurrent','bp-last-dispatched','bp-last-deferred',
-     'db-pending','db-delay-count','db-extra-sec','db-fired-with',
-     'ps-last-poll','ps-poll-count','ps-queue-depth','ps-last-error','ps-running'].forEach(id => set(id, relSk));
     // 「工具」chip 的 value 骨架（自检回包前会闪一下）
     const toolsChipVal = document.querySelector('#tools-tile .ov-chip-value');
     if (toolsChipVal) toolsChipVal.innerHTML = '<span class="rel-skeleton skeleton" style="width:38px;height:11px;display:inline-block;vertical-align:middle;"></span>';
@@ -560,11 +552,7 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
             try {
                 const statsData = await api.getMessageStats(7);
                 if (currentPage !== 'dashboard') return;
-                renderMessageTrendChart(statsData.trend || []);
                 renderHeroSparkline(statsData.trend || []);
-                renderMsgTypeChart(statsData.msg_types || []);
-                renderTopSenders(statsData.top_senders || []);
-                renderWordCloud(statsData.top_words || []);
                 // D1: 用 message-stats 趋势累加值覆盖统计卡消息数，保证与趋势图数据口径一致
                 const trendTotal = (statsData.trend || []).reduce((s, d) => s + (d.cnt || 0), 0);
                 const statMsgEl = document.getElementById('stat-messages');
@@ -573,17 +561,6 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                 }
             } catch (e) {
                 console.error('Failed to load message stats:', e);
-                // 清理骨架 + 显示占位，避免骨架永久卡住
-                ['word-cloud-skeleton', 'chart-message-trend-skeleton', 'chart-msg-types-skeleton'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.style.display = 'none';
-                });
-                const wcC = document.getElementById('word-cloud-container');
-                if (wcC) { wcC.style.display = 'block'; wcC.innerHTML = '<div class="word-cloud-empty"><p>数据加载失败</p></div>'; }
-                const trC = document.getElementById('chart-message-trend');
-                if (trC) trC.style.display = 'none';
-                const mtC = document.getElementById('msgtype-chart-wrap');
-                if (mtC) mtC.style.display = 'none';
             }
         })(),
         loadRecentMessages(),
@@ -910,5 +887,7 @@ function applyRealtimeLogs(data) {
     }
     lastLogId = logs[logs.length - 1].id;
 }
+
+
 
 

@@ -30,6 +30,8 @@ KMP_DUPLICATE_LIB_OK=TRUE pytest
 
 > 改完 `src/` 后需重启 bot（`scripts/run_linkora.py`）让改动生效；纯测试 / 文档改动无需重启。
 
+依赖声明四处一致：`requirements.txt` 为直接依赖唯一真源、`requirements.lock` 为完整传递闭包（CI / pip-audit 使用），二者须由 `scripts/check_deps.py` 校验对齐。前端资源改动需 `npm run build:frontend` 重新构建，前端单元测试用 `npm run test:frontend`（vitest）。
+
 ## 提交规范
 
 采用中文 `type(scope)` 前缀（与现有历史保持一致）：
@@ -60,7 +62,7 @@ KMP_DUPLICATE_LIB_OK=TRUE pytest
 2. 保证本地 `pytest` 全绿，且 `ruff check` 无新增 `C901` / `PGH004` 违规；
 3. PR 描述说明：**改了什么、为什么、如何验证**；
 4. 关联对应 Issue（如 `Closes #123`）；
-5. 等待 CI（secret-scan / lint / test on py3.12 & 3.13）通过；
+5. 等待 CI（secret-scan / lint / test on py3.14.6）通过；
 6. 维护者 Review 后合并。
 
 ### PR 自检清单

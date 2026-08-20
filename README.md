@@ -33,8 +33,8 @@
 | 接入平台 | **3 个**（钉钉 / 飞书 / 企业微信，数据物理隔离） |
 | 内置工具 | **38 个**（Tool Calling，单一真源 `BUILTIN_TOOL_MANIFEST`） |
 | 意图分类 | **39 个**（9 处置 + 7 动作 + 23 领域） |
-| Web 管理台 | **15 个页面（SPA）** / 29 个路由模块 / 153 端点 |
-| 代码规模 | ~170 个 `src` Python 模块 / 200+ 测试文件 |
+| Web 管理台 | **15 个页面（SPA）** / 31 个路由模块 / 161 端点 |
+| 代码规模 | 188 个 `src` Python 模块 / 200+ 测试文件 |
 
 ---
 
@@ -122,7 +122,7 @@ flowchart TB
 高频场景关键词精确匹配、毫秒级响应、不走 LLM；39 个内置意图覆盖天气 / 联网搜索 / 日程 / 待办 / 审批 / 考勤 / 组织 / 配置 / 维基等；黑白名单按会话 / 用户 / 关键词多维度控制；每条消息的意图判定与路由决策可追溯。
 
 ### Tool Calling（38 个内置工具）
-由 `BUILTIN_TOOL_MANIFEST` 单一真源声明并自动注册，按意图关键词自动匹配，覆盖消息通讯、知识文档、组织人员、日程待办、审批（钉钉 10 个）、考勤、会议纪要、长期记忆、运维工具等。
+由 `BUILTIN_TOOL_MANIFEST` 单一真源声明并自动注册，按意图关键词自动匹配，覆盖消息通讯、知识文档、组织人员、日程待办、审批（钉钉 8 个）、考勤、会议纪要、长期记忆、运维工具等。
 
 ### Web 管理台（`:8080`）
 仪表盘统计、对话记录检索、知识库管理、规则引擎配置、草稿审批、在线编辑 `config.yaml`、日志 / 健康检查 / 决策追踪 / 成本质量看板。
@@ -141,6 +141,8 @@ flowchart TB
 git clone <repo-url> linkora && cd linkora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+#    依赖锁定：requirements.lock 为完整传递闭包（CI / pip-audit 使用），
+#    日常开发与 Docker 用 requirements.txt（直接依赖唯一真源）即可。
 
 # 2. 准备配置
 cp config.yaml.example config.yaml
@@ -149,6 +151,9 @@ cp config.yaml.example config.yaml
 # 3. 平台 CLI 登录（以钉钉为例）
 dws auth login
 #    飞书：lark-cli login   企业微信：wecom-cli login
+
+# 前端资源改动后需重新构建（vitest 单测见 npm run test:frontend）：
+npm run build:frontend
 
 # 4. 启动（双进程：web + worker）
 .venv/bin/python scripts/run_linkora.py
@@ -165,7 +170,7 @@ dws auth login
 docker compose up -d
 ```
 
-部署细节见 [部署指南](docs/deployment.md) 与 [进阶部署](docs/DEPLOY.md)。
+部署细节见 [部署指南](docs/deployment.md) 与 [进阶部署](docs/deployment.md)。
 
 ---
 
@@ -221,7 +226,7 @@ platforms:
     adapter: { cli_path: wecom-cli }
 ```
 
-> 轮询配置真源在 `platforms[].poller`（按平台隔离），**不存在根级 `poller:` 段**。
+> 轮询配置真源在 `platforms[].poller`（按平台隔离）；根级 `poller:` 为 legacy 兼容段，运行期以 `platforms[].poller` 为准。
 
 全部配置项与 `llm` / `embedding` 段示例见 [配置参考](docs/configuration.md)。
 
@@ -303,7 +308,7 @@ KMP_DUPLICATE_LIB_OK=TRUE .venv/bin/python -m pytest tests/ -q
 | --- | --- |
 | [配置参考](docs/configuration.md) | `config.yaml` 全部配置项 |
 | [部署指南](docs/deployment.md) | 本地运行、Docker、后台服务 |
-| [进阶部署](docs/DEPLOY.md) | 平台前置条件、CI、systemd/launchd |
+| [进阶部署](docs/deployment.md) | 平台前置条件、CI、systemd/launchd |
 | [常见问题](docs/faq.md) | FAQ 与排障 |
 
 **理解系统**

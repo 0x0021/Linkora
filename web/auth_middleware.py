@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import logging
 import secrets
+import threading
 import time
 from functools import wraps
 from typing import Any, Callable
@@ -138,6 +139,65 @@ def require_role(*roles: str) -> Callable:
     return decorator
 
 
+# ── 密码哈希（PBKDF2-HMAC-SHA256，stdlib，无外部依赖）──────────────────────
+# 存储格式支持两种：
+#   - 哈希 `pbkdf2_sha256$<iter>$<salt_b64>$<hash_b64>`（推荐，生产应使用）
+#   - 明文（legacy 兼容，启动时告警，建议改为哈希）
+# 生成哈希：python -c "from web.auth_middleware import hash_password; print(hash_password('你的密码'))"
+_PBKDF2_ITER = 200_000
+
+
+def hash_password(password: str) -> str:
+    """生成 PBKDF2-HMAC-SHA256 密码哈希，供写入 config.yaml 的 web.auth_password。"""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ITER)
+    return "pbkdf2_sha256${}${}${}".format(
+        _PBKDF2_ITER,
+        base64.b64encode(salt).decode(),
+        base64.b64encode(dk).decode(),
+    )
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """校验密码：哈希格式走 PBKDF2，明文格式向后兼容（恒定时间比较）。"""
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, iter_s, salt_b64, hash_b64 = stored.split("$", 3)
+            salt = base64.b64decode(salt_b64)
+            expected = base64.b64decode(hash_b64)
+        except ValueError:
+            return False
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iter_s))
+        return hmac.compare_digest(dk, expected)
+    return hmac.compare_digest(password.encode("utf-8"), stored.encode("utf-8"))
+
+
+# ── 登录失败限流（进程内，按用户名锁定，防暴力破解）────────────────────────
+_login_fail_lock = threading.Lock()
+_login_failures: dict[str, list[float]] = {}
+_MAX_LOGIN_FAILS = 5
+_LOGIN_LOCKOUT_SECS = 300
+
+
+def _login_rate_allowed(username: str) -> bool:
+    now = time.time()
+    with _login_fail_lock:
+        ts = _login_failures.get(username, [])
+        ts = [t for t in ts if now - t < _LOGIN_LOCKOUT_SECS]
+        _login_failures[username] = ts
+        return len(ts) < _MAX_LOGIN_FAILS
+
+
+def _register_login_failure(username: str) -> None:
+    with _login_fail_lock:
+        _login_failures.setdefault(username, []).append(time.time())
+
+
+def _clear_login_failures(username: str) -> None:
+    with _login_fail_lock:
+        _login_failures.pop(username, None)
+
+
 def login(username: str, password: str) -> dict[str, Any]:
     """用户登录，返回令牌。"""
     # Import config using shared_state
@@ -149,14 +209,30 @@ def login(username: str, password: str) -> dict[str, Any]:
     if not cfg.web.auth_enabled:
         raise HTTPException(status_code=403, detail="Authentication is disabled")
 
+    # 登录失败限流：同一用户名连续失败超阈值后临时锁定，防暴力破解
+    if not _login_rate_allowed(username):
+        logger.warning("[认证] 登录限流：用户 %s 短时失败过多，已临时锁定", username)
+        raise HTTPException(status_code=429, detail="Too many failed attempts, try later")
+
     if username != cfg.web.auth_username:
+        _register_login_failure(username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    expected_password = cfg.web.auth_password.encode("utf-8")
-    provided_password = password.encode("utf-8")
+    stored_password = cfg.web.auth_password
+    # 明文弱口令兜底告警（生产应改为 PBKDF2 哈希）
+    if stored_password and not stored_password.startswith("pbkdf2_sha256$") \
+            and stored_password in ("please-change-me",):
+        logger.warning(
+            "[认证] 检测到默认/弱口令 auth_password=%r，存在暴力破解风险，"
+            "请改用 hash_password() 生成的 PBKDF2 哈希写入 config.yaml 的 web.auth_password",
+            stored_password,
+        )
 
-    if not hmac.compare_digest(provided_password, expected_password):
+    if not verify_password(password, stored_password):
+        _register_login_failure(username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    _clear_login_failures(username)
 
     # 根据用户名分配角色（简化逻辑）
     role = ROLE_ADMIN if username == cfg.web.auth_username else ROLE_OPERATOR

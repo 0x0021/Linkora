@@ -436,7 +436,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 last_error = e
                 if attempt < 2:
                     time.sleep(3)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - 重试循环兜底，避免配置错误直接崩栈
                 logger.error("wecom auth_login 异常 (attempt %d/3): %s", attempt + 1, e)
                 last_error = e
                 if attempt < 2:

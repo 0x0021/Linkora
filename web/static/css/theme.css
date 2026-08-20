@@ -762,14 +762,6 @@ html {
 /* ==========================================
    7. Dashboard Grid
    ========================================== */
-.dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.67rem;
-    margin-bottom: 0.67rem;
-    align-items: stretch;
-}
-
 .dashboard-grid .panel {
     margin-bottom: 0;
     min-height: 0;
@@ -1013,7 +1005,8 @@ html {
     height: auto;
 }
 
-.recent-messages-panel .panel-body {
+.recent-messages-panel .panel-body,
+.recent-messages-panel .dash-panel-body {
     padding: 0.4rem;
     flex: 1;
     overflow: hidden;
@@ -2284,8 +2277,6 @@ html {
     color: var(--text-tertiary);
     font-style: italic;
     font-size: 0.85em;
-}
-    vertical-align: middle;
 }
 
 /* 消息气泡内图片展示 */

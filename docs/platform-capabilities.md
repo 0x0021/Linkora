@@ -32,7 +32,7 @@ Linkora 可同时接入**钉钉、飞书、企业微信**三大 IM 平台。三�
 
 | 能力分组 | 工具（name） | 钉钉 | 飞书 | 企业微信 |
 |---|---|:---:|:---:|:---:|
-| **OA 审批**（7） | `approval_list_forms` / `approval_list_pending` / `approval_list_initiated` / `approval_list_executed` / `approval_list_tasks` / `approval_get_detail` / `approval_search_forms` / `transfer_approval` | ✓ | ✗ | ✗ |
+| **OA 审批**（8） | `approval_list_forms` / `approval_list_pending` / `approval_list_initiated` / `approval_list_executed` / `approval_list_tasks` / `approval_get_detail` / `approval_search_forms` / `transfer_approval` | ✓ | ✗ | ✗ |
 | **组织与考勤**（3） | `get_attendance` / `get_current_org` / `list_orgs` | ✓ | ✗ | ✗ |
 | **文档**（2） | `search_doc` / `get_doc_content` | ✓ | ✗ | ✗ |
 | **AI 听记**（2） | `get_minutes` / `list_minutes` | ✓ | ✗ | ✗ |

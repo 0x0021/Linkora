@@ -21,6 +21,8 @@
 | 飞书 | `lark-cli` | 联系飞书管理员获取 |
 | 企业微信 | `wecom-cli` | 联系企业微信管理员获取 |
 
+登录（首次）：钉钉 `dws auth login`；飞书 `lark-cli login`；企业微信 `wecom-cli` 扫码登录。三平台安装/登录口径一致：装好对应 CLI 并登录后，在 `platforms[].adapter.cli_path` 指向该 CLI 即可。
+
 ---
 
 ## 安装步骤
@@ -53,14 +55,16 @@ cp config.yaml.example config.yaml
 
 | 文件 | 角色 | 谁消费 |
 |------|------|--------|
-| `requirements.txt` | **直接依赖唯一真源**（31 条，全 `==`） | `Dockerfile`、`Dockerfile.build` |
+| `requirements.txt` | **直接依赖唯一真源**（32 条，全 `==`） | `Dockerfile`、`Dockerfile.build` |
 | `pyproject.toml` `[project].dependencies` | 逐条镜像 `requirements.txt` | 打包元数据、`uv` |
-| `requirements.lock` | 完整传递闭包（113 条，跨平台标记） | CI 安装与 `pip-audit` 扫描 |
+| `requirements.lock` | 完整传递闭包（112 条，跨平台标记） | CI 安装与 `pip-audit` 扫描 |
 | `uv.lock` | `uv` 工作流锁文件 | `uv sync` / `uv run` |
 
 核心依赖分组见 `requirements.txt` 内注释（配置 / LLM / Web / 向量检索与 OCR / 文档解析 / 系统工具）。
 
-> Python 下限为 **3.12**，由 `numpy==2.5.1` 决定（它没有 cp39–cp311 的 wheel）。
+前端资源（若修改 `web/static`）需重新构建：`npm run build:frontend`；前端单元测试用 `npm run test:frontend`（vitest）。
+
+> Python 下限为 **3.14**（仅 3.14 系列），`numpy==2.5.2` 等钉版依赖仅提供 cp314 wheel。
 > 放宽 `requires-python` 前请先确认所有钉版依赖都提供对应 wheel。
 
 #### 改依赖的正确姿势
@@ -179,27 +183,30 @@ web:
   auth_password: ""               # 通过 .env/WEB_AUTH_PASSWORD 或 config.yaml 显式设置
 ```
 
-完整配置项说明参见 `config.yaml.example`（约 470 行，含详细注释）。
+完整配置项说明参见 `config.yaml.example`（762 行，含详细注释）。
 
 ---
 
 ## 启动命令
 
 ```bash
-# 基础启动（仅消息处理，不启动 Web 管理台）
-python main.py
+# 基础启动（仅 worker，不启动 Web 管理台）
+python main.py --mode worker
 
-# 启动 Web 管理台（默认端口从 config.yaml web.port 读取）
-python main.py --web
+# 启动 Web 管理台（不跟端口默认 8000）
+python main.py --mode web
+
+# 同时启动 Web + worker（默认模式）
+python main.py --mode both
 
 # 指定 Web 端口
-python main.py --web 8080
+python main.py --mode web --web 8000
 
 # 指定配置文件路径
-python main.py custom_config.yaml --web 8080
+python main.py --config custom_config.yaml --mode web --web 8000
 
 # 开发模式（开启调试日志等）
-python main.py --web 8080 --dev
+python main.py --mode web --web 8000 --dev
 
 # 规则测试模式（不启动服务，仅测试规则命中）
 python main.py --test-rule "今天天气怎么样"
@@ -209,7 +216,10 @@ python main.py --test-rule "今天天气怎么样"
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
-| `--web [PORT]` | 启动 Web 管理台，可选指定端口 | `--web 8080` |
+| `--mode MODE` | 运行模式：`both` / `web` / `worker`（默认 `both`） | `--mode web` |
+| `--web [PORT]` | 启动 Web 管理台，可选指定端口（不跟端口默认 **8000**） | `--web 8000` |
+| `--data-dir DIR` | 覆盖数据目录（DB / 备份 / 模型缓存等可写路径） | `--data-dir /var/lib/linkora` |
+| `--config PATH` | 指定配置文件路径（等效于位置参数） | `--config custom_config.yaml` |
 | `--test-rule TEXT` | 规则测试模式 | `--test-rule "你好"` |
 | `--dev` | 开发模式 | `--dev` |
 | `[config_path]` | 配置文件路径（位置参数） | `custom_config.yaml` |
@@ -268,7 +278,7 @@ tests/
 ├── test_rag_*.py                  # RAG 检索/注入/门控
 ├── test_embedding.py              # Embedding 客户端
 ├── test_vector_index.py           # FAISS 索引
-└── ...（共约 190 个测试文件，tests/ 下）
+└── ...（共 241 个测试文件，tests/ 下）
 ```
 
 ### 测试超时

@@ -293,7 +293,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 sub = obj.get("errmsg")
                 if isinstance(sub, str) and sub:
                     msg = sub
-        except Exception as e:
+        except (json.JSONDecodeError, TypeError) as e:
             logger.debug("[resilience] 解析异常，使用兜底: %s", e)
             pass
         low = msg.lower()
@@ -333,7 +333,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 )
                 obj = json.loads((out.stdout or "").strip())
                 self._aibot_id_cache = obj.get("id") or ""
-            except Exception as e:  # noqa: BLE001
+            except (subprocess.CalledProcessError, json.JSONDecodeError, RuntimeError) as e:  # noqa: BLE001
                 logger.debug("提取 aibot_id 失败: %s", e)
                 self._aibot_id_cache = ""
         return self._aibot_id_cache or None
@@ -436,7 +436,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 last_error = e
                 if attempt < 2:
                     time.sleep(3)
-            except Exception as e:  # noqa: BLE001 - 重试循环兜底，避免配置错误直接崩栈
+            except (RuntimeError, IMAdapterError) as e:  # noqa: BLE001 - 重试循环兜底，避免配置错误直接崩栈
                 logger.error("wecom auth_login 异常 (attempt %d/3): %s", attempt + 1, e)
                 last_error = e
                 if attempt < 2:
@@ -447,7 +447,7 @@ class WecomCliAdapter(BaseIMAdapter):
         """企微无多 profile 概念，返回单一伪 profile。"""
         try:
             auth = self.is_authenticated()
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             logger.warning("[resilience] profile_list 探测认证态异常: %s", e, exc_info=True)
             auth = False
         return {"authenticated": bool(auth), "profiles": [{"name": "wecom", "brand": "wecom"}]}
@@ -483,7 +483,7 @@ class WecomCliAdapter(BaseIMAdapter):
                     "name": u.get("name", ""),
                     "title": u.get("position") or u.get("title") or "",
                 }
-        except Exception as e:
+        except (IMAdapterError, subprocess.CalledProcessError) as e:
             logger.debug("[resilience] 解析异常，使用兜底: %s", e)
             pass
         user_id = os.environ.get("USER", "")
@@ -495,7 +495,7 @@ class WecomCliAdapter(BaseIMAdapter):
             return []
         try:
             resp = self.run(["contact", "get_userlist"], force_no_dry_run=True)
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             if self._maybe_log_auth_expired(e):
                 return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
@@ -557,7 +557,7 @@ class WecomCliAdapter(BaseIMAdapter):
                  json.dumps({"begin_time": begin, "end_time": end, "cursor": None})],
                 force_no_dry_run=True,
             )
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             if self._maybe_log_auth_expired(e):
                 return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
@@ -583,7 +583,7 @@ class WecomCliAdapter(BaseIMAdapter):
                              "begin_time": begin, "end_time": end, "cursor": None})],
                 force_no_dry_run=True,
             )
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             if self._maybe_log_auth_expired(e):
                 return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
@@ -604,7 +604,7 @@ class WecomCliAdapter(BaseIMAdapter):
                              "begin_time": begin, "end_time": end, "cursor": None})],
                 force_no_dry_run=True,
             )
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             if self._maybe_log_auth_expired(e):
                 return []
             logger.warning("[resilience] 拉取列表失败，返回空: %s", e, exc_info=True)
@@ -673,7 +673,7 @@ class WecomCliAdapter(BaseIMAdapter):
                  json.dumps({"begin_time": start, "end_time": end, "cursor": None})],
                 force_no_dry_run=True,
             )
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             if self._maybe_log_auth_expired(e):
                 return {"conversationMessagesList": []}
             logger.warning("[resilience] chat_message_list_all 拉取会话列表异常: %s", e, exc_info=True)
@@ -694,7 +694,7 @@ class WecomCliAdapter(BaseIMAdapter):
                                  "begin_time": start, "end_time": end, "cursor": None})],
                     force_no_dry_run=True,
                 )
-            except Exception as e:  # noqa: BLE001
+            except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
                 if self._maybe_log_auth_expired(e):
                     continue
                 logger.warning("[resilience] chat_message_list_all 拉取会话 %s 消息异常: %s", chatid, e, exc_info=True)
@@ -856,7 +856,7 @@ class WecomCliAdapter(BaseIMAdapter):
                  json.dumps({"media_id": media_id})],
                 force_no_dry_run=True,
             )
-        except Exception as e:  # noqa: BLE001
+        except (IMAdapterError, subprocess.CalledProcessError) as e:  # noqa: BLE001
             raise self._base_error_class()(f"wecom 下载媒体失败: {e}") from e
 
         b64: str | None = None
@@ -871,7 +871,7 @@ class WecomCliAdapter(BaseIMAdapter):
                 f"wecom 下载响应无 base64 内容: {json.dumps(resp, ensure_ascii=False)[:300]}")
         try:
             data = base64.b64decode(b64)
-        except Exception as e:  # noqa: BLE001
+        except (ValueError, TypeError) as e:  # noqa: BLE001
             raise self._base_error_class()(f"wecom 媒体 base64 解码失败: {e}") from e
         out_dir = os.path.dirname(os.path.abspath(output_path)) or "."
         os.makedirs(out_dir, exist_ok=True)

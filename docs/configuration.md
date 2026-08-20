@@ -23,6 +23,7 @@
 | `storage` | `type` / `path` / `backup_enabled` / `backup_*` / `decisions_retention_days` / `messages_retention_days` / `doc_sync_interval_hours` | SQLite 路径与自动备份（legacy 兼容段，**运行期以 platforms.dingtalk.storage 为准**） |
 | `logging` | `level` / `file` / `max_size_mb` / `max_backups` | 日志 |
 | `web` | `port` / `host` / `auth_enabled` / `auth_username` / `auth_password` | 管理后台（安全默认仅本机回环 + 认证开启；密码为空且认证开启会启动报错） |
+| `proactive` | `enabled` / `hour` / `minute` / `owner_user_id` / `owner_open_dingtalk_id` / `lookback_hours` / `max_conversations` / `max_summary_chars` | 主动触达：每日定时把近期对话摘要推送给主人（默认关闭；`hour`/`minute` 控制推送时刻） |
 | `oa_approval` | `enabled` / `urge_reply_text` / `question_markers` / `action_markers` | 钉钉 OA 审批转发处理策略（别人转给你的审批 msgType=oa 默认回催办话术；含问号/动作标记则转 LLM 或审批工具） |
 | `ocr_postprocess` | `enabled` / `min_chars` / `enabled_steps` | OCR 文本后处理管线（去不可见字符 / 压缩重复标点 / 去口语填充词 / 合并空行 / CJK 加空格） |
 | `skillhub` | `auto_install` | SkillHub 市场（skill 榜单）安装脚本自动拉取开关（默认关，安全） |
@@ -206,6 +207,26 @@ rules:
 - **动态 few-shot（按场景检索主人原话，提升口吻还原度）**：`llm.dynamic_few_shot`（默认 `false`）。开启后，每次生产回复基于当前消息做场景相似检索，从主人历史里取最像的 `llm.dynamic_few_shot_n`（默认 `4`）条 `(user→assistant)` 配对注入 system prompt，替代原本固定且被截断的静态样例（`build_system_prompt` 仅取 `[:1]` 且截断 40/60 字，近乎无效）。检索算法由 `llm.dynamic_few_shot_method` 控制：`trigram`（纯文本粗筛，零延迟）/ `embedding`（embedding 余弦精排，需向量）/ `hybrid`（默认，trigram 粗筛 + embedding 精排，embedding 复用 agent 已算好的 `query_vec`，无额外开销）。**默认关闭**，对现有回复行为零影响，可随时开关回退。
 - **回测还原度评委口径**：`llm.backtest_judge_loose`（默认 `false`）。主人真实口吻多为口语 / 极简，与克隆回复字面重合度低，严格评委给分保守（约 10/100），难以反映真实还原度。开启后评委改为评「意图匹配 + 风格类别一致」，容忍措辞差异，回测分更贴近真实观感。**仅影响 `/api/persona/backtest` 打分，不影响真实回复。**
 - **回复硬截断上限**：`llm.brevity_hard_cap`（默认 `0`）。`0` 表示沿用 `llm.advanced.hard_truncation_chars`（默认 300）；设为正数可覆盖普通回复的截断上限（用于按主人风格放宽 / 收紧，避免极简主人被无意义截断，或灌水主人被放过）。结构化 / 多行列表卡片仍放宽到 1300 字符。
+
+## 主动触达（`proactive`）
+
+开启后，灵桥会在每日指定时刻把**近期对话摘要**主动推送给主人（钉钉 1:1），让主人无需登录后台即可掌握 bot 处理过的重点会话。Web 后台「对话摘要」页展示的「每日摘要汇总」与推送内容**完全同源**。
+
+```yaml
+proactive:
+  enabled: false              # 默认关闭；开启后必须配置 owner_user_id 或 owner_open_dingtalk_id
+  hour: 9                     # 每日推送小时（0-23）
+  minute: 0                   # 每日推送分钟（0-59）
+  owner_user_id: ""           # 主人钉钉 userId（与 owner_open_dingtalk_id 二选一）
+  owner_open_dingtalk_id: ""  # 主人钉钉 openId（二选一）
+  lookback_hours: 24          # 摘要回溯时长
+  max_conversations: 10       # 单次推送最大会话数
+  max_summary_chars: 200        # 单条会话摘要最大字符数
+```
+
+- `owner_user_id` 可通过 `dws contact user get-self` 获取。
+- 配置修改后需重启服务，常驻调度器才会加载新的推送时刻。
+- 若 `enabled=true` 但未配置任何主人 ID，调度器会 fail-safe 不启动。
 
 ## 后台限速、技能引擎与死信队列
 

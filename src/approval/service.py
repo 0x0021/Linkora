@@ -18,6 +18,7 @@ from src.approval.models import (
     ApprovalTransferError,
     NoTransferableTaskError,
     TargetUserInvalidError,
+    TransferExecutionError,
     TransferResult,
     TransferTarget,
 )
@@ -65,7 +66,11 @@ class ApprovalTransferService:
                 status="failed", platform=self.provider.platform,
                 instance_id=instance_id, approval_title=title_query,
                 message=e.reason)
-        except Exception as e:  # noqa: BLE001 - 兜底：绝不向调用方崩栈
+        except Exception as e:  # noqa: BLE001 - 最后兜底安全网
+            # 已知失败（ApprovalTransferError 及其子类）已在上方显式捕获并转成友好
+            # 失败回执；此处只承接 _transfer_impl 中「未预期的逻辑错误」。全量
+            # traceback 已记入日志并经 audit 上报 status=error，真实 bug 会被暴露、
+            # 而非静默吞掉，请据日志修复根因。
             logger.exception("[审批转交] 未预期异常: %s", e)
             audit("approval_transfer", "transfer_approval", "error",
                   actor=target_name, target=(instance_id or title_query),
@@ -106,6 +111,12 @@ class ApprovalTransferService:
 
         # 4) 列出可转交任务
         tasks = self.provider.list_transferable_tasks(inst_id)
+        if not isinstance(tasks, list):
+            # 平台实现违反协议（约定返回 list，失败返回 [] 而非抛异常）；转为明确
+            # 失败回执，避免下方迭代抛出 TypeError 被兜底静默吞成「内部错误」。
+            raise TransferExecutionError(
+                f"平台返回的任务列表格式异常（应为 list，实际 {type(tasks).__name__}），"
+                "请检查对应平台的审批适配器实现")
         task_ids = [t.task_id for t in tasks if t.task_id]
         if not task_ids:
             raise NoTransferableTaskError(
@@ -115,7 +126,14 @@ class ApprovalTransferService:
         # 5) 逐个执行转交，收集平台真实回执
         done_ids: list[str] = []
         for task_id in task_ids:
-            ok, receipt = self.provider.transfer_task(task_id, target, remark)
+            receipt_tuple = self.provider.transfer_task(task_id, target, remark)
+            if not (isinstance(receipt_tuple, tuple) and len(receipt_tuple) == 2):
+                # 平台实现违反协议（约定返回 (bool, str) 且不抛异常）；转为明确
+                # 失败回执，避免元组解包 ValueError 被兜底静默吞成「内部错误」。
+                raise TransferExecutionError(
+                    f"平台转交回执格式异常（应为 (bool, str)，实际 {type(receipt_tuple).__name__}），"
+                    "请检查对应平台的审批适配器实现")
+            ok, receipt = receipt_tuple
             if not ok:
                 # 已成功部分如实上报，避免误导「全部失败」
                 prefix = (f"任务 {done_ids} 已转交成功，" if done_ids else "")
@@ -142,6 +160,12 @@ class ApprovalTransferService:
     def _resolve_target(self, name: str) -> TransferTarget:
         """通讯录解析 + 唯一性校验。0 个/无法唯一确定 → TargetUserInvalidError。"""
         candidates = self.provider.resolve_user(name)
+        if not isinstance(candidates, list):
+            # 平台实现违反协议（约定返回 list，无匹配返回 [] 而非抛异常）；转为
+            # 明确失败回执，避免下方迭代抛出 TypeError 被兜底静默吞成「内部错误」。
+            raise TransferExecutionError(
+                f"平台返回的候选人员格式异常（应为 list，实际 {type(candidates).__name__}），"
+                "请检查对应平台的通讯录解析实现")
         candidates = [c for c in candidates if c.user_id]
         if not candidates:
             raise TargetUserInvalidError(

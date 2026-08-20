@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import datetime, timedelta
 
 from src.models import Message
@@ -37,7 +38,7 @@ class DiscoveryMixin(PollerMixinBase):
                 })
 
             return result
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("获取最近会话失败：%s", e)
             return []
 
@@ -137,7 +138,7 @@ class DiscoveryMixin(PollerMixinBase):
                                 "title": conv.get("title", ""),
                                 "chat_mode": "p2p", "singleChat": True,
                             }
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.debug("[轮询器] 飞书构建外部好友白名单失败: %s", e)
 
         # 2) DB 中窗口内有活动的会话（群 + 单聊），对僵尸会话（起点前 1h 仍无活动）跳过，
@@ -159,7 +160,7 @@ class DiscoveryMixin(PollerMixinBase):
                         # 起点前 1 小时仍无活动 → 视为僵尸，本轮跳过
                         if lt < start_time - timedelta(hours=1):
                             continue
-                    except Exception:
+                    except (RuntimeError, ValueError):
                         logger.warning("[resilience] silent exception in _fetch_messages_via_list_all", exc_info=True)
                 ct = conv.get("chat_type", "")
                 single = (ct == "single")
@@ -169,7 +170,7 @@ class DiscoveryMixin(PollerMixinBase):
                     "chat_mode": "p2p" if single else "group",
                     "singleChat": single,
                 }
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.debug("[轮询器] 构建 DB 会话白名单失败: %s", e)
 
         return whitelist_ids, whitelist_meta
@@ -301,7 +302,7 @@ class DiscoveryMixin(PollerMixinBase):
                             ts_parsed = datetime.fromisoformat(ts_str)
                             if conv_id not in conv_latest_time or ts_parsed > conv_latest_time[conv_id]:
                                 conv_latest_time[conv_id] = ts_parsed
-                        except Exception as e:
+                        except ValueError as e:
                             logger.debug("[轮询器] list-all 时间戳解析失败: %s", e)
                     logger.debug("[轮询器] list-all 跳过已处理消息: %s", raw_msg_id[:20])
                     continue

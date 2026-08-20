@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import threading
 import time
 import queue
@@ -113,12 +114,12 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             if self._inaccessible_conversations:
                 logger.info("[轮询器] 已从数据库加载 %d 个不遍历黑名单会话",
                             len(self._inaccessible_conversations))
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 加载黑名单失败: %s", e)
         # 启动时对账：解除已恢复访问的会话（自愈）
         try:
             self._reconcile_blocklist()
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 启动时黑名单对账失败（不影响运行）: %s", e)
         # list-all 主通道空轮探针计数器：连续多少轮 list-all 一条新消息都没拉到
         self._list_all_empty_streak: int = 0
@@ -145,7 +146,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
                     self._processed_msg_ids[msg_id] = True
                 if db_processed:
                     logger.info("[轮询器] 已从数据库加载 %d 个已处理消息 ID", len(db_processed))
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.warning("[轮询器] 从数据库加载已处理消息 ID 失败: %s", e)
 
         # 目标组织：优先用配置值；配置为空则自动使用当前登录组织。
@@ -162,7 +163,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
                     cur.get("corp_name", "?"), effective,
                     " [配置指定]" if self.target_org_corp_id else " [自动=当前登录组织]",
                 )
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("[轮询器] 解析目标组织失败（不影响运行）: %s", e)
             self.current_org = {"corp_id": "", "corp_name": ""}
 
@@ -270,7 +271,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             except KeyboardInterrupt:
                 logger.debug("用户中断轮询")
                 break
-            except Exception as e:
+            except RuntimeError as e:
                 self._last_error = str(e)[:500]
                 self._last_error_at = datetime.now()
                 logger.error("轮询出错：%s", e, exc_info=True)
@@ -296,7 +297,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         # 关闭线程池，避免线程泄漏（重启/热重载时累积）
         try:
             self._image_executor.shutdown(wait=True)
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("[轮询器] 关闭线程池时异常: %s", e)
 
     # === P0 Stream 长连接接入（v1.0.59+）===
@@ -320,7 +321,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         if self._stream_consumer is not None:
             try:
                 self._stream_consumer.stop()
-            except Exception as e:
+            except RuntimeError as e:
                 logger.warning("[Stream] 停止异常: %s", e)
             self._stream_consumer = None
             self._stream_handler = None

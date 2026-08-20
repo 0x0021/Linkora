@@ -57,7 +57,7 @@ class TestGetRecentConversationsFromDb:
 
     def test_db_error_graceful(self):
         fd = FakeDiscovery()
-        fd.store._conversation_repo.get_recent_conversations.side_effect = RuntimeError("db down")
+        fd.store._conversation_repo.get_recent_conversations.side_effect = __import__("sqlite3").Error("db down")
         assert fd._get_recent_conversations_from_db() == []
 
     def test_missing_chat_id(self):

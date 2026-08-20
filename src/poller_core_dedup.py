@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import re
 
 from src.models import Message
@@ -45,7 +46,7 @@ class DedupMixin(PollerMixinBase):
                 self._processed_msg_ids[msg_id] = True
                 self._processed_msg_ids.move_to_end(msg_id)
                 return True
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.debug("[轮询器] 消息去重查询失败: %s", e)
         return False
 
@@ -57,7 +58,7 @@ class DedupMixin(PollerMixinBase):
         self._processed_msg_ids[msg_id] = True
         try:
             self.store._message_repo.mark_message_processed(msg_id, chat_id)
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 标记消息已处理失败: %s", e)
         # 标记合并消息的所有原始 ID（防止未标记的消息被重复处理）
         # 兼容两套合并路径的 key：poller._combine_message_group 用 original_ids，
@@ -73,7 +74,7 @@ class DedupMixin(PollerMixinBase):
                         self._processed_msg_ids[orig_id] = True
                         try:
                             self.store._message_repo.mark_message_processed(orig_id, chat_id)
-                        except Exception:
+                        except sqlite3.Error:
                             logger.warning("mark_message_processed failed for orig_id=%s", orig_id, exc_info=True)
         # 移到末尾（LRU：最旧的在前面）
         self._processed_msg_ids.move_to_end(msg_id)
@@ -151,7 +152,7 @@ class DedupMixin(PollerMixinBase):
                 row = cur.fetchone()
                 if row:
                     return row["role"] == "assistant" or row["is_bot"] == 1
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.debug("[轮询器] bot 消息检查失败: %s", e)
 
         # 2. 通过内容+时间匹配查找（msg_id 不一致时的兜底）
@@ -173,7 +174,7 @@ class DedupMixin(PollerMixinBase):
                     # 双向前缀匹配（取前 60 归一化字符），兼容截断/格式差异
                     if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
                         return True
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.debug("[轮询器] 内容匹配去重查询失败: %s", e)
 
         return False
@@ -206,7 +207,7 @@ class DedupMixin(PollerMixinBase):
                 if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
                     return True
             return False
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.debug("[轮询器] 重复消息检查失败: %s", e)
             return False
 
@@ -329,7 +330,7 @@ class DedupMixin(PollerMixinBase):
                             peer_open_dingtalk_id=remote_oid,
                         )
                         return {"user_id": remote_uid, "open_dingtalk_id": remote_oid}
-            except Exception as e:
+            except (sqlite3.Error, RuntimeError) as e:
                 if self._is_global_permission_error(e):
                     # 跨组织会话：当前 DWS profile 无该组织权限 → 抛出，
                     # 交由主循环统一持久化跳过（避免每轮重试反复触发权限验证/弹窗）
@@ -384,7 +385,7 @@ class DedupMixin(PollerMixinBase):
                         peer_open_dingtalk_id=oid,
                     )
                     return {"user_id": uid, "open_dingtalk_id": oid}
-        except Exception as e:
+        except (sqlite3.Error, RuntimeError) as e:
             logger.warning("搜索联系人 '%s' 失败：%s", title, e)
 
         logger.debug(

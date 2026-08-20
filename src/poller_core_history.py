@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+
 import logging
 from datetime import datetime, timedelta
 from src.models import Message

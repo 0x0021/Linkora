@@ -122,7 +122,7 @@ class TestIsMsgProcessed:
     def test_db_error_graceful(self):
         dup = FakeDedup()
         dup.store = MagicMock()
-        dup.store._message_repo.is_message_processed.side_effect = RuntimeError("db down")
+        dup.store._message_repo.is_message_processed.side_effect = __import__("sqlite3").Error("db down")
         # 无内存记录 + DB 异常 → False，不抛出
         assert dup._is_msg_processed("msg_err") is False
 
@@ -152,7 +152,7 @@ class TestMarkMsgProcessed:
     def test_store_error_graceful(self):
         dup = FakeDedup()
         dup.store = MagicMock()
-        dup.store._message_repo.mark_message_processed.side_effect = RuntimeError("db down")
+        dup.store._message_repo.mark_message_processed.side_effect = __import__("sqlite3").Error("db down")
         dup.config = MagicMock()
         dup.config.max_processed_msg_ids = 1000
         dup._mark_msg_processed("m1", "c1")
@@ -214,6 +214,6 @@ class TestCheckIfBotMessage:
     def test_db_error_returns_false(self):
         dup = FakeDedup()
         dup.store = MagicMock()
-        dup.store.conv_conn.return_value.cursor.side_effect = RuntimeError("db down")
+        dup.store.conv_conn.return_value.cursor.side_effect = __import__("sqlite3").Error("db down")
         msg = _make_msg("m1")
         assert dup._check_if_bot_message(msg) is False

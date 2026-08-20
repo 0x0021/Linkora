@@ -3,6 +3,7 @@
 覆盖: _is_blocked, _classify_inaccessible_reason, _block_conversation, clear_cross_org_skips。
 """
 
+import sqlite3
 from unittest.mock import MagicMock
 
 
@@ -117,8 +118,8 @@ class TestBlockConversation:
 
     def test_store_error_graceful(self):
         fa = FakeAccess()
-        fa.store._blacklist_repo.add_blocked_conversation.side_effect = RuntimeError("db down")
-        fa._block_conversation("oc_jkl", "群", "group", RuntimeError("130003"))
+        fa.store._blacklist_repo.add_blocked_conversation.side_effect = sqlite3.Error("db down")
+        fa._block_conversation("oc_jkl", "群", "group", sqlite3.Error("130003"))
         assert "oc_jkl" in fa._inaccessible_conversations  # 内存仍写入
 
 
@@ -141,7 +142,7 @@ class TestClearCrossOrgSkips:
     def test_db_clear_error_graceful(self):
         fa = FakeAccess()
         fa._inaccessible_conversations = {"oc_a"}
-        fa.store._blacklist_repo.clear_blocked_conversations.side_effect = RuntimeError("db down")
+        fa.store._blacklist_repo.clear_blocked_conversations.side_effect = sqlite3.Error("db down")
         count = fa.clear_cross_org_skips()
         assert count == 1  # 内存仍然清空
         assert len(fa._inaccessible_conversations) == 0

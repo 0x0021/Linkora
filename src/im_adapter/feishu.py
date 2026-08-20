@@ -29,6 +29,7 @@ from .errors import (
     IMAdapterPermissionError,
     IMAdapterUnsupportedTypeError,
 )
+import subprocess
 
 from .feishu_doc_mixin import FeishuDocMixin
 from .feishu_media_mixin import FeishuMediaMixin
@@ -123,7 +124,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
             if isinstance(err, dict):
                 code = err.get("code")
                 message = err.get("message") or message
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             logger.warning("[resilience] silent exception in _classify_error", exc_info=True)
 
         msg = (message or "").lower()
@@ -149,7 +150,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         """检查认证状态。基于 ``lark-cli whoami`` 归一化。"""
         try:
             info = self.run(["whoami"])
-        except Exception as e:  # noqa: BLE001 - 认证探测失败即未登录
+        except (RuntimeError, subprocess.CalledProcessError) as e:  # noqa: BLE001 - 认证探测失败即未登录
             logger.warning("[resilience] silent exception in auth_status (e)", exc_info=True)
             return {"authenticated": False, "error": str(e)}
         ready = bool(info.get("available")) and str(info.get("tokenStatus")) in (
@@ -166,7 +167,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         """零网络优先读 ``whoami`` 判定登录态（可用 + token 有效）。"""
         try:
             info = self.run(["whoami"])
-        except Exception:  # noqa: BLE001
+        except (RuntimeError, subprocess.CalledProcessError):  # noqa: BLE001
             logger.warning("[resilience] silent exception in is_authenticated", exc_info=True)
             return False
         if not info.get("available"):

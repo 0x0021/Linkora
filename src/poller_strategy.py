@@ -52,7 +52,7 @@ class PollerStrategyMixin(PollerMixinBase):
 
         try:
             discovered = self.dws.sync_external_contacts()  # type: ignore[attr-defined]
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("[轮询器] 飞书外部联系人自动发现失败: %s", e)
             return
 
@@ -67,7 +67,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 oid = ef.get("open_dingtalk_id", "")
                 if oid:
                     existing_ids.add(oid)
-        except Exception:
+        except sqlite3.Error:
             logger.warning("[resilience] silent exception in _sync_feishu_external_contacts", exc_info=True)
 
         registered = 0
@@ -92,7 +92,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     "[轮询器] 自动注册外部联系人: %s (open_id=%s, chat_id=%s)",
                     name, oid[:24], chat_id[:24] if chat_id else "无",
                 )
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.warning(
                     "[轮询器] 自动注册外部联系人失败: %s | %s", name, e)
 
@@ -146,7 +146,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 cache[conv_id] = (now, info)
             else:
                 info = cached[1]
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.debug(
                 "[轮询器] 飞书 chat_type 纠错: 无法获取 %s 会话信息: %s",
                 title or conv_id[:24], e)
@@ -168,7 +168,7 @@ class PollerStrategyMixin(PollerMixinBase):
             )
             try:
                 self.store._conversation_repo.upsert_conversation(conv_id, title, feishu_type)
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.warning(
                     "[轮询器] 飞书 chat_type 纠错写入失败: %s | %s", conv_id, e)
 
@@ -202,7 +202,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 "list_unread",
                 f"无权限访问 list-unread-conversations 接口（未读会话不享实时优先）: {e}"
             )
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.warning("列出未读会话失败（未读会话不享实时优先）: %s", e)
         return unread_convs
 
@@ -235,7 +235,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     try:
                         self._dispatch_one(m, handler)
                         _fd += 1
-                    except Exception as _e:
+                    except RuntimeError as _e:
                         logger.error("[轮询器] list-all 快通道派发失败（消息可能延迟）: %s", _e, exc_info=True)
                 if _fd:
                     logger.info(
@@ -245,7 +245,7 @@ class PollerStrategyMixin(PollerMixinBase):
             else:
                 result_msgs.extend(msgs)
             logger.debug("[轮询器] list-all 直接返回了 %d 条新消息", len(msgs))
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             if self._is_global_permission_error(e):
                 # 组织级权限问题：仅按 key 去重警告一次，不阻断后续其他取信通道
                 self._warn_permission_once(
@@ -296,7 +296,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     forced_ids.add(oid)
                     all_conversations.append(c)
             logger.debug("[轮询器] 发现 %d 个未读会话", len(unread_convs))
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.warning("合并未读会话失败: %s", e)
 
         # 2. 置顶/最近会话列表（缓存化，极少变化）
@@ -313,7 +313,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 "list_top",
                 f"无权限访问 list-top-conversations 接口，跳过置顶会话轮询: {e}"
             )
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.warning("列出置顶会话失败: %s", e)
 
         # 3. 数据库缓存的最近会话（兜底）
@@ -357,7 +357,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     })
             if groups:
                 logger.debug("[轮询器] + %d 个群枚举（来自 dws 群列表），总计 %d", len(groups), len(all_conversations))
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.warning("群枚举失败：%s", e)
 
         return all_conversations, forced_ids
@@ -427,12 +427,12 @@ class PollerStrategyMixin(PollerMixinBase):
             return []
         try:
             joined = joined_fn()
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("[轮询器] 拉取已加入群列表失败: %s", e)
             joined = []
         try:
             mine = mine_fn()
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning("[轮询器] 拉取自建群列表失败: %s", e)
             mine = []
         merged: dict[str, dict] = {}
@@ -470,7 +470,7 @@ class PollerStrategyMixin(PollerMixinBase):
         if not self._is_duplicate_self_message(msg):
             try:
                 self.store._message_repo.save_message(msg, msg.role)
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.debug("[轮询器] 保存自己发的消息失败: %s", e)
         else:
             logger.debug("[轮询器] 跳过双写（%s，内容前60字符已存在）：%s",
@@ -604,7 +604,7 @@ class PollerStrategyMixin(PollerMixinBase):
                         title, chat_type, len(raw_msgs))
             # 拉取成功：清除该会话的连续权限失败计数
             self._perm_fail_streak.pop(open_id, None)
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             self._handle_fetch_errors(e, open_id, title, is_single, chat_type)
             return None
 
@@ -638,7 +638,7 @@ class PollerStrategyMixin(PollerMixinBase):
             self._update_poll_time_and_db(open_id, title, chat_type, all_timestamps, merged)
 
             return merged, all_timestamps, skipped_throttle
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.error(
                 "[轮询器] 会话 %s 消息处理异常，跳过本轮该会话（已前移轮询游标，避免脏数据拖垮轮询）: %s",
                 mask_oid(open_id), e,
@@ -646,7 +646,7 @@ class PollerStrategyMixin(PollerMixinBase):
             # 前移游标，等价于空轮保护，避免下次轮询重复抓取同一批脏消息而无限崩溃
             try:
                 self._update_poll_time_and_db(open_id, title, chat_type, [], [])
-            except Exception:
+            except sqlite3.Error:
                 logger.debug("[轮询器] 处理异常后前移游标也失败，忽略: %s", open_id[:20])
             return None
 
@@ -669,7 +669,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 if ts_str:
                     try:
                         all_timestamps.append(datetime.fromisoformat(ts_str))
-                    except Exception as e:
+                    except ValueError as e:
                         logger.debug("[轮询器] 主路径时间戳解析失败: %s", e)
                 logger.debug("[轮询器] 主路径跳过已处理消息: %s", raw_id[:20])
                 continue
@@ -804,7 +804,7 @@ class PollerStrategyMixin(PollerMixinBase):
                         open_id, title, chat_type,
                         last_message_time=max_ts.isoformat()
                     )
-                except Exception as e:
+                except sqlite3.Error as e:
                     logger.debug("[轮询器] 更新会话信息失败: %s", e)
             logger.debug("[轮询器] 更新 %s 的轮询时间点: %s",
                          title, self._last_poll_time[open_id])
@@ -858,7 +858,7 @@ class PollerStrategyMixin(PollerMixinBase):
         if self._poll_count % self._reconcile_every == 0:
             try:
                 self._reconcile_blocklist()
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.warning("[轮询器] 周期对账黑名单失败: %s", e)
 
         # === 1. 拉取未读会话列表（仅用于实时优先强制轮询 forced_ids）===

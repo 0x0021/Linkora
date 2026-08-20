@@ -395,7 +395,7 @@ class WecomCliAdapter(BaseIMAdapter):
         """检查认证状态（企微无 whoami，以 ``contact get_userlist`` 作为连通性探针）。"""
         try:
             resp = self.run(["contact", "get_userlist"], force_no_dry_run=True)
-        except Exception as e:  # noqa: BLE001 - 探测失败即未登录
+        except (RuntimeError, IMAdapterError) as e:  # noqa: BLE001 - 探测失败即未登录
             return {"authenticated": False, "error": str(e)}
         ok = isinstance(resp, dict) and resp.get("errcode") == 0
         return {
@@ -408,7 +408,7 @@ class WecomCliAdapter(BaseIMAdapter):
         """零网络优先不可用；以 ``get_userlist`` 探测判定登录态。"""
         try:
             resp = self.run(["contact", "get_userlist"], force_no_dry_run=True)
-        except Exception as e:  # noqa: BLE001
+        except (RuntimeError, IMAdapterError) as e:  # noqa: BLE001
             logger.warning("[resilience] is_authenticated 探测异常: %s", e, exc_info=True)
             return False
         if not isinstance(resp, dict):

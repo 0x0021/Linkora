@@ -109,7 +109,7 @@ class MemoryMixin(EngineMixinBase):
                                 chat_type=user_msg.chat_type,
                                 source="auto_extract",
                             )
-                        except Exception as cls_err:
+                        except sqlite3.Error as cls_err:
                             logger.warning("[记忆] 范围分类失败，默认个人: %s", cls_err)
                             scope = "personal"
 
@@ -118,7 +118,7 @@ class MemoryMixin(EngineMixinBase):
                             is_dup = self.store._memory_repo.check_memory_duplicate(
                                 memory_text, embedding_client=self.embedding_client,
                                 sender_id=user_msg.sender_id or "", scope=scope)
-                        except Exception as dup_err:
+                        except sqlite3.Error as dup_err:
                             logger.warning("[记忆] 去重检查异常，保守跳过: %s", dup_err)
                             continue
                         if is_dup:
@@ -129,7 +129,7 @@ class MemoryMixin(EngineMixinBase):
                         embedding = None
                         try:
                             embedding = self.embedding_client.embed(memory_text)
-                        except Exception as emb_err:
+                        except (ValueError, TypeError) as emb_err:
                             logger.debug("[记忆] 无法生成嵌入: %s", emb_err)
                         if not embedding:
                             logger.debug("[记忆] embedding 为空，跳过保存（无法被召回）: %s", memory_text[:40])
@@ -153,7 +153,7 @@ class MemoryMixin(EngineMixinBase):
 
                     if saved_count > 0:
                         logger.info("[记忆] 本轮对话保存了 %d 条新记忆", saved_count)
-                except Exception as e:
+                except sqlite3.Error as e:
                     logger.warning("[记忆] 异步记忆提取失败: %s", e)
 
             # ThreadPoolExecutor worker 不继承父线程的 platform ContextVar，
@@ -162,7 +162,7 @@ class MemoryMixin(EngineMixinBase):
             import contextvars as _cv
             self._memory_executor.submit(_cv.copy_context().run, _extract_worker)
 
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[记忆] 自动保存调度失败: %s", e)
 
     def _start_memory_cleanup_scheduler(self) -> threading.Thread:

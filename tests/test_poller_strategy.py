@@ -156,7 +156,7 @@ class TestSyncFeishuExternalContacts:
 
         def flaky(name, **kw):
             if name == "会失败":
-                raise RuntimeError("写库失败")
+                raise sqlite3.Error("写库失败")
             return real_add(name=name, **kw)
         store._external_friend_repo.add_external_friend = flaky
         p._sync_feishu_external_contacts()
@@ -169,7 +169,7 @@ class TestSyncFeishuExternalContacts:
             {"open_dingtalk_id": "ou_1", "name": "甲"},
         ])
         store._external_friend_repo.list_external_friends = MagicMock(
-            side_effect=RuntimeError("读失败"))
+            side_effect=sqlite3.Error("读失败"))
         p._sync_feishu_external_contacts()  # 不应抛出
 
 
@@ -242,7 +242,7 @@ class TestFeishuCorrectChatType:
         dws.chat_conversation_info.return_value = {"chat_mode": "p2p"}
         p, store = poller_factory(dws)
         store._conversation_repo.upsert_conversation = MagicMock(
-            side_effect=RuntimeError("写库失败"))
+            side_effect=sqlite3.Error("写库失败"))
         assert p._feishu_correct_chat_type("c1", "张三", "group") == "single"
 
     def test_db_read_failure_falls_back_to_input(self, poller_factory):
@@ -250,7 +250,7 @@ class TestFeishuCorrectChatType:
         dws.chat_conversation_info.return_value = {"chat_mode": "p2p"}
         p, store = poller_factory(dws)
         store._conversation_repo.get_conversation = MagicMock(
-            side_effect=RuntimeError("读失败"))
+            side_effect=sqlite3.Error("读失败"))
         assert p._feishu_correct_chat_type("c1", "张三", "single") == "single"
 
 

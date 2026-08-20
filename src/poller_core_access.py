@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 
 from src.memory.platform_context import get_current_platform
@@ -25,7 +26,7 @@ class AccessControlMixin(PollerMixinBase):
         try:
             n = self.store._blacklist_repo.clear_blocked_conversations()
             logger.info("[轮询器] 已清除 %d 个持久化黑名单会话", n)
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 清除持久化黑名单失败: %s", e)
         logger.info("[轮询器] 已清除 %d 个跨组织/无效会话跳过记录，下一轮将重新探测", count)
         return count
@@ -90,7 +91,7 @@ class AccessControlMixin(PollerMixinBase):
                 source=source,
                 last_error=str(error),
             )
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 写入黑名单失败（不影响内存跳过）: %s", e)
         # ⚠️ 不再调用 store.delete_conversation 删除会话行：黑名单检查（_is_blocked
         # + 内存 _inaccessible_conversations）已能在轮询时跳过该会话，删行是破坏性
@@ -183,7 +184,7 @@ class AccessControlMixin(PollerMixinBase):
             accessible = self.dws.chat_list_top_conversations(limit=100)
             accessible_ids = {c.get("openConversationId") for c in accessible
                              if c.get("openConversationId")}
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 黑名单对账获取可访问会话失败（改用直接探测）: %s", e)
             accessible_ids = set()
         blocked = self.store._blacklist_repo.load_blocked_conversations()
@@ -236,7 +237,7 @@ class AccessControlMixin(PollerMixinBase):
                 except AttributeError:
                     # 非钉钉适配器没有 chat_conversation_info；保持拉黑，由该平台自身逻辑处理
                     logger.debug("[轮询器] 当前适配器不支持 chat_conversation_info，跳过探测: %s", name)
-                except Exception as e:
+                except (sqlite3.Error, RuntimeError) as e:
                     # 仍不可达，保持拉黑（保密群 / 已退群 / 被踢等）
                     logger.debug("[轮询器] 黑名单对账探测失败: %s | %s", name, e)
             self._reconcile_probe_idx = (start + len(batch)) % len(remaining)
@@ -475,5 +476,5 @@ class AccessControlMixin(PollerMixinBase):
             if updates:
                 count = self.store._conversation_repo.batch_update_chat_types(updates, plat)
                 logger.info("[轮询器] 启动时重新分类会话：%d 个会话类型已更新", count)
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.warning("[轮询器] 重新分类会话失败：%s", e)

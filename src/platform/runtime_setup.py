@@ -56,7 +56,7 @@ class SetupMixin(EngineMixinBase):
             kb_tool = self.tool_router._tools.get("kb_search")
             if kb_tool:
                 bind_kb_search_embedding(kb_tool)
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error("[RAG] 热重载重建 kb_search 失败: %s", e)
     def _setup_embedding(self) -> None:
         # background=True：本地模型在后台线程下载/加载，Web 服务先起，下载进度可经
@@ -149,7 +149,7 @@ class SetupMixin(EngineMixinBase):
             )
             # 重新计算白名单漂移
             self._tool_whitelist_drift = self._compute_tool_whitelist_drift()
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.error("[DevHotReload] 工具表重建失败: %s", e, exc_info=False)
 
     def _setup_llm(self) -> None:
@@ -335,7 +335,7 @@ class SetupMixin(EngineMixinBase):
                     )
                     self.dws.chat_message_send(open_dingtalk_id=oid, text=notify_msg)
                     logger.info("[转人工] 已推送草稿通知 draft_id=%s 给主人", draft_id)
-            except Exception as e:
+            except RuntimeError as e:
                 logger.warning("[转人工] DM 推送失败（草稿已落库 draft_id=%s）: %s", draft_id, e)
         except Exception as e:
             logger.warning("[转人工] 草稿落库失败: %s", e)
@@ -346,7 +346,7 @@ class SetupMixin(EngineMixinBase):
                 if msg_key:
                     self.store._conversation_repo.update_last_replied_msg_id(message.chat_id, msg_key)
                     self.poller._mark_msg_processed(msg_key, message.chat_id)
-            except Exception as de:
+            except sqlite3.Error as de:
                 logger.warning("[转人工] 标记已处理失败: %s", de)
     def _load_current_user(self) -> dict:
         try:
@@ -387,7 +387,7 @@ class SetupMixin(EngineMixinBase):
                         base["dept"] = dept
                     if not base.get("title"):
                         base["title"] = title
-            except Exception as api_err:
+            except RuntimeError as api_err:
                 err_str = str(api_err)
                 if "TOKEN_VERIFIED_FAILED" in err_str or "该组织尚未开启 CLI 数据访问权限" in err_str:
                     logger.warning("个人钉钉模式：无法获取企业用户信息，跳过部门补全")
@@ -395,7 +395,7 @@ class SetupMixin(EngineMixinBase):
                     logger.debug("补拉用户部门失败（使用 profile 兜底）: %s", api_err)
 
             return base or {"userId": "", "userName": "个人用户", "orgName": "", "dept": "", "title": ""}
-        except Exception as e:
+        except RuntimeError as e:
             err_str = str(e)
             if "TOKEN_VERIFIED_FAILED" in err_str or "该组织尚未开启 CLI 数据访问权限" in err_str:
                 logger.warning("个人钉钉模式：无法获取企业用户信息，跳过用户详情加载")

@@ -118,7 +118,7 @@ class LifecycleMixin(EngineMixinBase):
                 )
                 web_thread.start()
                 logger.info("[%s] Web管理平台已启动: http://%s:%d", mode, web_host, web_port)
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.error("网页服务器启动失败: %s", e)
         if not start_web and not start_ingestion:
             logger.warning("无效模式 %s：未启动 Web 也未启动后台，进程将空转", mode)

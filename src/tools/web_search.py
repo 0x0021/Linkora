@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import requests
 import re
 import tempfile
 import threading
@@ -42,7 +43,7 @@ def _searx_load_cache() -> dict:
         if time.time() - data.get("fetched_at", 0) > _SEARXNG_CACHE_TTL_SECONDS:
             return {}
         return data
-    except Exception:
+    except (json.JSONDecodeError, TypeError):
         logger.debug("SearXNG 缓存读取失败，返回空缓存")
         return {}
 
@@ -63,7 +64,7 @@ def _searx_save_cache(data: dict) -> None:
         finally:
             tmp.close()
         os.replace(tmp.name, _SEARXNG_CACHE_PATH)
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
         logger.debug("保存 searx 缓存失败: %s", e)
 
 
@@ -78,7 +79,7 @@ def _searx_discover() -> list[str]:
         )
         resp.raise_for_status()
         payload = resp.json()
-    except Exception as e:
+    except (requests.RequestException, json.JSONDecodeError) as e:
         logger.warning("searx.space 实例列表拉取失败: %s", e)
         return []
 
@@ -221,7 +222,7 @@ def _searx_is_index_page(html: str) -> bool:
 def _searx_parse_json(text: str) -> list[dict]:
     try:
         data = json.loads(text)
-    except Exception as _exc:
+    except json.JSONDecodeError as _exc:
         logger.warning("_searx_parse_json: 解析失败: %s", _exc)
         return []
     out: list[dict] = []
@@ -282,7 +283,7 @@ def searxng_search(query: str, num_results: int = 5, timeout: int = 10) -> list[
                 params={"q": query, "format": "json"},
                 headers=_HEADERS, timeout=timeout, allow_redirects=True,
             )
-        except Exception as e:
+        except requests.RequestException as e:
             logger.debug("searx 实例 %s 请求异常: %s", inst, e)
             _searx_mark_bad(inst)
             continue
@@ -350,7 +351,7 @@ def _is_blocked_host(url: str) -> bool:
             pass  # host 非字面 IP（域名），交给 ssrf_safe_get 在请求时校验
         # 其余域名默认放行：ssrf_safe_get 会解析并校验公网可达
         return False
-    except Exception:
+    except ValueError:
         # urlparse 等极偶发异常：保守拦截
         return True
 
@@ -381,7 +382,7 @@ def _http_get(url: str, timeout: int, retries: int = 3, allow_redirects: bool = 
         except ValueError:
             # SSRF 拦截/DNS 失败不应重试
             raise
-        except Exception as e:  # 网络/TLS 瞬时错误，重试
+        except (requests.RequestException, OSError) as e:  # 网络/TLS 瞬时错误，重试
             last_err = e
             if attempt < retries - 1:
                 time.sleep(0.5 + attempt * 0.5)
@@ -419,7 +420,7 @@ def bing_search(query: str, num_results: int = 5, timeout: int = 10) -> list[dic
     try:
         resp = _http_get(url, timeout, retries=2)
         resp.raise_for_status()
-    except Exception as e:
+    except (requests.RequestException, ValueError) as e:
         logger.warning("必应搜索请求失败（query=%s）: %s", query, e)
         return []
 
@@ -473,7 +474,7 @@ def duckduckgo_search(query: str, num_results: int = 5, timeout: int = 10) -> li
     try:
         resp = _http_get(url, timeout, retries=2)
         resp.raise_for_status()
-    except Exception as e:
+    except (requests.RequestException, ValueError) as e:
         logger.warning("DuckDuckGo 搜索请求失败（query=%s）: %s", query, e)
         return []
 
@@ -660,7 +661,7 @@ def _fetch_page(url: str, timeout: int = 8) -> Optional[str]:
             logger.debug("_fetch_page 拒绝访问保留/内网地址: %s", url)
             return None
         resp = _http_get(url, timeout=timeout, retries=1, allow_redirects=False)
-    except Exception as e:
+    except (requests.RequestException, OSError) as e:
         logger.debug("_fetch_page 网络错误 %s: %s", url, str(e)[:60])
         return None
 
@@ -774,7 +775,7 @@ class WebSearchTool(BaseTool):
                     continue
                 try:
                     results = fn(q, num_results=num, timeout=self.timeout)
-                except Exception as e:
+                except (RuntimeError, ValueError) as e:
                     last_err = str(e)
                     logger.warning("搜索后端 %s 执行异常: %s", name, e)
                     results = []
@@ -811,7 +812,7 @@ class WebSearchTool(BaseTool):
                 from urllib.parse import urlparse
                 p = urlparse(url if "://" in url else f"http://{url}")
                 key = f"{p.netloc}{p.path}".rstrip("/")
-            except Exception as _exc:
+            except ValueError as _exc:
                 logger.debug("execute: url 去重键解析失败: %s", _exc)
                 key = url
             if not key or key in seen_keys:

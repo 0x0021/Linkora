@@ -194,6 +194,51 @@ def test_resolve_target_empty_name_raises():
     assert "未提供转交目标人姓名" in r.message
 
 
+def test_transfer_provider_returns_non_list_tasks_is_explicit():
+    # 平台违反协议返回 None（约定返回 list）→ 转为明确失败回执，
+    # 而非让下方迭代抛出 TypeError 被兜底静默吞成「内部错误」。
+    class _BadTasksProvider(_StubProvider):
+        def list_transferable_tasks(self, instance_id: str):
+            return None
+    prov = _BadTasksProvider(detail=_detail(), users=[_target()],
+                             tasks=[ApprovalNode(task_id="T1")])
+    r = ApprovalTransferService(prov).transfer(target_name="李四",
+                                               instance_id="INST1")
+    assert r.success is False
+    assert not r.message.startswith("内部错误")
+    assert "任务列表格式异常" in r.message
+
+
+def test_transfer_provider_transfer_task_bad_shape_is_explicit():
+    # transfer_task 返回非 (bool, str) → 明确失败回执，
+    # 而非元组解包 ValueError 被兜底静默吞成「内部错误」。
+    class _BadReceiptProvider(_StubProvider):
+        def transfer_task(self, task_id, target, remark=""):
+            return {"ok": True}  # 非元组
+    prov = _BadReceiptProvider(detail=_detail(), users=[_target()],
+                               tasks=[ApprovalNode(task_id="T1")])
+    r = ApprovalTransferService(prov).transfer(target_name="李四",
+                                               instance_id="INST1")
+    assert r.success is False
+    assert not r.message.startswith("内部错误")
+    assert "转交回执格式异常" in r.message
+
+
+def test_transfer_provider_resolve_user_non_list_is_explicit():
+    # resolve_user 返回 None（约定返回 list）→ 明确失败回执，
+    # 而非下方迭代抛出 TypeError 被兜底静默吞成「内部错误」。
+    class _BadUserProvider(_StubProvider):
+        def resolve_user(self, name: str):
+            return None
+    prov = _BadUserProvider(detail=_detail(), users=[],
+                            tasks=[ApprovalNode(task_id="T1")])
+    r = ApprovalTransferService(prov).transfer(target_name="李四",
+                                               instance_id="INST1")
+    assert r.success is False
+    assert not r.message.startswith("内部错误")
+    assert "候选人员格式异常" in r.message
+
+
 # =====================================================================
 # 钉钉 Provider 字段解析（需求：解析关键字段）
 # =====================================================================

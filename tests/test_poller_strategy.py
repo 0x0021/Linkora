@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
+import sqlite3
 
 from src.config import PollerConfig
 from src.models import Message
@@ -841,7 +842,7 @@ class TestPollOnce:
     def test_db_conv_fetch_error_swallowed(self, poller_factory):
         p, _ = poller_factory()
         _stub_poll_once_deps(p)
-        p._get_recent_conversations_from_db.side_effect = RuntimeError("DB 读失败")
+        p._get_recent_conversations_from_db.side_effect = sqlite3.Error("DB 读失败")
         out = p.poll_once()
         assert out == []
 
@@ -874,7 +875,7 @@ class TestPollOnce:
         p, _ = poller_factory()
         _stub_poll_once_deps(p)
         p.store._external_friend_repo.list_external_friends = MagicMock(
-            side_effect=RuntimeError("读外部好友失败"))
+            side_effect=sqlite3.Error("读外部好友失败"))
         out = p.poll_once()  # 不应抛出
         assert out == []
 

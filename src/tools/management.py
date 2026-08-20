@@ -228,8 +228,8 @@ class MessageStatsTool(BaseTool):
                 "days": days,
             }
 
-        except (sqlite3.Error, ValueError):
-            # 仅 DB 层或数据格式错误才兜底
+        except (sqlite3.Error, ValueError, RuntimeError):
+            # 仅 DB 层或数据格式错误才兜底；RuntimeError 覆盖 store 已关闭（conv_conn 抛）场景
             logger.error("消息统计查询失败")
             return {"error": "查询失败"}
 

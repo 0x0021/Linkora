@@ -86,7 +86,7 @@ class TestSystemStatusTool:
 
     def test_dws_profile_exception_graceful(self, store):
         mock_dws = MagicMock()
-        mock_dws._get_current_profile_local.side_effect = RuntimeError("dws error")
+        mock_dws._get_current_profile_local.side_effect = OSError("dws error")
         tool = SystemStatusTool(dws=mock_dws, store=store)
         with patch("psutil.virtual_memory") as mock_vm, \
              patch("psutil.cpu_percent", return_value=0.0), \
@@ -376,7 +376,7 @@ class TestConfigManageTool:
         assert reloaded["llm"]["model"] == "gpt-4"
 
     def test_get_exception_on_execute(self):
-        with patch("src.tools.management.load_config", side_effect=RuntimeError("crash")):
+        with patch("src.tools.management.load_config", side_effect=OSError("crash")):
             tool = ConfigManageTool()
             r = tool.execute({"action": "view"})
             assert "error" in r

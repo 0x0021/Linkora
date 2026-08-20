@@ -4,6 +4,7 @@ from .engine_mixins_base import EngineMixinBase
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 import functools
 import logging
+import sqlite3
 
 from src.poller_utils import is_read_receipt_content
 

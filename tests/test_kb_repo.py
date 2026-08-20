@@ -333,7 +333,7 @@ class TestDelete:
         doc_id = _add_doc(repo)
         repo.add_kb_chunks(doc_id, ["a"])
         fake_index = MagicMock()
-        fake_index.remove.side_effect = RuntimeError("faiss boom")
+        fake_index.remove.side_effect = ValueError("faiss boom")
         store._vector_index = fake_index
         repo.delete_kb_document(doc_id)  # 不应抛出
         assert repo.get_kb_document(doc_id) is None

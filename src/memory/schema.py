@@ -292,7 +292,8 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
             processed_at TEXT,
             processed_by TEXT DEFAULT '',
             final_reply TEXT DEFAULT '',
-            notes TEXT DEFAULT ''
+            notes TEXT DEFAULT '',
+            read_at TEXT
         )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_md_status ON message_drafts(status)")

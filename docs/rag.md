@@ -38,10 +38,12 @@
 
 ## 向量化配置
 
-- 模型：`BAAI/bge-small-zh-v1.5`（中文场景，默认；部署可切换为 `./data/models/bge-large-zh-v1.5` 获得更高质量）
+- 模型：`BAAI/bge-small-zh-v1.5`（中文场景，默认；provider 取值 `local` / `api`）
 - 模式：**强制离线**（`HF_HUB_OFFLINE=1` + `local_files_only=True`）
 - 加速：Apple Silicon 自动启用 MPS
 - 存储：本地 `models/` 目录或 `./data/models/` 目录缓存
+- 本地 embedding 服务：默认 `http://127.0.0.1:8910/v1`（provider=`api` 时走此地址）；**该服务不在时 RAG 自动降级为不检索**，不影响对话主流程
+- 如需更强模型可切换为 `./data/models/bge-m3`（当前 `data/models/` 下实际提供的模型）
 
 ## 相关配置
 
@@ -49,9 +51,13 @@
 embedding:
   enabled: true
   model: BAAI/bge-small-zh-v1.5
+  provider: local                 # local / api
+  base_url: http://127.0.0.1:8910/v1   # 本地 embedding 服务；不可达则 RAG 降级
   top_k: 5
 
 rag:
   chunk_size: 500
   chunk_overlap: 50
 ```
+
+RAG 检索默认：`rag_min_similarity=0.30`、`rag_max_results=4`、`rag_max_content_chars=1200`（低于相似度阈值不强行作答，转草稿 / 转人工）。

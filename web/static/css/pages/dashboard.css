@@ -897,10 +897,10 @@
     .ov-chip-value { max-width: 120px; }
 }
 
-/* --- 首页一屏适配：日志面板随 flex 行高自然撑满，不再写死 220px --- */
+/* --- 日志面板：给最大高度，内容自然排列，少时不留白、多时内部滚动 --- */
 #page-dashboard.active .realtime-log-panel {
-    height: 100%;
-    max-height: none;
+    height: auto;
+    max-height: 420px;
     overflow: hidden;
 }
 
@@ -914,7 +914,7 @@
 #page-dashboard.active #realtime-log-stream {
     padding: 0.4rem 0.5rem;
     overflow: auto;
-    height: 100%;
+    max-height: 100%;
 }
 
 #page-dashboard.active #realtime-log-stream .rt-log-line {

@@ -23,6 +23,12 @@ class DraftRepo:
 
     def __init__(self, store: "SQLiteStore") -> None:
         self.store = store
+        # 向后兼容：老库可能无 read_at 列，懒追加（幂等，列已存在则忽略）
+        try:
+            self.store.conn.execute("ALTER TABLE message_drafts ADD COLUMN read_at TEXT")
+            self.store.conn.commit()
+        except Exception:  # noqa: BLE001 - 列已存在属预期
+            pass
 
     def add_dead_letter(self, *, msg_id: str | None, chat_id: str, chat_name: str,
                         sender_id: str | None, sender_name: str | None,
@@ -283,4 +289,21 @@ class DraftRepo:
             )
         row = cur.fetchone()
         return row[0] if row else 0
+
+    def mark_drafts_read(self, draft_ids: list[str]) -> int:
+        """批量标记草稿为已读（写入 read_at，不改变处理状态）。
+
+        用于管理台「批量标记已读」：仅记录已读时间，不影响审批流转。
+        """
+        if not draft_ids:
+            return 0
+        now = datetime.now().isoformat()
+        cur = self.store.conn.cursor()
+        placeholders = ",".join("?" * len(draft_ids))
+        cur.execute(
+            f"UPDATE message_drafts SET read_at = ? WHERE draft_id IN ({placeholders})",
+            (now, *draft_ids),
+        )
+        self.store.conn.commit()
+        return cur.rowcount
 

@@ -30,17 +30,23 @@ cp config.yaml.example config.yaml
 dws auth login
 
 # 前台运行（带 Web 管理后台）
-python main.py --web                 # 默认端口 8080
+python main.py --mode web              # 默认端口 8000
 ```
 
 ### 常用参数
 
 ```bash
-# 自定义端口
-python main.py --web 9000
+# 指定运行模式（both / web / worker，默认 both）
+python main.py --mode web
 
-# 仅运行（不开 Web）
-python main.py
+# 自定义 Web 端口（不跟端口默认 8000）
+python main.py --mode web --web 9000
+
+# 指定数据目录 / 配置文件
+python main.py --data-dir /var/lib/linkora --config /etc/linkora/config.yaml
+
+# 仅运行 worker（不开 Web）
+python main.py --mode worker
 
 # 测试规则匹配
 python main.py --test-rule "在吗"
@@ -89,7 +95,7 @@ docker compose up -d
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `ENABLE_WEB` | `0` | 是否启动 Web 管理后台（`1`=启用，端口 8080） |
+| `ENABLE_WEB` | `0` | 是否启动 Web 管理后台（`1`=启用，端口 8000） |
 
 ### 数据持久化
 

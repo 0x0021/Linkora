@@ -225,3 +225,86 @@ async def edit_draft(draft_id: str, body: EditDraftBody):
     except Exception as e:
         logger.error("编辑草稿失败: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class BatchDraftBody(BaseModel):
+    ids: list[str]
+
+
+@router.post("/api/drafts/batch-mark-read")
+async def batch_mark_read(body: BatchDraftBody):
+    """批量标记草稿为已读（仅写入 read_at，不改变处理状态）。"""
+    try:
+        def _work():
+            store = get_store()
+            count = store._draft_repo.mark_drafts_read(body.ids)
+            return {"success": True, "count": count}
+        return await run_sync(_work)
+    except Exception as e:
+        logger.error("批量标记已读失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/api/drafts/batch-approve")
+async def batch_approve(body: BatchDraftBody):
+    """批量审批通过：对每条 pending 草稿发送原始 AI 回复并标记 approved。"""
+    approved: list[str] = []
+    errors: list[dict] = []
+    try:
+        def _work():
+            store = get_store()
+            for draft_id in body.ids:
+                draft = store._draft_repo.get_draft(draft_id)
+                if not draft:
+                    errors.append({"draft_id": draft_id, "error": "not_found"})
+                    continue
+                if draft.get("status") != "pending":
+                    errors.append({"draft_id": draft_id, "error": "already_processed"})
+                    continue
+                try:
+                    final_reply = draft.get("ai_reply", "")
+                    _send_draft_reply(draft, final_reply)
+                    store._draft_repo.resolve_draft(
+                        draft_id, "approved", final_reply=final_reply, notes="管理台批量审批通过")
+                    approved.append(draft_id)
+                except Exception as e:  # noqa: BLE001 - 单条失败不影响其余
+                    logger.warning("[草稿] 批量审批单条失败 draft_id=%s: %s", draft_id, e)
+                    errors.append({"draft_id": draft_id, "error": str(e)})
+        await run_sync(_work)
+        return {"success": True, "approved": approved, "errors": errors}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("批量审批失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/api/drafts/batch-reject")
+async def batch_reject(body: BatchDraftBody):
+    """批量拒绝：对每条 pending 草稿标记 discarded（不发送）。"""
+    rejected: list[str] = []
+    errors: list[dict] = []
+    try:
+        def _work():
+            store = get_store()
+            for draft_id in body.ids:
+                draft = store._draft_repo.get_draft(draft_id)
+                if not draft:
+                    errors.append({"draft_id": draft_id, "error": "not_found"})
+                    continue
+                if draft.get("status") != "pending":
+                    errors.append({"draft_id": draft_id, "error": "already_processed"})
+                    continue
+                ok = store._draft_repo.resolve_draft(
+                    draft_id, "discarded", notes="管理台批量拒绝")
+                if ok:
+                    rejected.append(draft_id)
+                else:
+                    errors.append({"draft_id": draft_id, "error": "not_found"})
+        await run_sync(_work)
+        return {"success": True, "rejected": rejected, "errors": errors}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("批量拒绝失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e

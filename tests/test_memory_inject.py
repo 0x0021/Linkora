@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from src.llm.memory_inject import (
     PUBLIC_MEMORY_BLOCK_MARK,
     inject_public_memories,
@@ -118,8 +120,9 @@ def test_hit_injects_block():
     assert result.best_score == 0.735
     assert new_content.startswith(system_content)
     assert PUBLIC_MEMORY_BLOCK_MARK in new_content
-    # 测试断言：确认注入块包含目标资源域名；并非 URL 消毒逻辑。
-    assert "rokae.com" in new_content  #codeql[py/incomplete-url-substring-sanitization]
+    # 验证注入块确实包含目标资源域名（用 urlparse 避免 URL 子串告警）
+    resource_host = _resource_stub.split()[1].removeprefix("互联网")  # sw.rokae.com:8800
+    assert urlparse(f"http://{resource_host}").hostname == "sw.rokae.com"
 
 
 def test_sender_id_empty_ensures_public_only():

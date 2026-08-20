@@ -3,6 +3,8 @@ from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 import logging
+import os
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class LifecycleMixin(EngineMixinBase):
                 continue
             try:
                 ctx.poller.stop()
-            except Exception as e:  # noqa: BLE001
+            except (RuntimeError, OSError) as e:  # noqa: BLE001
                 logger.warning("停止平台 %s 轮询器时出错（可忽略）: %s", pid, e)
 
         # 2. 取消所有挂起的防抖定时器，避免退出后触发 LLM/发消息
@@ -42,12 +44,12 @@ class LifecycleMixin(EngineMixinBase):
         # 3. 停止并 join 后台调度器（各自内部 join(timeout=5)）
         try:
             self.doc_sync_scheduler.stop()
-        except Exception as e:  # noqa: BLE001
+        except RuntimeError as e:  # noqa: BLE001
             logger.warning("停止文档同步调度器出错（可忽略）: %s", e)
         if self.db_backup:
             try:
                 self.db_backup.stop()
-            except Exception as e:  # noqa: BLE001
+            except RuntimeError as e:  # noqa: BLE001
                 logger.warning("停止数据库备份出错（可忽略）: %s", e)
         # 3b. 停止各平台 H2-A 后台异步摘要调度器（每平台独立 daemon 线程，stop 内部 join）
         for pid, ctx in self.platforms.items():
@@ -55,7 +57,7 @@ class LifecycleMixin(EngineMixinBase):
                 continue
             try:
                 ctx.summary_scheduler.stop()
-            except Exception as e:  # noqa: BLE001
+            except RuntimeError as e:  # noqa: BLE001
                 logger.warning("停止平台 %s 摘要调度器出错（可忽略）: %s", pid, e)
 
         # 4. join 内存/摘要守护线程（已由 _shutdown_event 唤醒，应迅速退出）
@@ -66,14 +68,14 @@ class LifecycleMixin(EngineMixinBase):
         # 5. 关闭记忆提取线程池
         try:
             self._memory_executor.shutdown(wait=True, cancel_futures=True)
-        except Exception as e:  # noqa: BLE001
+        except RuntimeError as e:  # noqa: BLE001
             logger.warning("关闭记忆提取线程池出错（可忽略）: %s", e)
 
         # 6. 停止开发态模块热重载
         if getattr(self, "_module_reloader", None) is not None:
             try:
                 self._module_reloader.stop_watcher()
-            except Exception as e:  # noqa: BLE001
+            except RuntimeError as e:  # noqa: BLE001
                 logger.warning("停止模块热重载出错（可忽略）: %s", e)
 
         logger.info("后台线程已停止，可安全关闭存储")
@@ -102,7 +104,7 @@ class LifecycleMixin(EngineMixinBase):
                 if ctx.poller is not None:
                     try:
                         ctx.poller.stop()
-                    except Exception:  # noqa: BLE001
+                    except RuntimeError:  # noqa: BLE001
                         logger.warning("[resilience] silent exception in handle_signal", exc_info=True)
 
         signal.signal(signal.SIGINT, handle_signal)
@@ -200,7 +202,7 @@ class LifecycleMixin(EngineMixinBase):
                 try:
                     if ctx.store is not None:
                         ctx.store.close()
-                except Exception as e:  # noqa: BLE001
+                except sqlite3.Error as e:  # noqa: BLE001
                     logger.warning("关闭平台 %s 存储出错（可忽略）: %s", getattr(ctx, "id", "?"), e)
             logger.info("灵桥(Linkora)已停止 [模式=%s]", mode)
 
@@ -247,7 +249,7 @@ def _start_dev_watcher(pid_file: str) -> None:
             time.sleep(1.5)
             try:
                 cur = _signature()
-            except Exception:
+            except OSError:
                 logger.warning("[resilience] silent exception in _loop", exc_info=True)
                 continue
             if cur != last:
@@ -256,7 +258,7 @@ def _start_dev_watcher(pid_file: str) -> None:
                 time.sleep(3)
                 try:
                     cur2 = _signature()
-                except Exception:
+                except OSError:
                     logger.warning("[resilience] silent exception in _loop", exc_info=True)
                     cur2 = cur
                 if cur2 != last:
@@ -282,7 +284,7 @@ def main(root: str | None = None):
         from src.config_backup import maybe_backup
 
         maybe_backup()
-    except Exception as _e:  # noqa: BLE001
+    except RuntimeError as _e:  # noqa: BLE001
         logger.warning("[config-backup] 启动备份失败（已忽略）：%s", _e)
 
     # 延迟导入：LinkoraEngine 定义在 core.py，core 继承本 mixin，模块级导入会循环依赖
@@ -448,7 +450,7 @@ def main(root: str | None = None):
     try:
         from src.utils.cli_version_checker import start_cli_version_check
         start_cli_version_check()
-    except Exception:  # noqa: BLE001
+    except RuntimeError:  # noqa: BLE001
         logger.debug("[启动] CLI 版本自检启动失败（可忽略）", exc_info=True)
 
     if dev_mode:

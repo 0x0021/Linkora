@@ -47,7 +47,7 @@ def cancel_requested() -> bool:
     """取消信号文件是否存在。线程 worker 每个时间窗前调用一次。"""
     try:
         return os.path.exists(CANCEL_FILE)
-    except Exception:
+    except OSError:
         logger.warning("检查取消信号文件失败: %s", CANCEL_FILE)
         return False
 
@@ -59,7 +59,7 @@ def write_status(d: dict) -> None:
         os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
         with open(STATUS_FILE, "w", encoding="utf-8") as f:
             json.dump(d, f, ensure_ascii=False, indent=2)
-    except Exception:
+    except OSError:
         # 状态文件写失败不应影响主流程，但需记录以便排查
         logger.warning("写入同步状态文件失败: %s", STATUS_FILE)
 
@@ -77,7 +77,7 @@ def configure_logging() -> None:
         fh = logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8")
         fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
         logger.addHandler(fh)
-    except Exception:
+    except OSError:
         # 配日志失败不至于影响主流程，但需记录
         logger.warning("配置同步日志文件失败: %s", LOG_FILE)
 
@@ -136,7 +136,7 @@ def resolve_current_user(dws, config) -> tuple[dict, str]:
                 "dept": "",
                 "title": "",
             }
-    except Exception as e:  # noqa: BLE001
+    except (OSError, RuntimeError) as e:  # noqa: BLE001
         logger.warning("读取本地 profile 失败（忽略）: %s", e)
 
     open_dingtalk_id = ""
@@ -155,7 +155,7 @@ def resolve_current_user(dws, config) -> tuple[dict, str]:
                 base["dept"] = dept
             if not base.get("title"):
                 base["title"] = title
-    except Exception as e:  # noqa: BLE001
+    except (OSError, RuntimeError) as e:  # noqa: BLE001
         logger.warning("补拉企业用户信息失败（忽略）: %s", e)
 
     return base, open_dingtalk_id
@@ -204,12 +204,12 @@ def run_sync_history(
     try:
         if os.path.exists(CANCEL_FILE):
             os.remove(CANCEL_FILE)
-    except Exception as e:  # noqa: BLE001
-        logger.warning(
-            "[sync-worker] 启动时清理遗留取消标记失败（继续执行，本次同步可能被误取消） "
-            "job_id=%s platform=%s file=%s error=%s: %s",
-            job_id, platform, CANCEL_FILE, type(e).__name__, e,
-        )
+        except OSError as e:  # noqa: BLE001
+            logger.warning(
+                "[sync-worker] 启动时清理遗留取消标记失败（继续执行，本次同步可能被误取消） "
+                "job_id=%s platform=%s file=%s error=%s: %s",
+                job_id, platform, CANCEL_FILE, type(e).__name__, e,
+            )
 
     configure_logging()
     logger.info(
@@ -314,14 +314,14 @@ def run_sync_history(
         try:
             if os.path.exists(CANCEL_FILE):
                 os.remove(CANCEL_FILE)
-        except Exception as cleanup_err:  # noqa: BLE001
+        except (OSError, RuntimeError) as e:  # noqa: BLE001
             logger.warning(
                 "[sync-worker] 取消后清理取消标记失败（残留文件可能导致下次同步被误取消） "
                 "job_id=%s platform=%s file=%s error=%s: %s",
                 job_id, platform, CANCEL_FILE, type(cleanup_err).__name__, cleanup_err,
             )
         return 0
-    except Exception as e:  # noqa: BLE001
+    except (OSError, RuntimeError) as e:  # noqa: BLE001
         write_status({
             "job_id": job_id, "status": "error", "platform": platform,
             "days": days, "scope": scope, "range": range_label,

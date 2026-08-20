@@ -63,6 +63,24 @@ decisions (
 - 最小相似度阈值（`memory.retrieval.min_similarity`，默认 0.6）过滤低质量结果
 - 定期清理（`memory.cleanup.*`）删除过期低质记忆
 
+## 公共记忆自动注入（v0.4.x 新增）
+
+公共记忆（`scope=public`）在每轮对话时会自动注入 system prompt，与 RAG 知识库注入对称：
+
+- **触发条件**：公共记忆语义相似度 ≥ 0.55（`memory.recall.threshold`）且 top_k=3
+- **权重提升**：公共记忆块被抽出为独立 system 消息紧贴 user 之前（近因效应），并附高优先级指令前缀
+- **覆盖声明**：公共记忆块含「与 KB 冲突时优先采用公共记忆」，避免模型被过时文档误导
+- **个人记忆不受影响**：私有记忆仍保持 LLM 主动调用 `recall_memory`，防止他人私聊内容泄露
+
+配置项：
+
+```yaml
+memory:
+  recall:
+    threshold: 0.55
+    top_k: 3
+```
+
 ## Agent 自动注入
 
 Agent 会自动在 `recall_memory` 和 `save_memory` 工具调用中注入 `sender_id`、`sender_name`、`chat_id`，确保记忆绑定到正确用户，无需 LLM 显式传参。

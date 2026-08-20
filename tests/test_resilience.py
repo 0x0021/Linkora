@@ -3,13 +3,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from unittest.mock import patch
 
 import pytest
 
 from src.utils.resilience import (
-    RecoverableError,
-    bump_resilience_metric,
     get_resilience_metrics,
     report_resilience_failure,
     swallow_recoverable,

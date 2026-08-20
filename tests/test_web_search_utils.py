@@ -711,9 +711,10 @@ class TestWebSearchToolMultiQuery:
                 m_ddg.side_effect = lambda q, **kw: [
                     {"title": f"ddg-{q}", "url": f"https://ddg.com/{q}", "snippet": q},
                 ]
-                with patch("src.tools.web_search._fetch_page", return_value=None):
-                    tool = WebSearchTool()
-                    result = tool.execute({"queries": ["q1", "q2"]})
+                with patch("src.tools.web_search.searxng_search", return_value=[]):
+                    with patch("src.tools.web_search._fetch_page", return_value=None):
+                        tool = WebSearchTool()
+                        result = tool.execute({"queries": ["q1", "q2"]})
         # 2 query × 2 后端 = 4 raw(URL 不同,不去重)；total_raw/total_dedup 已移至日志,不进 payload
         assert "total_raw" not in result
         assert "total_dedup" not in result

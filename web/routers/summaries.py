@@ -52,11 +52,12 @@ async def get_summaries(
             "digest": digest,
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-    except Exception as e:  # noqa: BLE001
-        logger.warning("[摘要] 读取失败 platform=%s: %s", pf, e)
+    except Exception:  # noqa: BLE001
+        # 禁止把内部异常细节暴露给客户端（CodeQL py/stack-trace-exposure）。
+        logger.exception("[摘要] 读取失败 platform=%s", pf)
         return {
             "ok": False,
-            "error": str(e),
+            "error": "摘要数据读取失败，请稍后重试",
             "platform": pf,
             "count": 0,
             "items": [],

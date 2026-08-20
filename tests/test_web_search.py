@@ -10,7 +10,22 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from src.tools.web_search import WebSearchTool, _safe_int
+
+
+@pytest.fixture(autouse=True)
+def _disable_real_network(monkeypatch):
+    """防呆：禁用 web_search 的真实网络出口 ssrf_safe_get，避免 execute() 在
+    未被 mock 的后端上真实发请求（CI 无外网 + urllib3 版本错配会直接抛 TypeError）。
+    抛 RuntimeError 使未 mock 的后端被 execute 安全回退为 []。
+    """
+    import src.tools.web_search as _ws
+
+    def _blocked_ssrf(*args, **kwargs):
+        raise RuntimeError("测试中被禁用的真实网络请求（web_search.ssrf_safe_get）")
+    monkeypatch.setattr(_ws, "ssrf_safe_get", _blocked_ssrf)
 
 
 class TestSafeInt:
@@ -42,21 +57,24 @@ class TestWebSearchExecute:
     def test_chinese_num_does_not_crash(self):
         """LLM 传中文数字 '五' 时工具不崩溃，回退默认 5。"""
         tool = WebSearchTool()
-        with patch("src.tools.web_search.bing_search", return_value=self._mk_results()) as m:
+        with patch("src.tools.web_search.bing_search", return_value=self._mk_results()) as m, \
+             patch("src.tools.web_search._fetch_page", return_value=None):
             r = tool.execute({"query": "测试", "num_results": "五"})
         assert "results" in r
         assert m.call_args.kwargs.get("num_results") == 5
 
     def test_float_string_num(self):
         tool = WebSearchTool()
-        with patch("src.tools.web_search.bing_search", return_value=self._mk_results()) as m:
+        with patch("src.tools.web_search.bing_search", return_value=self._mk_results()) as m, \
+             patch("src.tools.web_search._fetch_page", return_value=None):
             tool.execute({"query": "测试", "num_results": "3.7"})
         assert m.call_args.kwargs.get("num_results") == 3
 
     def test_num_clamped_to_range(self):
         """越界值裁剪到 [1, 10]。"""
         tool = WebSearchTool()
-        with patch("src.tools.web_search.bing_search", return_value=self._mk_results()) as m:
+        with patch("src.tools.web_search.bing_search", return_value=self._mk_results()) as m, \
+             patch("src.tools.web_search._fetch_page", return_value=None):
             tool.execute({"query": "测试", "num_results": 100})
             assert m.call_args.kwargs.get("num_results") == 10
             tool.execute({"query": "测试", "num_results": -3})

@@ -26,14 +26,23 @@ def _disable_real_network(monkeypatch):
     """防呆：本模块内任何「未显式 mock」的网络请求都立即失败，避免 CI/本地因代理或
     SSL 握手挂死（典型如 searxng 后端未被 mock 时，execute() 仍会真实发请求）。
 
-    各单元测试仍可用 `with patch("requests.get")` 覆盖本 fixture，以验证真实网络行为；
-    但凡漏 mock 的后端都会在这里快速抛 ConnectionError，而不是卡 60s+ 拖垮整条流水线。
+    各单元测试仍可用 `with patch("requests.get")` / `with patch("src.tools.web_search.ssrf_safe_get")`
+    覆盖本 fixture，以验证真实网络行为；但凡漏 mock 的后端都会在这里快速抛异常，
+    而不是卡 60s+ 拖垮整条流水线，或被 CI 环境的 urllib3 版本错配（PoolKey 参数冲突）击穿。
     """
     import requests as _req
 
     def _blocked(*args, **kwargs):
         raise _req.ConnectionError("测试中被禁用的真实网络请求（存在未 mock 的网络调用）")
     monkeypatch.setattr(_req, "get", _blocked)
+
+    # web_search 后端走 ssrf_safe_get(Session)，requests.get 不被使用，单独禁用避免漏网。
+    # 抛 RuntimeError（execute 的 try 捕获 RuntimeError/ValueError）使未 mock 的后端安全回退 []，
+    import src.tools.web_search as _ws
+
+    def _blocked_ssrf(*args, **kwargs):
+        raise RuntimeError("测试中被禁用的真实网络请求（web_search.ssrf_safe_get）")
+    monkeypatch.setattr(_ws, "ssrf_safe_get", _blocked_ssrf)
 
 
 # ============ _strip_html ============

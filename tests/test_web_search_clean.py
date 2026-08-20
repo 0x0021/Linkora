@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -16,6 +17,19 @@ sys.path.insert(0, str(ROOT))
 from src.tools.web_search import (  # noqa: E402
     WebSearchTool, _is_garbled, _clean_and_rank, _tokenize,
 )
+
+
+@pytest.fixture(autouse=True)
+def _disable_real_network(monkeypatch):
+    """防呆：禁用 web_search 的真实网络出口 ssrf_safe_get，避免 execute() 在
+    未被 mock 的后端(searxng)上真实发请求（CI 无外网 + urllib3 版本错配会直接抛 TypeError）。
+    抛 RuntimeError 使未 mock 的后端被 execute 安全回退为 []。
+    """
+    import src.tools.web_search as _ws
+
+    def _blocked_ssrf(*args, **kwargs):
+        raise RuntimeError("测试中被禁用的真实网络请求（web_search.ssrf_safe_get）")
+    monkeypatch.setattr(_ws, "ssrf_safe_get", _blocked_ssrf)
 
 
 def test_is_garbled_detects_control_chars():
@@ -79,10 +93,12 @@ def test_execute_strips_internal_debug_fields():
         {"title": "珞石机器人上市", "url": "https://sohu.com", "snippet": "拟赴港上市"},
         {"title": "FIFA", "url": "https://fifa.com", "snippet": "schedule"},
     ]
-    # execute 会遍历全部后端（bing + duckduckgo）并合并，故两个后端都要 mock，
-    # 否则 duckduckgo 会真实联网、结果不可控。
+    # execute 会遍历全部后端（bing + duckduckgo + searxng）并合并，故后端都要 mock，
+    # 否则未 mock 的后端会真实联网、结果不可控；_fetch_page 亦需 mock（富集阶段联网）。
     with patch("src.tools.web_search.bing_search", return_value=raw), \
-         patch("src.tools.web_search.duckduckgo_search", return_value=[]):
+         patch("src.tools.web_search.duckduckgo_search", return_value=[]), \
+         patch("src.tools.web_search.searxng_search", return_value=[]), \
+         patch("src.tools.web_search._fetch_page", return_value=None):
         r = tool.execute({"query": "珞石机器人 上市", "num_results": 10})
     assert "results" in r
     # total_raw/total_dedup 已移至日志，不应出现在返回给 LLM 的 payload 中

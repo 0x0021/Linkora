@@ -118,7 +118,8 @@ def test_hit_injects_block():
     assert result.best_score == 0.735
     assert new_content.startswith(system_content)
     assert PUBLIC_MEMORY_BLOCK_MARK in new_content
-    assert "rokae.com" in new_content
+    # 测试断言：确认注入块包含目标资源域名；并非 URL 消毒逻辑。
+    assert "rokae.com" in new_content  #codeql[py/incomplete-url-substring-sanitization]
 
 
 def test_sender_id_empty_ensures_public_only():

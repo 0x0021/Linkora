@@ -317,6 +317,34 @@ class ConversationRepo:
             updated_at=row["updated_at"] or "",
         )
 
+    def list_recent_summaries(self, limit: int = 20, platform: str = "") -> list[dict]:
+        """近期对话摘要列表（JOIN conversations 取 chat_name），按 updated_at 倒序。
+
+        供 Web「对话摘要」页与主动触达聚合展示复用；单次查询取回，避免逐条 N+1。
+        """
+        cur = self._cc(platform).cursor()
+        cur.execute(
+            """SELECT s.chat_id, s.summary_text, s.covered_count, s.updated_at,
+                      COALESCE(c.chat_name, '') AS chat_name
+               FROM conversation_summaries s
+               LEFT JOIN conversations c ON c.chat_id = s.chat_id
+               ORDER BY s.updated_at DESC
+               LIMIT ?""",
+            (int(limit),),
+        )
+        rows = cur.fetchall()
+        cur.close()
+        return [
+            {
+                "chat_id": r["chat_id"],
+                "summary_text": r["summary_text"] or "",
+                "covered_count": int(r["covered_count"] or 0),
+                "updated_at": r["updated_at"] or "",
+                "chat_name": r["chat_name"] or "",
+            }
+            for r in rows
+        ]
+
     def upsert_conversation_summary(
         self,
         chat_id: str,

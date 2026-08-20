@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -134,8 +135,8 @@ class OcrMixin(PollerMixinBase):
                         # 把图片路径持久化到消息记录（消息记录页缩略图）
                         try:
                             self.store._message_repo.update_message_image_path(msg_id, rel_path)
-                        except Exception as e:
-                            logger.debug("[轮询器] 更新图片路径失败: %s", e)
+                        except sqlite3.Error:
+                            logger.debug("[轮询器] 更新图片路径失败")
                     # OCR 完成，移出在途字典（结果已落缓存，wait_for_ocr 仍能取到）
                     self._ocr_futures.pop(msg_id, None)
                     # 防缓存无限增长：超过阈值时淘汰最旧的一批
@@ -149,8 +150,9 @@ class OcrMixin(PollerMixinBase):
                     logger.info("[轮询器] OCR 完成，更新消息内容: %s", msg_id[:20])
                     self.store._message_repo.update_message_content(msg_id, result_content)
                 return result_content
-            except Exception as e:
-                logger.warning("[轮询器] OCR 回调失败: %s", e)
+            except (RuntimeError, OSError):
+                # DWS CLI 失败 / 文件系统错误 → 记录并清理
+                logger.warning("[轮询器] OCR 回调失败")
                 with self._ocr_lock:
                     self._ocr_futures.pop(msg_id, None)
                     self._ocr_results[msg_id] = ""  # 空结果防止无限重试
@@ -181,8 +183,9 @@ class OcrMixin(PollerMixinBase):
                 future = self._image_executor.submit(_cv.copy_context().run, ocr_task)
                 self._ocr_futures[msg_id] = future
             return placeholder, ""
-        except Exception as e:
-            logger.warning("[轮询器] 提交 OCR 任务失败: %s", e)
+        except (RuntimeError, OSError):
+            # DWS CLI 失败 / 文件系统 I/O 错误 → 降级返回占位符
+            logger.warning("[轮询器] 提交 OCR 任务失败")
             if caption:
                 return f"{caption}\n[图片] (识别队列繁忙)", ""
             return "[图片] (识别队列繁忙)", ""
@@ -201,8 +204,9 @@ class OcrMixin(PollerMixinBase):
                 result = future.result(timeout=timeout)
                 if result:
                     return result
-            except Exception as e:
-                logger.debug("[轮询器] OCR future 获取结果超时或失败: %s", e)
+            except (TimeoutError, RuntimeError, OSError):
+                # Future 执行超时或失败 → 容错查缓存
+                logger.debug("[轮询器] OCR future 获取结果超时或失败")
         # future 不存在或已完成：查持久结果缓存
         with self._ocr_lock:
             cached = self._ocr_results.get(msg_id)
@@ -279,8 +283,9 @@ class OcrMixin(PollerMixinBase):
 
         try:
             img_path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.debug("[轮询器] 创建图片目录失败: %s", e)
+        except OSError:
+            # 目录创建失败（权限/磁盘满）→ 容错继续
+            logger.debug("[轮询器] 创建图片目录失败")
 
         try:
             self.dws.download_media(
@@ -301,8 +306,9 @@ class OcrMixin(PollerMixinBase):
                 try:
                     from src.tools.parse_document import post_process_ocr_text
                     ocr_text = post_process_ocr_text(ocr_text)
-                except Exception as e:
-                    logger.warning("[轮询器] OCR 后处理失败，回退原始文本: %s", e)
+                except (ValueError, TypeError):
+                    # OCR 后处理失败 → 回退原始文本
+                    logger.warning("[轮询器] OCR 后处理失败，回退原始文本")
                 if ocr_text:
                     # ★ 结构化包裹：用 <card title="图片内容"> 包住 OCR 文本，
                     # 前端 renderMsgContent 会走 _renderCardBody 把「标签：值」渲染成 KV 卡片。
@@ -315,8 +321,9 @@ class OcrMixin(PollerMixinBase):
             if caption:
                 return f"{caption}\n[图片 - 无法识别文字]", rel_path
             return "[图片 - 无法识别文字]", rel_path
-        except Exception as e:
-            logger.warning("[轮询器] 图片下载/OCR 失败: %s", e)
+        except (OSError, RuntimeError, ValueError):
+            # 文件 I/O / DWS CLI / 解析失败 → 容错降级
+            logger.warning("[轮询器] 图片下载/OCR 失败")
             if caption:
                 return f"{caption}\n[图片] (识别失败)", ""
             return "[图片] (识别失败)", ""
@@ -350,8 +357,9 @@ class OcrMixin(PollerMixinBase):
 
         try:
             img_path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.debug("[轮询器] 创建自发送图片目录失败: %s", e)
+        except OSError:
+            # 目录创建失败（权限/磁盘满）→ 容错继续
+            logger.debug("[轮询器] 创建自发送图片目录失败")
 
         # 去重：文件已存在且非空，直接复用，避免重复下载
         if img_path.exists() and img_path.stat().st_size > 0:
@@ -373,8 +381,9 @@ class OcrMixin(PollerMixinBase):
             if caption:
                 return caption, rel_path
             return "[图片]", rel_path
-        except Exception as e:
-            logger.warning("[轮询器] 自发送图片下载失败: %s", e)
+        except (OSError, RuntimeError):
+            # 下载失败 → 容错降级
+            logger.warning("[轮询器] 自发送图片下载失败")
             if caption:
                 return f"{caption}\n[图片] (下载失败)", ""
             return "[图片] (下载失败)", ""
@@ -408,8 +417,8 @@ class OcrMixin(PollerMixinBase):
                 c = json.loads(raw_content)
                 if isinstance(c, dict):
                     media_id = c.get("mediaId") or c.get("fileId") or c.get("file_id")
-            except Exception as _exc:
-                logger.debug(f"_download_received_file: swallowed exception: {_exc}")
+            except (json.JSONDecodeError, TypeError):
+                logger.debug("_download_received_file: JSON 解析失败")
                 pass
         if not media_id:
             return "", ""
@@ -422,8 +431,8 @@ class OcrMixin(PollerMixinBase):
             c = json.loads(raw_content)
             if isinstance(c, dict):
                 filename = c.get("filename") or c.get("fileName")
-        except Exception as _exc:
-            logger.debug(f"_download_received_file: swallowed exception: {_exc}")
+        except (json.JSONDecodeError, TypeError):
+            logger.debug("_download_received_file: JSON 解析失败")
             pass
         if not filename:
             # 非 JSON 的纯文本形态：`[视频消息](mediaId=@lQb...) fileName=xxx.mp4 url: ...`
@@ -465,8 +474,9 @@ class OcrMixin(PollerMixinBase):
                 return "", ""
             logger.info("[轮询器] 接收%s已下载到本地: %s", media_type, rel)
             return str(out_path), rel
-        except Exception as e:
-            logger.warning("[轮询器] 接收文件下载失败: %s", e)
+        except (OSError, RuntimeError):
+            # 下载失败 → 容错返回空
+            logger.warning("[轮询器] 接收文件下载失败")
             return "", ""
 
     @staticmethod
@@ -555,10 +565,10 @@ class OcrMixin(PollerMixinBase):
                         "[轮询器] 卡片图片下载为空: msg=%s key=%s",
                         msg_id[:20], key[:30],
                     )
-            except Exception as e:
+            except (OSError, RuntimeError):
                 logger.warning(
-                    "[轮询器] 卡片图片下载失败: msg=%s key=%s err=%s",
-                    msg_id[:20], key[:30], e,
+                    "[轮询器] 卡片图片下载失败: msg=%s key=%s",
+                    msg_id[:20], key[:30],
                 )
                 # 清理可能写出的 0 字节文件
                 try:
@@ -573,8 +583,9 @@ class OcrMixin(PollerMixinBase):
         """调用文档解析器的 OCR 能力（懒加载 + 实例缓存复用，避免每张图都重载 OCR 模型）。"""
         try:
             from src.tools.parse_document import DocumentParser
-        except Exception as e:
-            logger.warning("[轮询器] OCR 模块加载失败: %s", e)
+        except (ImportError, OSError):
+            # 模块加载失败 → 返回空
+            logger.warning("[轮询器] OCR 模块加载失败")
             return ""
         # 缓存 DocumentParser 实例：首次创建后复用，避免每张图都重新加载模型（数秒延迟）。
         # 双重检查锁保证多线程（_image_executor 线程池）下仅初始化一次。
@@ -586,8 +597,8 @@ class OcrMixin(PollerMixinBase):
                         # （内部不读取具体字段），运行时兼容；此处 cast 以满足静态类型。
                         self._doc_parser = DocumentParser(cast("AppConfig", self.config))
                         logger.info("[轮询器] OCR 引擎实例已初始化并缓存复用")
-                    except Exception as e:
-                        logger.warning("[轮询器] OCR 解析器初始化失败: %s", e)
+                    except (ImportError, OSError):
+                        logger.warning("[轮询器] OCR 解析器初始化失败")
                         return ""
         parser = self._doc_parser
         if not getattr(parser, "_ocr_available", False):
@@ -596,6 +607,7 @@ class OcrMixin(PollerMixinBase):
         try:
             with self._ocr_call_lock:
                 return parser.ocr_image(str(path))
-        except Exception as e:
-            logger.warning("[轮询器] OCR 执行失败: %s", e)
+        except (OSError, RuntimeError, ValueError):
+            # OCR 执行失败 → 容错返回空
+            logger.warning("[轮询器] OCR 执行失败")
             return ""

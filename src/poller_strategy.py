@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 from datetime import datetime, timedelta
 
@@ -120,7 +121,7 @@ class PollerStrategyMixin(PollerMixinBase):
             conv = self.store._conversation_repo.get_conversation(conv_id)
             if conv:
                 db_type = conv.get("chat_type") or current_chat_type
-        except Exception:
+        except (sqlite3.Error, RuntimeError):
             logger.warning("[resilience] silent exception in _feishu_correct_chat_type", exc_info=True)
 
         try:
@@ -324,7 +325,8 @@ class PollerStrategyMixin(PollerMixinBase):
                     seen.add(oid)
                     all_conversations.append(c)
             logger.debug("[轮询器] + %d 个数据库缓存会话，总计 %d", len(db_convs), len(all_conversations))
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底；DWS 侧错误由调用方处理
             logger.warning("获取数据库缓存会话失败: %s", e)
 
         # 4. 外部好友强制轮询
@@ -337,7 +339,8 @@ class PollerStrategyMixin(PollerMixinBase):
                     all_conversations.append(conv_entry)
             if external_friends:
                 logger.debug("[轮询器] + %d 个外部好友（强制），总计 %d", len(external_friends), len(all_conversations))
-        except Exception as e:
+        except sqlite3.Error as e:
+            # 仅 DB 层失败才兜底
             logger.warning("列出外部好友失败：%s", e)
 
         # 5. 钉钉群枚举源（chat +chat-list-all / +chat-list-mine 补全群，list-all 搜索权益不覆盖群）
@@ -381,7 +384,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     conv_chat_id = str(conv.get("chat_id", ""))
                     if conv_chat_id.startswith("oc_"):
                         real_conv_id = conv_chat_id
-            except Exception:
+            except (sqlite3.Error, RuntimeError):
                 logger.warning("[resilience] silent exception in poll_once", exc_info=True)
         if not real_conv_id:
             logger.debug(
@@ -454,8 +457,9 @@ class PollerStrategyMixin(PollerMixinBase):
                 conv = self.store._conversation_repo.get_conversation(open_id)
                 if conv and conv.get("last_message_time"):
                     last_poll = datetime.fromisoformat(conv["last_message_time"])
-            except Exception as e:
-                logger.debug("[轮询器] 数据库 last_message_time 解析失败: %s", e)
+            except (sqlite3.Error, ValueError):
+                # DB 读取失败或 ISO 时间戳解析失败 → 容错返回默认值
+                logger.debug("[轮询器] 数据库 last_message_time 解析失败")
         return last_poll, is_first_poll
 
     def _store_self_message_if_new(self, msg) -> None:

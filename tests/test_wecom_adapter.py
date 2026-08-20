@@ -182,7 +182,9 @@ class TestContact(unittest.TestCase):
 
     def test_get_self_returns_empty(self):
         # wecom-cli 不可用（subprocess 抛异常）且无 WECOM_USER_ID / $USER 时，应回退为 {}
-        cap = _RunCapture(side_effect=Exception("wecom-cli unavailable"))
+        def _boom(*args, **kwargs):
+            raise OSError("wecom-cli unavailable")
+        cap = _RunCapture(side_effect=_boom)
         with patch("src.im_adapter.wecom.subprocess.run", cap), \
                 patch.dict(os.environ, {"USER": "", "WECOM_USER_ID": ""}):
             self.assertEqual(WecomCliAdapter().contact_user_get_self(), {})

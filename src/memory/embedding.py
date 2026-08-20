@@ -368,7 +368,7 @@ class EmbeddingClient:
         for attempt in range(max(1, retries)):
             try:
                 last = self.embed(text)
-            except Exception as e:  # 防御：embed 内部未捕获的异常同样重试
+            except (RuntimeError, TypeError) as e:  # 防御：embed 内部未捕获的异常同样重试
                 logger.warning("向量嵌入异常（第 %d 次）: %s", attempt + 1, e)
                 last = []
             if last:
@@ -426,7 +426,7 @@ class EmbeddingClient:
         t0 = time.time()
         try:
             self.embed(dummy)
-        except Exception as e:
+        except (RuntimeError, TypeError) as e:
             logger.warning("[嵌入] 预热 dummy 推理异常: %s", e)
             return None
         cost = time.time() - t0
@@ -472,7 +472,7 @@ class EmbeddingClient:
                     continue
                 try:
                     self.embed("向量模型心跳保活")
-                except Exception as e:  # 心跳异常绝不抛出，避免线程崩溃
+                except (RuntimeError, TypeError) as e:  # 心跳异常绝不抛出，避免线程崩溃
                     logger.warning("[嵌入] 心跳推理异常（已忽略）: %s", e)
         finally:
             with self._heartbeat_lock:
@@ -511,7 +511,7 @@ class EmbeddingClient:
             if len(texts) == 1:
                 return vector[0].tolist()
             return vector.tolist()
-        except Exception as e:
+        except (RuntimeError, OSError, TypeError) as e:
             logger.error("本地向量嵌入失败: %s", e, exc_info=True)
             return []
 
@@ -523,7 +523,7 @@ class EmbeddingClient:
                 model=self.config.model,
             )
             return response.data[0].embedding
-        except Exception as e:
+        except (RuntimeError, TypeError) as e:
             logger.error("API 向量嵌入失败: %s", e, exc_info=True)
             return []
 
@@ -539,6 +539,6 @@ class EmbeddingClient:
             if na == 0 or nb == 0:
                 return 0.0
             return float(np.dot(a, b) / (na * nb))
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError) as e:
             logger.debug("cosine similarity failed: %s", e)
             return 0.0

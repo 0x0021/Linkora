@@ -212,6 +212,11 @@ class WecomCliAdapter(BaseIMAdapter):
                     time.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                     continue
                 raise
+            except OSError as e:
+                # CLI 基础设施错误（二进制缺失 / 无执行权限 / 管道破裂等）统一
+                # 归入 IMAdapter* 异常族，让调用方按既有 catch 优雅降级。
+                raise self._base_error_class()(
+                    f"{self.cli_path} 启动失败: {e}") from e
             except NotImplementedError:
                 raise
             except self._permission_error_class():

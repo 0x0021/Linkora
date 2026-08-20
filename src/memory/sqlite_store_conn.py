@@ -67,7 +67,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                     if otid not in alive:
                         try:
                             oconn.close()
-                        except Exception as e:
+                        except sqlite3.Error as e:
                             logger.debug("关闭旧连接失败: %s", e)
                         self._conns.pop(otid, None)
                         break  # 每次只回收一个，避免一次性关闭过多
@@ -75,7 +75,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
         if need_init:
             try:
                 self.init_db()
-            except Exception as e:
+            except sqlite3.Error as e:
                 # 失败时回退标志位，下一个线程访问 conn 时会重新尝试 init_db
                 self._schema_initialized = False
                 logger.error("SQLiteStore schema 初始化失败 %s: %s", self.db_path, e)
@@ -123,7 +123,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             if cached is not None:
                 try:
                     cached[1].close()
-                except Exception as _close_err:  # noqa: BLE001
+                except sqlite3.Error as _close_err:  # noqa: BLE001
                     logger.debug("[账号隔离] 关闭旧会话连接失败: %s", _close_err)
             existed = os.path.exists(path)
             c = sqlite3.connect(path)
@@ -147,7 +147,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                     if otid not in alive:
                         try:
                             oconn.close()
-                        except Exception as e:
+                        except sqlite3.Error as e:
                             logger.debug("关闭旧会话连接失败: %s", e)
                         self._conv_conns.pop((otid, oplat), None)
                         break
@@ -155,7 +155,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
         if need_migrate:
             try:
                 self._migrate_main_to_conv(c, platform)
-            except Exception as e:  # noqa: BLE001
+            except sqlite3.Error as e:  # noqa: BLE001
                 logger.warning("[账号隔离] 主库→会话库迁移失败（不影响新库使用）: %s", e)
         return c
 
@@ -197,7 +197,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                     ).fetchall()
                 else:
                     rows = main.execute(f"SELECT {cols} FROM {table}").fetchall()
-            except Exception as e:  # noqa: BLE001
+            except sqlite3.Error as e:  # noqa: BLE001
                 logger.debug("[账号隔离] 迁移表 %s 失败（主库可能无此表）: %s", table, e)
                 continue
             if not rows:
@@ -237,7 +237,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                 raise RuntimeError(f"数据库完整性检查失败: {self.db_path} — {result}")
         except RuntimeError:
             raise
-        except Exception as e:
+        except (sqlite3.Error, OSError) as e:
             logger.warning("DB integrity_check 执行异常: %s -> %s", self.db_path, e)
 
     def _cleanup_orphan_wal_shm(self) -> None:

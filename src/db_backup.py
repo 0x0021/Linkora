@@ -139,7 +139,7 @@ class DatabaseBackup:
 
             self._cleanup_old_backups()
             return str(backup_path)
-        except Exception as e:
+        except (sqlite3.Error, OSError, RuntimeError) as e:
             logger.error("备份数据库失败: %s", e, exc_info=True)
             # 清理残留的部分备份文件，避免影响 _cleanup_old_backups 的计数
             try:
@@ -159,7 +159,7 @@ class DatabaseBackup:
         if self.backup_on_start:
             try:
                 self.backup_now()
-            except Exception as e:
+            except (sqlite3.Error, OSError, RuntimeError) as e:
                 logger.error("首次备份失败: %s", e)
 
         while self._running:
@@ -169,7 +169,7 @@ class DatabaseBackup:
                     break
                 if self._running:
                     self.backup_now()
-            except Exception as e:
+            except (sqlite3.Error, OSError, RuntimeError) as e:
                 logger.error("备份循环错误: %s", e)
                 self._stop_event.wait(300)
 
@@ -186,7 +186,7 @@ class DatabaseBackup:
                 for old_backup in backups[self.max_backups:]:
                     old_backup.unlink()
                     logger.info("已移除旧备份: %s", old_backup.name)
-        except Exception as e:
+        except (sqlite3.Error, OSError, RuntimeError) as e:
             logger.error("清理旧备份失败: %s", e)
 
 
@@ -255,7 +255,7 @@ class DatabaseBackupCoordinator:
         if self.backup_on_start:
             try:
                 self._run_queue()
-            except Exception as e:  # noqa: BLE001
+            except (sqlite3.Error, OSError, RuntimeError) as e:  # noqa: BLE001
                 # 启动首轮兜底：与周期调用（下方 while 内）对齐，避免首轮异常
                 # 直接杀死协调器线程、导致所有平台后续备份永久停止。
                 logger.error("数据库备份协调器启动备份异常（已忽略，周期备份继续）: %s", e, exc_info=True)
@@ -271,7 +271,7 @@ class DatabaseBackupCoordinator:
             if self._running:
                 try:
                     self._run_queue()
-                except Exception as e:  # noqa: BLE001
+                except (sqlite3.Error, OSError, RuntimeError) as e:  # noqa: BLE001
                     # 循环级兜底：单次备份队列异常若逃逸会静默杀死协调器线程
                     # （僵尸线程，所有后续备份停止）。记日志后下轮继续。
                     logger.error("数据库备份协调器循环异常（已忽略，下轮继续）: %s", e, exc_info=True)
@@ -283,7 +283,7 @@ class DatabaseBackupCoordinator:
                 break
             try:
                 b.backup_now()
-            except Exception as e:  # noqa: BLE001
+            except (sqlite3.Error, OSError, RuntimeError) as e:  # noqa: BLE001
                 logger.error(
                     "数据库备份协调器执行平台 %s 备份失败: %s",
                     getattr(b, "db_path", "?"),

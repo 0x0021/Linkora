@@ -66,10 +66,12 @@ class LifecycleMixin(EngineMixinBase):
                 th.join(timeout=timeout)
 
         # 5. 关闭记忆提取线程池
-        try:
-            self._memory_executor.shutdown(wait=True, cancel_futures=True)
-        except RuntimeError as e:  # noqa: BLE001
-            logger.warning("关闭记忆提取线程池出错（可忽略）: %s", e)
+        _mem_exec = getattr(self, "_memory_executor", None)
+        if _mem_exec is not None:
+            try:
+                _mem_exec.shutdown(wait=True, cancel_futures=True)
+            except RuntimeError as e:  # noqa: BLE001
+                logger.warning("关闭记忆提取线程池出错（可忽略）: %s", e)
 
         # 6. 停止开发态模块热重载
         if getattr(self, "_module_reloader", None) is not None:

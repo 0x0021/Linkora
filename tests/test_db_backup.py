@@ -114,7 +114,7 @@ class TestBackupNow:
         result = backup.backup_now()
         assert result is None
 
-    @patch("src.db_backup.sqlite3")
+    @patch("src.db_backup.sqlite3", Error=sqlite3.Error, OperationalError=sqlite3.OperationalError, DatabaseError=sqlite3.DatabaseError)
     @patch("pathlib.Path.stat")
     def test_successful_backup(self, mock_stat, mock_sqlite3, backup):
         mock_stat.return_value = MagicMock(st_size=2048)
@@ -131,7 +131,7 @@ class TestBackupNow:
         mock_src.close.assert_called_once()
         mock_dst.close.assert_called_once()
 
-    @patch("src.db_backup.sqlite3")
+    @patch("src.db_backup.sqlite3", Error=sqlite3.Error, OperationalError=sqlite3.OperationalError, DatabaseError=sqlite3.DatabaseError)
     def test_closes_connections_on_error(self, mock_sqlite3, backup):
         mock_src = MagicMock()
         mock_src.backup.side_effect = sqlite3.OperationalError("disk full")
@@ -144,7 +144,7 @@ class TestBackupNow:
         mock_src.close.assert_called_once()
         mock_dst.close.assert_called_once()
 
-    @patch("src.db_backup.sqlite3")
+    @patch("src.db_backup.sqlite3", Error=sqlite3.Error, OperationalError=sqlite3.OperationalError, DatabaseError=sqlite3.DatabaseError)
     def test_closes_src_on_dst_error(self, mock_sqlite3, backup):
         mock_src = MagicMock()
         mock_sqlite3.connect.side_effect = [mock_src, sqlite3.OperationalError]
@@ -152,7 +152,7 @@ class TestBackupNow:
         assert result is None
         mock_src.close.assert_called_once()
 
-    @patch("src.db_backup.sqlite3")
+    @patch("src.db_backup.sqlite3", Error=sqlite3.Error, OperationalError=sqlite3.OperationalError, DatabaseError=sqlite3.DatabaseError)
     @patch("pathlib.Path.stat")
     def test_cleanup_called_after_backup(self, mock_stat, mock_sqlite3, backup):
         mock_stat.return_value = MagicMock(st_size=1024)

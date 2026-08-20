@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.llm.history import _RE_CHINESE, estimate_cost as _history_estimate_cost
+from src.llm.memory_inject import inject_public_memories
 from src.llm.message_wrap import wrap_incoming_message
 from src.llm.rag_inject import inject_rag_knowledge
 from src.llm.timeline import format_time_label, gap_notice, incoming_gap_notice
@@ -194,6 +195,16 @@ class PromptBuilder:
         agent._last_kb_citations = rag_result.citations
         # 存储注入的知识块原文，供 sanitize_reply 做流程词敏感检测。
         agent._last_kb_relevant_knowledge = rag_result.relevant_knowledge
+
+        # 自动注入公共记忆（团队共享知识，无隐私风险，每轮自动召回）。
+        # 个人记忆保持 LLM 主动调 recall_memory（点对点隐私边界，不能自动注入）。
+        # 复用 query_embedding，零额外 embedding 成本。
+        system_content, _mem_result = inject_public_memories(
+            query=query,
+            system_content=system_content,
+            agent=agent,
+            query_embedding=query_embedding,
+        )
 
         # 历史消息分层处理：近期完整保留 + 早期摘要
         tiered_history = agent._apply_history_tiering(history)

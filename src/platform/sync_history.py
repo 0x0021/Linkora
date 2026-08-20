@@ -204,12 +204,12 @@ def run_sync_history(
     try:
         if os.path.exists(CANCEL_FILE):
             os.remove(CANCEL_FILE)
-        except OSError as e:  # noqa: BLE001
-            logger.warning(
-                "[sync-worker] 启动时清理遗留取消标记失败（继续执行，本次同步可能被误取消） "
-                "job_id=%s platform=%s file=%s error=%s: %s",
-                job_id, platform, CANCEL_FILE, type(e).__name__, e,
-            )
+    except OSError as e:  # noqa: BLE001
+        logger.warning(
+            "[sync-worker] 启动时清理遗留取消标记失败（继续执行，本次同步可能被误取消） "
+            "job_id=%s platform=%s file=%s error=%s: %s",
+            job_id, platform, CANCEL_FILE, type(e).__name__, e,
+        )
 
     configure_logging()
     logger.info(
@@ -314,7 +314,7 @@ def run_sync_history(
         try:
             if os.path.exists(CANCEL_FILE):
                 os.remove(CANCEL_FILE)
-        except (OSError, RuntimeError) as e:  # noqa: BLE001
+        except (OSError, RuntimeError) as cleanup_err:  # noqa: BLE001
             logger.warning(
                 "[sync-worker] 取消后清理取消标记失败（残留文件可能导致下次同步被误取消） "
                 "job_id=%s platform=%s file=%s error=%s: %s",

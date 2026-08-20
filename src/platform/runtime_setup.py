@@ -5,6 +5,7 @@ from ._timeout import run_with_timeout
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
 import logging
+import sqlite3
 from src.paths import get_skills_root
 from src.utils.security import mask_oid
 

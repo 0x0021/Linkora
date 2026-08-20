@@ -587,7 +587,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 return self.run(args)
             try:
                 return self.run(args)
-            except (IMAdapterError, subprocess.CalledProcessError) as first_err:
+            except (IMAdapterError, subprocess.CalledProcessError, RuntimeError) as first_err:
                 # 主从身份降级：user 身份发失败时（230027/230002 通常意味着「user 不在
                 # 会话」或「跨租户外部」），自动用 bot 身份重试一次。bot 身份在 lark-cli
                 # 里的权限范围比 user 小（仅企业内），但当 user 不被允许发言时它是
@@ -682,7 +682,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                 return self.run(args)
             try:
                 return self.run(args)
-            except (IMAdapterError, subprocess.CalledProcessError) as first_err:
+            except (IMAdapterError, subprocess.CalledProcessError, RuntimeError) as first_err:
                 first_msg = str(first_err) if str(first_err) else ""
                 first_msg_lower = first_msg.lower()
                 _user_ineligible = (
@@ -746,7 +746,7 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         try:
             self.run(args, force_no_dry_run=True)
             return True
-        except (IMAdapterError, subprocess.CalledProcessError) as exc:  # 吞掉一切异常，绝不向上抛  # noqa: BLE001
+        except Exception as exc:  # 吞掉一切异常，绝不向上抛  # noqa: BLE001
             logger.warning("[飞书] 撤回消息失败 message_id=%s: %s",
                            message_id[:32], exc)
             return False

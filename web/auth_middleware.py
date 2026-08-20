@@ -223,9 +223,8 @@ def login(username: str, password: str) -> dict[str, Any]:
     if stored_password and not stored_password.startswith("pbkdf2_sha256$") \
             and stored_password in ("please-change-me",):
         logger.error(
-            "[认证] 检测到默认/弱口令 auth_password=%r，存在暴力破解风险，"
+            "[认证] 检测到默认/弱口令，存在暴力破解风险，"
             "请改用 hash_password() 生成的 PBKDF2 哈希写入 config.yaml 的 web.auth_password",
-            stored_password,
         )
 
     if not verify_password(password, stored_password):

@@ -510,6 +510,13 @@ html {
    ========================================== */
 .page {
     display: none;
+    /* 强制去除可能的浏览器默认 focus outline / 系统级蓝色边框 */
+    outline: none !important;
+    border: none !important;
+    box-shadow: none;
+}
+.page:focus, .page:focus-within, .page:active {
+    outline: none !important;
 }
 
 .page.active {

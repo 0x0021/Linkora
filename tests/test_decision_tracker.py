@@ -44,6 +44,7 @@ class TestDecisionTracker:
     def test_record_with_sqlite_store(self):
         """录制时同时持久化到 SQLite。"""
         mock_store = MagicMock()
+        mock_store._closed = False  # 防止 MagicMock 自动创建 truthy 属性导致 _closed 检查误判
         dt = DecisionTracker(maxlen=5)
         dt.set_sqlite_store(mock_store)
         dt.record(sender="A", chat="B", content="test", intent="business", action="llm",
@@ -57,6 +58,7 @@ class TestDecisionTracker:
     def test_record_sqlite_exception_silenced(self):
         """持久化失败不抛出异常。"""
         mock_store = MagicMock()
+        mock_store._closed = False
         mock_store._decisions_repo.record_decision.side_effect = RuntimeError("DB down")
         dt = DecisionTracker(maxlen=5)
         dt.set_sqlite_store(mock_store)
@@ -68,6 +70,7 @@ class TestDecisionTracker:
     def test_recent_fallback_sqlite(self):
         """内存为空时回退 SQLite 恢复记录。"""
         mock_store = MagicMock()
+        mock_store._closed = False
         mock_store._decisions_repo.get_decisions.return_value = {
             "items": [{
                 "created_at": "2026-07-13T10:00:00",
@@ -93,6 +96,7 @@ class TestDecisionTracker:
     def test_recent_sqlite_exception_silenced(self):
         """SQLite 回退异常返回空列表。"""
         mock_store = MagicMock()
+        mock_store._closed = False
         mock_store._decisions_repo.get_decisions.side_effect = RuntimeError("DB error")
         dt = DecisionTracker(maxlen=5)
         dt.set_sqlite_store(mock_store)
@@ -129,6 +133,7 @@ class TestRefreshFromSqlite:
         刷新分支永不触发，多进程下 Web 面板的决策追踪冻结在启动快照上。
         """
         mock_store = MagicMock()
+        mock_store._closed = False
         mock_store._decisions_repo.get_decisions.return_value = {
             "items": [{
                 "created_at": "2026-08-15 13:19:07",  # 本地时间，明显晚于内存快照
@@ -164,6 +169,7 @@ class TestRefreshFromSqlite:
     def test_refreshes_only_requested_platform(self):
         """DB 刷新应按传入 platform_id 过滤，避免多平台数据串台。"""
         mock_store = MagicMock()
+        mock_store._closed = False
         captured = {}
 
         def fake_get(page_size=20, platform_id=None, **_kw):

@@ -182,6 +182,41 @@ function simpleMarkdown(md) {
     return html;
 }
 
+/* 专门格式化 AI 对话摘要块：每行 "• **名字**：内容" → 结构化卡片 */
+function renderDigestBlocks(md) {
+    if (!md) return '';
+    const lines = md.split('\n');
+    let header = '';
+    const entries = [];
+    let inHeader = true;
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (inHeader) {
+            header = line;
+            inHeader = false;
+            continue;
+        }
+        const m = line.match(/^•\s+\*\*(.+?)\*\*\s*：\s*(.+)$/);
+        if (m) {
+            entries.push({ name: m[1], content: m[2] });
+        } else {
+            entries.push({ name: null, content: line });
+        }
+    }
+    if (!header && entries.length === 0) return simpleMarkdown(md);
+    const escHeader = escapeHtml(header);
+    const rows = entries.map(e => {
+        if (!e.name) {
+            return `<div class="db-block">${escapeHtml(e.content)}</div>`;
+        }
+        const escName = escapeHtml(e.name);
+        const escContent = simpleMarkdown(escapeHtml(e.content));
+        return `<div class="db-row"><div class="db-name">${escName}</div><div class="db-sep">·</div><div class="db-text">${escContent}</div></div>`;
+    }).join('');
+    return `<div class="db-card"><div class="db-header">${escHeader}</div><div class="db-body">${rows}</div></div>`;
+}
+
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;

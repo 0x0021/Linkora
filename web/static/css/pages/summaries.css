@@ -173,6 +173,70 @@
 .summary-digest strong { color: var(--text-primary); font-weight: 700; }
 .summary-digest em { color: var(--brand-primary); font-style: normal; font-weight: 600; }
 
+/* ---------- 对话摘要结构化卡片 ---------- */
+.db-card {
+    border-radius: 10px;
+    overflow: hidden;
+}
+.db-header {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--brand-primary);
+    padding: 0.6rem 1.15rem;
+    background: rgba(34, 211, 238, 0.08);
+    border-bottom: 1px solid rgba(34, 211, 238, 0.12);
+    letter-spacing: 0.02em;
+}
+.db-body {
+    display: flex;
+    flex-direction: column;
+}
+.db-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.55rem;
+    padding: 0.7rem 1.15rem;
+    border-bottom: 1px solid var(--border-light, #f1f5f9);
+    transition: background 0.15s ease;
+}
+.db-row:last-child { border-bottom: none; }
+.db-row:hover { background: rgba(34, 211, 238, 0.03); }
+[data-theme="dark"] .db-row { border-bottom-color: rgba(148, 163, 184, 0.1); }
+[data-theme="dark"] .db-row:hover { background: rgba(255, 255, 255, 0.02); }
+.db-name {
+    flex-shrink: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 0;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.db-sep {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    opacity: 0.5;
+}
+.db-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.83rem;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    word-break: break-word;
+}
+.db-text strong { color: var(--text-primary); font-weight: 700; }
+.db-text em { color: var(--brand-primary); font-style: normal; font-weight: 600; }
+.db-block {
+    padding: 0.7rem 1.15rem;
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    line-height: 1.65;
+}
+
 /* ---------- 各会话摘要列表 ---------- */
 .summary-list-panel .panel-header {
     display: flex;

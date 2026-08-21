@@ -73,6 +73,11 @@ class RollingSummaryScheduler:
 
     def _run_once(self) -> None:
         """扫描所有活跃会话，每个会话取最近 lookback_minutes 分钟消息生成摘要。"""
+        # 检查 store 是否已关闭（避免 shutdown 后访问导致 SQLiteStore is closed 异常）
+        if getattr(self._store, '_closed', False):
+            logger.debug("[滚动摘要] store 已关闭，跳过本轮")
+            return
+
         cutoff_ts = (
             datetime.now(timezone.utc) - timedelta(minutes=self._lookback_minutes)
         ).isoformat()

@@ -186,7 +186,7 @@ class KBSearchTool(BaseTool):
                   向量化，复用该向量做检索——避免与 Agent 的语义意图分类重复 embed。
 
         Returns:
-            包含搜索结果的字典（search_method: embedding / fulltext / none）
+            包含搜索结果的字典（search_method: hybrid / embedding / fulltext / none）
         """
         if not query or not str(query).strip():
             return {"error": "搜索查询不能为空"}
@@ -200,6 +200,7 @@ class KBSearchTool(BaseTool):
 
         try:
             # 方法 1：向量检索（如果 embedding 可用）
+            embedding_results: list[dict] = []
             if self.embedding_client:
                 if query_embedding is None:
                     query_embedding = self.embedding_client.embed(query)
@@ -207,31 +208,29 @@ class KBSearchTool(BaseTool):
                         logger.warning("[RAG] 查询向量化失败")
                         query_embedding = None
                 if query_embedding is not None:
-                    results = self._search_kb_embedding(
+                    embedding_results = self._search_kb_embedding(
                         query_embedding, top_k, min_similarity, query)
-                    if results:
-                        return {
-                            "success": True,
-                            "query": query,
-                            "search_method": "embedding",
-                            "results": results,
-                            "message": f"找到 {len(results)} 条相关结果（向量检索，相似度≥{min_similarity}）",
-                        }
-                    else:
-                        logger.info(
-                            "[RAG] 向量检索无结果（min_similarity=%s），降级到全文检索",
-                            min_similarity,
-                        )
+                    logger.info(
+                        "[RAG] 向量检索返回 %d 条结果（min_similarity=%s）",
+                        len(embedding_results), min_similarity,
+                    )
 
-            # 方法 2：全文检索（兜底）
-            results = self._search_by_fulltext(query, top_k)
+            # 方法 2：全文检索（兜底 + 与向量结果融合）
+            # 融合语义与关键词，解决「向量召回泛泛步骤、丢失含具体楼层/IP 的表格 chunk」问题
+            fulltext_results = self._search_by_fulltext(query, top_k)
+            logger.info("[RAG] 全文检索返回 %d 条结果", len(fulltext_results))
+
+            results = self._merge_search_results(embedding_results, fulltext_results, top_k)
             if results:
+                search_method = "hybrid" if (embedding_results and fulltext_results) else (
+                    "embedding" if embedding_results else "fulltext"
+                )
                 return {
                     "success": True,
                     "query": query,
-                    "search_method": "fulltext",
+                    "search_method": search_method,
                     "results": results,
-                    "message": f"找到 {len(results)} 条相关结果（全文检索）",
+                    "message": f"找到 {len(results)} 条相关结果（{search_method}）",
                 }
 
             # 都没找到
@@ -258,6 +257,31 @@ class KBSearchTool(BaseTool):
             "chunk_id": r.get("chunk_id", ""),
         }
 
+    @staticmethod
+    def _merge_search_results(embedding_results: list[dict],
+                              fulltext_results: list[dict],
+                              top_k: int) -> list[dict]:
+        """融合向量与全文检索结果，按 chunk_id 去重并取最高得分，按得分降序返回 top_k。
+
+        融合策略：
+        - 同一 chunk 在两条链路都命中时，取两者最高分为最终 score（关键词命中的
+          具体楼层/IP 表格 chunk 因此能被提升排序）。
+        - 保留全部来源标记，便于上层区分。
+        """
+        merged: dict[str, dict] = {}
+        for r in embedding_results + fulltext_results:
+            cid = str(r.get("chunk_id", ""))
+            if not cid:
+                continue
+            if cid in merged:
+                # 保留更高分，score 同域可比（均已归一化到 [0,1]）
+                if r.get("score", 0) > merged[cid].get("score", 0):
+                    merged[cid]["score"] = r["score"]
+            else:
+                merged[cid] = dict(r)
+        results = sorted(merged.values(), key=lambda x: x.get("score", 0), reverse=True)
+        return results[:top_k]
+
     def _search_kb_embedding(self, query_embedding: list[float], top_k: int,
                              min_similarity: float, query_text: str = "") -> list[dict]:
         """向量检索知识库（统一入口：调用方负责准备好 query 向量）。"""
@@ -281,16 +305,52 @@ class KBSearchTool(BaseTool):
             logger.error("[RAG] 向量检索失败: %s", e)
             return []
 
+    @staticmethod
+    def _expand_floor_keywords(query: str) -> list[str]:
+        """针对「楼层」类查询扩展同义关键词，提升表格/IP 清单命中。
+
+        例如：用户问「7楼打印机」，文档里写的是「7F 研发办公区打印机」；
+        中文 2-gram 分词无法把「7楼」和「7F」关联，此处主动扩展。
+        """
+        variants = [query]
+        if not query:
+            return variants
+
+        # 数字 + 楼/层/F 互相扩展：7楼 <-> 7F <-> 7层
+        import re
+        for m in re.finditer(r'(\d+)([Ff楼層层])', query):
+            num = m.group(1)
+            for suffix in ['F', 'f', '楼', '层', '層']:
+                variants.append(query[:m.start()] + num + suffix + query[m.end():])
+        # 去重并保持原始查询在首位
+        seen = set()
+        unique = []
+        for v in variants:
+            if v not in seen:
+                seen.add(v)
+                unique.append(v)
+        return unique
+
     def _search_by_fulltext(self, query: str, top_k: int) -> list[dict]:
         """使用全文检索知识库（兜底方案）。"""
         try:
-            results = self.store._kb_repo.search_kb_by_keyword(
-                query=query,
-                top_k=top_k,
-            )
+            # 楼层关键词扩展：一次查多个同义变体，结果去重后合并
+            best_by_chunk: dict[str, dict] = {}
+            for q_variant in self._expand_floor_keywords(query):
+                results = self.store._kb_repo.search_kb_by_keyword(
+                    query=q_variant,
+                    top_k=top_k,
+                )
+                for r in results:
+                    cid = str(r.get("chunk_id", ""))
+                    if not cid:
+                        continue
+                    existing = best_by_chunk.get(cid)
+                    if existing is None or r.get("score", 0) > existing.get("score", 0):
+                        best_by_chunk[cid] = r
 
             formatted = []
-            for r in results:
+            for r in best_by_chunk.values():
                 # 纵深防御：score 钳位到 [0,1]。repo 层已按满分归一化，
                 # 此处兜底防止任何未归一化的原始计数（如旧数据/新增路径）
                 # 泄漏为下游「相关度>100%」异常展示。
@@ -298,6 +358,7 @@ class KBSearchTool(BaseTool):
                 formatted.append(self._format_hit(
                     r, min(max(raw_score, 0.0), 1.0)))
 
+            formatted.sort(key=lambda x: x.get("score", 0), reverse=True)
             logger.info("[RAG] 全文检索返回 %d 条结果", len(formatted))
             return formatted
 

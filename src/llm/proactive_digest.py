@@ -100,12 +100,16 @@ class ProactiveDigestScheduler:
 
     # ------------------------------------------------------------------ 收集
     def collect_items(self) -> list[dict]:
-        """取最近 lookback_hours 内有缓存摘要的对话（供测试与运行期共用）。
+        """取「今日」有缓存摘要的对话（供测试与运行期共用）。
 
-        仅读本地缓存摘要，不调 LLM。无摘要或超出回溯窗口的对话被跳过。
+        仅读本地缓存摘要，不调 LLM。无摘要或早于「今日 00:00（本地）」的对话被跳过；
+        cutoff 取 ``max(今日0点, now - lookback_hours)``：既保证不串入昨天内容（标题即「今日」），
+        又尊重 ``lookback_hours`` 作为更窄的回溯上限。
         """
         try:
-            cutoff = datetime.now() - timedelta(hours=self._cfg.lookback_hours)
+            now = datetime.now()
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff = max(today_start, now - timedelta(hours=self._cfg.lookback_hours))
             recent = self._store._conversation_repo.get_recent_conversations(
                 limit=self._cfg.max_conversations, platform=self._platform,
             )

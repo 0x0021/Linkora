@@ -21,7 +21,7 @@ function stopSummariesPolling() {
 // 各会话摘要明细列表（按 updated_at 倒序）
 function renderSummaryList(items) {
     if (!items || !items.length) {
-        return `<div class="metrics-empty">暂无对话摘要。对话摘要调度器生成摘要后将在此实时显示。</div>`;
+        return `<div class="metrics-empty">今日暂无新对话摘要。对话摘要调度器生成今日摘要后将在此实时显示。</div>`;
     }
     const lis = items.map(function (it) {
         const name = escapeHtml(it.chat_name || it.chat_id || '未知对话');
@@ -53,14 +53,14 @@ async function loadSummariesPage() {
         const digest = r.digest || '';
         const digestHtml = digest
             ? `<div class="panel summary-digest-panel">
-                   <div class="panel-header"><h3><i class="fa-solid fa-clipboard-list"></i> 每日摘要汇总</h3></div>
+                   <div class="panel-header"><h3><i class="fa-solid fa-clipboard-list"></i> 今日摘要汇总</h3></div>
                    <div class="panel-body summary-digest">${simpleMarkdown(digest)}</div>
                </div>`
             : '';
         body.innerHTML = `
             ${digestHtml}
             <div class="panel">
-                <div class="panel-header"><h3><i class="fa-solid fa-list"></i> 各会话摘要（${r.count || 0}）</h3></div>
+                <div class="panel-header"><h3><i class="fa-solid fa-list"></i> 各会话摘要（今日 · ${r.count || 0}）</h3></div>
                 <div class="panel-body">${renderSummaryList(r.items)}</div>
             </div>
             <div class="summaries-foot">最后更新：${formatTsLocal(r.generated_at)}${r.platform ? ' · 平台 ' + escapeHtml(r.platform) : ''}</div>

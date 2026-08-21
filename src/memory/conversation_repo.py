@@ -25,6 +25,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _today_start_iso() -> str:
+    """返回本地时区今日 00:00:00 的 ISO 字符串，用于「今日」时间过滤。
+
+    ``conversation_summaries.updated_at`` 由 ``datetime.now().isoformat()`` 写入（本地 naive），
+    故此处同样用本地 naive 时间；ISO 同格式字符串按字典序比较即时间序比较。
+    """
+    return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
 class ConversationRepo:
     """Repository extracted from SQLiteStore for conversation operations."""
 
@@ -317,21 +326,26 @@ class ConversationRepo:
             updated_at=row["updated_at"] or "",
         )
 
-    def list_recent_summaries(self, limit: int = 20, platform: str = "") -> list[dict]:
+    def list_recent_summaries(self, limit: int = 20, platform: str = "",
+                               since: str | None = None) -> list[dict]:
         """近期对话摘要列表（JOIN conversations 取 chat_name），按 updated_at 倒序。
 
         供 Web「对话摘要」页与主动触达聚合展示复用；单次查询取回，避免逐条 N+1。
+        ``since`` 给定时仅返回 ``updated_at >= since`` 的摘要（用于「今日」过滤，
+        调用方传 ``_today_start_iso()`` 即可只看今天生成的摘要）。
         """
         cur = self._cc(platform).cursor()
-        cur.execute(
-            """SELECT s.chat_id, s.summary_text, s.covered_count, s.updated_at,
-                      COALESCE(c.chat_name, '') AS chat_name
-               FROM conversation_summaries s
-               LEFT JOIN conversations c ON c.chat_id = s.chat_id
-               ORDER BY s.updated_at DESC
-               LIMIT ?""",
-            (int(limit),),
-        )
+        sql = """SELECT s.chat_id, s.summary_text, s.covered_count, s.updated_at,
+                        COALESCE(c.chat_name, '') AS chat_name
+                 FROM conversation_summaries s
+                 LEFT JOIN conversations c ON c.chat_id = s.chat_id"""
+        params: list = []
+        if since:
+            sql += " WHERE s.updated_at >= ?"
+            params.append(since)
+        sql += " ORDER BY s.updated_at DESC LIMIT ?"
+        params.append(int(limit))
+        cur.execute(sql, params)
         rows = cur.fetchall()
         cur.close()
         return [

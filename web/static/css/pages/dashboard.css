@@ -465,10 +465,10 @@
 
 /* --- 面板体：三层纵向节奏 --- */
 .ov-body {
-    padding: 0.15rem 1.1rem 0.65rem;
+    padding: clamp(0.1rem, 0.15rem, 0.2rem) clamp(0.85rem, 1.1rem, 1.25rem) clamp(0.4rem, 0.65rem, 0.8rem);
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: clamp(0.25rem, 0.4rem, 0.55rem);
 }
 /* 高度不足时禁止压缩卡片：flex 子项默认 flex-shrink:1，
    #page-dashboard 视口受限（height:100% + overflow:hidden + minmax(0,auto) 行高）
@@ -487,10 +487,10 @@
 .ov-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(160px, 1.05fr) minmax(200px, 1.5fr) auto;
+    grid-template-columns: minmax(140px, 1.05fr) minmax(180px, 1.5fr) auto;
     align-items: center;
-    gap: 1rem;
-    padding: 0.55rem 1rem;
+    gap: clamp(0.5rem, 1rem, 1.25rem);
+    padding: clamp(0.35rem, 0.55rem, 0.75rem) clamp(0.7rem, 1rem, 1.25rem);
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-light);
@@ -528,7 +528,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.42rem;
-    font-size: 0.7rem;
+    font-size: clamp(0.6rem, 0.7rem, 0.78rem);
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
@@ -541,7 +541,7 @@
 .ov-hero-value {
     margin: 0.18rem 0 0.14rem;
     min-height: 1.7rem;
-    font-size: 1.7rem;
+    font-size: clamp(1.35rem, 1.7rem, 2.1rem);
     font-weight: 800;
     line-height: 1.06;
     letter-spacing: -0.025em;
@@ -576,7 +576,7 @@
     align-items: center;
     gap: 0.3rem;
     padding: 0.12rem 0.5rem;
-    font-size: 0.7rem;
+    font-size: clamp(0.6rem, 0.7rem, 0.78rem);
     font-weight: 700;
     letter-spacing: 0.01em;
     border-radius: 999px;
@@ -589,7 +589,7 @@
 .ov-hero-delta.is-down { color: var(--brand-warning); background: rgba(245, 158, 11, 0.12); }
 .ov-hero-delta.is-flat { color: var(--text-tertiary); background: rgba(148, 163, 184, 0.12); }
 .ov-hero-hint {
-    font-size: 0.72rem;
+    font-size: clamp(0.62rem, 0.72rem, 0.8rem);
     color: var(--text-tertiary);
 }
 
@@ -598,7 +598,7 @@
     position: relative;
     z-index: 1;
     min-width: 0;
-    height: 52px;
+    height: clamp(38px, 52px, 64px);
     color: var(--brand-primary);
     display: flex;
     flex-direction: column;
@@ -607,7 +607,7 @@
 }
 .ov-hero-chart svg {
     width: 100%;
-    height: 38px;
+    height: clamp(28px, 38px, 48px);
     display: block;
     overflow: visible;
 }
@@ -668,8 +668,8 @@
    结构：icon 左 / value + label 右，横向紧凑，降低整体高度，保留品牌渐变条 hover 高亮 */
 #panel-overview .stats-grid.ov-subs {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 0.55rem;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: clamp(0.35rem, 0.55rem, 0.65rem);
     margin: 0;
 }
 #panel-overview .stat-card {
@@ -678,8 +678,8 @@
     flex-direction: row;
     align-items: center;
     text-align: left;
-    gap: 0.55rem;
-    padding: 0.42rem 0.65rem;
+    gap: clamp(0.35rem, 0.55rem, 0.65rem);
+    padding: clamp(0.3rem, 0.42rem, 0.55rem) clamp(0.5rem, 0.65rem, 0.8rem);
     min-width: 0;
     box-sizing: border-box;
     background: var(--bg-surface);
@@ -719,13 +719,13 @@
 #panel-overview .stat-card:hover::before { opacity: 1; }
 
 #panel-overview .stat-icon {
-    width: 30px;
-    height: 30px;
+    width: clamp(26px, 30px, 34px);
+    height: clamp(26px, 30px, 34px);
     border-radius: 9px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    font-size: 0.82rem;
+    font-size: clamp(0.7rem, 0.82rem, 0.92rem);
     /* 背景/颜色继承 theme.css 的 6 色区分，不覆盖 */
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -741,7 +741,7 @@
     gap: 0.08rem;
 }
 #panel-overview .stat-value {
-    font-size: 1.15rem;
+    font-size: clamp(0.95rem, 1.15rem, 1.35rem);
     font-weight: 800;
     line-height: 1.1;
     letter-spacing: -0.02em;
@@ -754,7 +754,7 @@
     max-width: 100%;
 }
 #panel-overview .stat-label {
-    font-size: 0.66rem;
+    font-size: clamp(0.58rem, 0.66rem, 0.72rem);
     color: var(--text-tertiary);
     white-space: nowrap;
     overflow: hidden;

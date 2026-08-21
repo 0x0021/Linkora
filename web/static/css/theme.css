@@ -8410,13 +8410,22 @@ td .action-btns .btn i,
 .dashboard-grid .panel-header {
     position: relative;
 }
+/* 面板头部装饰线：默认隐藏避免跨边界遮挡上方面板内容，hover 时浮现作为聚焦提示。
+   原 bottom:-1px 渐变线在 .ov-body flex-shrink:0 + 卡片不被压缩的修复后，
+   会与上方"系统概览"面板底部视觉冲突（决策追踪/最近消息标题上方出现深色横条）。 */
 .dashboard-grid .panel-header::after {
     content: '';
     position: absolute;
-    bottom: -1px; left: 0;
+    bottom: 0; left: 0.5rem;
     width: 36px; height: 2px;
     background: linear-gradient(90deg, var(--brand-primary), transparent);
     border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.22s ease;
+}
+.dashboard-grid .panel:hover .panel-header::after,
+.dashboard-grid .panel:focus-within .panel-header::after {
+    opacity: 1;
 }
 
 /* ---- 系统状态全宽：瓷砖均匀分布 ---- */

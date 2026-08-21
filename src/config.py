@@ -45,6 +45,10 @@ _KNOWN_DICT_KEYS: dict[str, set[str]] = {
     "root.memory.retrieval": {"min_similarity"},
     "root.memory.conversation_summary": {
         "enabled", "max_messages_per_conversation", "summary_interval_hours", "summary_ratio",
+        "rolling",
+    },
+    "root.memory.conversation_summary.rolling": {
+        "enabled", "interval_minutes", "lookback_minutes", "min_messages",
     },
 }
 

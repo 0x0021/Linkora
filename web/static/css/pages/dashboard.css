@@ -539,11 +539,15 @@
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: var(--brand-primary);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .ov-hero-value .skeleton {
     -webkit-text-fill-color: initial;
     display: inline-block;
-    width: 130px;
+    width: 160px;
     height: 1.6rem;
     vertical-align: middle;
 }

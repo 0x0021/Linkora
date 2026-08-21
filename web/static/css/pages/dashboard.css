@@ -476,11 +476,12 @@
 .ov-body > * {
     flex-shrink: 0;
 }
-/* 内容超高时面板内部滚动兜底（覆盖 layout/dashboard.css 的 overflow:visible，
-   否则卡片虽不再压缩，底部仍会被 .panel 的 overflow:hidden 裁掉）。
-   特异性 (1,4,0) > layout 的 (1,3,0)。 */
+/* 内容超高时不出现内嵌滚动条（避免「这么大的滚动条」视觉问题）。
+   整体由 dashboard.js 的 fitDashboardToViewport() 用 CSS zoom 按比例缩放
+   解决不同分辨率适配，比面板内滚动更优雅。
+   特异性 (1,4,0) > layout 的 (1,3,0)，强制覆盖 overflow:visible。 */
 #page-dashboard.active .dash-row-overview .panel-body.ov-body {
-    overflow: auto;
+    overflow: visible;
 }
 
 /* --- 第一层：Hero 主指标（左 / 中 sparkline / 右 三段式） --- */

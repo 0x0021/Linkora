@@ -622,6 +622,8 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
     loadEmbeddingStatus();
     // 路由质量 KPI 概览（订阅 store 切片，跨页共享，不重复请求）
     loadRoutingQualityOverview();
+    // 数据更新后内容高度变化，重新计算 zoom
+    fitDashboardToViewport();
 }
 
 
@@ -786,6 +788,50 @@ function stopDashboardLivePolling() {
 }
 window.startDashboardLivePolling = startDashboardLivePolling;
 window.stopDashboardLivePolling = stopDashboardLivePolling;
+
+// ============ 视口适配：按比例缩放（zoom）============
+// 用 CSS zoom 让 #page-dashboard 在任意视口下整体缩放，避免内嵌滚动条。
+// 比 overflow:auto 优雅：内容按比例缩小，Hero/次级卡/胶囊都完整可见。
+// CSS zoom 主流 Chromium/WebKit 支持；Firefox 不支持但影响小（仅页面级别缩放失效）。
+var _fitDashRaf = null;
+var _fitDashZoom = 1;
+function fitDashboardToViewport() {
+    // 防抖：连续 resize 时只在下一帧执行一次
+    if (_fitDashRaf) return;
+    _fitDashRaf = requestAnimationFrame(function () {
+        _fitDashRaf = null;
+        const page = document.getElementById('page-dashboard');
+        if (!page || !page.classList.contains('active')) return;
+        const container = page.parentElement;
+        if (!container) return;
+        // 先重置 zoom 才能测到真实自然尺寸
+        page.style.zoom = '';
+        const naturalH = page.scrollHeight;
+        const naturalW = page.scrollWidth;
+        const containerH = container.clientHeight;
+        const containerW = container.clientWidth;
+        let scale = 1;
+        if (containerH > 100 && naturalH > containerH) {
+            scale = Math.min(scale, containerH / naturalH);
+        }
+        if (containerW > 100 && naturalW > containerW) {
+            scale = Math.min(scale, containerW / naturalW);
+        }
+        // 缩放下限 0.5：太小时可读性太差，宁可裁剪也不缩成豆
+        if (scale < 1 && scale >= 0.5) {
+            _fitDashZoom = scale;
+            page.style.zoom = scale.toFixed(3);
+        } else {
+            _fitDashZoom = 1;
+            page.style.zoom = '';
+        }
+    });
+}
+window.fitDashboardToViewport = fitDashboardToViewport;
+window.addEventListener('resize', fitDashboardToViewport);
+window.addEventListener('load', fitDashboardToViewport);
+// 数据更新（Hero 数字/胶囊内容变化）会改变高度，定时复核 zoom
+setInterval(fitDashboardToViewport, 2500);
 
 // 将一批「新增消息」渲染进实时消息流（F-H6：抽出以便被单通道 stream 复用）
 function applyNewMessages(newMessages) {

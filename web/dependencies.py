@@ -222,22 +222,17 @@ def get_rag_config() -> dict:
 
 
 def get_store_dep(platform: str | None = Query(default=None)):
-    """FastAPI 依赖注入版本：请求结束自动关闭 store，避免异常路径泄漏。
+    """FastAPI 依赖注入：返回全局单例 store。
 
-    platform 缺省时读取请求上下文（由 web.api 平台中间件设置），保证与内联
-    `get_store()` 行为一致。
+    【CRITICAL】绝不能在此 close()：SQLiteStore 是全局单例（store_factory 缓存，
+    且 platform 上下文 ctx.store 与它是同一对象）。若在请求结束时 close()，
+    会把 _closed 标记为 True 并关闭全部线程连接，导致此后所有走 ctx.store /
+    get_store() 的端点报 "SQLiteStore is closed"（实测：/api/summaries 30s 轮询
+    触发一次 close，随后 /api/metrics/tokens 全部 500）。
+    连接资源由 SQLiteStore 内部 per-thread 连接缓存 + _max_conns(64) 死线程
+    回收机制管理，无需在请求级显式关闭。
     """
-    store = get_store(platform)
-    try:
-        yield store
-    finally:
-        try:
-            store.close()
-        except Exception as e:  # noqa: BLE001
-            # 不上抛：close 失败发生在响应已生成之后，此时抛异常只会把一个成功的
-            # 请求变成 500，且掩盖真正的业务结果。但必须留痕——静默 pass 会让「连接
-            # 泄漏 / DB 文件被删」这类会逐步拖垮进程的问题完全不可见。
-            logger.warning("请求结束关闭 store 失败（连接可能泄漏）: %s", e)
+    return get_store(platform)
 
 
 def _get_project_root() -> Path:

@@ -99,7 +99,7 @@ class TestAuthIntegration:
         """测试使用有效令牌获取用户信息。"""
         from web.auth_middleware import TokenManager
 
-        mgr = TokenManager(secret_key="test-secret")
+        mgr = TokenManager(secret_key="test-secret-key-for-unit-tests-only")
         token = mgr.generate_token("testuser", "viewer")
 
         from web.api import app
@@ -122,7 +122,7 @@ class TestTokenLifecycle:
         """测试令牌生成和验证流程。"""
         from web.auth_middleware import TokenManager
 
-        mgr = TokenManager(secret_key="test-key")
+        mgr = TokenManager(secret_key="test-key-for-unit-tests-security")
         token = mgr.generate_token("user1", "admin")
 
         # 验证令牌格式正确
@@ -138,7 +138,7 @@ class TestTokenLifecycle:
         """测试令牌过期机制。"""
         from web.auth_middleware import TokenManager
 
-        mgr = TokenManager(secret_key="test-key")
+        mgr = TokenManager(secret_key="test-key-for-unit-tests-security")
         token = mgr.generate_token("user1")
 
         # 正常令牌应该有效
@@ -149,7 +149,7 @@ class TestTokenLifecycle:
         """测试篡改令牌被拒绝。"""
         from web.auth_middleware import TokenManager
 
-        mgr = TokenManager(secret_key="test-key")
+        mgr = TokenManager(secret_key="test-key-for-unit-tests-security")
         token = mgr.generate_token("user1")
 
         # 篡改签名

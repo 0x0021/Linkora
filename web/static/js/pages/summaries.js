@@ -4,7 +4,7 @@
 // 数据源：GET /api/summaries?window=today|yesterday|7days（conversation_summaries 表，多平台隔离）。
 
 let summariesPolling = null;
-let currentWindow = 'today';
+let currentWindow = '7days';
 const WINDOW_LABELS = { today: '今日', yesterday: '昨日', '7days': '近七天' };
 
 function startSummariesPolling() {
@@ -67,12 +67,44 @@ async function loadSummariesPage() {
                    <div class="panel-body summary-digest">${simpleMarkdown(digest)}</div>
                </div>`
             : '';
+
+        // 分析卡片数据
+        const totalCovers = (r.items || []).reduce((s, it) => s + (it.covered_count || 0), 0);
+        const platforms = new Set(r.items?.map(it => it.platform).filter(Boolean));
+        const latestTime = r.items?.length ? Math.max(...r.items.map(it => it.updated_at ? new Date(it.updated_at).getTime() : 0)) : 0;
+        const lastUpdate = latestTime ? formatTsLocal(new Date(latestTime).toISOString()) : '—';
+
+        const analyticsHtml = `
+            <div class="summaries-analytics">
+                <div class="analytics-card">
+                    <div class="analytics-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+                    <div class="analytics-value">${r.count || 0}</div>
+                    <div class="analytics-label">摘要条数</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-icon"><i class="fa-solid fa-comment-dots"></i></div>
+                    <div class="analytics-value">${totalCovers}</div>
+                    <div class="analytics-label">覆盖消息</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-icon"><i class="fa-solid fa-comments"></i></div>
+                    <div class="analytics-value">${platforms.size || 0}</div>
+                    <div class="analytics-label">活跃会话</div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-icon"><i class="fa-solid fa-clock"></i></div>
+                    <div class="analytics-value">${lastUpdate}</div>
+                    <div class="analytics-label">最新摘要</div>
+                </div>
+            </div>`;
+
         body.innerHTML = `
             <div class="summaries-window-bar">
                 <button class="summaries-window-btn${currentWindow === 'today' ? ' active' : ''}" data-window="today" onclick="setWindow('today')">今日</button>
                 <button class="summaries-window-btn${currentWindow === 'yesterday' ? ' active' : ''}" data-window="yesterday" onclick="setWindow('yesterday')">昨日</button>
                 <button class="summaries-window-btn${currentWindow === '7days' ? ' active' : ''}" data-window="7days" onclick="setWindow('7days')">近七天</button>
             </div>
+            ${analyticsHtml}
             ${digestHtml}
             <div class="panel">
                 <div class="panel-header"><h3><i class="fa-solid fa-list"></i> 各会话摘要（${WINDOW_LABELS[r.window] || '摘要'} · ${r.count || 0}）</h3></div>

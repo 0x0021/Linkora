@@ -243,22 +243,22 @@
                                     <span class="ov-head-badge"><i class="fa-solid fa-gauge-high"></i></span>
                                     <div class="ov-head-txt">
                                         <h3>系统概览</h3>
-                                        <p class="ov-head-sub">实时运行指标与服务状态</p>
+                                        <p class="ov-head-sub">实时运行指标</p>
                                     </div>
                                 </div>
-                                <div class="panel-actions">
-                                    <span class="ov-live" title="数据每 10s 自动刷新"><span class="ov-live-dot"></span>LIVE</span>
-                                </div>
+                                <!-- 运行状态胶囊流：并入 header 节省独立行的高度 -->
+                                <div class="ov-head-status" id="status-list"></div>
+                                <span class="ov-live" title="数据每 10s 自动刷新"><span class="ov-live-dot"></span>LIVE</span>
                             </div>
                             <div class="panel-body ov-body">
-                                <!-- Hero：主指标（左：数字+今日变化 / 中：7日 sparkline / 右：采集胶囊） -->
+                                <!-- Hero：主指标（左：数字+今日变化 / 右：7日 sparkline），两列紧凑布局 -->
                                 <div class="ov-hero" id="stat-card-messages">
                                     <div class="ov-hero-main">
                                         <div class="ov-hero-label"><i class="fa-solid fa-message"></i>总消息数</div>
                                         <div class="ov-hero-value" id="stat-messages"><span class="stat-skeleton skeleton skeleton-line tall"></span></div>
                                         <div class="ov-hero-meta">
                                             <span class="ov-hero-delta" id="stat-messages-today" title="今日新增消息数">—</span>
-                                            <span class="ov-hero-hint">累计已处理的会话消息</span>
+                                            <span class="ov-hero-hint">累计已处理</span>
                                         </div>
                                     </div>
                                     <div class="ov-hero-chart" id="stat-messages-spark" aria-label="7 日消息趋势" title="7 日消息趋势">
@@ -276,9 +276,6 @@
                                         <div class="ov-spark-axis">
                                             <span id="stat-messages-spark-axis">近 7 日</span>
                                         </div>
-                                    </div>
-                                    <div class="ov-hero-side">
-                                        <span class="ov-hero-pill"><span class="ov-live-dot"></span>持续采集中</span>
                                     </div>
                                 </div>
 
@@ -312,12 +309,6 @@
                                             <div class="stat-label">长期记忆</div>
                                         </div>
                                     </div>
-                                </div>
-
-                                <!-- 运行状态：胶囊流 -->
-                                <div class="ov-rail-wrap">
-                                    <div class="ov-rail-title"><span></span>运行状态</div>
-                                    <div class="ov-rail" id="status-list"></div>
                                 </div>
                             </div>
                         </div>

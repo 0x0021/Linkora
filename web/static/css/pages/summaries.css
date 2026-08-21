@@ -170,6 +170,7 @@
     color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-word;
+    padding: 1rem 1.15rem;
 }
 .summary-digest strong { color: var(--text-primary); font-weight: 700; }
 .summary-digest em { color: var(--brand-primary); font-style: normal; font-weight: 600; }

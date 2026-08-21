@@ -500,7 +500,7 @@ html {
 .content-area {
     flex: 1;
     min-height: 0;          /* 关键：允许 flex 子项收缩至 0，才能作为 overflow 容器拿到实际高度 */
-    padding: 1.25rem 1.5rem;
+    padding: 1.75rem 2.25rem;     /* 与 app-shell.css 一致加大内边距（原 1.25rem 1.5rem 偏紧） */
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -4183,8 +4183,9 @@ html {
     justify-content: space-between;
     gap: 1rem;
     flex-wrap: wrap;
-    padding: 1.5rem 0 1.25rem;
+    padding: 1rem 0 1.5rem;   /* 顶部 padding 从 1.5rem 减至 1rem（content-area 顶部已有 1.75rem padding），底部 1.25rem→1.5rem 让标题与下方内容有呼吸 */
     border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1.25rem;   /* 与下方 panel/card 之间增加缓冲 */
 }
 
 .page-header-text {

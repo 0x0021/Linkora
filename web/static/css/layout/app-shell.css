@@ -418,9 +418,15 @@
     flex: 1 1 0;
     min-height: 0;
     height: calc(100vh - 64px);   /* 强制高度：避免 flex-shrink 把 .content-area 压缩到 0 */
-    padding: 1.25rem 1.5rem;
+    padding: 1.75rem 2.25rem;     /* 全局内边距加大，让内部卡片与视口边框有呼吸空间（原 1.25rem 1.5rem 偏紧） */
     overflow-y: auto;
     overflow-x: hidden;
+    /* 防止浏览器默认 outline（点击/focus）在 content-area 周围显示蓝色矩形框 */
+    outline: none;
+}
+.content-area:focus,
+.content-area:focus-within {
+    outline: none;
 }
 
 /* ===== 灵桥 Linkora 品牌样式 ===== */

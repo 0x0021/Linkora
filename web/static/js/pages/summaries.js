@@ -4,7 +4,7 @@
 // 数据源：GET /api/summaries?window=today|yesterday|7days（conversation_summaries 表，多平台隔离）。
 
 let summariesPolling = null;
-let currentWindow = '7days';
+let currentWindow = 'today';
 const WINDOW_LABELS = { today: '今日', yesterday: '昨日', '7days': '近七天' };
 
 function startSummariesPolling() {

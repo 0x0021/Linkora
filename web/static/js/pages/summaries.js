@@ -77,7 +77,7 @@ async function loadSummariesPage() {
         const digestHtml = digest
             ? `<div class="panel summary-digest-panel">
                    <div class="panel-header"><h3><i class="fa-solid fa-clipboard-list"></i> ${WINDOW_LABELS[r.window] || '摘要'}汇总</h3></div>
-                   <div class="panel-body summary-digest">${simpleMarkdown(digest)}</div>
+                   <div class="panel-body summary-digest">${renderDigestBlocks(digest)}</div>
                </div>`
             : '';
 

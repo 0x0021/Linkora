@@ -128,7 +128,7 @@ class DecisionTracker:
 
         platform_id = kw.get("platform_id", "")
         store = self._store_for(platform_id)
-        if store:
+        if store and not getattr(store, '_closed', False):
             try:
                 tools = kw.get("routed_tools", None)
                 store._decisions_repo.record_decision(
@@ -180,9 +180,13 @@ class DecisionTracker:
         store = self._store_for(platform_id)
         if store:
             try:
-                result = store._decisions_repo.get_decisions(
-                    page_size=n, platform_id=platform_id or None)
-                db_recs = result.get("items", []) if isinstance(result, dict) else []
+                # SQLiteStore 可能已在关闭流程中被 close()，此时跳过 DB 刷新只走内存快照
+                if not getattr(store, '_closed', False):
+                    result = store._decisions_repo.get_decisions(
+                        page_size=n, platform_id=platform_id or None)
+                    db_recs = result.get("items", []) if isinstance(result, dict) else []
+                else:
+                    db_recs = []
                 if db_recs:
                     newest_db_dt = _normalize_dt(db_recs[0].get("created_at", ""))
                     newest_mem_dt = _normalize_dt(platform_recs[-1].ts) if platform_recs else None

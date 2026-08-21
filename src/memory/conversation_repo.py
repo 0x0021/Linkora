@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, TYPE_CHECKING
 
 from src.memory.sqlite_store import ConversationSummaryRow
@@ -26,12 +26,27 @@ logger = logging.getLogger(__name__)
 
 
 def _today_start_iso() -> str:
-    """返回本地时区今日 00:00:00 的 ISO 字符串，用于「今日」时间过滤。
-
-    ``conversation_summaries.updated_at`` 由 ``datetime.now().isoformat()`` 写入（本地 naive），
-    故此处同样用本地 naive 时间；ISO 同格式字符串按字典序比较即时间序比较。
-    """
+    """返回本地时区今日 00:00:00 的 ISO 字符串。"""
     return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
+def _since_iso(window: str = "today") -> str:
+    """按时间窗口返回起始 ISO 字符串，供 list_recent_summaries 的 since 参数使用。
+
+    窗口可选值：
+      - "today"   : 今日 00:00:00（默认）
+      - "yesterday": 昨日 00:00:00
+      - "7days"   : 7 天前 00:00:00
+    """
+    now = datetime.now()
+    if window == "today":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    if window == "yesterday":
+        return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    if window == "7days":
+        return (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    # 兜底：今日
+    return _today_start_iso()
 
 
 class ConversationRepo:

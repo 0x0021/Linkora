@@ -470,6 +470,18 @@
     flex-direction: column;
     gap: 0.4rem;
 }
+/* 高度不足时禁止压缩卡片：flex 子项默认 flex-shrink:1，
+   #page-dashboard 视口受限（height:100% + overflow:hidden + minmax(0,auto) 行高）
+   会把它压缩挤扁——次级卡图标/标签被挤掉只剩数字，胶囊被裁。 */
+.ov-body > * {
+    flex-shrink: 0;
+}
+/* 内容超高时面板内部滚动兜底（覆盖 layout/dashboard.css 的 overflow:visible，
+   否则卡片虽不再压缩，底部仍会被 .panel 的 overflow:hidden 裁掉）。
+   特异性 (1,4,0) > layout 的 (1,3,0)。 */
+#page-dashboard.active .dash-row-overview .panel-body.ov-body {
+    overflow: auto;
+}
 
 /* --- 第一层：Hero 主指标（左 / 中 sparkline / 右 三段式） --- */
 .ov-hero {

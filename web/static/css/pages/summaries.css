@@ -7,6 +7,39 @@
     gap: var(--space-sm);
 }
 
+/* 时间窗口切换按钮 */
+.summaries-window-bar {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+.summaries-window-btn {
+    padding: 0.28rem 0.72rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: inherit;
+}
+.summaries-window-btn:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+    background: var(--brand-primary-light, rgba(34, 211, 238, 0.08));
+}
+.summaries-window-btn.active {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary);
+    color: #fff;
+}
+[data-theme="dark"] .summaries-window-btn.active {
+    color: var(--text-primary);
+}
+
 /* 刷新提示（与模型页同款语义） */
 .summaries-refresh-hint {
     display: inline-flex;

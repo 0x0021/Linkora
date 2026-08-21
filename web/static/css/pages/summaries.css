@@ -1,6 +1,6 @@
-/* ============ summaries.css v2 ============ */
-/* 「对话摘要」页 - 全新设计语言
-   设计原则：信息密度 + 呼吸感 + 层级清晰
+/* ============ summaries.css v3 ============ */
+/* 「对话摘要」页 - 结构化卡片 + 顶部工具栏
+   设计原则：信息密度 + 层级清晰 + 结构化展示
    色彩：品牌青渐变 / 功能色区分 / 暗色适配 */
 
 /* ---------- 页面容器 ---------- */
@@ -10,7 +10,16 @@
     gap: 0.75rem;
 }
 
-/* ---------- 时间窗口 segmented control ---------- */
+/* ---------- 顶部工具栏 ---------- */
+.summaries-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* 时间窗口 segmented control */
 .summaries-window-bar {
     display: inline-flex;
     gap: 0.125rem;
@@ -61,6 +70,39 @@
     background: rgba(34, 211, 238, 0.15);
     color: var(--brand-primary);
     box-shadow: 0 2px 12px rgba(34, 211, 238, 0.15);
+}
+
+/* 今日汇总 badge（与 segmented control 同一行） */
+.summaries-digest-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(99, 102, 241, 0.08));
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    border-radius: 999px;
+    color: var(--brand-primary);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+[data-theme="dark"] .summaries-digest-badge {
+    background: rgba(34, 211, 238, 0.12);
+    border-color: rgba(34, 211, 238, 0.25);
+}
+.summaries-digest-badge i { font-size: 0.78rem; }
+.digest-badge-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 0.35rem;
+    background: var(--brand-primary);
+    color: #0f172a;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
 }
 
 /* ---------- 统计卡片网格 ---------- */
@@ -174,12 +216,164 @@
 /* 响应式 */
 @media (max-width: 900px) {
     .summaries-stats { grid-template-columns: repeat(2, 1fr); }
+    .digest-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
     .summaries-stats { grid-template-columns: 1fr; }
+    .summaries-toolbar { flex-direction: column; align-items: flex-start; }
+    .summaries-digest-badge { align-self: flex-start; }
 }
 
-/* ---------- 今日汇总面板 ---------- */
+/* ---------- 今日汇总结构化卡片网格 ---------- */
+.digest-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.625rem;
+}
+
+.digest-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 0.9rem;
+    background: var(--bg-surface, #fff);
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+}
+.digest-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--brand-primary);
+    box-shadow: 0 8px 24px rgba(34, 211, 238, 0.1),
+                0 2px 8px rgba(15, 23, 42, 0.04);
+}
+[data-theme="dark"] .digest-card {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(148, 163, 184, 0.12);
+}
+[data-theme="dark"] .digest-card:hover {
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(34, 211, 238, 0.35);
+}
+
+.digest-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+}
+
+.digest-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
+}
+
+.digest-card-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.digest-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.digest-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.digest-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+}
+.digest-tag-platform {
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.2);
+}
+.digest-tag-count {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border-color: rgba(16, 185, 129, 0.2);
+}
+[data-theme="dark"] .digest-tag-platform { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.3); }
+[data-theme="dark"] .digest-tag-count    { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3); }
+.digest-tag i { font-size: 0.55rem; }
+
+.digest-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.digest-topic {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.18rem 0.5rem;
+    background: rgba(34, 211, 238, 0.08);
+    color: var(--brand-primary);
+    border-radius: 999px;
+    border: 1px solid rgba(34, 211, 238, 0.15);
+}
+.digest-topic-todo {
+    background: rgba(16, 185, 129, 0.08);
+    color: #059669;
+    border-color: rgba(16, 185, 129, 0.15);
+}
+[data-theme="dark"] .digest-topic { background: rgba(34, 211, 238, 0.12); border-color: rgba(34, 211, 238, 0.2); }
+[data-theme="dark"] .digest-topic-todo { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.2); }
+.digest-topic i { font-size: 0.55rem; }
+
+.digest-card-body {
+    font-size: 0.83rem;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    word-break: break-word;
+}
+.digest-card-body strong { color: var(--text-primary); font-weight: 700; }
+.digest-card-body em { color: var(--brand-primary); font-style: normal; font-weight: 600; }
+
+.digest-card-foot {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    color: var(--text-tertiary);
+    margin-top: auto;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border-light, #f1f5f9);
+}
+[data-theme="dark"] .digest-card-foot { border-top-color: rgba(148, 163, 184, 0.08); }
+.digest-card-foot i { font-size: 0.62rem; opacity: 0.7; }
+
+/* ---------- 旧版 digest 列表兼容 ---------- */
 .summary-digest-panel {
     border: 1px solid var(--border-light, #e5e7eb);
     border-radius: 14px;
@@ -191,12 +385,7 @@
     border-color: rgba(148, 163, 184, 0.15);
     background: rgba(255, 255, 255, 0.02);
 }
-
-/* ---------- 对话摘要结构化卡片 ---------- */
-.db-card {
-    border-radius: 12px;
-    overflow: hidden;
-}
+.db-card { border-radius: 12px; overflow: hidden; }
 .db-header {
     font-size: 0.72rem;
     font-weight: 700;
@@ -217,10 +406,7 @@
     background: var(--brand-primary);
     box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.2);
 }
-.db-body {
-    display: flex;
-    flex-direction: column;
-}
+.db-body { display: flex; flex-direction: column; }
 .db-row {
     display: flex;
     align-items: baseline;
@@ -233,7 +419,6 @@
 .db-row:hover { background: rgba(34, 211, 238, 0.025); }
 [data-theme="dark"] .db-row { border-bottom-color: rgba(148, 163, 184, 0.08); }
 [data-theme="dark"] .db-row:hover { background: rgba(255, 255, 255, 0.025); }
-
 .db-name {
     flex-shrink: 0;
     font-size: 0.8rem;
@@ -256,12 +441,7 @@
     background: var(--brand-primary);
     opacity: 0.6;
 }
-.db-sep {
-    flex-shrink: 0;
-    font-size: 0.75rem;
-    color: var(--text-tertiary);
-    opacity: 0.4;
-}
+.db-sep { flex-shrink: 0; font-size: 0.75rem; color: var(--text-tertiary); opacity: 0.4; }
 .db-text {
     flex: 1;
     min-width: 0;
@@ -272,12 +452,7 @@
 }
 .db-text strong { color: var(--text-primary); font-weight: 700; }
 .db-text em { color: var(--brand-primary); font-style: normal; font-weight: 600; }
-.db-block {
-    padding: 0.5rem 1rem;
-    font-size: 0.83rem;
-    color: var(--text-secondary);
-    line-height: 1.65;
-}
+.db-block { padding: 0.5rem 1rem; font-size: 0.83rem; color: var(--text-secondary); line-height: 1.65; }
 
 /* ---------- 各会话摘要列表 ---------- */
 .summary-list-panel {
@@ -373,12 +548,12 @@
     width: 38px;
     height: 38px;
     border-radius: 11px;
-    background: linear-gradient(135deg, var(--brand-primary), #6366f1);
     color: #fff;
     display: grid;
     place-items: center;
-    font-size: 1rem;
-    box-shadow: 0 3px 10px rgba(34, 211, 238, 0.25);
+    font-size: 0.95rem;
+    font-weight: 700;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
 }
 .summary-idx {
     font-size: 0.58rem;
@@ -443,6 +618,25 @@
 }
 .summary-text strong { color: var(--text-primary); font-weight: 700; }
 .summary-text em { color: var(--brand-primary); font-style: normal; font-weight: 600; }
+
+.summary-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.1rem;
+}
+.summary-topic-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.12rem 0.45rem;
+    background: rgba(99, 102, 241, 0.08);
+    color: #6366f1;
+    border-radius: 999px;
+    border: 1px solid rgba(99, 102, 241, 0.12);
+}
+[data-theme="dark"] .summary-topic-chip { background: rgba(99, 102, 241, 0.14); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.2); }
 
 .summary-meta {
     display: flex;

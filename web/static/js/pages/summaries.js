@@ -1,5 +1,5 @@
-// ============ pages/summaries.js v2 ============
-// 「对话摘要」页 - 全新设计
+// ============ pages/summaries.js v3 ============
+// 「对话摘要」页 - 结构化卡片 + 顶部工具栏
 // 数据源：GET /api/summaries?window=today|yesterday|7days
 
 let summariesPolling = null;
@@ -9,6 +9,16 @@ const WINDOW_HINTS = {
     today: '今日 00:00 至今',
     yesterday: '昨日全天',
     '7days': '近 7 天'
+};
+const PLATFORM_ICON = {
+    dingtalk: 'qq',
+    wecom: 'wechat',
+    feishu: 'slack'
+};
+const PLATFORM_LABEL = {
+    dingtalk: '钉钉',
+    wecom: '企微',
+    feishu: '飞书'
 };
 
 function startSummariesPolling() {
@@ -32,6 +42,121 @@ function setWindow(w) {
     loadSummariesPage();
 }
 
+function avatarLetter(name) {
+    if (!name) return '?';
+    const c = name.trim().charAt(0);
+    return /[\u4e00-\u9fa5]/.test(c) ? c : c.toUpperCase();
+}
+
+function avatarGradient(name) {
+    const palettes = [
+        ['#22D3EE', '#6366F1'],
+        ['#34D399', '#10B981'],
+        ['#F472B6', '#DB2777'],
+        ['#FBBF24', '#F97316'],
+        ['#A78BFA', '#7C3AED'],
+        ['#60A5FA', '#2563EB'],
+    ];
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % palettes.length;
+    return palettes[h];
+}
+
+// 从摘要文本里轻量提取主题/关键词标签
+function extractTopics(summary) {
+    if (!summary) return [];
+    const text = summary.replace(/^【对话摘要】\s*/, '');
+    const topics = [];
+    const patterns = [
+        /围绕\s*([^，。；\.]{2,12})\s*(展开|讨论|沟通|问题)/,
+        /关于\s*([^，。；\.]{2,12})\s*(问题|事项|安排|情况)/,
+        /([^，。；\.]{2,10})(问题|事项|安排|需求|功能|系统)/,
+        /(采购|销售|HR|人事|考勤|外勤|SRM|钉钉|企业通|企微|飞书)/,
+    ];
+    for (const re of patterns) {
+        const m = text.match(re);
+        if (m) {
+            const t = m[1] + (m[2] || '');
+            if (t && !topics.includes(t) && topics.length < 3) topics.push(t);
+        }
+    }
+    return topics.slice(0, 3);
+}
+
+function extractTodo(summary) {
+    if (!summary) return '';
+    const text = summary.replace(/^【对话摘要】\s*/, '');
+    const m = text.match(/(?:建议|需要|应该|应当|最好|可以|请|需)\s*([^。；\n]{2,30})/);
+    return m ? m[0].slice(0, 28) : '';
+}
+
+// 今日汇总：解析 digest 并与 items 元数据关联，渲染为结构化卡片网格
+function renderDigestCards(digest, items) {
+    if (!digest) return '';
+    const metaByName = new Map();
+    for (const it of items || []) {
+        const key = it.chat_name || it.chat_id;
+        if (key) metaByName.set(key, it);
+    }
+
+    const lines = digest.split('\n');
+    let header = '';
+    let countBadge = 0;
+    const entries = [];
+    let inHeader = true;
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (inHeader) {
+            header = line;
+            const cm = line.match(/共\s*(\d+)\s*段/);
+            if (cm) countBadge = parseInt(cm[1], 10);
+            inHeader = false;
+            continue;
+        }
+        const m = line.match(/^•\s+\*\*(.+?)\*\*\s*：\s*(.+)$/);
+        if (m) {
+            entries.push({ name: m[1], content: m[2] });
+        }
+    }
+    if (!entries.length) return renderDigestBlocks(digest);
+
+    const cards = entries.map(e => {
+        const meta = metaByName.get(e.name) || {};
+        const platform = meta.platform || '';
+        const platformLabel = PLATFORM_LABEL[platform] || '';
+        const cnt = meta.covered_count != null ? meta.covered_count : 0;
+        const time = meta.updated_at ? formatTsLocal(meta.updated_at, false) : '';
+        const topics = extractTopics(e.content);
+        const todo = extractTodo(e.content);
+        const [c1, c2] = avatarGradient(e.name);
+        const nameInitial = avatarLetter(e.name);
+        const summary = e.content.replace(/^【对话摘要】\s*/, '').trim();
+
+        return `
+        <div class="digest-card">
+            <div class="digest-card-head">
+                <div class="digest-avatar" style="background:linear-gradient(135deg, ${c1}, ${c2})">${nameInitial}</div>
+                <div class="digest-card-meta">
+                    <div class="digest-card-title">
+                        <span class="digest-name">${escapeHtml(e.name)}</span>
+                        ${platformLabel ? `<span class="digest-tag digest-tag-platform"><i class="fa-brands fa-${PLATFORM_ICON[platform] || 'comment'}"></i>${platformLabel}</span>` : ''}
+                        ${cnt ? `<span class="digest-tag digest-tag-count"><i class="fa-solid fa-message"></i>${cnt} 条</span>` : ''}
+                    </div>
+                    <div class="digest-topics">
+                        ${topics.map(t => `<span class="digest-topic">${escapeHtml(t)}</span>`).join('')}
+                        ${todo ? `<span class="digest-topic digest-topic-todo"><i class="fa-solid fa-check"></i>${escapeHtml(todo)}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="digest-card-body">${simpleMarkdown(escapeHtml(summary))}</div>
+            ${time ? `<div class="digest-card-foot"><i class="fa-regular fa-clock"></i>${time}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    return { header, countBadge, cards };
+}
+
 // 各会话摘要明细列表
 function renderSummaryList(items) {
     if (!items || !items.length) {
@@ -46,21 +171,25 @@ function renderSummaryList(items) {
         const time = it.updated_at ? formatTsLocal(it.updated_at, false) : '—';
         const cnt = it.covered_count != null ? it.covered_count : 0;
         const platform = it.platform || '';
-        const platformLabel = ({dingtalk: '钉钉', wecom: '企微', feishu: '飞书'})[platform] || '';
+        const platformLabel = PLATFORM_LABEL[platform] || '';
         const summaryHtml = simpleMarkdown(it.summary || '');
+        const topics = extractTopics(it.summary);
+        const [c1, c2] = avatarGradient(it.chat_name || it.chat_id || String(idx));
+        const initial = avatarLetter(it.chat_name || it.chat_id);
         return `
         <div class="summary-item">
             <div class="summary-item-side">
-                <div class="summary-avatar"><i class="fa-solid fa-comments"></i></div>
+                <div class="summary-avatar" style="background:linear-gradient(135deg, ${c1}, ${c2})">${initial}</div>
                 <div class="summary-idx">#${idx + 1}</div>
             </div>
             <div class="summary-item-main">
                 <div class="summary-item-head">
                     <span class="summary-name">${name}</span>
-                    ${platformLabel ? `<span class="summary-tag summary-tag-platform"><i class="fa-brands fa-${platform === 'dingtalk' ? 'qq' : platform === 'wecom' ? 'wechat' : 'slack'}"></i>${platformLabel}</span>` : ''}
+                    ${platformLabel ? `<span class="summary-tag summary-tag-platform"><i class="fa-brands fa-${PLATFORM_ICON[platform] || 'comment'}"></i>${platformLabel}</span>` : ''}
                     <span class="summary-tag summary-tag-count"><i class="fa-solid fa-message"></i>${cnt} 条</span>
                 </div>
                 <div class="summary-text">${summaryHtml}</div>
+                ${topics.length ? `<div class="summary-topics">${topics.map(t => `<span class="summary-topic-chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
                 <div class="summary-meta">
                     <span class="summary-meta-item"><i class="fa-regular fa-clock"></i>${time}</span>
                 </div>
@@ -84,14 +213,12 @@ async function loadSummariesPage() {
             return;
         }
 
-        // 今日汇总面板
         const digest = r.digest || '';
-        const digestHtml = digest
-            ? `<div class="summary-digest-panel">
-                   <div class="panel-header"><h3><i class="fa-solid fa-clipboard-list"></i> ${WINDOW_LABELS[r.window] || '摘要'}汇总</h3></div>
-                   <div class="panel-body" style="padding:0">${renderDigestBlocks(digest)}</div>
-               </div>`
+        const digestResult = digest ? renderDigestCards(digest, r.items || []) : null;
+        const digestHtml = digestResult
+            ? `<div class="digest-grid">${digestResult.cards}</div>`
             : '';
+        const digestCount = digestResult ? digestResult.countBadge : 0;
 
         // 统计卡片数据
         const totalCovers = (r.items || []).reduce((s, it) => s + (it.covered_count || 0), 0);
@@ -102,7 +229,7 @@ async function loadSummariesPage() {
         const platformHint = platforms.size > 1
             ? `跨 ${platforms.size} 平台`
             : platforms.size === 1
-                ? [...platforms][0] === 'dingtalk' ? '钉钉' : [...platforms][0] === 'wecom' ? '企微' : '飞书'
+                ? PLATFORM_LABEL[[...platforms][0]] || [...platforms][0]
                 : '暂无数据';
 
         const analyticsHtml = `
@@ -142,16 +269,24 @@ async function loadSummariesPage() {
             </div>`;
 
         body.innerHTML = `
-            <div class="summaries-window-bar">
-                <button class="summaries-window-btn${currentWindow === 'today' ? ' active' : ''}" data-window="today" onclick="setWindow('today')">
-                    <i class="fa-solid fa-sun"></i>今日
-                </button>
-                <button class="summaries-window-btn${currentWindow === 'yesterday' ? ' active' : ''}" data-window="yesterday" onclick="setWindow('yesterday')">
-                    <i class="fa-solid fa-moon"></i>昨日
-                </button>
-                <button class="summaries-window-btn${currentWindow === '7days' ? ' active' : ''}" data-window="7days" onclick="setWindow('7days')">
-                    <i class="fa-solid fa-calendar-week"></i>近七天
-                </button>
+            <div class="summaries-toolbar">
+                <div class="summaries-window-bar">
+                    <button class="summaries-window-btn${currentWindow === 'today' ? ' active' : ''}" data-window="today" onclick="setWindow('today')">
+                        <i class="fa-solid fa-sun"></i>今日
+                    </button>
+                    <button class="summaries-window-btn${currentWindow === 'yesterday' ? ' active' : ''}" data-window="yesterday" onclick="setWindow('yesterday')">
+                        <i class="fa-solid fa-moon"></i>昨日
+                    </button>
+                    <button class="summaries-window-btn${currentWindow === '7days' ? ' active' : ''}" data-window="7days" onclick="setWindow('7days')">
+                        <i class="fa-solid fa-calendar-week"></i>近七天
+                    </button>
+                </div>
+                ${digestResult ? `
+                <div class="summaries-digest-badge">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <span>${WINDOW_LABELS[r.window] || '摘要'}汇总</span>
+                    <span class="digest-badge-count">${digestCount}</span>
+                </div>` : ''}
             </div>
             ${analyticsHtml}
             ${digestHtml}

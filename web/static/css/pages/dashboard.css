@@ -391,27 +391,29 @@
     z-index: 1;
 }
 
-/* --- 面板头 --- */
+/* --- 面板头：三列布局（左标题 / 中运行状态 chips / 右 LIVE）--- */
 .ov-head {
     align-items: center;
-    padding-top: 0.75rem;
-    padding-bottom: 0.6rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.5rem;
+    gap: 0.75rem;
 }
 .ov-head-main {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.65rem;
     min-width: 0;
+    flex-shrink: 0;
 }
 .ov-head-badge {
-    width: 36px;
-    height: 36px;
-    border-radius: 11px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
     flex-shrink: 0;
     color: #fff;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     background: linear-gradient(135deg, var(--brand-primary) 0%, #6366f1 100%);
     box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35),
                 inset 0 1px 0 rgba(255, 255, 255, 0.25);
@@ -427,12 +429,52 @@
 .ov-head-txt h3 {
     margin: 0;
     line-height: 1.2;
+    font-size: 0.85rem;
 }
 .ov-head-sub {
-    margin: 2px 0 0;
-    font-size: 0.72rem;
+    margin: 1px 0 0;
+    font-size: 0.65rem;
     color: var(--text-tertiary);
     line-height: 1.2;
+}
+
+/* 运行状态胶囊流：并入 header，单行紧凑，溢出横向滚动 */
+.ov-head-status {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.32rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0.25rem;
+    /* 隐藏滚动条但保留滚动能力 */
+    scrollbar-width: thin;
+}
+.ov-head-status::-webkit-scrollbar {
+    height: 3px;
+}
+.ov-head-status::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}
+.ov-head-status .ov-chip {
+    flex-shrink: 0;
+    padding: 0.22rem 0.5rem;
+    gap: 0.3rem;
+}
+.ov-head-status .ov-chip-ico {
+    width: 16px;
+    height: 16px;
+    font-size: 0.55rem;
+}
+.ov-head-status .ov-chip-label {
+    font-size: 0.6rem;
+}
+.ov-head-status .ov-chip-value {
+    font-size: 0.65rem;
+    max-width: 120px;
 }
 
 /* LIVE 徽章 */
@@ -449,6 +491,7 @@
     border: 1px solid rgba(22, 163, 74, 0.24);
     border-radius: 999px;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 .ov-live-dot {
     width: 6px;
@@ -484,11 +527,11 @@
     overflow: visible;
 }
 
-/* --- 第一层：Hero 主指标（左 / 中 sparkline / 右 三段式） --- */
+/* --- 第一层：Hero 主指标（重构后两列：左数字+今日变化 / 右 sparkline） --- */
 .ov-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(140px, 1.05fr) minmax(180px, 1.5fr) auto;
+    grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr);
     align-items: center;
     gap: clamp(0.5rem, 1rem, 1.25rem);
     padding: clamp(0.35rem, 0.55rem, 0.75rem) clamp(0.7rem, 1rem, 1.25rem);
@@ -631,39 +674,9 @@
 .ov-spark-axis span:first-child { font-weight: 600; color: var(--text-tertiary); }
 .ov-spark-axis span:last-child { color: var(--text-tertiary); }
 
-.ov-hero-side {
-    position: relative;
-    z-index: 1;
-    flex-shrink: 0;
-    align-self: center;
-}
-/* 数据采集胶囊：从"虚边浅底"改为"实心填充+字白+绿点"
-   让右上角在 hero 的浅渐变上视觉锚点清晰，避免被冲淡 */
-.ov-hero-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.34rem 0.65rem;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #ffffff;
-    background: linear-gradient(120deg, var(--brand-primary) 0%, #6366f1 100%);
-    border: 1px solid transparent;
-    border-radius: 999px;
-    white-space: nowrap;
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28),
-                inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-[data-theme="dark"] .ov-hero-pill {
-    background: linear-gradient(120deg, var(--brand-primary) 0%, #818cf8 100%);
-    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.34),
-                inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-.ov-hero-pill .ov-live-dot {
-    background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
-}
+/* 第二层右侧的"持续采集中"胶囊随重构删除（已由 LIVE 徽章替代 + ov-head-status chips）；
+   保留 .ov-hero-pill 样式以防其他页面复用。
+   .ov-hero-side 也已删除——重构后 Hero 改为两列（左数字 + 右 sparkline）。 */
 
 /* --- 第二层：次级指标卡（auto-fit，兼容 JS 动态追加的第 5 张） ---
    结构：icon 左 / value + label 右，横向紧凑，降低整体高度，保留品牌渐变条 hover 高亮 */
@@ -784,28 +797,9 @@
     }
 }
 
-/* --- 第三层：运行状态胶囊流 --- */
-.ov-rail-wrap {
-    padding-top: 0.55rem;
-    border-top: 1px dashed var(--border-light);
-}
-.ov-rail-title {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.4rem;
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-}
-.ov-rail-title span {
-    width: 3px;
-    height: 11px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
-}
+/* --- 第三层：运行状态胶囊流（已重构并入 panel-header 的 .ov-head-status，
+   下方独立 .ov-rail-wrap 已删除——节省约 50-60px 高度空间）--- */
+/* 保留 .ov-rail-title 样式以防其他页面复用，但不引用 */
 /* ⚠️ 特异性陷阱：theme.css 有
      #panel-overview #status-list { display:flex; flex-wrap:nowrap }  → (2,0,0)
    ID 数量优先于 class 数量，所以 .ov-rail#status-list (1,1,0) 会输。
@@ -848,8 +842,7 @@
 [data-theme="dark"] #panel-overview .stat-label,
 [data-theme="dark"] #panel-overview .ov-chip-label,
 [data-theme="dark"] #panel-overview .ov-hero-label,
-[data-theme="dark"] #panel-overview .ov-hero-hint,
-[data-theme="dark"] #panel-overview .ov-rail-title {
+[data-theme="dark"] #panel-overview .ov-hero-hint {
     color: #cbd5e1;
 }
 .ov-chip:hover {

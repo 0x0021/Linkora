@@ -944,6 +944,10 @@
 #page-dashboard.active .dash-row-middle .panel-header,
 #page-dashboard.active .dash-row-log .panel-header {
     padding: 0.3rem 0.85rem;
+    /* 固定 min-height 保证"决策追踪(无 actions)"与"最近消息(有 actions+badge)"两
+       个 panel-header 像素级一致——grid stretch + flex center + 内容差异会导致
+       h3 文字位置肉眼可见的偏移。38px = padding 0.3rem×2 + h3 行高 ~18px 上下贴边。 */
+    min-height: 38px;
 }
 /* 决策追踪 / 最近消息标题区与实时日志一致：控件字号/高度收紧 */
 #page-dashboard.active .dash-row-middle .panel-header h3,

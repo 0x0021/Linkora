@@ -53,6 +53,14 @@
     max-height: 100%;
     overflow: hidden;
 }
+/* 系统概览面板特殊：取消 max-height 限制让内容自然撑开，
+   否则「运行状态」胶囊流会被 overflow:hidden 裁掉。
+   .ov-body > * flex-shrink:0 保护卡片不被压缩，但 panel 高度受限时溢出被裁——
+   解除 panel 高度限制，hero + 5次级 + 胶囊完整可见。
+   极端矮视口由 dashboard.js 的 fitDashboardToViewport() 用 zoom 兜底。 */
+#page-dashboard.active .dash-row-overview .panel {
+    max-height: none;
+}
 
 /* 概览与中栏面板按内容自然撑开，禁止内部滚动条 */
 #page-dashboard.active .dash-row-overview .panel-body,

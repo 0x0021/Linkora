@@ -257,6 +257,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* 强制去除可能的浏览器/Safari 系统级蓝色焦点边框 */
+    outline: none !important;
+    border: none !important;
 }
 
 .topbar {

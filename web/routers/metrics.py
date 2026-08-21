@@ -361,6 +361,11 @@ def _iter_platform_stores():
         store = getattr(ctx, "store", None)
         if store is None:
             continue
+        # 防御：跳过已关闭的 store（如生命周期中曾被 close），避免单点 500。
+        # 正常情况下 get_store_dep 不再 close 全局单例，此分支仅作兜底。
+        if getattr(store, "_closed", False):
+            logger.warning("平台 %s 的 store 已关闭，跳过该平台指标聚合", platform_id)
+            continue
         yield platform_id, store
 
 

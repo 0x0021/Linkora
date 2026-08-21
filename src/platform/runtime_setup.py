@@ -249,6 +249,27 @@ class SetupMixin(EngineMixinBase):
         self.platforms["dingtalk"].summary_scheduler = dingtalk_scheduler
         logger.info("[H2-A] 主平台 dingtalk 后台异步摘要调度器已启动")
 
+        # H2-B：主平台(dingtalk)接线每小时滚动摘要调度器（配置 rolling_enabled=true 才启动）。
+        from src.llm.rolling_summary_scheduler import RollingSummaryScheduler
+        rolling_cfg = self.config.memory.conversation_summary.get("rolling", {})
+        rolling_enabled = rolling_cfg.get("enabled", True)
+        rolling_interval = rolling_cfg.get("interval_minutes", 60)
+        rolling_lookback = rolling_cfg.get("lookback_minutes", 60)
+        if rolling_enabled:
+            rolling_scheduler = RollingSummaryScheduler(
+                agent=self.platforms["dingtalk"].llm_agent,
+                store=self.store,
+                platform="dingtalk",
+                lookback_minutes=rolling_lookback,
+                interval_minutes=rolling_interval,
+            )
+            rolling_scheduler.start()
+            self.platforms["dingtalk"].rolling_summary_scheduler = rolling_scheduler
+            logger.info("[H2-B] 主平台 dingtalk 滚动摘要调度器已启动（间隔=%dmin，回溯=%dmin）",
+                        rolling_interval, rolling_lookback)
+        else:
+            logger.info("[H2-B] 滚动摘要调度器未启用（memory.conversation_summary.rolling.enabled=false）")
+
         # P4-13：主平台(dingtalk)接线每日主动摘要推送（默认关闭，enabled 才启动）。
         from src.llm.proactive_digest import ProactiveDigestScheduler
         proactive_scheduler = ProactiveDigestScheduler(

@@ -422,6 +422,11 @@ memory:
     max_messages_per_conversation: 50              # 单会话参与摘要的最大消息数
     summary_interval_hours: 24                      # 摘要间隔（小时）
     summary_ratio: 0.4                             # 摘要压缩比
+    rolling:                                       # 滚动摘要（H2-B）：每小时提取最近 N 分钟消息生成摘要
+      enabled: true                                # 是否启用滚动摘要（与 H2-A 事件驱动摘要互补）
+      interval_minutes: 60                         # 调度间隔（分钟），默认每小时一次
+      lookback_minutes: 60                         # 回溯窗口（分钟），默认取最近 1 小时消息
+      min_messages: 3                              # 触发摘要的最小消息数（不足则跳过）
 
   # 向量索引（F18 RAG 检索规模化）：类型与幽灵向量自动清理
   vector_index_type: flat                           # flat=精确暴力检索(默认)；hnsw=近似检索，规模增长时提速显著

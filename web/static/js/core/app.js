@@ -547,7 +547,7 @@ async function init() {
         // 注意：currentPage 初始为 'dashboard'，switchPage('dashboard') 会因页面未改变而短路返回，
         // 导致 loadDashboard/lodaDashboardData 不会被触发。因此对仪表盘场景需直接调用 loadDashboard。
         // 允许的页面白名单（与 switchPage 的 titles 保持一致）
-        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate'];
+        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate', 'summaries'];
         const saved = (() => { try { return sessionStorage.getItem('marvis_last_page'); } catch (_) { return null; } })();
         if (saved && ALLOWED_PAGES.includes(saved)) {
             if (saved === 'dashboard') {

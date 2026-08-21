@@ -941,20 +941,21 @@
 }
 
 /* 面板头部在一屏下稍微紧凑 */
-#page-dashboard.active .dash-row-middle .panel-header {
-    padding: 0.65rem 0.85rem;
-}
-/* 实时日志标题区减半（用户要求：标题高度留一半，其余让位给日志内容）：
-   纵向 padding 0.65rem → 0.3rem，内部控件字号/高度同步收紧 */
+#page-dashboard.active .dash-row-middle .panel-header,
 #page-dashboard.active .dash-row-log .panel-header {
     padding: 0.3rem 0.85rem;
 }
+/* 决策追踪 / 最近消息标题区与实时日志一致：控件字号/高度收紧 */
+#page-dashboard.active .dash-row-middle .panel-header h3,
 #page-dashboard.active .dash-row-log .panel-header h3 {
     font-size: 0.72rem;
 }
+#page-dashboard.active .dash-row-middle .panel-header .panel-actions,
 #page-dashboard.active .dash-row-log .panel-header .panel-actions {
     gap: 0.35rem;
 }
+#page-dashboard.active .dash-row-middle .panel-header .form-control-sm,
+#page-dashboard.active .dash-row-middle .panel-header .btn-sm,
 #page-dashboard.active .dash-row-log .panel-header .form-control-sm,
 #page-dashboard.active .dash-row-log .panel-header .btn-sm {
     padding: 0.12rem 0.4rem;
@@ -963,10 +964,17 @@
     height: auto;
     min-height: 0;
 }
+#page-dashboard.active .dash-row-middle .panel-header .log-count-badge,
+#page-dashboard.active .dash-row-middle .panel-header .live-indicator,
 #page-dashboard.active .dash-row-log .panel-header .log-count-badge,
 #page-dashboard.active .dash-row-log .panel-header .live-indicator {
     font-size: 0.6rem;
     padding: 0.1rem 0.4rem;
+}
+/* 最近消息的「查看全部 →」链接按钮同步收紧 */
+#page-dashboard.active .dash-row-middle .panel-header .link-btn {
+    font-size: 0.62rem;
+    padding: 0.12rem 0.3rem;
 }
 
 /* --- 无障碍：尊重系统减少动效偏好 --- */

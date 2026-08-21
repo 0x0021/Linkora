@@ -41,6 +41,13 @@
     max-height: 100%;
     overflow: hidden;
 }
+/* 系统概览 row 容器：解除 max-height + overflow 限制，让 hero/5次级/胶囊流完整可见。
+   panel 自身的 max-height 已在下方单独解除；此处对应 row 容器（grid row 元素）。
+   矮视口由 dashboard.js 的 fitDashboardToViewport() 用 zoom 兜底。 */
+#page-dashboard.active .dash-row-overview {
+    max-height: none;
+    overflow: visible;
+}
 
 /* 行内 panel 撑满 grid cell，flex 列布局 */
 #page-dashboard.active .dash-row-overview .panel,
@@ -60,6 +67,7 @@
    极端矮视口由 dashboard.js 的 fitDashboardToViewport() 用 zoom 兜底。 */
 #page-dashboard.active .dash-row-overview .panel {
     max-height: none;
+    overflow: visible;
 }
 
 /* 概览与中栏面板按内容自然撑开，禁止内部滚动条 */

@@ -117,6 +117,15 @@ _CASUAL_ANCHORS = [
     "早上好晚上好",
 ]
 # embedding 不可用时的兜底：仅抑制极少数明显闲聊（稳定、非业务词，不随 KB 增长维护）
+# 关键词快速通道：避免 embedding 锚点/模型抖动导致 how-to 类查询被漏检。
+# 必须同时命中「how-to 意图词」+「实体/主题词」才算知识查询，防止单纯点名
+# （如「打印机清单」）被误判。
+_HOW_TO_HINTS = ("怎么用", "如何使用", "怎么连接", "怎么配置", "怎么设置", "怎么添加",
+                 "怎么开通", "怎么申请", "在哪里", "在哪里看", "流程是什么", "查一下",
+                 "搜索一下", "搜一下", "看一下", "给我发")
+_ENTITY_HINTS = ("打印机", "VPN", "WiFi", "wifi", "无线网络", "账号", "密码", "IP",
+                 "审批", "流程", "申请", "文档", "规范", "指南", "教程", "制度", "手册",
+                 "服务器", "考勤", "员工手册")
 _CASUAL_FALLBACK = ("你好", "在吗", "谢谢", "天气", "吃什么", "早", "晚安", "哈哈", "收到")
 _INTENT_MARGIN = 0.06          # 知识意图相似度需高于闲聊多少才判定为知识查询（v2: 0.04→0.06，提高抗闲聊伪装）
 _INTENT_FLOOR = 0.12           # 知识意图相似度下限（v3: 0.22→0.12，大幅放宽以提升纯RAG问答覆盖）
@@ -188,6 +197,15 @@ def is_document_query(agent: Any, query: str, query_embedding=None) -> bool:
     q = (query or "").strip()
     if not q:
         return False
+    # 关键词快速通道：必须同时命中 how-to 意图词 + 实体主题词，且不含强闲聊词时，
+    # 直接判定为知识查询，避免 embedding 锚点抖动导致漏检（如「我刚来北京，7楼打印机怎么用」）。
+    q_lower = q.lower()
+    has_howto_hint = any(w in q_lower for w in _HOW_TO_HINTS)
+    has_entity_hint = any(w in q_lower for w in _ENTITY_HINTS)
+    has_casual_hint = any(w in q_lower for w in _CASUAL_FALLBACK)
+    if has_howto_hint and has_entity_hint and not has_casual_hint:
+        logger.debug("[RAG] 关键词命中知识查询意图: %s", q[:40])
+        return True
     emb = get_embedding_client(agent)
     if emb and query_embedding is not None:
         # 惰性生成并缓存锚点向量（首次使用时算一次）

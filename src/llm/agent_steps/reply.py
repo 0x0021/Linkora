@@ -319,20 +319,30 @@ def summarize_conversation(
 
     if max_messages and max_messages > 0 and len(messages) > max_messages:
         messages = messages[-max_messages:]
+    owner_name = getattr(agent, "user_name", "") or ""
     conversation_text = []
     for msg in messages:
-        role = "对方" if msg.role != "assistant" else "我"
+        # 以「主人 / 当前用户」为第一人称视角标注，而非 AI 视角
+        if owner_name and msg.sender_name == owner_name:
+            role = "我"
+        elif msg.role == "assistant" or msg.is_bot:
+            role = "AI"
+        elif msg.sender_name:
+            role = msg.sender_name
+        else:
+            role = "对方"
         conversation_text.append(f"{role}: {msg.content[:300]}")
     conversation_str = "\n".join(conversation_text)
 
     summary_prompt = [
-        {"role": "system", "content": """你是一个对话摘要助手。请对以下对话进行简洁的摘要。
+        {"role": "system", "content": """你是对话摘要助手。请站在「我」的角度，对以下对话进行简洁摘要。
 
 要求：
 1. 用中文输出，不超过 200 字
 2. 包含对话的核心主题、关键信息和结论
 3. 使用自然语言描述，不要使用列表或编号
-4. 格式：以「【对话摘要】」开头
+4. 视角：以主人（我）的第一人称总结——对方说了什么、我做了什么/回复了什么
+5. 格式：以「【对话摘要】」开头
 
 只输出摘要内容，不要其他内容。"""},
         {"role": "user", "content": f"请对以下对话进行摘要：\n\n{conversation_str}"},

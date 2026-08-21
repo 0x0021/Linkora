@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Query
 
 from web.dependencies import get_current_platform, get_store_dep, run_sync
 from src.llm.proactive_digest import build_digest
+from src.memory.conversation_repo import _today_start_iso
 
 logger = logging.getLogger("web.api")
 
@@ -32,7 +33,9 @@ async def get_summaries(
     """近期对话摘要 + 每日聚合摘要文本。"""
     pf = platform or get_current_platform()
     try:
-        rows = await run_sync(store._conversation_repo.list_recent_summaries, limit, pf)
+        rows = await run_sync(
+            store._conversation_repo.list_recent_summaries, limit, pf, _today_start_iso(),
+        )
         items = [
             {
                 "chat_id": r["chat_id"],

@@ -422,6 +422,74 @@ class ConversationRepo:
         self._cc(platform).commit()
         return False
 
+    def fetch_messages_in_range(
+        self,
+        start_iso: str,
+        end_iso: str,
+        platform: str = "",
+        limit_per_chat: int = 200,
+        skip_msg_types: "list[str] | None" = None,
+    ) -> "dict[str, list[dict]]":
+        """按时间窗口 [start_iso, end_iso) 取出消息，按 chat_id 分组返回原始行字典。
+
+        用于「摘要连续性补跑」按自然日回放停机期消息；只取非系统类消息，
+        按会话聚合，供调用方逐会话调 LLM 生成当日摘要。失败返回空 dict（非致命）。
+        """
+        skip = set(skip_msg_types or [])
+        skip.add("system")  # 系统通知永远不进摘要
+        try:
+            cur = self._cc(platform).cursor()
+            placeholders = ",".join("?" for _ in skip)
+            cur.execute(
+                f"""SELECT msg_id, chat_id, chat_type, sender_id, sender_name,
+                           content, msg_type, timestamp
+                    FROM messages
+                    WHERE timestamp >= ? AND timestamp < ?
+                      AND is_withdrawn = 0
+                      AND (msg_type IS NULL OR msg_type NOT IN ({placeholders}))
+                    ORDER BY chat_id, timestamp ASC""",
+                (start_iso, end_iso, *skip),
+            )
+            rows = cur.fetchall()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[摘要补跑] 查询窗口消息失败: %s", e)
+            return {}
+
+        grouped: "dict[str, list[dict]]" = {}
+        for r in rows:
+            chat_id = r["chat_id"]
+            bucket = grouped.setdefault(chat_id, [])
+            if len(bucket) >= limit_per_chat:
+                continue
+            bucket.append({
+                "msg_id": r["msg_id"] or "",
+                "chat_id": chat_id,
+                "chat_type": r["chat_type"] or "",
+                "sender_id": r["sender_id"] or "",
+                "sender_name": r["sender_name"] or "",
+                "content": r["content"] or "",
+                "msg_type": r["msg_type"] or "text",
+                "timestamp": r["timestamp"] or "",
+            })
+        return grouped
+
+    def update_summary_updated_at(self, chat_id: str, updated_at_iso: str,
+                                   platform: str = "") -> bool:
+        """覆盖某会话摘要的 updated_at（供补跑按自然日正确归日）。非致命。"""
+        if not chat_id:
+            return False
+        try:
+            cur = self._cc(platform).cursor()
+            cur.execute(
+                "UPDATE conversation_summaries SET updated_at = ? WHERE chat_id = ?",
+                (updated_at_iso, str(chat_id)),
+            )
+            self._cc(platform).commit()
+            return cur.rowcount > 0
+        except Exception as e:  # noqa: BLE001
+            logger.debug("[摘要补跑] 更新 updated_at 失败 chat_id=%s: %s", chat_id, e)
+            return False
+
     def get_chat_type(self, chat_id: str = "", platform: str = "") -> str:
         """查询会话类型（single/group/...），供范围分类使用；查不到返回空串。"""
         if not chat_id:

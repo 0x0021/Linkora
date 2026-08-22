@@ -282,6 +282,26 @@ class SetupMixin(EngineMixinBase):
         self.platforms["dingtalk"].proactive_digest_scheduler = proactive_scheduler
         proactive_scheduler.start()
 
+        # P4-14：启动期检测停机时长，按自然日补跑遗漏窗口的摘要（best-effort 后台线程）。
+        # 与 rolling / proactive 共用同一份 conversation_summaries 缓存，使「当天 / 近七天」
+        # 摘要连续完整；失败非致命，绝不拖垮主回复链路。
+        from src.llm.summary_backfill import SummaryBackfill
+        bf_cfg = self.config.summary_backfill
+        if bf_cfg.enabled:
+            throttle_min = getattr(self.config.llm_throttle, "background_min_interval_seconds", 20) or 20
+            backfill_scheduler = SummaryBackfill(
+                agent=self.platforms["dingtalk"].llm_agent,
+                store=self.store,
+                config=bf_cfg,
+                platform="dingtalk",
+                min_interval_seconds=float(throttle_min),
+            )
+            backfill_scheduler.start()
+            self.platforms["dingtalk"].summary_backfill_scheduler = backfill_scheduler
+            logger.info("[P4-14] 摘要连续性补跑调度器已启动（最大补跑=%d天）", bf_cfg.max_backfill_days)
+        else:
+            logger.info("[P4-14] 摘要连续性补跑未启用（summary_backfill.enabled=false）")
+
         # 启动期：从主人历史消息抽取沟通风格画像（Feature B，best-effort 非阻塞）
         self._refresh_style_profile()
     def _should_handoff_low_confidence(self, message, reply_text) -> bool:

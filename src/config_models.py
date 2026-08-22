@@ -783,6 +783,23 @@ class ProactiveConfig(BaseModel):
     max_summary_chars: int = 200  # 单条对话摘要截断长度（字符）
 
 
+class SummaryBackfillConfig(BaseModel):
+    """摘要连续性补跑（P4-14）：启动检测停机时长，按自然日补齐遗漏窗口的摘要。
+
+    默认开启。进程中断期间 RollingSummary / ProactiveDigest 不会写缓存也不会补跑
+    错过的那一天；本机制在启动时读 ``meta.last_run_at``（主库），与「现在」算出停机天数，
+    把遗漏窗口切成若干自然日，对每天有消息的会话现场调 LLM 生成当日摘要，写回
+    ``conversation_summaries``（与正常周期同源同格式），使「当天 / 近七天」摘要连续完整。
+    与 ProactiveDigest 共用同一份缓存，故补跑后主动推送的近七天视图自然补全。
+
+    失败全部非致命：DB/LLM 异常仅记日志，绝不拖垮主回复链路；补跑后刷新 last_run_at 防误判。
+    """
+
+    enabled: bool = True  # 是否启用启动期摘要补跑（默认开）
+    max_backfill_days: int = 14  # 最多补跑最近 N 天（防止极端停机刷爆 LLM）
+    min_messages_per_chat: int = 3  # 单会话某日不足此条数则跳过（避免噪声摘要）
+
+
 class RagConfig(BaseModel):
     chunk_size: int = 500  # 分块软目标/上限参考（字符数）；语义分块优先在此长度附近断块
     chunk_overlap: int = 50  # 分块重叠大小（字符数）
@@ -873,6 +890,7 @@ class AppConfig(BaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
+    summary_backfill: SummaryBackfillConfig = Field(default_factory=SummaryBackfillConfig)
     rag: RagConfig = Field(default_factory=RagConfig)
     skills: SkillsConfig = Field(default_factory=SkillsConfig)
     skillhub: SkillHubConfig = Field(default_factory=SkillHubConfig)

@@ -24,6 +24,7 @@
 | `logging` | `level` / `file` / `max_size_mb` / `max_backups` | 日志 |
 | `web` | `port` / `host` / `auth_enabled` / `auth_username` / `auth_password` | 管理后台（安全默认仅本机回环 + 认证开启；密码为空且认证开启会启动报错） |
 | `proactive` | `enabled` / `hour` / `minute` / `owner_user_id` / `owner_open_dingtalk_id` / `lookback_hours` / `max_conversations` / `max_summary_chars` | 主动触达：每日定时把近期对话摘要推送给主人（默认关闭；`hour`/`minute` 控制推送时刻） |
+| `summary_backfill` | `enabled` / `max_backfill_days` / `min_messages_per_chat` | 摘要连续性补跑：启动时检测停机时长，按自然日补生成遗漏的「当日 / 近七天」摘要，与正常周期同源（默认开启） |
 | `oa_approval` | `enabled` / `urge_reply_text` / `question_markers` / `action_markers` | 钉钉 OA 审批转发处理策略（别人转给你的审批 msgType=oa 默认回催办话术；含问号/动作标记则转 LLM 或审批工具） |
 | `ocr_postprocess` | `enabled` / `min_chars` / `enabled_steps` | OCR 文本后处理管线（去不可见字符 / 压缩重复标点 / 去口语填充词 / 合并空行 / CJK 加空格） |
 | `skillhub` | `auto_install` | SkillHub 市场（skill 榜单）安装脚本自动拉取开关（默认关，安全） |
@@ -227,6 +228,22 @@ proactive:
 - `owner_user_id` 可通过 `dws contact user get-self` 获取。
 - 配置修改后需重启服务，常驻调度器才会加载新的推送时刻。
 - 若 `enabled=true` 但未配置任何主人 ID，调度器会 fail-safe 不启动。
+
+## 摘要连续性补跑（`summary_backfill`）
+
+开启后（默认开启），灵桥在每次启动时检测「上次运行时间」，若发现中途停机，会按自然日补齐停机期间遗漏的「当日 / 近七天」对话摘要——**无需用户手动触发**。补出的摘要与正常周期**同源同格式**（均写回 `conversation_summaries`，Web 摘要页与主动推送自动覆盖），保证摘要连续性。
+
+```yaml
+summary_backfill:
+  enabled: true              # 启动检测停机并补生成遗漏摘要
+  max_backfill_days: 14      # 最多补跑最近 N 天，防止极端停机刷爆 LLM 额度
+  min_messages_per_chat: 3   # 单会话当日不足此条数则跳过，避免噪声摘要
+```
+
+- 补跑在独立后台线程执行，DB / LLM 异常仅记日志、不影响主回复链路；完成后刷新「上次运行时间」防止重复补跑。
+- 消息时间戳在库内可能混合「本地时间」与「UTC（带 Z）」，补跑会统一归本地时区再切分自然日，避免跨时区漏补。
+- 停机超过 `max_backfill_days` 时只补最近 N 天。调整此值需权衡 LLM 额度消耗。
+- 改动生效需重启服务。
 
 ## 后台限速、技能引擎与死信队列
 

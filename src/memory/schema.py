@@ -498,6 +498,16 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
 
     conn.commit()
 
+    # ── 元数据 KV 表（全局，跨平台）───────────────────────────────────
+    # 用于持久化进程级状态（如 last_run_at：上次成功运行时间，供摘要连续性补跑检测停机时长）。
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
     # ── 完整性检查 ─────────────────────────────────────────────────────
     try:
         cur.execute("PRAGMA integrity_check")

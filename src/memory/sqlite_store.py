@@ -417,6 +417,35 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
             self.__blacklist_repo = BlacklistRepo(self)
         return self.__blacklist_repo
 
+    # ── 元数据 KV（主库 meta 表，跨平台全局）──────────────────────────
+    def get_meta(self, key: str, default: str = "") -> str:
+        """读取主库 meta 表的字符串值；缺失返回 default。非致命，异常仅记日志。"""
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT value FROM meta WHERE key = ?", (key,))
+            row = cur.fetchone()
+            return row["value"] if row else default
+        except Exception as e:  # noqa: BLE001
+            logger.debug("[meta] 读取 %s 失败: %s", key, e)
+            return default
+
+    def set_meta(self, key: str, value: str) -> bool:
+        """写入主库 meta 表（UPSERT）。非致命，异常仅记日志并返回 False。"""
+        if not key:
+            return False
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                """INSERT INTO meta (key, value) VALUES (?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+                (key, value),
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:  # noqa: BLE001
+            logger.debug("[meta] 写入 %s 失败: %s", key, e)
+            return False
+
     @property
     def _conversation_repo(self):
         """Lazy-load ConversationRepo."""

@@ -333,6 +333,22 @@ class LLMClient:
         url = url.rstrip("/")
         if not url.endswith("/v1") and "/v1/" not in url and not url.endswith("/v1/"):
             pass
+        # SSRF 纵深：阻断链路本地/云元数据地址（169.254.169.254 等高危目标）；
+        # 回环/私网（本地 LLM，如 127.0.0.1:11434 / 8910）属合法用途，放行。
+        try:
+            import ipaddress
+            import socket
+            from urllib.parse import urlparse
+
+            host = urlparse(url).hostname
+            if host:
+                for info in socket.getaddrinfo(host, None):
+                    ip = ipaddress.ip_address(info[4][0])
+                    if ip.is_link_local:  # 169.254.0.0/16 含云元数据
+                        logger.error("LLM base_url 指向链路本地/元数据地址，拒绝: %s", url)
+                        return None  # 回退到默认端点，避免 SSRF
+        except Exception as _exc:
+            logger.debug("[LLM] base_url SSRF 预检跳过: %s", _exc)
         return url
 
 

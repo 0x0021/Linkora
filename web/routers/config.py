@@ -500,13 +500,19 @@ def _ensure_platform_config(config: AppConfig, platform_id: str):
 @router.post("/api/config/default")
 async def restore_default_config():
     try:
+        import secrets
         import shutil
         from src.config import AppConfig, WebConfig
         backup_path = _api.CONFIG_PATH + ".bak"
         if Path(_api.CONFIG_PATH).exists():
             shutil.copy2(_api.CONFIG_PATH, backup_path)
-        # 出厂默认骨架（仅 web 段最小设定），其余段为 AppConfig 默认值
-        default_skeleton = AppConfig(web=WebConfig(auth_enabled=True, auth_password="please-change-me")).model_dump()
+        # 出厂默认骨架（仅 web 段最小设定），其余段为 AppConfig 默认值。
+        # 注意：auth_password 必须用随机强口令，绝不写死 "please-change-me" 等已知默认
+        # 值——否则 WebConfig 校验会拒绝加载，且公开默认口令等于裸奔。
+        new_pw = secrets.token_urlsafe(16)
+        default_skeleton = AppConfig(
+            web=WebConfig(auth_enabled=True, auth_password=new_pw)
+        ).model_dump()
         merged = default_skeleton
         try:
             current = _api.load_config(_api.CONFIG_PATH)
@@ -515,10 +521,24 @@ async def restore_default_config():
             merged = _deep_merge(default_skeleton, current.model_dump())
         except Exception as e:
             logger.warning("[config] 读取当前配置失败，按纯出厂默认骨架恢复: %s", e)
+        # 若合并后密码仍为空或已知默认值（例如原配置未设密码），强制用本次生成的随机
+        # 强口令，保证重启后能用该口令登录，且不落公开默认口令。
+        _known = ("please-change-me", "changeme", "admin", "password", "")
+        _web = merged.setdefault("web", {})
+        _pw_applied = False
+        if _web.get("auth_enabled") and (_web.get("auth_password") or "") in _known:
+            _web["auth_password"] = new_pw
+            _pw_applied = True
         # 写回前：还原被 env 注入的明文密钥为磁盘原值，避免明文落盘/泄露
         _revert_env_masked_secrets_to_disk(merged, _load_disk_config_raw())
         _api._write_config(merged)
-        return {"success": True, "message": f"已恢复默认配置骨架（原配置备份为 {backup_path}；已保留你的全部现有设置，仅补齐全默认结构）"}
+        msg = (
+            f"已恢复默认配置骨架（原配置备份为 {backup_path}；已保留你的全部现有设置，"
+            f"仅补齐全默认结构）"
+        )
+        if _pw_applied:
+            msg += f"；管理后台新口令已自动生成为：{new_pw}（请尽快到设置中修改）"
+        return {"success": True, "message": msg}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

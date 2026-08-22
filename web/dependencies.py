@@ -137,20 +137,10 @@ def get_store(platform: str | None = None) -> SQLiteStore:
         cached.init_db()
         stores[db_path] = cached
     store = cached
-    # 向量索引随 DB 变化失效：仅当已加载时才做廉价 COUNT 校验
-    vi = store._vector_index
-    if vi is not None:
-        try:
-            if store._kb_repo.count_embedded_chunks() != getattr(vi, "count", -1):
-                store._vector_index = None  # 下次使用自动从 DB 重建
-        except Exception as e:  # noqa: BLE001
-            # 降级而非上抛：这只是「向量索引是否陈旧」的廉价校验，失败不应让整个请求
-            # 500（沿用已加载的索引即可）。但必须留痕——静默 pass 会把「DB 损坏 / 表缺失
-            # / 连接失效」等真实故障藏成「KB 搜索结果莫名陈旧」，线上极难排查。
-            logger.warning(
-                "向量索引陈旧校验失败（db=%s），沿用已加载索引（结果可能陈旧）: %s",
-                db_path, e,
-            )
+    # 向量索引随 DB 变化失效：在 faiss 索引锁内做廉价 COUNT 校验（见
+    # SQLiteStore._invalidate_stale_vector_index，@_with_index_lock 包裹），
+    # 避免与重建并发导致 faiss 段错误 / 读到半重建索引。
+    store._invalidate_stale_vector_index()
     return store
 
 

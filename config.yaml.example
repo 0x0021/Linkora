@@ -667,7 +667,7 @@ web:
   host: 127.0.0.1                                  # 监听地址（安全默认仅本机回环；公网访问请经反代+认证）
   auth_enabled: true                               # 是否开启认证（安全默认开启；关闭=管理后台裸奔，高危）
   auth_username: admin                             # * 登录用户名
-  auth_password: 'please-change-me'                # * 登录密码——务必修改！支持明文(legacy)或 PBKDF2 哈希(pbkdf2_sha256$...)；生成：python -c "from web.auth_middleware import hash_password; print(hash_password('你的密码'))"。auth_enabled=true 且密码为空会启动报错（fail-closed 拒绝启动）
+  auth_password: 'REPLACE_WITH_YOUR_STRONG_PASSWORD'   # * 登录密码——务必修改！支持明文(legacy)或 PBKDF2 哈希(pbkdf2_sha256$...)；生成：python -c "from web.auth_middleware import hash_password; print(hash_password('你的密码'))"。auth_enabled=true 且密码为空/空白/已知默认值会启动报错（fail-closed 拒绝启动）
   jwt_secret: ''                                    # * JWT 签名密钥——生产务必设置固定高熵值；留空则运行时生成临时随机密钥（重启失效）
 
 # ============================================================

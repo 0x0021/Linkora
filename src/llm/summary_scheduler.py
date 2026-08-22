@@ -52,9 +52,10 @@ class SummaryScheduler:
         scheduler.stop()           # 退出时优雅停止（join）
     """
 
-    def __init__(self, agent: "LLMAgent", store: "SQLiteStore") -> None:
+    def __init__(self, agent: "LLMAgent", store: "SQLiteStore", platform: str = "dingtalk") -> None:
         self._agent = agent
         self._store = store
+        self._platform = platform
         self._queue: "queue.Queue[SummaryJob]" = queue.Queue()
         self._pending: set[str] = set()  # 在途 chat_id（in-flight），用于去重
         self._pending_lock = threading.Lock()
@@ -153,7 +154,16 @@ class SummaryScheduler:
 
         仅当 summarize_conversation 返回非空才执行 UPSERT；空则返回、不写库，
         缓存保持旧值（或仍为空），主回复不受影响、无脏数据。
+
+        须在平台上下文内执行：本调度器按平台接线（每个平台独立 store/agent），
+        summarize_conversation 与 _conversation_repo 写回均依赖 current_platform_var
+        路由到正确的账号库。缺少上下文会落到默认 dingtalk 库，造成跨账号写错库。
         """
+        from src.memory.platform_context import with_platform
+        with with_platform(self._platform):
+            self._process_job_inner(job)
+
+    def _process_job_inner(self, job: SummaryJob) -> None:
         try:
             summary = self._agent.summarize_conversation(
                 job.older, max_messages=getattr(self._agent, "_summary_max_messages", 0),

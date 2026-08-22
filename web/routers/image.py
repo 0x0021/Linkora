@@ -21,6 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse, urlunparse
 
 import httpx
+import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from starlette.concurrency import run_in_threadpool
@@ -28,7 +29,10 @@ from PIL import Image
 
 import web.api as _api
 from src.paths import data_path, get_skill_icons_dir
+from src.utils.net import is_ssrf_safe
 from web.security import resolve_safe_ip  # SSRF 防护：白名单 host 仍可能 DNS 重绑定到内网，需钉公网 IP
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -447,6 +451,11 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
     仅处理 http(s) 外链；目标已存在时跳过（幂等）。返回是否成功落盘。
     """
     if not icon_url or not icon_url.startswith(("http://", "https://")):
+        return False
+    # SSRF 防护：icon_url 来自 SkillHub 排行榜外部元数据，可被投毒指向内网/回环/
+    # 链路本地（169.254.169.254 云元数据）。抓取前强制校验目标为公网地址，否则拒绝。
+    if not is_ssrf_safe(icon_url):
+        logger.warning("[图标] 拒绝下载非公网图标 URL（疑似 SSRF）: %s", icon_url)
         return False
     safe = _slug_to_safe_name(slug)
     dest = get_skill_icons_dir() / f"{os.path.basename(safe)}.png"

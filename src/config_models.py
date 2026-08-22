@@ -811,17 +811,23 @@ class WebConfig(BaseModel):
 
     @model_validator(mode="after")
     def _enforce_non_empty_auth_password(self) -> "WebConfig":
-        """fail-closed：开启认证但密码为空时拒绝构造（启动即退出）。
+        """fail-closed：开启认证但密码为空或仍为已知默认值时拒绝构造（启动即退出）。
 
         空密码下 `_auth_check` 用 hmac.compare_digest("", "") == True，任意请求
-        可用空密码登入，等同裸奔。故 auth_enabled=True 且密码为空属不安全配置，
-        在 WebConfig 构造期即抛出，使进程无法以该配置启动。
-        auth_enabled=False（信任内网/反代场景）时空密码允许。
+        可用空密码登入，等同裸奔。同理，已知默认值（如 "please-change-me"）等于
+        公开口令，任何人可登入管理后台，故一并拒绝。
+        在 WebConfig 构造期即抛出，使进程无法以该不安全配置启动。
+        auth_enabled=False（信任内网/反代场景）时空密码允许（但默认值仍拒绝，
+        因其代表「未真正配置」）。
         """
-        if self.auth_enabled and not (self.auth_password or "").strip():
+        # 已知弱/默认口令：恢复出厂或遗漏配置时会写死这些值，等同公开，必须拒绝。
+        # 注意：先 strip() 再判定，空白口令（"   "）与空口令同等视为未配置。
+        _KNOWN_DEFAULT_PASSWORDS = ("please-change-me", "changeme", "admin", "password")
+        _pw = (self.auth_password or "").strip()
+        if self.auth_enabled and (not _pw or _pw in _KNOWN_DEFAULT_PASSWORDS):
             raise ValueError(
-                "auth_enabled=True 但 auth_password 为空，拒绝启动（安全默认）："
-                "请在 config.yaml 的 web.auth_password 设置非空密码"
+                "auth_enabled=True 但 auth_password 为空/空白或为已知默认值，拒绝启动（安全默认）："
+                "请在 config.yaml 的 web.auth_password 设置高强度密码（建议 PBKDF2 哈希）"
             ) from None
         return self
 

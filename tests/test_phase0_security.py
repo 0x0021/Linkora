@@ -39,6 +39,17 @@ def test_webconfig_empty_password_with_auth_disabled_ok():
     assert app.web.auth_enabled is False
 
 
+def test_webconfig_known_default_password_rejected():
+    # 已知默认/弱口令（如 please-change-me，曾被「恢复出厂」写死）等同公开，必须拒绝启动。
+    # 见 WebConfig._enforce_non_empty_auth_password。
+    for weak in ("please-change-me", "changeme", "admin", "password"):
+        with pytest.raises(ValueError):
+            WebConfig(auth_enabled=True, auth_password=weak)
+    # 空白口令（仅空格/换行）与空口令同等视为未配置
+    with pytest.raises(ValueError):
+        WebConfig(auth_enabled=True, auth_password="   \t\n")
+
+
 # ---------------------------------------------------------------------------
 # T2 — is_ssrf_safe 扩大拒绝范围
 # ---------------------------------------------------------------------------

@@ -564,3 +564,25 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
                 c.close()
             except Exception as e:
                 logger.debug("关闭会话数据库连接失败: %s", e)
+
+    @_with_index_lock
+    def _invalidate_stale_vector_index(self) -> None:
+        """向量索引随 DB 变化失效：仅当已加载且 chunk 计数不一致时置 None，触发下次自动重建。
+
+        须在 faiss 索引锁内执行（@_with_index_lock），避免与重建路径（同样经该锁包裹）
+        并发导致 faiss 段错误或读到半重建索引。web/dependencies.get_store 调用此方法。
+        """
+        vi = self._vector_index
+        if vi is None:
+            return
+        try:
+            if self._kb_repo.count_embedded_chunks() != getattr(vi, "count", -1):
+                self._vector_index = None  # 下次使用自动从 DB 重建
+        except Exception as e:  # noqa: BLE001
+            # 降级而非上抛：这只是「向量索引是否陈旧」的廉价校验，失败不应让整个请求
+            # 500（沿用已加载的索引即可）。但必须留痕——静默 pass 会把「DB 损坏 / 表缺失
+            # / 连接失效」等真实故障藏成「KB 搜索结果莫名陈旧」，线上极难排查。
+            logger.warning(
+                "向量索引陈旧校验失败（db=%s），沿用已加载索引（结果可能陈旧）: %s",
+                self.db_path, e,
+            )

@@ -655,7 +655,7 @@ proactive:
   minute: 0                                        # 每日触发分钟（0-59）
   owner_user_id: ""                                # 钉钉 user_id（与下面 open_dingtalk_id 二选一）
   owner_open_dingtalk_id: ""                       # 钉钉 open_dingtalk_id；两者皆空则不启动
-  lookback_hours: 24                               # 回溯窗口（小时），仅纳入窗口内有更新的对话
+  lookback_hours: 24                               # 滚动回溯窗口（小时）：取过去 N 小时内有更新的对话，跨自然日生效（如 17:30 推送覆盖昨日 17:30→今日 17:30）
   max_conversations: 10                            # 单次摘要最多纳入的对话数
   max_summary_chars: 200                           # 单条对话摘要截断长度（字符）
 

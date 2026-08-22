@@ -5,6 +5,9 @@
   关闭或 owner 未配置时「不启动」，对线上零行为影响。
 - 触发：每日本地时区 hour:minute 一次。复用 ``SummaryScheduler`` 已产出的
   对话缓存摘要（conversation_summaries.summary_text），仅做滚动汇总，**不额外消耗 LLM**。
+- 窗口：**滚动窗口**（默认过去 ``lookback_hours=24`` 小时），跨自然日生效。
+  例如每日 17:30 推送即覆盖「昨日 17:30 → 今日 17:30」，不再把今日 0 点作为硬截断。
+  收集直接复用 Web「对话摘要」页的 ``list_recent_summaries(since=cutoff)``，推送与页面同源。
 - 发送：经 ``DwsAdapter.chat_message_send`` 推给 owner 的 1:1（user_id 或 open_dingtalk_id）。
 - 失败全部非致命：收集/发送异常仅记日志，绝不拖垮主回复链路。
 
@@ -34,16 +37,19 @@ def _next_trigger_ts(now: datetime, hour: int, minute: int) -> float:
     return target.timestamp()
 
 
-def build_digest(items: list[dict], max_summary_chars: int = 200) -> str:
+def build_digest(items: list[dict], max_summary_chars: int = 200,
+                 title: str | None = None) -> str:
     """由近期对话摘要拼装中文 digest 文本（纯函数，便于单测，不触碰 IO）。
 
     Args:
         items: 每项含 ``chat_name`` / ``chat_id`` / ``summary``（已截断前的原文）。
         max_summary_chars: 单条摘要截断长度，超出补省略号。
+        title: 自定义标题；缺省回退「今日对话摘要」（Web 页默认口径）。
+            推送场景传「近 N 小时对话摘要」以匹配滚动窗口语义。
     """
     if not items:
         return "（今日无新对话摘要）"
-    header = f"📋 今日对话摘要（共 {len(items)} 段）"
+    header = title or f"📋 今日对话摘要（共 {len(items)} 段）"
     lines = [header, ""]
     for it in items:
         name = it.get("chat_name") or it.get("chat_id") or "未知对话"
@@ -100,47 +106,39 @@ class ProactiveDigestScheduler:
 
     # ------------------------------------------------------------------ 收集
     def collect_items(self) -> list[dict]:
-        """取「今日」有缓存摘要的对话（供测试与运行期共用）。
+        """取「过去 lookback_hours 小时内」有缓存摘要的对话（供测试与运行期共用）。
 
-        仅读本地缓存摘要，不调 LLM。无摘要或早于「今日 00:00（本地）」的对话被跳过；
-        cutoff 取 ``max(今日0点, now - lookback_hours)``：既保证不串入昨天内容（标题即「今日」），
-        又尊重 ``lookback_hours`` 作为更窄的回溯上限。
+        直接复用 Web「对话摘要」页的 ``list_recent_summaries(since=cutoff)``，
+        保证推送与页面**同源同口径**，不再依赖「前 N 个活跃会话」枚举。
+
+        窗口为**滚动窗口** ``now - lookback_hours``（默认 24h），可跨越自然日：
+        例如每日 17:30 推送即覆盖「昨日 17:30 → 今日 17:30」，不再把今日 0 点作为
+        硬截断（旧实现 ``max(今日0点, now-lookback)`` 在 lookback≥24 时恒等于 0 点，
+        导致参数静默失效、昨日尾巴被丢弃）。
         """
         try:
             now = datetime.now()
-            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            cutoff = max(today_start, now - timedelta(hours=self._cfg.lookback_hours))
-            recent = self._store._conversation_repo.get_recent_conversations(
-                limit=self._cfg.max_conversations, platform=self._platform,
+            cutoff = now - timedelta(hours=self._cfg.lookback_hours)
+            cutoff_iso = cutoff.isoformat()
+            rows = self._store._conversation_repo.list_recent_summaries(
+                limit=self._cfg.max_conversations,
+                platform=self._platform,
+                since=cutoff_iso,
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("[主动触达] 读取近期对话失败: %s", e)
             return []
 
         items: list[dict] = []
-        for c in recent:
-            cid = c.get("chat_id")
-            if not cid:
+        for r in rows:
+            summary = (r.get("summary_text") or "").strip()
+            if not summary:
                 continue
-            try:
-                row = self._store._conversation_repo.get_conversation_summary(cid)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("[主动触达] 读摘要失败 chat_id=%s: %s", cid, e)
-                continue
-            if row is None or not getattr(row, "summary_text", ""):
-                continue
-            updated = getattr(row, "updated_at", "") or ""
-            if updated:
-                try:
-                    if datetime.fromisoformat(updated) < cutoff:
-                        continue
-                except ValueError:
-                    pass  # 时间解析失败不跳过（宁多勿漏）
             items.append({
-                "chat_id": cid,
-                "chat_name": c.get("chat_name"),
-                "summary": row.summary_text,
-                "updated_at": updated,
+                "chat_id": r.get("chat_id"),
+                "chat_name": r.get("chat_name"),
+                "summary": summary,
+                "updated_at": r.get("updated_at") or "",
             })
         return items
 
@@ -158,7 +156,8 @@ class ProactiveDigestScheduler:
 
     def _run_once(self) -> None:
         items = self.collect_items()
-        digest = build_digest(items, self._cfg.max_summary_chars)
+        title = f"📋 近 {self._cfg.lookback_hours} 小时对话摘要（共 {len(items)} 段）"
+        digest = build_digest(items, self._cfg.max_summary_chars, title=title)
         try:
             if self._cfg.owner_user_id:
                 self._adapter.chat_message_send(title="每日对话摘要", text=digest,

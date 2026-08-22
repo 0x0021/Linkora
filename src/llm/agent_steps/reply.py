@@ -312,6 +312,7 @@ def summarize_conversation(
     agent,
     messages: list[Message],
     max_messages: int = 0,
+    owner_name: str | None = None,
 ) -> str:
     """用 LLM 生成对话摘要。"""
     if not messages:
@@ -319,7 +320,18 @@ def summarize_conversation(
 
     if max_messages and max_messages > 0 and len(messages) > max_messages:
         messages = messages[-max_messages:]
-    owner_name = getattr(agent, "user_name", "") or ""
+    owner_name = (owner_name or getattr(agent, "user_name", "") or "").strip()
+    if not owner_name:
+        # 兜底：部分调用方可能未显式传入，尝试从 system_prompt 中推断已格式化的主人名
+        system_prompt = getattr(getattr(agent, "config", None), "system_prompt", "") or ""
+        for placeholder in ("user_name", "owner_name"):
+            idx = system_prompt.find(f"{{{placeholder}}}")
+            if idx == -1:
+                # 已格式化过的 system_prompt 中可能出现具体人名
+                continue
+        # 已格式化的模板里不会包含 {user_name}，因此若仍无 owner_name 只能告警
+        logger.warning("[摘要] 未提供 owner_name，摘要视角可能混乱；请调用方显式传入或设置 agent.user_name")
+    owner_label = owner_name or "我"
     conversation_text = []
     for msg in messages:
         # 以「主人 / 当前用户」为第一人称视角标注，而非 AI 视角
@@ -335,14 +347,20 @@ def summarize_conversation(
     conversation_str = "\n".join(conversation_text)
 
     summary_prompt = [
-        {"role": "system", "content": """你是对话摘要助手。请站在「我」的角度，对以下对话进行简洁摘要。
+        {"role": "system", "content": f"""你是对话摘要助手。请严格站在「我」（对话主人）的第一人称视角，对以下对话进行简洁摘要。
+
+背景：
+- 对话主人的名字/身份是「{owner_label}」。
+- 下面消息中标注为「我:」的，就是主人自己说的话；标注为「AI:」的是 AI 回复；其余是对方或其他人说的话。
 
 要求：
-1. 用中文输出，不超过 200 字
-2. 包含对话的核心主题、关键信息和结论
-3. 使用自然语言描述，不要使用列表或编号
-4. 视角：以主人（我）的第一人称总结——对方说了什么、我做了什么/回复了什么
-5. 格式：以「【对话摘要】」开头
+1. 用中文输出，不超过 200 字。
+2. 包含对话的核心主题、关键信息和结论。
+3. 使用自然语言描述，不要使用列表或编号。
+4. 视角：绝对以主人（我）的第一人称总结——对方说了什么、我做了什么/回复了什么。
+5. 凡是主人（{owner_label}）的消息，摘要中统一用「我」指代；严禁出现「我向{owner_label}…」「{owner_label}向我…」这类把主人当成第三方的矛盾描述。
+6. 如果对方称呼主人为具体称谓或昵称，摘要里仍用「我」指代，不要切换视角。
+7. 格式：以「【对话摘要】」开头。
 
 只输出摘要内容，不要其他内容。"""},
         {"role": "user", "content": f"请对以下对话进行摘要：\n\n{conversation_str}"},

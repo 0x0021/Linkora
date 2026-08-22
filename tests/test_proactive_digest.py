@@ -13,18 +13,28 @@ class _Row:
 
 
 class _FakeRepo:
-    """模拟 ConversationRepo：recent 与 summary 皆由构造时注入。"""
+    """模拟 ConversationRepo：list_recent_summaries 由构造时注入（含 since 过滤）。"""
 
-    def __init__(self, recent: list[dict], summaries: dict[str, _Row | None]) -> None:
-        self._recent = recent
-        self._summaries = summaries
+    def __init__(self, recent_rows: list[dict] | None = None,
+                 summaries: dict[str, _Row | None] | None = None) -> None:
+        self._recent_rows = recent_rows or []
+        self._summaries = summaries or {}
         self.send_calls: list[tuple] = []
 
     def get_recent_conversations(self, limit: int = 20, platform: str = "") -> list[dict]:
-        return self._recent[:limit]
+        return []
 
     def get_conversation_summary(self, chat_id: str, platform: str = "") -> _Row | None:
         return self._summaries.get(chat_id)
+
+    def list_recent_summaries(self, limit: int = 20, platform: str = "",
+                              since: str | None = None) -> list[dict]:
+        out = []
+        for r in self._recent_rows:
+            if since and (r.get("updated_at") or "") < since:
+                continue
+            out.append(r)
+        return out[:limit]
 
 
 class _FakeStore:
@@ -54,6 +64,13 @@ def test_build_digest_empty():
     assert build_digest([]) == "（今日无新对话摘要）"
 
 
+def test_build_digest_custom_title():
+    items = [{"chat_name": "张三", "chat_id": "c1", "summary": "讨论了排期"}]
+    out = build_digest(items, title="📋 近 24 小时对话摘要（共 1 段）")
+    assert "近 24 小时对话摘要" in out
+    assert "共 1 段" in out
+
+
 def test_build_digest_truncates():
     items = [{"chat_name": "张三", "chat_id": "c1",
               "summary": "x" * 500}]
@@ -71,29 +88,27 @@ def test_build_digest_skips_missing_summary():
 # ── collect_items 回溯窗口过滤 ──
 def test_collect_filters_by_lookback():
     now = datetime.now()
-    recent = [
-        {"chat_id": "old", "chat_name": "旧对话"},
-        {"chat_id": "new", "chat_name": "新对话"},
+    rows = [
+        {"chat_id": "old", "chat_name": "旧对话",
+         "summary_text": "旧摘要", "updated_at": (now - timedelta(hours=30)).isoformat()},
+        {"chat_id": "new", "chat_name": "新对话",
+         "summary_text": "新摘要", "updated_at": now.isoformat()},
     ]
-    summaries = {
-        "old": _Row("旧摘要", (now - timedelta(hours=30)).isoformat()),
-        "new": _Row("新摘要", now.isoformat()),
-    }
-    repo = _FakeRepo(recent, summaries)
+    repo = _FakeRepo(recent_rows=rows)
     adapter = _FakeAdapter()
     cfg = ProactiveConfig(enabled=True, lookback_hours=24,
                           owner_user_id="u1", max_conversations=10)
     sched = _scheduler(cfg, repo, adapter)
     items = sched.collect_items()
     ids = [i["chat_id"] for i in items]
-    assert ids == ["new"]  # 旧对话超出 24h 窗口被过滤
+    assert ids == ["new"]  # 旧对话（>24h 前）被 since 过滤
 
 
 def test_collect_skips_no_summary():
     now = datetime.now()
-    recent = [{"chat_id": "c1", "chat_name": "无摘要对话"}]
-    summaries = {"c1": _Row("", now.isoformat())}
-    repo = _FakeRepo(recent, summaries)
+    rows = [{"chat_id": "c1", "chat_name": "无摘要对话",
+             "summary_text": "", "updated_at": now.isoformat()}]
+    repo = _FakeRepo(recent_rows=rows)
     adapter = _FakeAdapter()
     cfg = ProactiveConfig(enabled=True, lookback_hours=24, owner_user_id="u1")
     sched = _scheduler(cfg, repo, adapter)
@@ -103,9 +118,9 @@ def test_collect_skips_no_summary():
 # ── _run_once 发送 ──
 def test_run_once_sends_to_owner_user():
     now = datetime.now()
-    recent = [{"chat_id": "c1", "chat_name": "项目群"}]
-    summaries = {"c1": _Row("讨论了排期", now.isoformat())}
-    repo = _FakeRepo(recent, summaries)
+    rows = [{"chat_id": "c1", "chat_name": "项目群",
+             "summary_text": "讨论了排期", "updated_at": now.isoformat()}]
+    repo = _FakeRepo(recent_rows=rows)
     adapter = _FakeAdapter()
     cfg = ProactiveConfig(enabled=True, owner_user_id="u123", max_summary_chars=200)
     sched = _scheduler(cfg, repo, adapter)
@@ -119,9 +134,9 @@ def test_run_once_sends_to_owner_user():
 
 def test_run_once_falls_back_to_open_id():
     now = datetime.now()
-    recent = [{"chat_id": "c1", "chat_name": "群"}]
-    summaries = {"c1": _Row("摘要", now.isoformat())}
-    repo = _FakeRepo(recent, summaries)
+    rows = [{"chat_id": "c1", "chat_name": "群",
+             "summary_text": "摘要", "updated_at": now.isoformat()}]
+    repo = _FakeRepo(recent_rows=rows)
     adapter = _FakeAdapter()
     cfg = ProactiveConfig(enabled=True, owner_open_dingtalk_id="ou_abc")
     sched = _scheduler(cfg, repo, adapter)

@@ -41,6 +41,9 @@ def build_digest(items: list[dict], max_summary_chars: int = 200,
                  title: str | None = None) -> str:
     """由近期对话摘要拼装中文 digest 文本（纯函数，便于单测，不触碰 IO）。
 
+    输出按钉钉 markdown 渲染习惯排版：条目之间空一行（段间距），避免单换行被
+    钉钉折叠成空格导致所有摘要粘成一段；自动去除摘要里冗余的「【对话摘要】」前缀。
+
     Args:
         items: 每项含 ``chat_name`` / ``chat_id`` / ``summary``（已截断前的原文）。
         max_summary_chars: 单条摘要截断长度，超出补省略号。
@@ -50,17 +53,20 @@ def build_digest(items: list[dict], max_summary_chars: int = 200,
     if not items:
         return "（今日无新对话摘要）"
     header = title or f"📋 今日对话摘要（共 {len(items)} 段）"
-    lines = [header, ""]
-    for it in items:
+    paragraphs: list[str] = [header, ""]
+    for idx, it in enumerate(items, start=1):
         name = it.get("chat_name") or it.get("chat_id") or "未知对话"
         summary = (it.get("summary") or "").strip()
+        # 摘要函数本身会以「【对话摘要】」开头，聚合推送里不需要重复前缀
+        summary = summary.removeprefix("【对话摘要】").strip()
         if not summary:
-            lines.append(f"• **{name}**：（无摘要）")
+            paragraphs.append(f"{idx}. **{name}**：（无摘要）")
             continue
         if len(summary) > max_summary_chars:
             summary = summary[:max_summary_chars] + "…"
-        lines.append(f"• **{name}**：{summary}")
-    return "\n".join(lines)
+        paragraphs.append(f"{idx}. **{name}**：{summary}")
+    # 标题与正文、条目与条目之间用空行分隔，确保钉钉渲染出清晰段落
+    return "\n\n".join(paragraphs)
 
 
 class ProactiveDigestScheduler:

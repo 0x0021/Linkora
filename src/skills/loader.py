@@ -14,8 +14,9 @@
     # 技能正文
 
 技能的发现路径（优先级从高到低）：
-    1. {project_root}/data/skills/{name}/SKILL.md  （主路径）
+    1. {project_root}/data/skills/{name}/SKILL.md  （主路径，用户可写，Web 安装/克隆落这里）
     2. {project_root}/.agents/skills/{name}/SKILL.md（兼容旧路径）
+    3. {project_root}/src/skills/{name}/SKILL.md  （仓库内置技能，随源码分发，clone 即自带）
 """
 
 from __future__ import annotations
@@ -34,10 +35,12 @@ logger = logging.getLogger(__name__)
 # 1) 用户数据目录下的 skills（可写，Web 安装/克隆落这里）— 可重定位
 # 2) 捆绑资源下的内置 skills（冻结态 _MEIPASS/data/skills，开发态仓库 data/skills）
 # 3) .agents/skills（cwd 相对，兼容旧路径）
+# 4) 仓库内置 skills（src/skills，随源码分发，clone 即自带，CI 可覆盖）
 _SKILL_DIRS = [
     str(data_path("skills")),
     str(get_app_root() / "data" / "skills"),
     ".agents/skills",
+    str(get_app_root() / "src" / "skills"),
 ]
 _SKILL_FILE = "SKILL.md"
 

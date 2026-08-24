@@ -6,8 +6,8 @@
 ## 测试统计
 
 - 测试文件：**190+ 个**
-- 测试用例：**1395 个**（2 skipped）
-- 测试耗时：**60.90s**
+- 测试用例：**1409 个**（2 skipped）
+- 测试耗时：**63.50s**
 
 ## 关键路径覆盖
 
@@ -42,6 +42,8 @@
 - `test_json_parse_exception_handling.py` - 9 个用例
 - `test_weather_exception_handling.py` - 12 个用例
 - `test_alert_manager.py` - 16 个用例
-- `test_llm_alert_integration.py` - 3 个用例
+- `test_llm_alert_integration.py` - 4 个用例
+- `test_bench_llm.py` - 5 个用例
+- `test_gen_site.py` - 6 个用例
 
-**新增总计：57 个用例**
+**新增总计：72 个用例**

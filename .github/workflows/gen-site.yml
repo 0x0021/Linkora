@@ -1,0 +1,39 @@
+name: Linkora Documentation Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'docs/**'
+  schedule:
+    - cron: '0 2 * * *'  # 每天凌晨 2 点自动生成
+  workflow_dispatch:
+
+jobs:
+  generate-site:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Generate documentation site
+      run: |
+        python scripts/gen_site.py --all
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/site
+        publish_branch: gh-pages

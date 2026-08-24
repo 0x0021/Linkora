@@ -20,6 +20,8 @@
 ### 新功能
 
 - feat(alerts): 新增错误监控告警系统（src/alerts/）
+- feat(alerts-web): 新增告警中心 Web 页面（web/templates/alerts.html）
+- feat(alerts-api): 新增告警 API 路由（web/routers/alerts.py）
 - feat(bench): 新增性能基准测试工具（scripts/bench_llm.py）
 - feat(docs): 新增文档站点自动生成（scripts/gen_site.py）
 

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>告警中心 - Linkora</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .alert-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .alert-card.critical {
+            border-left: 4px solid #dc2626;
+        }
+        .alert-card.error {
+            border-left: 4px solid #f97316;
+        }
+        .alert-card.warning {
+            border-left: 4px solid #eab308;
+        }
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .alert-type {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .alert-count {
+            background: #ef4444;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .alert-time {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .alert-samples {
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+        .alert-sample {
+            font-family: monospace;
+            font-size: 12px;
+            color: #374151;
+            padding: 4px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .alert-sample:last-child {
+            border-bottom: none;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #111827;
+        }
+        .stat-label {
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚨 告警中心</h1>
+            <button class="refresh-btn" onclick="loadAlerts()">刷新</button>
+        </header>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalErrors">0</div>
+                <div class="stat-label">错误类型数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalAlerts">0</div>
+                <div class="stat-label">告警次数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="criticalCount">0</div>
+                <div class="stat-label">严重告警</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="errorCount">0</div>
+                <div class="stat-label">错误告警</div>
+            </div>
+        </div>
+
+        <h2>告警历史</h2>
+        <div id="alertsList">
+            <p>加载中...</p>
+        </div>
+    </div>
+
+    <script>
+        async function loadAlerts() {
+            try {
+                const response = await fetch('/api/alerts/history');
+                const data = await response.json();
+                renderAlerts(data);
+                loadStats();
+            } catch (error) {
+                console.error('加载告警失败:', error);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/alerts/stats');
+                const data = await response.json();
+                renderStats(data);
+            } catch (error) {
+                console.error('加载统计失败:', error);
+            }
+        }
+
+        function renderStats(stats) {
+            document.getElementById('totalErrors').textContent = stats.total_error_types || 0;
+            
+            let totalAlerts = 0;
+            let criticalCount = 0;
+            let errorCount = 0;
+            
+            for (const [type, data] of Object.entries(stats.errors || {})) {
+                totalAlerts += data.count;
+                if (type.includes('Auth') || type.includes('DB')) {
+                    criticalCount++;
+                } else if (type.includes('Network') || type.includes('RateLimit')) {
+                    errorCount++;
+                }
+            }
+            
+            document.getElementById('totalAlerts').textContent = totalAlerts;
+            document.getElementById('criticalCount').textContent = criticalCount;
+            document.getElementById('errorCount').textContent = errorCount;
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alertsList');
+            
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #6b7280;">暂无告警记录 ✅</p>';
+                return;
+            }
+
+            container.innerHTML = alerts.map(alert => {
+                const severity = getSeverity(alert.error_type);
+                const time = alert.last_seen ? new Date(alert.last_seen).toLocaleString('zh-CN') : '未知';
+                const samples = (alert.samples || []).map(s => 
+                    `<div class="alert-sample">${escapeHtml(s)}</div>`
+                ).join('');
+
+                return `
+                    <div class="alert-card ${severity}">
+                        <div class="alert-header">
+                            <span class="alert-type">${alert.error_type}</span>
+                            <span class="alert-count">${alert.count} 次</span>
+                        </div>
+                        <div class="alert-time">最后发生：${time}</div>
+                        ${samples ? `<div class="alert-samples">${samples}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getSeverity(errorType) {
+            if (errorType.includes('Auth') || errorType.includes('DB')) {
+                return 'critical';
+            } else if (errorType.includes('Network') || errorType.includes('RateLimit')) {
+                return 'error';
+            }
+            return 'warning';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 页面加载时自动获取告警
+        loadAlerts();
+        
+        // 每 30 秒自动刷新
+        setInterval(loadAlerts, 30000);
+    </script>
+</body>
+</html>

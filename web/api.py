@@ -1169,6 +1169,7 @@ from web.routers.cost_quality import router as _cost_quality_router
 from web.routers.dashboard_live import router as _dashboard_live_router
 from web.routers.models import router as _models_router
 from web.routers.summaries import router as _summaries_router
+from web.routers.alerts import router as _alerts_router
 
 app.include_router(_dead_letters_router)
 app.include_router(_drafts_router)
@@ -1202,4 +1203,5 @@ app.include_router(_cost_quality_router)
 app.include_router(_dashboard_live_router)
 app.include_router(_models_router)
 app.include_router(_summaries_router)
+app.include_router(_alerts_router)
 

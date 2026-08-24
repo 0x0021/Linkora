@@ -1,4 +1,5 @@
-// ============ pages/summaries.js v3 ============
+// ============ pages/summaries.js v4 ============
+// 修复 undefined 显示问题：确保所有字段有默认值
 // 「对话摘要」页 - 结构化卡片 + 顶部工具栏
 // 数据源：GET /api/summaries?window=today|yesterday|7days
 
@@ -127,10 +128,11 @@ function renderDigestCards(digest, items) {
         const platformLabel = PLATFORM_LABEL[platform] || '';
         const cnt = meta.covered_count != null ? meta.covered_count : 0;
         const time = meta.updated_at ? formatTsLocal(meta.updated_at, false) : '—';
+        const name = e.name || '未知对话';
         const topics = extractTopics(e.content);
         const todo = extractTodo(e.content);
-        const [c1, c2] = avatarGradient(e.name);
-        const nameInitial = avatarLetter(e.name);
+        const [c1, c2] = avatarGradient(name);
+        const nameInitial = avatarLetter(name);
         const summary = e.content.replace(/^【对话摘要】\s*/, '').trim();
 
         return `
@@ -139,7 +141,7 @@ function renderDigestCards(digest, items) {
                 <div class="digest-avatar" style="background:linear-gradient(135deg, ${c1}, ${c2})">${nameInitial}</div>
                 <div class="digest-card-meta">
                     <div class="digest-card-title">
-                        <span class="digest-name">${escapeHtml(e.name)}</span>
+                        <span class="digest-name">${escapeHtml(name)}</span>
                         ${platformLabel ? `<span class="digest-tag digest-tag-platform"><i class="fa-brands fa-${PLATFORM_ICON[platform] || 'comment'}"></i>${platformLabel}</span>` : ''}
                         ${cnt ? `<span class="digest-tag digest-tag-count"><i class="fa-solid fa-message"></i>${cnt} 条</span>` : ''}
                     </div>

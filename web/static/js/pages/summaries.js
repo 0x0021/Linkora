@@ -115,7 +115,8 @@ function renderDigestCards(digest, items) {
             inHeader = false;
             continue;
         }
-        const m = line.match(/^•\s+\*\*(.+?)\*\*\s*：\s*(.+)$/);
+        // 匹配 digest 格式：• **名称**：内容
+        const m = line.match(/^•\s*\*\*(.+?)\*\*\s*：\s*(.+)$/);
         if (m) {
             entries.push({ name: m[1], content: m[2] });
         }

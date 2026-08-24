@@ -60,11 +60,11 @@ def build_digest(items: list[dict], max_summary_chars: int = 200,
         # 摘要函数本身会以「【对话摘要】」开头，聚合推送里不需要重复前缀
         summary = summary.removeprefix("【对话摘要】").strip()
         if not summary:
-            paragraphs.append(f"{idx}. **{name}**：（无摘要）")
+            paragraphs.append(f"• **{name}**：（无摘要）")
             continue
         if len(summary) > max_summary_chars:
             summary = summary[:max_summary_chars] + "…"
-        paragraphs.append(f"{idx}. **{name}**：{summary}")
+        paragraphs.append(f"• **{name}**：{summary}")
     # 标题与正文、条目与条目之间用空行分隔，确保钉钉渲染出清晰段落
     return "\n\n".join(paragraphs)
 

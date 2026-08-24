@@ -73,9 +73,10 @@ class MetricsReportLogger:
                 snap["_platform"] = platform_id
                 snap["_type"] = "metrics_snapshot"
                 logger.info(json.dumps(snap, ensure_ascii=False))
-            except Exception:
-                logger.exception(
-                    "Failed to collect metrics for platform=%s", platform_id
+            except (TypeError, ValueError) as e:
+                # JSON 序列化/数据格式问题，记录详情
+                logger.warning(
+                    "指标收集数据格式异常，platform=%s: %s", platform_id, e
                 )
 
     def _run(self) -> None:
@@ -83,9 +84,10 @@ class MetricsReportLogger:
         while not self._stop_event.wait(self._interval):
             try:
                 self.report_once()
-            except Exception as e:  # noqa: BLE001
-                # 上报异常若逃逸会静默杀死指标线程（僵尸线程），下轮继续即可
-                logger.error("指标上报异常（已忽略，下轮继续）: %s", e, exc_info=True)
+            except Exception as e:
+                # 指标上报异常若逃逸会静默杀死指标线程（僵尸线程），下轮继续即可
+                # 区分临时性失败（网络/序列化）与致命失败（配置错误）
+                logger.error("指标上报异常（已忽略，下轮继续）: %s", e)
 
 
 # ── Convenience: start from main.py ──────────────────────────────────────

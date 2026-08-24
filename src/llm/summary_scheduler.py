@@ -84,9 +84,9 @@ class SummaryScheduler:
         # 入队一个 None 作为毒丸，确保 worker 即便队列空也能从 get() 唤醒退出
         try:
             self._queue.put(None)  # type: ignore[arg-type]
-        except Exception as _exc:  # noqa: BLE001
-            logger.warning(f"stop: swallowed exception: {_exc}")
-            pass
+        except Exception as _exc:
+            # 毒丸入队失败（队列已关闭）属于正常关机路径
+            logger.debug("stop: 毒丸入队失败（队列可能已关闭）: %s", _exc)
         if self._thread is not None:
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
@@ -123,7 +123,7 @@ class SummaryScheduler:
                 created_at=datetime.now().isoformat(),
             )
             self._queue.put(job)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # 调度失败不能拖垮主回复：回收 pending 并记日志
             with self._pending_lock:
                 self._pending.discard(chat_id)
@@ -141,7 +141,8 @@ class SummaryScheduler:
                 break
             try:
                 self._process_job(job)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
+                # 处理任务异常不影响主回复链路，仅记录警告
                 logger.warning("[摘要调度] 处理任务异常 chat_id=%s: %s", getattr(job, "chat_id", "?"), e)
             finally:
                 # 无论成功/失败，都释放该 chat 的 pending，允许下一轮重新调度
@@ -168,7 +169,8 @@ class SummaryScheduler:
             summary = self._agent.summarize_conversation(
                 job.older, max_messages=getattr(self._agent, "_summary_max_messages", 0),
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # 摘要计算异常（LLM 失败/网络超时）不影响主回复链路
             logger.warning("[摘要调度] 摘要计算异常 chat_id=%s: %s", job.chat_id, e)
             return
         if not summary:
@@ -192,6 +194,6 @@ class SummaryScheduler:
                 )
             else:
                 logger.debug("[摘要调度] 写回被 CAS 跳过 chat_id=%s", job.chat_id)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # DB 写异常仅记日志，不影响主线程（主回复早已发出）
             logger.warning("[摘要调度] 写回失败 chat_id=%s: %s", job.chat_id, e)

@@ -6,6 +6,8 @@ import threading
 import re
 import time
 import urllib.parse
+import urllib.error
+from http.client import HTTPException
 
 from src.tools.base import BaseTool
 from src.utils.net import ssrf_safe_get
@@ -26,7 +28,8 @@ def _http_get(url: str, timeout: int, retries: int = 3):
         except ValueError:
             # SSRF 拦截/DNS 失败不应重试
             raise
-        except Exception as e:  # 网络/TLS 瞬时错误，重试
+        except (urllib.error.URLError, HTTPException, TimeoutError, OSError) as e:
+            # 网络/TLS 瞬时错误，重试
             last_err = e
             if attempt < retries - 1:
                 time.sleep(0.5 + attempt * 0.5)
@@ -371,7 +374,7 @@ def _geocode_nominatim(city: str, timeout: int) -> dict | None:
             "longitude": float(lon),
             "source": "nominatim",
         }
-    except Exception as e:
+    except (urllib.error.URLError, HTTPException, ValueError) as e:
         logger.warning("Nominatim 地理解析失败（城市=%s）: %s", city, e)
         return None
 
@@ -413,7 +416,7 @@ def _geocode_open_meteo(city: str, timeout: int) -> dict | None:
                 "longitude": r["longitude"],
                 "source": "open-meteo",
             }
-    except Exception as e:
+    except (urllib.error.URLError, HTTPException, ValueError, KeyError) as e:
         logger.warning("Open-Meteo 地理编码兜底失败（城市=%s）: %s", city, e)
     return None
 
@@ -505,7 +508,7 @@ def _fetch_forecast(lat: float, lon: float, days: int, timeout: int) -> dict | N
         resp = _http_get(url, timeout)
         resp.raise_for_status()
         return resp.json()
-    except Exception as e:
+    except (urllib.error.URLError, HTTPException, TimeoutError, ValueError) as e:
         logger.warning("Open-Meteo 预报拉取失败: %s", e)
         return None
 
@@ -1129,6 +1132,6 @@ class WeatherTool(BaseTool):
                 ),
                 "source": "wttr.in",
             }
-        except Exception as e:
-            logger.error("wttr.in 兜底也失败（城市=%s）: %s", city, e)
+        except (urllib.error.URLError, HTTPException, TimeoutError, ValueError) as e:
+            logger.warning("wttr.in 兜底也失败（城市=%s）: %s", city, e)
             return {"error": f"无法获取 {city} 的天气信息（天气服务暂不可用）"}

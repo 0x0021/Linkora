@@ -454,8 +454,9 @@ class OcrMixin(PollerMixinBase):
         out_path, rel = self._file_storage(chat_id, safe_name)
         try:
             out_path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logger.debug("[轮询器] 创建接收文件目录失败: %s", e)
+        except OSError as e:
+            # 目录创建失败（权限/磁盘满）→ 容错继续
+            logger.warning("[轮询器] 创建接收文件目录失败: %s", e)
 
         # 去重：文件已存在且非空，直接复用，避免每轮轮询重复下载
         if out_path.exists() and out_path.stat().st_size > 0:

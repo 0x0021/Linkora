@@ -65,7 +65,8 @@ def handle_stream_response(
                                 group=message.chat_id,
                                 user=message.sender_id,
                             )
-                        except Exception as e:
+                        except (TypeError, AttributeError, OSError) as e:
+                            # IM 适配器网络/序列化失败
                             logger.warning("[流式输出] 更新消息失败: %s", e)
                     last_update_time = now
                     yield accumulated_content
@@ -85,19 +86,22 @@ def handle_stream_response(
                             group=message.chat_id,
                             user=message.sender_id,
                         )
-                    except Exception as e:
+                    except (TypeError, AttributeError, OSError) as e:
+                        # IM 适配器网络/序列化失败
                         logger.warning("[流式输出] 最终更新失败: %s", e)
                 yield accumulated_content
                 break
 
     except Exception as e:
-        logger.error("[流式输出] 处理失败: %s", e, exc_info=True)
+        # 流式输出处理失败（LLM 超时/网络中断）时，尝试清理占位消息
+        logger.error("[流式输出] 处理失败: %s", e)
         if msg_id:
             try:
                 recalled = im_adapter.chat_message_recall(
                     message_id=msg_id, group=message.chat_id, user=message.sender_id)
-            except Exception as _exc:
-                logger.warning(f"_handle_stream_response: swallowed exception: {_exc}")
+            except (TypeError, AttributeError) as _exc:
+                # IM 适配器可能未完全初始化
+                logger.warning("流式中断时召回消息失败: %s", _exc)
                 recalled = False
             if not recalled:
                 try:
@@ -107,6 +111,6 @@ def handle_stream_response(
                         group=message.chat_id,
                         user=message.sender_id,
                     )
-                except Exception as _exc:
-                    logger.warning(f"_handle_stream_response: swallowed exception: {_exc}")
+                except (TypeError, AttributeError) as _exc:
+                    logger.warning("流式中断时更新消息失败: %s", _exc)
         raise

@@ -365,7 +365,8 @@ class LLMAgent:
             # 仍不完整（极少见）：返回最佳努力结果，不再二次调用 LLM。
             logger.warning("[续写补全] 续写后仍未完整，返回最佳努力结果")
             return finalized
-        except Exception as e:  # 任意异常均降级，保证主回复不受影响
+        except (TypeError, ValueError, RuntimeError) as e:
+            # 续写补全失败（模型未加载/上下文超长等）不影响主回复
             logger.warning("[续写补全] 调用失败，降级返回原文: %s", e)
             return text
 

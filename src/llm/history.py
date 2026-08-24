@@ -162,12 +162,9 @@ def read_cached_summary(
         return None
     try:
         row = agent.store._conversation_repo.get_conversation_summary(chat_id) if agent.store else None
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         # 故意吞掉，所有摘要失败都不该阻塞主回复——日志由 caller 记录。
-        import logging
-        logging.getLogger(__name__).debug(
-            "[摘要] 读缓存失败 chat_id=%s: %s", chat_id, e,
-        )
+        logger.debug("[摘要] 读缓存失败 chat_id=%s: %s", chat_id, e)
         return None
     if row is None or not row.summary_text:
         return None
@@ -221,8 +218,6 @@ def maybe_schedule_summary(
         return
     try:
         scheduler.schedule(chat_id, older)
-    except Exception as e:  # noqa: BLE001
-        import logging
-        logging.getLogger(__name__).debug(
-            "[摘要] 调度后台摘要失败 chat_id=%s: %s", chat_id, e,
-        )
+    except Exception as e:
+        # 调度后台摘要失败不影响主回复
+        logger.debug("[摘要] 调度后台摘要失败 chat_id=%s: %s", chat_id, e)

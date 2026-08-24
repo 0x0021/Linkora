@@ -14,6 +14,7 @@ from openai import (
     APIConnectionError,
     APITimeoutError,
     RateLimitError,
+    BadRequestError,
 )
 
 # 本地模型(第二层备用)通常部署在 127.0.0.1，需要绕过系统代理避免 502
@@ -25,6 +26,7 @@ except Exception:
 
 from src.config import LlmConfig
 from src.llm.exceptions import LLMRateLimitExhaustedError
+from src.exceptions import LLMNetworkError, LLMRateLimitError, LLMAuthError
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,24 @@ def _classify_failure(e: Exception) -> tuple[bool, bool, bool]:
     is_auth_error = "401" in text or "403" in text
     is_retryable = _is_retryable_error(e)
     return is_rate_limited, is_auth_error, is_retryable
+
+
+def _rethrow_classified(e: Exception) -> None:
+    """把 openai 异常按类型重新抛出为 LinkoraError 族子类，便于调用方统一 catch。
+
+    注意：不改变任何已有 except 分支的行为——原有 LLMRateLimitExhaustedError /
+    RuntimeError 仍然从 _retry_primary_model / _try_fallback_pool 抛出；此函数
+    仅供入口层（如 main.py / runtime_reply_guard.py）做统一分类日志与指标上报。
+    """
+    if isinstance(e, RateLimitError):
+        raise LLMRateLimitError(str(e)) from e
+    if isinstance(e, (APITimeoutError, APIConnectionError)):
+        raise LLMNetworkError(str(e)) from e
+    if isinstance(e, (APIStatusError, BadRequestError)):
+        status = getattr(e, "status_code", None)
+        if status and 400 <= status < 500:
+            raise LLMAuthError(str(e)) from e
+        raise LLMNetworkError(str(e)) from e
 
 
 def _is_retryable_error(e: Exception) -> bool:
@@ -261,8 +281,8 @@ class LLMClient:
             try:
                 sf_http_client = httpx.Client(trust_env=False)
             except Exception as _exc:
-                logger.warning(f"__init__: swallowed exception: {_exc}")
-                pass
+                # httpx 客户端创建失败（网络/配置问题）降级为无代理模式
+                logger.warning("__init__: httpx 客户端创建失败，降级为系统代理: %s", _exc)
         if self.secondary_fallback_model or self.secondary_fallback_model_pool:
             sf_clients = {}
             for m in self.secondary_fallback_model_pool:
@@ -347,8 +367,9 @@ class LLMClient:
                     if ip.is_link_local:  # 169.254.0.0/16 含云元数据
                         logger.error("LLM base_url 指向链路本地/元数据地址，拒绝: %s", url)
                         return None  # 回退到默认端点，避免 SSRF
-        except Exception as _exc:
-            logger.debug("[LLM] base_url SSRF 预检跳过: %s", _exc)
+        except (OSError, ValueError, TypeError):
+            # 本地模型（如 127.0.0.1）通常没有有效 hostname，SSRF 预检失败属正常
+            pass
         return url
 
 
@@ -418,6 +439,11 @@ class LLMClient:
                 model_kwargs["model"] = model
                 try:
                     return self._do_chat(client, model_kwargs, stream=True)
+                except (APIConnectionError, APITimeoutError) as e:
+                    state.last_err = e
+                    logger.warning("LLM(%s) 流式网络错误，降级为非流式: %s", model, e)
+                    stream = False
+                    break
                 except Exception as e:
                     state.last_err = e
                     logger.warning("LLM(%s) 流式调用失败，降级为非流式: %s", model, e)

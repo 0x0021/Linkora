@@ -66,7 +66,7 @@ def _config_signature(raw: dict) -> str:
     """对配置内容求稳定签名，用于日志去重。"""
     try:
         text = yaml.safe_dump(raw, sort_keys=True, allow_unicode=True, default_flow_style=False)
-    except Exception:
+    except yaml.YAMLError:
         logger.debug("配置签名 YAML dump 失败，回退 repr")
         text = repr(raw)
     return hashlib.sha1(text.encode("utf-8")).hexdigest()

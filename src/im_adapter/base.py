@@ -284,7 +284,7 @@ class BaseIMAdapter:
                 if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
                     raise self._base_error_class()(
                         f"{self.cli_path} 下载未生成有效文件: {output_path}")
-                MAX_DOWNLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+                MAX_DOWNLOAD_SIZE = 10 * 1024 * 1024  # 10MB（OCR/图片场景上限，防磁盘耗尽）
                 file_size = os.path.getsize(output_path)
                 if file_size > MAX_DOWNLOAD_SIZE:
                     raise self._base_error_class()(

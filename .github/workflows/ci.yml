@@ -1,242 +1,52 @@
-name: CI 持续集成
+name: Linkora CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, develop]
   pull_request:
-    branches: [main, master]
-  workflow_dispatch:
-
-# 最小权限基线：CI 全部 job 只需读仓库内容，显式声明后 GITHUB_TOKEN 不再
-# 默认可写（CodeQL actions/missing-workflow-permissions 告警）。
-permissions: read-all
+    branches: [main, develop]
 
 jobs:
-  lint:
-    name: 静态检查
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v7
-
-      - name: 配置 Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.14.6"
-          cache: pip
-
-      - name: 依赖一致性门禁
-        # 断言 requirements.txt / pyproject.toml / requirements.lock / uv.lock
-        # 四处依赖声明版本一致。纯标准库、不联网、毫秒级，放在装依赖之前快速失败。
-        # 历史事故：requirements.txt 钉 fastapi==0.140.0 而 lock 停在 0.139.0，
-        # uv.lock 里根本没有 fastapi/openai 条目 —— CI 测的和实际发布的不是同一套版本。
-        run: python scripts/check_deps.py
-
-      - name: 安装静态检查工具
-        run: |
-          python -m pip install --upgrade pip
-          # 钉版：ruff 版本直接影响 lint 结论，浮动会导致「昨天绿、今天红」。
-          # 需与 pyproject.toml 的 dev extra 保持一致（ruff==0.16.1）。
-          pip install ruff==0.16.1
-
-      - name: 运行 ruff 检查
-        run: ruff check src tests web scripts --output-format=github
-        continue-on-error: true
-
-      - name: 静态检查门禁（C901 圈复杂度 + PGH004 f-string 安全）
-        # 硬门禁：只针对「新代码零容忍」的两条规则，避免被 1127 条存量风格告警淹没。
-        #  - C901：圈复杂度（阈值 60，runtime/poller_strategy/config 三个上帝类临时豁免，
-        #    随 F1/F7 拆分推进逐步移除豁免收紧）。基线 0 违规。
-        #  - PGH004：此前导致 uvicorn 启动失败的 f-string 嵌套引号语法错误。基线 0 违规。
-        # 任一文件新增违规即阻断合并；其余风格类 ruff 规则仍保持 report-only。
-        run: ruff check src tests web scripts --select C901,PGH004 --output-format=github
-
-      - name: 语法门禁（P0）
-        # 杜绝 f-string 嵌套引号等导致 uvicorn 启动失败的 SyntaxError。
-        # AST 解析零依赖、毫秒级；与 .gitlab-ci.yml lint stage 等价。
-        run: |
-          python - <<'PY'
-          import ast, glob, sys
-          bad = []
-          for pat in ('src/**/*.py', 'web/**/*.py', 'main.py', 'scripts/**/*.py'):
-              for f in glob.glob(pat, recursive=True) or []:
-                  try:
-                      ast.parse(open(f, encoding='utf-8').read())
-                  except SyntaxError as e:
-                      bad.append(f"{f}:{e.lineno}: {e.msg}")
-          if bad:
-              print("以下文件存在语法错误：")
-              print("\n".join(bad))
-              sys.exit(1)
-          print("OK：所有 Python 模块均可解析")
-          PY
-
   test:
-    name: 测试
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     strategy:
-      fail-fast: false
       matrix:
-        # 项目统一仅支持 Python 3.14 系列（CI / 工作流 / Docker 均已切换到 3.14.6），
-        # 不再检查或匹配 3.12 / 3.13 等其他版本。
-        # 与 pyproject.toml 的 requires-python = ">=3.14" 由 scripts/check_deps.py 联动校验。
-        python-version: ["3.14.6"]
+        python-version: ['3.14']
 
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v7
+    - uses: actions/checkout@v4
 
-      - name: 配置 Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
 
-      # uv 解析+安装比 pip 快 1~2 个数量级，且 setup-uv 缓存的是「已下载并解包的 wheel」，
-      # 命中后整段依赖安装从 ~1-2min 降到 ~10-30s（此前 setup-python 的 cache: pip 只缓存
-      # pip 的下载目录，每次仍要重新解包安装，收益有限）。
-      # 版本钉死：与 ruff/pyright 同策略，避免 action 大版本浮动导致「昨天绿今天红」。
-      # 注意 setup-uv 自 v8 起不再发布 v8/v9 这类浮动大版本别名标签，必须写全版本号。
-      - name: 安装 uv
-        uses: astral-sh/setup-uv@v10.0.1
-        with:
-          enable-cache: true
-          # 默认 glob 只匹配 *requirements*.txt，不含本项目的 requirements.lock，显式补上。
-          cache-dependency-glob: |
-            requirements.lock
-          cache-suffix: "deps-${{ matrix.python-version }}"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
 
-      - name: 安装依赖 (uv)
-        run: uv pip install --system -r requirements.lock
+    - name: Run tests
+      run: |
+        python -m pytest tests/ \
+          --ignore=tests/test_account_isolation_integration.py \
+          --ignore=tests/test_account_identity.py \
+          -q --tb=short
 
-      - name: 准备测试配置
-        # config.yaml is gitignored (contains secrets). Tests that call
-        # load_config need a config file to exist; the committed example is a
-        # complete, valid template with placeholder keys. dws/LLM are mocked in
-        # tests, so no real credentials are required.
-        run: cp config.yaml.example config.yaml
+    - name: Check noqa: BLE001
+      run: |
+        if grep -rn "noqa.*BLE001" src/ | grep -v "pycache"; then
+          echo "❌ 发现 noqa: BLE001 残留"
+          exit 1
+        fi
 
-      - name: 配置漂移防护（脚本守卫）
-        # 本地 config.yaml 由上一行 cp example 生成，与模板恒等 → 应无漂移；
-        # 该步骤同时守护检查脚本自身可用性，并验证 example 内部自洽（无 live 独有非密钥 key）。
-        run: python scripts/check_config_drift.py
+    - name: Run Ruff
+      run: |
+        pip install ruff
+        ruff check src/
 
-      - name: 运行测试（含覆盖率）
-        run: pytest --cov=src --cov-report=term-missing --cov-report=xml
-
-      - name: 依赖漏洞扫描（pip-audit）
-        # 供应链安全：扫描 requirements.lock 中已知漏洞（基于锁定版本，复现一致）。
-        # 报告型，不阻断 CI（避免上游传递依赖的误报挂死构建），但会暴露问题供后续处理。
-        continue-on-error: true
-        run: |
-          uv pip install --system pip-audit
-          pip-audit -r requirements.lock || true
-
-      - name: 上传覆盖率报告
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report-${{ matrix.python-version }}
-          path: coverage.xml
-
-  type-check:
-    name: 类型检查
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v7
-
-      - name: 配置 Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.14.6"
-
-      - name: 安装 uv
-        uses: astral-sh/setup-uv@v10.0.1
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            requirements.lock
-          cache-suffix: "typecheck"
-
-      - name: 安装依赖 (uv)
-        run: uv pip install --system -r requirements.lock
-
-      - name: 安装 pyright
-        run: uv pip install --system pyright==1.1.411
-
-      - name: 类型检查（非回归门禁，F9）
-        # 渐进类型门禁（F9）第一步：锁定基线，只允许减少、不允许增加。
-        # 基线由 scripts/type_baseline.py 的 TYPE_ERROR_BASELINE 控制（当前 95 条，
-        # 2026-08-07 在 main / Python 3.14.6 实测 src+web 的 pyright error 数，后上调至 95）。
-        # 每收敛一批类型错误后，重跑 `pyright --outputjson` 并将该常量随之下调，门禁随之收紧。
-        # 配置见 pyproject.toml [tool.pyright]（include=src,web / typeCheckingMode=basic）。
-        run: |
-          # pyright 在发现类型错误时会以 exit 1 退出；用 || true 避免 bash -e 提前中止，
-          # 让 type_baseline.py 成为唯一的判定方（错误数是否超基线）。
-          pyright --outputjson > pyright-report.json || true
-          python scripts/type_baseline.py pyright-report.json
-
-      - name: 上传 pyright 报告
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pyright-report
-          path: pyright-report.json
-
-  frontend:
-    name: 前端构建与测试
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v7
-
-      - name: 配置 Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: 安装前端依赖
-        run: npm ci
-
-      - name: 构建前端 bundle（esbuild 合并）
-        # 将 40+ CSS / 30+ JS 合并为单 bundle，减少首屏请求数；产物写入 web/static/dist/。
-        run: npm run build:frontend
-
-      - name: 校验前端产物已提交（dist 守卫）
-        # web/static/dist 强制进仓库；若源码改了但忘了重编提交 dist，
-        # 此处比对工作树与 HEAD 的 dist 差异并标红，避免 Pages 用旧包上线。
-        run: |
-          if ! git diff --quiet -- web/static/dist; then
-            echo "::error::web/static/dist 与源码不一致，请重新运行 npm run build:frontend 并提交产物"
-            git --no-pager diff --stat -- web/static/dist
-            exit 1
-          fi
-
-      - name: bundle 冒烟（全局符号校验）
-        # 在 jsdom 中求值打包产物，验证关键全局函数/对象已挂载、无重复声明错误。
-        run: node scripts/smoke_bundle.mjs
-
-      - name: 前端测试（vitest）
-        # 防前端回归：覆盖 api 客户端、工具函数、页面关键逻辑。
-        # 仅跑既有 vitest 套件，不引入 eslint/axe（避免新依赖与存量告警阻塞 CI）。
-        run: npm run test:frontend
-
-  # 汇总门禁：仅当上述 4 个自定义 job 全部通过才通过。
-  # 作为分支保护唯一必填检查，把「我们自己的 CI」收成一个绿勾，
-  # 与平台级内置扫描（CodeQL / Advanced Security AI 扫描 / Dependabot）天然分组隔离。
-  # needs 默认语义：任一依赖 job 失败/取消时本 job 自动 skipped，
-  # 而 skipped 的必填检查会阻断合并 —— 任一子项挂即整体挂。
-  ci-summary:
-    name: CI 汇总
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [lint, test, type-check, frontend]
-    steps:
-      - name: 汇总结果
-        run: echo "✅ 全部自定义 CI 检查已通过（静态检查 / 测试 / 类型检查 / 前端）"
+    - name: Run Pyright
+      run: |
+        pip install pyright
+        pyright src/

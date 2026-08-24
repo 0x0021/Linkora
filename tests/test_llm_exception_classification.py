@@ -66,6 +66,52 @@ class TestRethrowClassified:
         result = _rethrow_classified(original)
         assert result is None
 
+    def test_rate_limit_with_429_in_message(self):
+        """验证 429 限频错误正确分类。"""
+        response = MagicMock()
+        original = RateLimitError(message="429 Too Many Requests", response=response, body=None)
+        with pytest.raises(LLMRateLimitError):
+            _rethrow_classified(original)
+
+    def test_network_error_with_timeout(self):
+        """验证超时错误正确分类为网络错误。"""
+        request = MagicMock()
+        original = APITimeoutError(request=request)
+        with pytest.raises(LLMNetworkError):
+            _rethrow_classified(original)
+
+    def test_auth_error_with_401(self):
+        """验证 401 鉴权错误正确分类。"""
+        response = MagicMock()
+        response.status_code = 401
+        original = APIStatusError("Unauthorized", response=response, body=None)
+        with pytest.raises(LLMAuthError):
+            _rethrow_classified(original)
+
+    def test_auth_error_with_403(self):
+        """验证 403 禁止访问错误正确分类。"""
+        response = MagicMock()
+        response.status_code = 403
+        original = APIStatusError("Forbidden", response=response, body=None)
+        with pytest.raises(LLMAuthError):
+            _rethrow_classified(original)
+
+    def test_network_error_with_500(self):
+        """验证 500 服务器错误正确分类为网络错误。"""
+        response = MagicMock()
+        response.status_code = 500
+        original = APIStatusError("Internal Server Error", response=response, body=None)
+        with pytest.raises(LLMNetworkError):
+            _rethrow_classified(original)
+
+    def test_network_error_with_503(self):
+        """验证 503 服务不可用正确分类为网络错误。"""
+        response = MagicMock()
+        response.status_code = 503
+        original = APIStatusError("Service Unavailable", response=response, body=None)
+        with pytest.raises(LLMNetworkError):
+            _rethrow_classified(original)
+
     def test_exception_chain_preserved(self):
         """验证 __cause__ 链完整保留。"""
         response = MagicMock()

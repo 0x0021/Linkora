@@ -190,7 +190,10 @@ class MemoryMixin(EngineMixinBase):
                         if deleted > 0:
                             logger.info("[记忆] 平台 %s 已移除 %d 条旧记忆", ctx.id, deleted)
                     except Exception as e:
+                        # 记忆清理失败不影响主回复链路；区分临时性错误（可重试）与致命错误（需告警）
                         logger.error("[记忆] 平台 %s 清理失败: %s", ctx.id, e)
+                        if isinstance(e, sqlite3.OperationalError):
+                            logger.warning("[记忆] 疑似 SQLite 锁定/事务冲突，下次周期重试")
 
                 # 每配置的天数执行一次（等待期间可被关闭信号立即唤醒）
                 # 周期取整；<=0 视为禁用清理调度（避免 range(0) 忙循环 / 浮点 TypeError 致线程静默退出）
@@ -231,7 +234,10 @@ class MemoryMixin(EngineMixinBase):
                                 ctx.id, deleted, remaining,
                             )
                     except Exception as e:
+                        # 决策清理失败不影响主回复链路；区分临时性错误（可重试）与致命错误（需告警）
                         logger.error("[决策清理] 平台 %s 定时清理失败: %s", ctx.id, e)
+                        if isinstance(e, sqlite3.OperationalError):
+                            logger.warning("[决策清理] 疑似 SQLite 锁定/事务冲突，下次周期重试")
 
                 # 每24小时执行一次（等待期间可被关闭信号立即唤醒）
                 for _ in range(24 * 60):  # 分钟
@@ -268,7 +274,10 @@ class MemoryMixin(EngineMixinBase):
                                 ctx.id, deleted, retention_days,
                             )
                     except Exception as e:
+                        # 消息清理失败不影响主回复链路；区分临时性错误（可重试）与致命错误（需告警）
                         logger.error("[消息清理] 平台 %s 定时清理失败: %s", ctx.id, e)
+                        if isinstance(e, sqlite3.OperationalError):
+                            logger.warning("[消息清理] 疑似 SQLite 锁定/事务冲突，下次周期重试")
 
                 for _ in range(24 * 60):
                     if not self._running:
@@ -374,7 +383,10 @@ class MemoryMixin(EngineMixinBase):
                                                 ctx.id, th.max_summaries_per_cycle)
                                     break
                     except Exception as e:
+                        # 摘要调度失败不影响主回复链路；区分临时性错误（可重试）与致命错误（需告警）
                         logger.error("[摘要] 平台 %s 摘要调度器执行失败: %s", ctx.id, e)
+                        if isinstance(e, sqlite3.OperationalError):
+                            logger.warning("[摘要] 疑似 SQLite 锁定/事务冲突，下次周期重试")
 
                 # 每配置的小时数执行一次（等待期间可被关闭信号立即唤醒）
                 # 周期取整；<=0 视为禁用摘要调度（避免 range(0) 忙循环 / 浮点 TypeError 致线程静默退出）

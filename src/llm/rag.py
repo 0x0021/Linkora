@@ -169,6 +169,7 @@ def embed_message(agent: Any, text: str) -> Optional[list[float]]:
     try:
         return emb.embed(text)
     except Exception as e:
+        # 向量化失败（模型未加载/网络问题）降级为纯子串匹配
         logger.warning("[语义路由] 消息向量化失败，降级为纯子串匹配: %s", e)
         return None
 
@@ -220,6 +221,7 @@ def is_document_query(agent: Any, query: str, query_embedding=None) -> bool:
                             e for e in (emb.embed(a) for a in _CASUAL_ANCHORS) if e
                         ]
                     except Exception as e:
+                        # 锚点向量化失败降级为闲聊抑制
                         logger.warning("[RAG] 锚点向量化失败，降级为闲聊抑制: %s", e)
                         return not any(w in q for w in _CASUAL_FALLBACK)
         sim_k = max(
@@ -333,7 +335,8 @@ def retrieve_relevant_knowledge(
                     top_k=getattr(agent, "_rerank_top_k", None) or None,
                     timeout=getattr(agent, "_rerank_timeout", 2.0),
                 )
-            except Exception as e:  # noqa: BLE001 - 重排异常绝不阻断主链路
+            except Exception as e:
+                # 重排异常绝不阻断主链路，沿用原始顺序
                 logger.debug("[rerank] 重排调用异常，沿用原始顺序: %s", e)
 
         # 取最高相似度（用于置信阈值双保险）
@@ -396,8 +399,9 @@ def retrieve_relevant_knowledge(
         # 由 prompt_builder 在注入判定通过后读取并写入 agent._last_kb_citations。
         try:
             agent._last_kb_citations_raw = citations
-        except Exception:
-            logger.debug("[resilience] 无法在 agent 上暂存引文（best-effort，忽略）", exc_info=True)
+        except (AttributeError, TypeError):
+            # agent 对象可能未完全初始化（best-effort，忽略）
+            logger.debug("[resilience] 无法在 agent 上暂存引文，忽略")
 
         # 空块防编造：全部结果低于展示阈值时 knowledge_parts 仅剩「【相关知识】」头，
         # 若照旧返回非空串会被 rag_inject 误判为已接地，强令模型"直接基于它回答"——
@@ -409,6 +413,7 @@ def retrieve_relevant_knowledge(
 
         return "\n".join(knowledge_parts), best_score
     except Exception as e:
+        # RAG 自动注入失败不影响主回复链路
         logger.warning("[RAG] 自动注入失败: %s", e)
         return "", None
 
@@ -420,8 +425,9 @@ def load_style_profile(agent: Any) -> dict | None:
             prof = agent.store._memory_ops_repo.get_style_profile()
             if isinstance(prof, dict):
                 return prof
-        except Exception as e:
-            logger.debug("[风格] 读取画像失败: %s", e)
+        except (AttributeError, TypeError):
+            # 读取画像失败不影响主回复
+            logger.debug("[风格] 读取画像失败")
     return None
 
 
@@ -461,8 +467,9 @@ def get_style_prompt(agent: Any) -> str:
                 if isinstance(fb, dict) and fb.get("prompt"):
                     prof = fb
                     logger.debug("[风格] 平台 %s 无画像，回退主平台底模", agent.platform_id)
-            except Exception as e:
-                logger.debug("[风格] 回退主平台底模失败: %s", e)
+            except (AttributeError, TypeError):
+                # 回退主平台底模失败不影响主回复
+                logger.debug("[风格] 回退主平台底模失败")
         # 低置信度（样本过少）→ 退回保守中性风格 + 护栏提示，避免生硬套用不可靠画像
         if prof and isinstance(prof, dict) and prof.get("confidence") == "low":
             logger.info("[风格] 平台 %s 自动画像置信度低，回退中性风格+护栏", agent.platform_id)

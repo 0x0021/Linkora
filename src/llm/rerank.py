@@ -120,8 +120,9 @@ def get_reranker(model: str, offline: bool = False):
 
             logger.info("重排模型加载完成: %s", model)
             return state.reranker
-        except Exception as e:  # noqa: BLE001 - 降级兜底，不向上抛
-            logger.error("[rerank] 加载重排模型失败，降级为原始顺序: %s", e)
+        except Exception as e:
+            # 降级兜底：重排模型加载失败不影响主链路，使用原始顺序
+            logger.warning("[rerank] 加载重排模型失败，降级为原始顺序: %s", e)
             state.reranker = None
             return None
 
@@ -187,7 +188,8 @@ def rerank(
             # 候选窗口重排后，与未参与重排的尾部拼接
             return reordered[: max(1, min(top_k, n))] + work[len(candidate):]
         return reordered
-    except Exception as e:  # noqa: BLE001 - 重排失败绝不阻断 RAG 主链路
+    except Exception as e:
+        # 重排失败绝不阻断 RAG 主链路，降级为原始顺序
         logger.warning("[rerank] 重排失败，降级为原始顺序: %s", e)
         return _maybe_truncate(work, top_k)
 

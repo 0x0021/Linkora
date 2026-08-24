@@ -880,6 +880,12 @@ class WecomCliAdapter(BaseIMAdapter):
             raise self._base_error_class()(f"wecom 媒体 base64 解码失败: {e}") from e
         out_dir = os.path.dirname(os.path.abspath(output_path)) or "."
         os.makedirs(out_dir, exist_ok=True)
+        MAX_DOWNLOAD_SIZE = 10 * 1024 * 1024  # 10MB 大小限制（防磁盘耗尽）
+        if len(data) > MAX_DOWNLOAD_SIZE:
+            raise self._base_error_class()(
+                f"wecom 下载文件过大 ({len(data) / 1024 / 1024:.1f}MB)，"
+                f"超出 {MAX_DOWNLOAD_SIZE / 1024 / 1024:.0f}MB 限制"
+            )
         with open(output_path, "wb") as f:
             f.write(data)
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:

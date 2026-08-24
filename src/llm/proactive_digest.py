@@ -131,7 +131,8 @@ class ProactiveDigestScheduler:
                 platform=self._platform,
                 since=cutoff_iso,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # 读取近期对话失败不影响主回复链路，降级为空列表
             logger.warning("[主动触达] 读取近期对话失败: %s", e)
             return []
 
@@ -157,7 +158,8 @@ class ProactiveDigestScheduler:
                 break  # 被 stop() 唤醒
             try:
                 self._run_once()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
+                # 执行异常不影响主回复链路，仅记录警告
                 logger.warning("[主动触达] 执行异常: %s", e)
 
     def _run_once(self) -> None:
@@ -172,5 +174,6 @@ class ProactiveDigestScheduler:
                 self._adapter.chat_message_send(title="每日对话摘要", text=digest,
                                                 open_dingtalk_id=self._cfg.owner_open_dingtalk_id)
             logger.info("[主动触达] 已推送（%d 段）", len(items))
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # 推送失败不影响主回复链路，仅记录警告
             logger.warning("[主动触达] 推送失败: %s", e)

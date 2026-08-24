@@ -67,8 +67,9 @@ class RollingSummaryScheduler:
         while not self._stop_event.is_set():
             try:
                 self._run_once()
-            except Exception as e:  # noqa: BLE001
-                logger.warning("[滚动摘要] 执行异常: %s", e, exc_info=True)
+            except Exception as e:
+                # 执行异常不影响主回复链路，仅记录警告（不打印完整堆栈）
+                logger.warning("[滚动摘要] 执行异常: %s", e)
             self._stop_event.wait(timeout=self._interval_minutes * 60)
 
     def _run_once(self) -> None:
@@ -95,7 +96,8 @@ class RollingSummaryScheduler:
                    LIMIT 50""",
             )
             convs = [dict(r) for r in cur.fetchall()]
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # 查询活跃会话失败（可能是 DB 临时不可用）不影响主回复
             logger.warning("[滚动摘要] 查询活跃会话失败: %s", e)
             return
 
@@ -108,7 +110,8 @@ class RollingSummaryScheduler:
             try:
                 self._process_chat(chat_id, chat_name, cutoff_ts)
                 processed += 1
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
+                # 处理单会话失败不影响其他会话，继续下一轮
                 logger.warning("[滚动摘要] 处理会话 %s 失败: %s", chat_id[:20], e)
 
         logger.info("[滚动摘要] 本轮处理 %d 个会话（平台=%s）", processed, self._platform)
@@ -130,7 +133,8 @@ class RollingSummaryScheduler:
                 (str(chat_id), cutoff_ts, self._max_messages),
             )
             rows = cur.fetchall()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # 查询消息失败（可能是 DB 临时不可用）不影响主回复
             logger.warning("[滚动摘要] 查询消息失败 chat_id=%s: %s", chat_id, e)
             return
 
@@ -163,7 +167,8 @@ class RollingSummaryScheduler:
         # 调 LLM 生成摘要
         try:
             summary = self._agent.summarize_conversation(messages)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # LLM 调用失败（网络超时/限流）不影响主回复
             logger.warning("[滚动摘要] LLM 调用失败 chat_id=%s: %s", chat_id, e)
             return
 
@@ -182,5 +187,6 @@ class RollingSummaryScheduler:
                 "[滚动摘要] 摘要已写回 chat_id=%s 覆盖 %d 条消息",
                 chat_id, len(messages),
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # DB 写回失败不影响主回复
             logger.warning("[滚动摘要] 写回失败 chat_id=%s: %s", chat_id, e)

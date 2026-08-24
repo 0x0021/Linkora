@@ -145,8 +145,9 @@ def build_tool(cls: type[BaseTool], services: dict) -> BaseTool | None:
         # 无自有 __init__ → 无参构造
         try:
             return cls()
-        except Exception as e:  # noqa: BLE001
-            logger.error("[Tools] 构建工具 %s 失败: %s", getattr(cls, "name", cls.__name__), e)
+        except (TypeError, ValueError, AttributeError) as e:
+            # 构建失败：构造参数类型不匹配/必填字段缺失
+            logger.warning("[Tools] 构建工具 %s 失败: %s", getattr(cls, "name", cls.__name__), e)
             return None
     try:
         sig = inspect.signature(init)
@@ -172,8 +173,9 @@ def build_tool(cls: type[BaseTool], services: dict) -> BaseTool | None:
 
     try:
         return cls(**kwargs)
-    except Exception as e:  # noqa: BLE001 - 构建失败需可观测，但不应中断注册流程
-        logger.error("[Tools] 构建工具 %s 失败: %s", getattr(cls, "name", cls.__name__), e)
+    except (TypeError, ValueError, AttributeError) as e:
+        # 构建失败需可观测，但不应中断注册流程
+        logger.warning("[Tools] 构建工具 %s 失败: %s", getattr(cls, "name", cls.__name__), e)
         return None
 
 
@@ -242,7 +244,8 @@ def register_builtin_tools(
         if hook:
             try:
                 hook(tool, services)
-            except Exception as e:  # noqa: BLE001
-                logger.error("[Tools] 后置钩子执行失败 (%s): %s", tool.name, e)
+            except (TypeError, ValueError, AttributeError) as e:
+                # 后置钩子失败不影响工具注册，仅记录警告
+                logger.warning("[Tools] 后置钩子执行失败 (%s): %s", tool.name, e)
 
     return registered

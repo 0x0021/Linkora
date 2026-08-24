@@ -306,8 +306,8 @@ def resolve_routing_mode(agent: Any) -> str:
         return "smart"
     try:
         fs = getattr(cfg, "model_fields_set", set()) or set()
-    except Exception as _exc:
-        logger.debug(f"resolve_routing_mode: swallowed exception: {_exc}")
+    except AttributeError:
+        logger.debug("resolve_routing_mode: cfg 不是 Pydantic model，回退空集合")
         fs = set()
     if "tool_routing_mode" in fs:
         mode = cfg.tool_routing_mode

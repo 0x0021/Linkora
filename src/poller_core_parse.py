@@ -353,7 +353,7 @@ class ParseMixin(PollerMixinBase):
         # 顶层的 [ 是数组开始符，不能当空白跳过——先尝试整体解析数组/对象
         try:
             walk(_json.loads(blob))
-        except Exception as e:
+        except (_json.JSONDecodeError, TypeError) as e:
             logger.debug("[轮询器] JSON 整体解析失败，尝试逐段拼接: %s", e)
             # 多段拼接 JSON（如 [{...}]\n{...}，整体解析失败）时用 raw_decode 逐段解析。
             # 只跳过分隔符/空白；[ 与 { 是 JSON 起始符，不能跳过。
@@ -366,7 +366,7 @@ class ParseMixin(PollerMixinBase):
                     obj, end = dec.raw_decode(blob, pos)
                     walk(obj)
                     pos = end
-                except Exception:
+                except (_json.JSONDecodeError, TypeError):
                     logger.debug("[轮询器] raw_decode 跳过异常增量: pos %d/%d", pos, n)
                     pos += 1
         # 去掉纯表情/方向占位符（如 [向右]）与多余空白
@@ -541,9 +541,8 @@ class ParseMixin(PollerMixinBase):
             try:
                 abs_img = str(Path(self.config.image_temp_dir).expanduser() / image_path)
                 content = f"{content}\n[本地图片] {abs_img}"
-            except Exception as _exc:
-                logger.debug(f"_raw_to_message: swallowed exception: {_exc}")
-                pass
+            except OSError:
+                logger.warning("[轮询器] 图片路径展开失败，忽略: %s", image_path)
         return Message(
             msg_id=msg_id,
             chat_id=chat_id,
@@ -587,7 +586,7 @@ class ParseMixin(PollerMixinBase):
         if content.startswith("{"):
             try:
                 c = json.loads(content)
-            except Exception as e:
+            except (json.JSONDecodeError, TypeError) as e:
                 logger.debug("[轮询器] caption JSON 解析失败: %s", e)
             else:
                 if isinstance(c, dict):
@@ -615,8 +614,8 @@ class ParseMixin(PollerMixinBase):
                                 key, cap[:80]
                             )
                             return cap
-            except Exception as e:
-                logger.debug("[轮询器] caption 查询串解析失败: %s", e)
+            except ValueError:
+                logger.debug("[轮询器] caption 查询串解析失败")
 
         # ---- D) 其他顶层的可能文字字段 ----
         for field in ("title", "description", "summary"):

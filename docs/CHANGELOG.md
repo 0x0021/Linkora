@@ -6,6 +6,46 @@
 
 ---
 
+## v0.4.7 (2026-08-24)
+
+> 缺陷修复：LLM 异常分类、OCR 下载大小限制、异常处理治理
+
+### 核心亮点
+- **LLM 调用异常精确分类**：新增 `LLMNetworkError`、`LLMRateLimitError`、`LLMAuthError` 三个子类，供入口层统一 catch、日志分层过滤、监控指标按异常类型统计。流式调用区分网络错误（立即降级为非流式）与一般错误（继续重试），避免网络抖动导致不必要的重试浪费。
+- **OCR 图片下载大小限制收紧**：`MAX_DOWNLOAD_SIZE` 从 50MB 降至 10MB，防止恶意或异常链接返回超大文件耗尽磁盘。企业微信 `download_media()` 新增 base64 解码后的大小检查。
+- **异常处理治理**：清理 91 处 `# noqa: BLE001` 注释，替换为精确异常捕获或添加注释说明。涉及 14 个文件、40+ 处宽泛 `except Exception`。
+- **测试覆盖**：1338 个测试用例全部通过，关键路径（意图分类、工具路由、生命周期、数据库、向量检索、RAG、天气工具、消息解析、OCR）均已覆盖。
+
+### 修复文件清单
+```
+src/llm/client.py              # LLM 异常分类 + _rethrow_classified()
+src/llm/router.py              # AttributeError 精确捕获
+src/llm/agent.py               # 续写补全异常分类
+src/llm/stream_helper.py       # IM 适配器异常分类
+src/llm/history.py             # 移除 noqa，优化日志
+src/im_adapter/base.py         # MAX_DOWNLOAD_SIZE 50MB→10MB
+src/im_adapter/wecom.py        # 添加 10MB 大小限制检查
+src/poller_core_parse.py       # JSON 解析异常精确捕获
+src/poller_core_ocr.py         # 目录创建 OSError 精确捕获
+src/config.py                  # YAML 解析异常精确捕获
+src/metrics/report_logger.py   # 移除 noqa: BLE001
+src/tools/registry.py          # 构建失败精确捕获
+src/llm/proactive_digest.py    # 移除 noqa: BLE001
+src/llm/summary_scheduler.py   # 移除 noqa: BLE001
+src/llm/rolling_summary_scheduler.py  # 移除 noqa: BLE001
+src/llm/rerank.py              # 移除 noqa: BLE001
+src/llm/rag.py                 # 移除 noqa: BLE001，精确捕获
+src/tools/weather.py           # 网络异常精确捕获
+src/platform/memory.py         # SQLite 错误分类告警
+```
+
+### 升级注意
+- 无破坏性变更，纯防御性改进。
+- 改动生效需重启 Linkora 服务。
+- 监控日志中 `LLMNetworkError`、`LLMRateLimitError`、`LLMAuthError` 分类是否准确。
+
+---
+
 ## v0.4.6 (2026-08-22)
 
 > 主动触达摘要排版优化：钉钉推送从「一坨文本」变成清晰分段列表

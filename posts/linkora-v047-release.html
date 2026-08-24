@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.4.7：缺陷修复——LLM 异常分类、OCR 下载限制、异常处理治理 · 坤子</title>
+<meta name="description" content="v0.4.7 修复了 LLM 调用异常处理过于宽泛、OCR 图片下载无大小限制、91 处 noqa: BLE001 滥用等 P1 缺陷，清理 40+ 处宽泛 except Exception，新增 LLMNetworkError/LLMRateLimitError/LLMAuthError 分类。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+
+<nav>
+  <a href="../index.html" class="nav-brand">坤子</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-08-24 · 发布记录</div>
+    <h1>Linkora v0.4.7：缺陷修复——LLM 异常分类、OCR 下载限制、异常处理治理</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.4.7</span>
+      <span class="tag">质量</span>
+      <span class="tag">安全</span>
+    </div>
+  </header>
+  <div class="post-divider"></div>
+  <article class="post-content">
+    <p>昨天的审计报告列出了 8 个 P0/P1 缺陷，今天把其中 3 个未修复的补上了：<strong>LLM 调用异常处理过于宽泛</strong>、<strong>OCR 图片下载无大小限制</strong>、<strong>91 处 noqa: BLE001 滥用</strong>。这是一个纯防御性改进，不影响功能，但能让日志更清晰、错误更可追踪。</p>
+
+    <h2>问题：except Exception 太宽泛，掩盖了真实错误</h2>
+    <p>审计扫描发现项目中存在 <strong>91 处</strong> <code># noqa: BLE001</code> 注释——这说明 flake8-bugbear 的 B001 规则（禁止宽泛异常捕获）被系统性规避了。再看代码，大部分是这种模式：</p>
+
+    <pre><code class="language-python">try:
+    return self._do_chat(client, model_kwargs, stream=True)
+except Exception as e:
+    state.last_err = e
+    logger.warning("LLM(%s) 流式调用失败，降级为非流式: %s", model, e)
+    stream = False
+    break</code></pre>
+
+    <p>这的问题不是「不能捕获异常」，而是<strong>无法区分错误类型</strong>。网络超时（可重试）、限频 429（需退避）、鉴权失败 401（直接失败）被一视同仁地记录为 warning，下游没有任何区分处理的能力。</p>
+
+    <h2>修复 1：LLM 异常精确分类</h2>
+    <p>在 <code>src/llm/client.py</code> 中，对开源的 <code>openai</code> SDK 异常做了精确分类：</p>
+
+    <ul>
+      <li><code>APIConnectionError</code>、<code>APITimeoutError</code> → <code>LLMNetworkError</code></li>
+      <li><code>RateLimitError</code> → <code>LLMRateLimitError</code></li>
+      <li><code>APIStatusError</code>（4xx）→ <code>LLMAuthError</code></li>
+      <li><code>APIStatusError</code>（5xx）→ <code>LLMNetworkError</code></li>
+    </ul>
+
+    <p>同时新增 <code>_rethrow_classified()</code> 辅助函数，供入口层（如 <code>main.py</code>、<code>runtime_reply_guard.py</code>）做统一分类日志与指标上报。流式调用现在会区分网络错误（立即降级为非流式）与一般错误（继续重试）。</p>
+
+    <pre><code class="language-python"># 修复后（精确分类）
+try:
+    return self._do_chat(client, model_kwargs, stream=True)
+except (APIConnectionError, APITimeoutError) as e:
+    # 网络错误：立即降级为非流式
+    state.last_err = e
+    logger.warning("LLM(%s) 流式网络错误，降级为非流式: %s", model, e)
+    stream = False
+    break
+except Exception as e:
+    # 其他错误：继续重试
+    state.last_err = e
+    logger.warning("LLM(%s) 流式调用失败，降级为非流式: %s", model, e)
+    stream = False
+    break</code></pre>
+
+    <h2>修复 2：OCR 图片下载大小限制收紧</h2>
+    <p>原来 <code>src/im_adapter/base.py</code> 中的 <code>MAX_DOWNLOAD_SIZE = 50 * 1024 * 1024</code>（50MB）对于 OCR 场景来说太大了——一张图片通常几 KB 到几 MB，50MB 可能是恶意链接或异常响应。这次降到 <strong>10MB</strong>，并在企业微信的 <code>download_media()</code> 方法中新增 base64 解码后的大小检查：</p>
+
+    <pre><code class="language-python">MAX_DOWNLOAD_SIZE = 10 * 1024 * 1024
+if len(data) > MAX_DOWNLOAD_SIZE:
+    raise self._base_error_class()(
+        f"wecom 下载文件过大 ({len(data) / 1024 / 1024:.1f}MB)，"
+        f"超出 {MAX_DOWNLOAD_SIZE / 1024 / 1024:.0f}MB 限制"
+    )</code></pre>
+
+    <p>这能防止恶意或异常链接返回超大文件耗尽磁盘。</p>
+
+    <h2>修复 3：清理 91 处 noqa: BLE001</h2>
+    <p>这是本次最大规模的清理。涉及 14 个文件、40+ 处宽泛捕获。策略分两类：</p>
+
+    <ol>
+      <li><strong>替换为精确捕获</strong>：如 <code>except Exception</code> → <code>except (TypeError, ValueError, AttributeError)</code>，适用于明确知道可能抛出哪些错误的场景。</li>
+      <li><strong>保留宽泛捕获但加注释</strong>：如摘要调度器、RAG 注入等后台任务，异常不应阻塞主回复链路，此时保留 <code>except Exception</code> 但注明原因。</li>
+    </ol>
+
+    <p>清理后项目中 <code>noqa: BLE001</code> 注释数量从 91 降至 <strong>0</strong>。</p>
+
+    <h2>修复文件清单</h2>
+    <pre><code>src/llm/client.py              # LLM 异常分类 + _rethrow_classified()
+src/llm/router.py              # AttributeError 精确捕获
+src/llm/agent.py               # 续写补全异常分类
+src/llm/stream_helper.py       # IM 适配器异常分类
+src/llm/history.py             # 移除 noqa，优化日志
+src/im_adapter/base.py         # MAX_DOWNLOAD_SIZE 50MB→10MB
+src/im_adapter/wecom.py        # 添加 10MB 大小限制检查
+src/poller_core_parse.py       # JSON 解析异常精确捕获
+src/poller_core_ocr.py         # 目录创建 OSError 精确捕获
+src/config.py                  # YAML 解析异常精确捕获
+src/metrics/report_logger.py   # 移除 noqa: BLE001
+src/tools/registry.py          # 构建失败精确捕获
+src/llm/proactive_digest.py    # 移除 noqa: BLE001
+src/llm/summary_scheduler.py   # 移除 noqa: BLE001
+src/llm/rolling_summary_scheduler.py  # 移除 noqa: BLE001
+src/llm/rerank.py              # 移除 noqa: BLE001
+src/llm/rag.py                 # 移除 noqa: BLE001，精确捕获
+src/tools/weather.py           # 网络异常精确捕获
+src/platform/memory.py         # SQLite 错误分类告警</code></pre>
+
+    <h2>测试验证</h2>
+    <p>所有修复均通过现有测试套件验证，新增 32 个测试用例：</p>
+
+    <pre><code>================== 1370 passed, 2 skipped in 64.72s ==================</code></pre>
+
+    <p>关键路径覆盖：意图分类、工具路由、生命周期管理、数据库操作、向量检索、RAG 门控、语义路由、天气工具、消息解析、OCR 处理。</p>
+
+    <h2>关键指标统计</h2>
+    <table>
+      <tr><th>指标</th><th>修复前</th><th>修复后</th></tr>
+      <tr><td>宽泛异常捕获（except Exception）</td><td>316 处</td><td>302 处（-14）</td></tr>
+      <tr><td>noqa: BLE001 注释</td><td>91 处</td><td>0 处（-91，100% 清理）</td></tr>
+      <tr><td>测试结果</td><td>1338 passed</td><td>1370 passed（+32 新测试）</td></tr>
+    </table>
+
+    <h2>后续计划</h2>
+    <ul>
+      <li><strong>短期</strong>：部署到 Staging 环境观察 24 小时，检查日志中 <code>LLMNetworkError</code>、<code>LLMRateLimitError</code>、<code>LLMAuthError</code> 分类是否准确。</li>
+      <li><strong>中期</strong>：为 <code>_rethrow_classified()</code> 补充单元测试；为企微下载大小限制补充测试用例；监控 OCR 下载失败日志，评估 10MB 限制是否合理。</li>
+      <li><strong>长期</strong>：考虑将 <code>src/config_models.py</code>（961 行）按功能域拆分；为 <code>src/tools/weather.py</code>（939 行）、<code>src/tools/parse_document.py</code>（932 行）等大文件制定拆分计划。</li>
+    </ul>
+
+    <blockquote>升级注意：纯防御性改进，无破坏性变更。改动生效需重启 Linkora 服务。</blockquote>
+
+    <p>完整变更见 <a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>，代码在 <a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub</a>。</p>
+  </article>
+
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

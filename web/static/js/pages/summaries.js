@@ -169,34 +169,22 @@ function renderSummaryList(items) {
             <span style="font-size:0.8rem;opacity:0.7">对话摘要调度器生成摘要后将在此实时显示</span>
         </div>`;
     }
-    return `<div class="summary-list">${items.map((it, idx) => {
+    return `<div class="summary-list-compact">${items.map((it, idx) => {
         const name = escapeHtml(it.chat_name || it.chat_id || '未知对话');
         const time = it.updated_at ? formatTsLocal(it.updated_at, false) : '—';
         const cnt = it.covered_count != null ? it.covered_count : 0;
         const platform = it.platform || '';
         const platformLabel = PLATFORM_LABEL[platform] || '';
-        const summaryHtml = simpleMarkdown(it.summary || '');
-        const topics = extractTopics(it.summary);
-        const [c1, c2] = avatarGradient(it.chat_name || it.chat_id || String(idx));
-        const initial = avatarLetter(it.chat_name || it.chat_id);
+        const summaryText = (it.summary || '').replace(/^【对话摘要】\s*/, '').trim().slice(0, 80);
         return `
-        <div class="summary-item">
-            <div class="summary-item-side">
-                <div class="summary-avatar" style="background:linear-gradient(135deg, ${c1}, ${c2})">${initial}</div>
-                <div class="summary-idx">#${idx + 1}</div>
+        <div class="summary-item-compact">
+            <div class="summary-item-compact-head">
+                <span class="summary-name">${name}</span>
+                ${platformLabel ? `<span class="summary-tag summary-tag-platform">${platformLabel}</span>` : ''}
+                ${cnt ? `<span class="summary-tag summary-tag-count">${cnt} 条</span>` : ''}
+                <span class="summary-time">${time}</span>
             </div>
-            <div class="summary-item-main">
-                <div class="summary-item-head">
-                    <span class="summary-name">${name}</span>
-                    ${platformLabel ? `<span class="summary-tag summary-tag-platform"><i class="fa-brands fa-${PLATFORM_ICON[platform] || 'comment'}"></i>${platformLabel}</span>` : ''}
-                    <span class="summary-tag summary-tag-count"><i class="fa-solid fa-message"></i>${cnt} 条</span>
-                </div>
-                <div class="summary-text">${summaryHtml}</div>
-                ${topics.length ? `<div class="summary-topics">${topics.map(t => `<span class="summary-topic-chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-                <div class="summary-meta">
-                    <span class="summary-meta-item"><i class="fa-regular fa-clock"></i>${time}</span>
-                </div>
-            </div>
+            <div class="summary-item-compact-body">${escapeHtml(summaryText)}${summaryText.length >= 80 ? '…' : ''}</div>
         </div>`;
     }).join('')}</div>`;
 }

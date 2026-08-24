@@ -699,3 +699,44 @@
     font-size: 1.1rem;
     opacity: 0.8;
 }
+
+/* ---------- 紧凑列表样式 ---------- */
+.summary-list-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.summary-item-compact {
+    background: var(--bg-surface, #fff);
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.15s ease;
+}
+
+.summary-item-compact:hover {
+    border-color: var(--brand-primary, #3b82f6);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.summary-item-compact-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.summary-item-compact-body {
+    font-size: 0.82rem;
+    color: var(--text-secondary, #4b5563);
+    line-height: 1.5;
+    padding-left: 0.25rem;
+}
+
+.summary-time {
+    font-size: 0.72rem;
+    color: var(--text-tertiary, #9ca3af);
+    margin-left: auto;
+}

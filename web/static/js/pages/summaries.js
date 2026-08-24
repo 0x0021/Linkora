@@ -175,16 +175,14 @@ function renderSummaryList(items) {
         const cnt = it.covered_count != null ? it.covered_count : 0;
         const platform = it.platform || '';
         const platformLabel = PLATFORM_LABEL[platform] || '';
-        const summaryText = (it.summary || '').replace(/^【对话摘要】\s*/, '').trim().slice(0, 80);
+        const summaryText = (it.summary || '').replace(/^【对话摘要】\s*/, '').trim().slice(0, 60);
         return `
         <div class="summary-item-compact">
-            <div class="summary-item-compact-head">
-                <span class="summary-name">${name}</span>
-                ${platformLabel ? `<span class="summary-tag summary-tag-platform">${platformLabel}</span>` : ''}
-                ${cnt ? `<span class="summary-tag summary-tag-count">${cnt} 条</span>` : ''}
-                <span class="summary-time">${time}</span>
-            </div>
-            <div class="summary-item-compact-body">${escapeHtml(summaryText)}${summaryText.length >= 80 ? '…' : ''}</div>
+            <span class="summary-item-name">${name}</span>
+            ${platformLabel ? `<span class="summary-tag summary-tag-platform">${platformLabel}</span>` : ''}
+            ${cnt ? `<span class="summary-tag summary-tag-count">${cnt} 条</span>` : ''}
+            <span class="summary-item-body">${escapeHtml(summaryText)}${summaryText.length >= 60 ? '…' : ''}</span>
+            <span class="summary-time">${time}</span>
         </div>`;
     }).join('')}</div>`;
 }

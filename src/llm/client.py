@@ -27,6 +27,7 @@ except Exception:
 from src.config import LlmConfig
 from src.llm.exceptions import LLMRateLimitExhaustedError
 from src.exceptions import LLMNetworkError, LLMRateLimitError, LLMAuthError
+from src.alerts.manager import record_error
 
 logger = logging.getLogger(__name__)
 

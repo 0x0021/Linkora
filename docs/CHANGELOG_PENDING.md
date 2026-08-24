@@ -17,11 +17,19 @@
 - fix(defects): 修复 LLM 异常分类、OCR 下载限制、清理 noqa: BLE001
 - fix(summary): 摘要第一人称视角加固，杜绝把主人当成第三方的矛盾视角
 
+### 新功能
+
+- feat(alerts): 新增错误监控告警系统（src/alerts/）
+- feat(bench): 新增性能基准测试工具（scripts/bench_llm.py）
+- feat(docs): 新增文档站点自动生成（scripts/gen_site.py）
+
 ### 测试
 
 - test: 补充 LLM 异常分类单元测试（+6 cases）
 - test: 新增告警管理器测试（16 cases）
-- test: 新增 LLM 告警集成测试（3 cases）
+- test: 新增 LLM 告警集成测试（4 cases）
+- test: 新增基准测试用例（5 cases）
+- test: 新增文档生成器测试（6 cases）
 
 ### CI/CD
 

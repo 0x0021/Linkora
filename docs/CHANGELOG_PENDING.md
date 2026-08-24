@@ -10,6 +10,7 @@
 ### 新功能
 
 - feat(proactive): 主动触达摘要钉钉排版优化
+- feat(alerts): 新增错误监控告警系统（src/alerts/）
 
 ### 缺陷修复
 
@@ -19,3 +20,9 @@
 ### 测试
 
 - test: 补充 LLM 异常分类单元测试（+6 cases）
+- test: 新增告警管理器测试（16 cases）
+- test: 新增 LLM 告警集成测试（3 cases）
+
+### CI/CD
+
+- chore(ci): 添加 CI/CD 门禁和文档自动生成

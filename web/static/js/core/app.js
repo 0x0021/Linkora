@@ -787,6 +787,12 @@ async function checkWebAuth() {
         api.clearAuth();
     }
 
+    // 防止重复检查：如果登录框已显示，不再重复调用
+    const loginOverlay = document.getElementById('login-overlay');
+    if (loginOverlay && loginOverlay.style.display === 'flex') {
+        return;
+    }
+
     try {
         const res = await fetch('/api/status', { credentials: 'omit' });
         if (res.status === 401) {

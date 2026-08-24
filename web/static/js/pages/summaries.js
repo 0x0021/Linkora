@@ -126,7 +126,7 @@ function renderDigestCards(digest, items) {
         const platform = meta.platform || '';
         const platformLabel = PLATFORM_LABEL[platform] || '';
         const cnt = meta.covered_count != null ? meta.covered_count : 0;
-        const time = meta.updated_at ? formatTsLocal(meta.updated_at, false) : '';
+        const time = meta.updated_at ? formatTsLocal(meta.updated_at, false) : '—';
         const topics = extractTopics(e.content);
         const todo = extractTodo(e.content);
         const [c1, c2] = avatarGradient(e.name);
@@ -222,8 +222,8 @@ async function loadSummariesPage() {
 
         // 统计卡片数据
         const totalCovers = (r.items || []).reduce((s, it) => s + (it.covered_count || 0), 0);
-        const platforms = new Set(r.items?.map(it => it.platform).filter(Boolean));
-        const latestTime = r.items?.length ? Math.max(...r.items.map(it => it.updated_at ? new Date(it.updated_at).getTime() : 0)) : 0;
+        const platforms = new Set((r.items || []).map(it => it.platform).filter(Boolean));
+        const latestTime = (r.items || []).length > 0 ? Math.max(...(r.items || []).map(it => it.updated_at ? new Date(it.updated_at).getTime() : 0), 0) : 0;
         const lastUpdate = latestTime ? formatTsLocal(new Date(latestTime).toISOString(), false) : '—';
         const windowHint = WINDOW_HINTS[currentWindow] || '';
         const platformHint = platforms.size > 1
@@ -284,7 +284,7 @@ async function loadSummariesPage() {
                 ${digestResult ? `
                 <div class="summaries-digest-badge">
                     <i class="fa-solid fa-clipboard-list"></i>
-                    <span>${WINDOW_LABELS[r.window] || '摘要'}汇总</span>
+                    <span>${WINDOW_LABELS[r.window] || r.window || '摘要'}汇总</span>
                     <span class="digest-badge-count">${digestCount}</span>
                 </div>` : ''}
             </div>
@@ -293,13 +293,13 @@ async function loadSummariesPage() {
             <div class="summary-list-panel">
                 <div class="panel-header">
                     <h3><i class="fa-solid fa-list-ul"></i>各会话摘要</h3>
-                    <span class="panel-tag">${WINDOW_LABELS[r.window] || '摘要'} · ${r.count || 0} 条</span>
+                    <span class="panel-tag">${WINDOW_LABELS[r.window] || r.window || '摘要'} · ${r.count || 0} 条</span>
                 </div>
                 <div class="panel-body">${renderSummaryList(r.items)}</div>
             </div>
             <div class="summaries-foot">
                 <i class="fa-regular fa-clock"></i>
-                最后更新：${formatTsLocal(r.generated_at, false)}
+                最后更新：${formatTsLocal(r.generated_at || new Date().toISOString(), false)}
                 ${r.platform ? `<span>· 平台 ${escapeHtml(r.platform)}</span>` : ''}
             </div>
         `;

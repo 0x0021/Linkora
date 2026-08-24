@@ -50,9 +50,10 @@ async def get_summaries(
             {
                 "chat_id": r["chat_id"],
                 "chat_name": r.get("chat_name") or "",
-                "summary": r["summary_text"],
-                "covered_count": r.get("covered_count") or 0,
+                "summary": r["summary_text"] or "",
+                "covered_count": int(r.get("covered_count") or 0),
                 "updated_at": r.get("updated_at") or "",
+                "platform": r.get("platform") or "",
             }
             for r in rows
         ]

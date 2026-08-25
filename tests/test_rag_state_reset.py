@@ -135,7 +135,10 @@ def agent():
     # 关键：把查询文本向量作为该分块向量，保证 faiss 检索相似度≈1.0
     store._kb_repo.update_chunk_embedding(chunk_id, emb.embed(QUERY_DOC))
 
-    kb_tool = KBSearchTool(store, {"enabled": True})
+    # enabled=False：避免构造时触发 sentence_transformers/transformers 重导入
+    # （CI 跳过 account 测试后本文件成首个导入者，会触发 >60s 超时）。
+    # FakeEmb 随后注入，检索路径只看 embedding_client 不为 None，行为等价。
+    kb_tool = KBSearchTool(store, {"enabled": False})
     kb_tool.embedding_client = emb   # 复用查询向量，跳过模型
     tool_router = SimpleNamespace(_tools={"kb_search": kb_tool})
 

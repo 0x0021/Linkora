@@ -9,44 +9,32 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.14']
-
+    env:
+      # faiss / numpy 各自打包 OpenMP 运行时，重复初始化会触发
+      # "OMP: Error #15: Initializing libomp twice" → SIGABRT。
+      # pytest 必须带此变量（本地同理，见项目约定）。
+      KMP_DUPLICATE_LIB_OK: "TRUE"
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.14'
+        enable-cache: true
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
+    - name: Sync dependencies (runtime + dev)
+      run: uv sync --extra dev
 
     - name: Run tests
       run: |
-        python -m pytest tests/ \
+        uv run pytest tests/ \
           --ignore=tests/test_account_isolation_integration.py \
           --ignore=tests/test_account_identity.py \
           -q --tb=short
 
-    - name: Check noqa: BLE001
-      run: |
-        if grep -rn "noqa.*BLE001" src/ | grep -v "pycache"; then
-          echo "❌ 发现 noqa: BLE001 残留"
-          exit 1
-        fi
-
     - name: Run Ruff
-      run: |
-        pip install ruff
-        ruff check src/
+      run: uv run ruff check src/
 
     - name: Run Pyright
-      run: |
-        pip install pyright
-        pyright src/
+      run: uv run pyright src/

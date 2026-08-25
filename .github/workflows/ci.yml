@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       # faiss / numpy 各自打包 OpenMP 运行时，重复初始化会触发
       # "OMP: Error #15: Initializing libomp twice" → SIGABRT。

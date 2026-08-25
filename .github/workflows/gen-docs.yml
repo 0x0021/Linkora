@@ -12,6 +12,9 @@ on:
 jobs:
   generate-docs:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # actions/upload-artifact 需要创建 artifact
     steps:
     - uses: actions/checkout@v4
 

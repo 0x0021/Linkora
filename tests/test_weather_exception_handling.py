@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 import urllib.error
 from http.client import HTTPException
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestWeatherExceptionHandling:

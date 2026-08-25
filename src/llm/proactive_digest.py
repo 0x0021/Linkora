@@ -54,7 +54,7 @@ def build_digest(items: list[dict], max_summary_chars: int = 200,
         return "（今日无新对话摘要）"
     header = title or f"📋 今日对话摘要（共 {len(items)} 段）"
     paragraphs: list[str] = [header, ""]
-    for idx, it in enumerate(items, start=1):
+    for it in items:
         name = it.get("chat_name") or it.get("chat_id") or "未知对话"
         summary = (it.get("summary") or "").strip()
         # 摘要函数本身会以「【对话摘要】」开头，聚合推送里不需要重复前缀

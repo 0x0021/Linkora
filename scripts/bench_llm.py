@@ -17,7 +17,6 @@ import json
 import statistics
 import time
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
@@ -41,7 +40,7 @@ def bench_llm_call(iterations: int = 10) -> BenchmarkResult:
     实际部署时需要替换为真实 LLM 调用。
     """
     times = []
-    for i in range(iterations):
+    for _ in range(iterations):
         start = time.perf_counter()
         # 模拟 LLM 调用（实际测试时应替换为真实调用）
         time.sleep(0.1)  # 模拟 100ms 延迟
@@ -70,7 +69,7 @@ def bench_ocr_download(size_mb: float = 1.0, iterations: int = 10) -> BenchmarkR
         iterations: 迭代次数
     """
     times = []
-    for i in range(iterations):
+    for _ in range(iterations):
         start = time.perf_counter()
         # 模拟下载（实际测试时应替换为真实下载）
         # 假设下载速度 10MB/s
@@ -95,7 +94,7 @@ def bench_ocr_download(size_mb: float = 1.0, iterations: int = 10) -> BenchmarkR
 def bench_database_query(iterations: int = 100) -> BenchmarkResult:
     """基准测试数据库查询性能。"""
     times = []
-    for i in range(iterations):
+    for _ in range(iterations):
         start = time.perf_counter()
         # 模拟数据库查询
         time.sleep(0.001)  # 1ms

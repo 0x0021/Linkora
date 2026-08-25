@@ -4,10 +4,8 @@
 """
 from __future__ import annotations
 
-import pytest
 import tempfile
 import os
-from pathlib import Path
 from scripts.gen_site import generate_api_docs, generate_test_docs, generate_changelog_docs, generate_html_site
 
 

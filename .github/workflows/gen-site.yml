@@ -11,6 +11,9 @@ on:
     - cron: '0 2 * * *'  # 每天凌晨 2 点自动生成
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   generate-site:
     runs-on: ubuntu-latest

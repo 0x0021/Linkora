@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linkora 文档站点</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #333; }
+        h2 { color: #666; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .stats { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat-value { font-size: 32px; font-weight: bold; color: #007acc; }
+        .stat-label { color: #666; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f5f5f5; font-weight: 600; }
+        tr:hover { background: #f9f9f9; }
+        .nav { background: #333; padding: 15px; margin: -20px -20px 20px; }
+        .nav a { color: white; text-decoration: none; margin-right: 20px; }
+        .nav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="#overview">概览</a>
+            <a href="#api">API 文档</a>
+            <a href="#tests">测试文档</a>
+            <a href="#changelog">变更历史</a>
+        </div>
+
+        <h1>Linkora 文档站点</h1>
+        <p>自动生成文档站点，最后更新：2026-08-25 06:02:25</p>
+
+        <div class="stats" id="overview">
+            <h2>项目统计</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">270</div>
+                    <div class="stat-label">API 类</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">424</div>
+                    <div class="stat-label">API 函数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">253</div>
+                    <div class="stat-label">测试文件</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">3716</div>
+                    <div class="stat-label">测试用例</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="api">
+            <h2>API 文档</h2>
+            <table>
+                <tr>
+                    <th>类名</th>
+                    <th>模块</th>
+                    <th>方法数</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td><code>DiscoveryMixin</code></td>
+                    <td><code>src.poller_core_discovery</code></td>
+                    <td>4</td>
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>DedupMixin</code></td>
+                    <td><code>src.poller_core_dedup</code></td>
+                    <td>7</td>
+                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
+                </tr>
+                <tr>
+                    <td><code>AccessControlMixin</code></td>
+                    <td><code>src.poller_core_access</code></td>
+                    <td>16</td>
+                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
+                </tr>
+                <tr>
+                    <td><code>_PathOverrideState</code></td>
+                    <td><code>src.paths</code></td>
+                    <td>6</td>
+                    <td>进程级路径覆盖状态（替代 global 变量）。
+
+覆盖来自启动 argv（--data-dir / --config），属进程级一次性设置。若用
+thread...</td>
+                </tr>
+                <tr>
+                    <td><code>Ansi</code></td>
+                    <td><code>src.log_formatter</code></td>
+                    <td>0</td>
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>FancyConsoleFormatter</code></td>
+                    <td><code>src.log_formatter</code></td>
+                    <td>4</td>
+                    <td>增强控制台日志格式化器。
+
+- 单行：``HH:MM:SS 🟢 INFO    module_name          : 消息内容``
+- 多行：自动在后续...</td>
+                </tr>
+                <tr>
+                    <td><code>StartupBanner</code></td>
+                    <td><code>src.log_formatter</code></td>
+                    <td>1</td>
+                    <td>启动汇总横幅：在启动完成后输出一行汇总信息。...</td>
+                </tr>
+                <tr>
+                    <td><code>LinkoraError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>2</td>
+                    <td>所有 Linkora 业务异常的基类。...</td>
+                </tr>
+                <tr>
+                    <td><code>DBError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>数据库操作失败的基类。...</td>
+                </tr>
+                <tr>
+                    <td><code>DBConnectionError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>数据库连接失败（连接池耗尽、文件损坏等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>DBWriteError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>数据库写入失败（约束冲突、事务失败等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>DBBusyError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>数据库忙（SQLite Busy Timeout）。...</td>
+                </tr>
+                <tr>
+                    <td><code>DBSchemaError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>数据库 schema 不匹配（缺少列、表不存在等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 调用失败的基类。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMNetworkError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>网络相关 LLM 错误（连接失败、超时等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMRateLimitError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 服务限流（429 / Rate Limit Exceeded）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMAuthError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 认证失败（API Key 无效、过期等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMContentError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 内容安全拦截（敏感词、违规内容等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMTimeoutError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 调用超时。...</td>
+                </tr>
+                <tr>
+                    <td><code>IMAdapterError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>IM 适配器错误的基类（IM 族根）。
+
+本模块只持有各族「族根」与根类 ``LinkoraError``；IM 族的具体子类（权限/限频/
+超时/资源不存在/...</td>
+                </tr>
+            </table>
+        </div>
+
+        <div id="tests">
+            <h2>测试文档</h2>
+            <table>
+                <tr>
+                    <th>测试文件</th>
+                    <th>用例数</th>
+                </tr>
+                <tr>
+                    <td><code>test_poller_feishu_card_image.py</code></td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td><code>test_rag_metrics.py</code></td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td><code>test_memory_inject.py</code></td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td><code>test_semantic_routing.py</code></td>
+                    <td>22</td>
+                </tr>
+                <tr>
+                    <td><code>test_metrics.py</code></td>
+                    <td>16</td>
+                </tr>
+                <tr>
+                    <td><code>test_classifier.py</code></td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td><code>test_rag_state_reset.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_shared_state.py</code></td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><code>test_json_parse_exception_handling.py</code></td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td><code>test_p2_dws_force_no_dry_run.py</code></td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><code>test_skill_loader.py</code></td>
+                    <td>41</td>
+                </tr>
+                <tr>
+                    <td><code>test_dependencies.py</code></td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td><code>test_web_routers_departments.py</code></td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td><code>test_skill_loader_supplement.py</code></td>
+                    <td>17</td>
+                </tr>
+                <tr>
+                    <td><code>test_e2e_kb_pipeline.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_dws_oa_approval.py</code></td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td><code>test_platform_whitelist.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_ssrf_safe_get.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_wecom_download_size_limit.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_document_clean_llm.py</code></td>
+                    <td>8</td>
+                </tr>
+            </table>
+        </div>
+
+        <div id="changelog">
+            <h2>变更历史</h2>
+            <table>
+                <tr>
+                    <th>版本</th>
+                    <th>发布日期</th>
+                </tr>
+                <tr>
+                    <td><code>v0.4.7</code></td>
+                    <td>2026-08-24</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.6</code></td>
+                    <td>2026-08-22</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.5</code></td>
+                    <td>2026-08-22</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.4</code></td>
+                    <td>2026-08-22</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.3</code></td>
+                    <td>2026-08-21</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.2</code></td>
+                    <td>2026-08-20</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.1</code></td>
+                    <td>2026-08-20</td>
+                </tr>
+                <tr>
+                    <td><code>v0.4.0</code></td>
+                    <td>2026-08-18</td>
+                </tr>
+                <tr>
+                    <td><code>v0.3.0</code></td>
+                    <td>2026-08-11</td>
+                </tr>
+                <tr>
+                    <td><code>v0.2.0</code></td>
+                    <td>2026-08-07</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

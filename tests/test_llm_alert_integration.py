@@ -4,13 +4,12 @@
 """
 from __future__ import annotations
 
-import pytest
-from openai import APIStatusError, APIConnectionError, APITimeoutError, RateLimitError
+from openai import APIStatusError, APIConnectionError, RateLimitError
 from unittest.mock import MagicMock
 
 from src.exceptions import LLMNetworkError, LLMRateLimitError, LLMAuthError
 from src.llm.client import _rethrow_classified
-from src.alerts.manager import get_alert_manager, AlertConfig
+from src.alerts.manager import get_alert_manager
 
 
 class TestLLMAlertIntegration:
@@ -52,7 +51,7 @@ class TestLLMAlertIntegration:
     def test_auth_error_triggers_alert(self):
         """验证鉴权错误能触发告警。"""
         manager = get_alert_manager()
-        for i in range(10):
+        for _ in range(10):
             response = MagicMock()
             response.status_code = 401
             original = APIStatusError("Unauthorized", response=response, body=None)

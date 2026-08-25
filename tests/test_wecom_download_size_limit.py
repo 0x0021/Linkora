@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.im_adapter.errors import IMAdapterError
 from src.im_adapter.wecom import WecomCliAdapter
 
 
@@ -83,9 +84,9 @@ class TestWecomDownloadSizeLimit:
                 assert len(data) > MAX_DOWNLOAD_SIZE, "测试数据应大于 10MB"
 
                 # 验证大小限制逻辑
-                with pytest.raises(Exception):  # 实际会抛出 IMAdapterError
+                with pytest.raises(IMAdapterError):  # 实际会抛出 IMAdapterError
                     if len(data) > MAX_DOWNLOAD_SIZE:
-                        raise Exception(
+                        raise IMAdapterError(
                             f"wecom 下载文件过大 ({len(data) / 1024 / 1024:.1f}MB)，"
                             f"超出 {MAX_DOWNLOAD_SIZE / 1024 / 1024:.0f}MB 限制"
                         )

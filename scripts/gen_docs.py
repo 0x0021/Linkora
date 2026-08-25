@@ -72,7 +72,7 @@ def generate_changelog(since_tag: str = "v0.4.4") -> str:
     lines = [f"## {datetime.now().strftime('%Y-%m-%d')} (未发布)\n"]
     lines.append(f"> 自 {since_tag} 以来的变更\n\n")
 
-    for type_name, (chinese_name, items) in types.items():
+    for chinese_name, items in types.values():
         if items:
             lines.append(f"### {chinese_name}\n")
             for item in items:

@@ -4,7 +4,6 @@
 """
 from __future__ import annotations
 
-import pytest
 from scripts.bench_llm import bench_llm_call, bench_ocr_download, bench_database_query
 
 

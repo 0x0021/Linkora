@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from src.alerts.manager import AlertManager, get_alert_manager
 from web.auth_middleware import get_current_user
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/alerts", tags=["告警"])
 @router.get("/stats")
 async def get_alert_stats(
     manager: AlertManager = Depends(get_alert_manager),
-    current_user: User = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """获取告警统计信息。
 
@@ -36,7 +36,7 @@ async def get_alert_history(
     limit: int = 50,
     error_type: str | None = None,
     manager: AlertManager = Depends(get_alert_manager),
-    current_user: User = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
     """获取告警历史记录。
 
@@ -71,7 +71,7 @@ async def get_alert_history(
 @router.post("/clear")
 async def clear_alert_stats(
     manager: AlertManager = Depends(get_alert_manager),
-    current_user: User = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, str]:
     """清空告警统计。
 
@@ -85,7 +85,7 @@ async def clear_alert_stats(
 @router.get("/config")
 async def get_alert_config(
     manager: AlertManager = Depends(get_alert_manager),
-    current_user: User = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """获取告警配置。
 
@@ -105,7 +105,7 @@ async def get_alert_config(
 async def update_alert_config(
     new_config: dict[str, Any],
     manager: AlertManager = Depends(get_alert_manager),
-    current_user: User = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, str]:
     """更新告警配置。
 

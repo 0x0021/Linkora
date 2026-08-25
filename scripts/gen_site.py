@@ -16,12 +16,9 @@ from __future__ import annotations
 
 import argparse
 import ast
-import json
 import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
 
 @dataclass
@@ -138,8 +135,6 @@ def generate_api_docs(src_dir: str = "src") -> dict:
         for file in files:
             if file.endswith(".py") and not file.startswith("__"):
                 filepath = os.path.join(root, file)
-                relpath = filepath.replace(src_dir + "/", "")
-
                 all_classes.extend(extract_class_docs(filepath))
                 all_functions.extend(extract_function_docs(filepath))
 
@@ -170,7 +165,7 @@ def generate_test_docs(tests_dir: str = "tests") -> dict:
                         content = f.read()
                         count = content.count("def test_")
                         test_count += count
-                except:
+                except Exception:
                     count = 0
 
                 test_files.append({
@@ -290,7 +285,7 @@ def generate_html_site(api_docs: dict, test_docs: dict, changelog_docs: list, ou
                 </tr>
 """
 
-    html += f"""            </table>
+    html += """            </table>
         </div>
 
         <div id="tests">
@@ -309,7 +304,7 @@ def generate_html_site(api_docs: dict, test_docs: dict, changelog_docs: list, ou
                 </tr>
 """
 
-    html += f"""            </table>
+    html += """            </table>
         </div>
 
         <div id="changelog">

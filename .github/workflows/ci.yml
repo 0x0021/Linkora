@@ -26,6 +26,12 @@ jobs:
     - name: Sync dependencies (runtime + dev)
       run: uv sync --extra dev
 
+    - name: Provide config.yaml for tests
+      # config.yaml 含密钥被 gitignore，CI 仓库内不存在；大量测试与 web 鉴权中间件
+      # 依赖其存在（否则 FileNotFoundError / JWT 401）。example 已提交且无密钥，
+      # 按官方文档 cp 出一份即可（jwt_secret 留空 → 进程内随机密钥缓存，测试内同源可用）。
+      run: cp config.yaml.example config.yaml
+
     - name: Run tests
       run: |
         uv run pytest tests/ \

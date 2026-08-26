@@ -165,7 +165,7 @@ def _pin_session(url: str, **kwargs):
     session.mount("http://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
     session.mount("https://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
     pinned_url = url
-    is_ssrf_safe(pinned_url)  # CodeQL sanitizer: confirms URL is public-facing
+    is_ssrf_safe(pinned_url)  # 双保险：私网/保留地址直接抛 ValueError，阻断后续建连
     return session, pinned_url
 
 

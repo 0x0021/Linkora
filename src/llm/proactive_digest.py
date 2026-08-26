@@ -28,6 +28,9 @@ if TYPE_CHECKING:  # 仅类型标注，避免运行时循环导入
 
 logger = logging.getLogger(__name__)
 
+# 持久化标记 key：存上次成功推送的 ISO 时间，用于跨进程/跨实例去重。
+_PROACTIVE_DIGEST_LAST_SENT_AT = "proactive_digest_last_sent_at"
+
 
 def _next_trigger_ts(now: datetime, hour: int, minute: int) -> float:
     """返回下一次触发时刻的时间戳（秒）。若今日该时刻已过，则顺延到明日。"""
@@ -162,7 +165,30 @@ class ProactiveDigestScheduler:
                 # 执行异常不影响主回复链路，仅记录警告
                 logger.warning("[主动触达] 执行异常: %s", e)
 
+    def _last_sent_date(self) -> str | None:
+        """读取 meta 中上次成功推送的日期（YYYY-MM-DD），读取失败返回 None。"""
+        try:
+            raw = self._store.get_meta(_PROACTIVE_DIGEST_LAST_SENT_AT, default="")
+            if raw:
+                dt = datetime.fromisoformat(raw)
+                return dt.date().isoformat()
+        except Exception as e:  # noqa: BLE001
+            logger.debug("[主动触达] 读取上次发送日期失败: %s", e)
+        return None
+
+    def _mark_sent_now(self) -> None:
+        """把当前时间写入 meta，作为今日已推送标记（推送成功后调用）。"""
+        try:
+            self._store.set_meta(_PROACTIVE_DIGEST_LAST_SENT_AT, datetime.now().isoformat())
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[主动触达] 记录发送时间失败: %s", e)
+
     def _run_once(self) -> None:
+        today = datetime.now().date().isoformat()
+        if self._last_sent_date() == today:
+            logger.info("[主动触达] 今日已推送过，跳过")
+            return
+
         items = self.collect_items()
         title = f"📋 近 {self._cfg.lookback_hours} 小时对话摘要（共 {len(items)} 段）"
         digest = build_digest(items, self._cfg.max_summary_chars, title=title)
@@ -174,6 +200,7 @@ class ProactiveDigestScheduler:
                 self._adapter.chat_message_send(title="每日对话摘要", text=digest,
                                                 open_dingtalk_id=self._cfg.owner_open_dingtalk_id)
             logger.info("[主动触达] 已推送（%d 段）", len(items))
+            self._mark_sent_now()
         except Exception as e:
-            # 推送失败不影响主回复链路，仅记录警告
+            # 推送失败不影响主回复链路，仅记录警告；不 mark，下次窗口再试
             logger.warning("[主动触达] 推送失败: %s", e)

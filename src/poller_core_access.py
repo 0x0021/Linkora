@@ -274,6 +274,15 @@ class AccessControlMixin(PollerMixinBase):
         is_confidential = "保密群" in err_str or "保密" in err_str
         is_forbidden = "forbidden" in err_str.lower() or "禁止" in err_str
         is_auth_perm_denied = "AUTH_PERMISSION_DENIED" in err_str  # 会话级权限不足
+        # 跨组织会话：需先 `dws chat data-auth cross-org` 授权，未授权时稳定返回
+        # CrossOrgPermissionDenied / "没有跨组织拉取权限"。属会话级权限问题（仅影响
+        # 跨组织会话，非全局），按权限错误降级（标记 _metadata_unavailable，改用 sender 兜底），
+        # 不拉黑、不反复重试。
+        is_cross_org_denied = (
+            "CrossOrgPermissionDenied" in err_str
+            or "没有跨组织拉取权限" in err_str
+            or "跨组织" in err_str
+        )
         # 参数级错误：DWS CLI 的 chat message list --group <cid> 对部分会话
         # 无法正确映射 openCid/cid 参数，API 返回 "openCid or cid is required"。
         # 这类错误不会自愈（非瞬时抖动），应拉黑该会话、改由 list-all 通道覆盖。
@@ -287,6 +296,7 @@ class AccessControlMixin(PollerMixinBase):
             or is_confidential
             or (is_forbidden and "TOKEN_VERIFIED_FAILED" not in err_str)
             or is_auth_perm_denied
+            or is_cross_org_denied
             or is_param_required
         )
 

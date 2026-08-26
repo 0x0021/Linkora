@@ -38,6 +38,9 @@ def is_permission_error(error_msg: str) -> bool:
             "is not in conversation",
             "AGENT_CODE_NOT_EXISTS",  # 认证会话失效，需要重新登录
             "AUTH_PERMISSION_DENIED",  # 会话级权限不足（无权限访问该会话/资源）
+            "CrossOrgPermissionDenied",  # 跨组织会话需先 dws chat data-auth cross-org 授权
+            "没有跨组织拉取权限",  # 同上（中文报错文案）
+            "跨组织",  # 同上（兜底）
         )
     )
 

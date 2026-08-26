@@ -7,6 +7,7 @@ import re
 from src.models import Message
 from src.memory.platform_context import get_current_platform
 from src.poller_mixins_base import PollerMixinBase
+from src.im_adapter.errors import IMAdapterError
 
 logger = logging.getLogger(__name__)
 
@@ -330,7 +331,7 @@ class DedupMixin(PollerMixinBase):
                             peer_open_dingtalk_id=remote_oid,
                         )
                         return {"user_id": remote_uid, "open_dingtalk_id": remote_oid}
-            except (sqlite3.Error, RuntimeError) as e:
+            except (sqlite3.Error, RuntimeError, IMAdapterError) as e:
                 if self._is_global_permission_error(e):
                     # 跨组织会话：当前 DWS profile 无该组织权限 → 抛出，
                     # 交由主循环统一持久化跳过（避免每轮重试反复触发权限验证/弹窗）
@@ -385,7 +386,7 @@ class DedupMixin(PollerMixinBase):
                         peer_open_dingtalk_id=oid,
                     )
                     return {"user_id": uid, "open_dingtalk_id": oid}
-        except (sqlite3.Error, RuntimeError) as e:
+        except (sqlite3.Error, RuntimeError, IMAdapterError) as e:
             logger.warning("搜索联系人 '%s' 失败：%s", title, e)
 
         logger.debug(

@@ -102,8 +102,8 @@ class TestLLMClientRetryAndFallback:
         return LLMClient(cfg)
 
     @patch("src.llm.client.time.sleep")
-    def test_429_retries_three_times_with_backoff(self, mock_sleep):
-        """429 应重试共 3 次（第1次原始调用 + 2次重试），等待 2s/4s 后 fallback。"""
+    def test_429_bails_and_cools_down_then_fallback(self, mock_sleep):
+        """429 应立即跳过主模型并设置冷却，不再同 call 内浪费重试，直接 fallback。"""
         client = self._make_client()
         rate_err = Exception(
             "Error code: 429 - {'error': {'code': 'rate_limit_exceeded'}}"
@@ -114,16 +114,16 @@ class TestLLMClientRetryAndFallback:
 
         def do_fn(client_obj, kwargs, stream=False, **_kw):
             call_count[0] += 1
-            if call_count[0] <= 3:
+            if call_count[0] == 1:
                 raise rate_err
             return fb_resp
 
         with patch.object(client, "_do_chat", side_effect=do_fn):
             client.chat([{"role": "user", "content": "hello"}])
 
-        assert call_count[0] == 4  # 3 次重试 + 1 次 fallback
-        assert mock_sleep.call_count == 2  # 3 次尝试之间有 2 次等待
-        assert [c.args[0] for c in mock_sleep.call_args_list] == [2, 4]
+        assert call_count[0] == 2  # 1 次主模型（429 即退）+ 1 次 fallback
+        assert mock_sleep.call_count == 0  # 429 不再重试等待
+        assert client._is_in_cooldown("test-model") is True
 
     @patch("src.llm.client.time.sleep")
     def test_non_retryable_error_no_retry(self, mock_sleep):

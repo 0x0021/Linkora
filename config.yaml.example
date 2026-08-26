@@ -386,6 +386,10 @@ llm:
   converge_after_tool_rounds: 3                    # 连续 N 轮都在调工具则强制收敛（0=关闭）
   max_retries: 3                                   # 主模型单轮最大重试次数（含首次；耗尽后切备用模型）
   base_backoff: 2.0                                # 退避基数（秒）：第 n 次等待 base_backoff * 2**n
+  backoff_jitter: 0.3                              # 退避 jitter 比例(0-1)；0=关闭，>0 时等待时间在 [base, base*2^(n+1)] 随机取，避免惊群
+  rate_limit_cooldown: 30.0                        # 模型触发 429 后的冷却期(秒)；若服务端返回 Retry-After 则优先使用
+  timeout_cooldown: 10.0                           # 模型重试耗尽仍失败后的短冷却期(秒)，避免下一轮继续砸同一个模型
+  max_concurrency: 0                               # 全局 LLM 并发上限(0=不限制)；免费额度/低并发模型建议设为 3-5
   timeout: 60                                      # LLM API 超时时间（秒）
   few_shot_examples: []                            # 本人语气 few-shot 样例（让数字分路口吻更像本人）
   persona_style_prompt: ''                         # 主人沟通风格覆盖（留空则由历史消息自动画像兜底）

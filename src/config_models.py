@@ -542,6 +542,15 @@ class LlmConfig(BaseModel):
     # 不可重试（直接进 DLQ）：401/403 鉴权失败、400 格式错误等。
     max_retries: int = 3  # 主模型单轮最大重试次数（含首次；耗尽后切备用模型）
     base_backoff: float = 2.0  # 退避基数（秒）：第 n 次等待 base_backoff * 2**n
+    # 退避 jitter：0=固定退避；>0 时在 [base_backoff, base_backoff*2^(n+1)] 内随机取值，
+    # 避免多个并发请求在同一时刻重试（惊群效应）。免费 LLM 建议 0.3-0.5。
+    backoff_jitter: float = 0.3
+    # 429 限频后模型冷却秒数。若服务端返回 Retry-After 头则优先使用。
+    rate_limit_cooldown: float = 30.0
+    # 超时/瞬时故障重试耗尽后，给该模型的短冷却期（秒），防止下一轮继续砸同一个模型。
+    timeout_cooldown: float = 10.0
+    # 全局 LLM 并发上限（所有 LLMClient 实例共享）。0=不限制；免费/低并发模型建议 3-5。
+    max_concurrency: int = 0
 
 
 class LlmThrottleConfig(BaseModel):

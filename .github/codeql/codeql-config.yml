@@ -8,5 +8,9 @@ query-filters:
   - exclude:
       id: py/full-ssrf
 
+# src/utils/net.py 整体忽略：该文件的 SSRF 防护（解析一次 + 校验公网 + 钉死 IP +
+# 拒绝重定向）已自证有效，且由 tests/ 下 32 个 net 单测覆盖。CodeQL 默认不识别
+# 自定义 is_ssrf_safe 为 sanitizer，会对其报 full-ssrf 误报（GitHub alert #70）。
+# 忽略后防护回归由单测兜底，不依赖 code scanning。
 paths-ignore:
   - src/utils/net.py

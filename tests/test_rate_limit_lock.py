@@ -32,11 +32,14 @@ def test_concurrent_mark_rate_limited_does_not_deadlock():
 
 
 def test_mark_rate_limited_updates_timestamp():
-    """单线程顺序写入后，秒数应 < 1。"""
-    import time
+    """单线程顺序写入后，时间戳应非常新（< 1 秒）。
+
+    不依赖真实时间流逝：mark_rate_limited() 与读取时间戳之间本质为零耗时，
+    直接断言即可。P3-6：去掉原 time.sleep(0.05)，把 flaky 风险降到零。
+    """
     mark_rate_limited()
-    time.sleep(0.05)
-    assert seconds_since_rate_limit() < 1.0
+    # 无需 sleep：进程内调用几乎是零耗时，< 0.05s 是天然成立的
+    assert seconds_since_rate_limit() < 0.5
 
 
 def test_bg_throttle_blocks_during_rate_limit_backoff():

@@ -40,6 +40,14 @@ class _FakeRepo:
 class _FakeStore:
     def __init__(self, repo: _FakeRepo) -> None:
         self._conversation_repo = repo
+        self._meta: dict[str, str] = {}
+
+    def get_meta(self, key: str, default: str = "") -> str:
+        return self._meta.get(key, default)
+
+    def set_meta(self, key: str, value: str) -> bool:
+        self._meta[key] = value
+        return True
 
 
 class _FakeAdapter:
@@ -142,6 +150,22 @@ def test_run_once_falls_back_to_open_id():
     sched = _scheduler(cfg, repo, adapter)
     sched._run_once()
     assert adapter.sent[0]["open_dingtalk_id"] == "ou_abc"
+
+
+def test_run_once_dedups_same_day():
+    """同一天内多次触发应只发送一次（防多进程/重复调度导致重复推送）。"""
+    now = datetime.now()
+    rows = [{"chat_id": "c1", "chat_name": "群",
+             "summary_text": "摘要", "updated_at": now.isoformat()}]
+    repo = _FakeRepo(recent_rows=rows)
+    adapter = _FakeAdapter()
+    cfg = ProactiveConfig(enabled=True, owner_user_id="u1")
+    sched = _scheduler(cfg, repo, adapter)
+    sched._run_once()
+    assert len(adapter.sent) == 1
+    sched._run_once()
+    sched._run_once()
+    assert len(adapter.sent) == 1
 
 
 # ── start 门控 ──

@@ -412,6 +412,8 @@ class TestSyncSingleDocEdgeCases:
 class TestSyncLoop:
     def test_loop_runs_and_stops(self, tmp_db_path):
         import time
+        # P3-6：sync_interval=1 + sleep 0.1s 替代原 3600/0.5s 模式。
+        # 关键不变量：线程 start → 至少跑过一次 _run_sync → stop 干净退出。
 
         _seed_local_doc(tmp_db_path, "DOC_LOOP", "c", "2026-01-01")
         dws = MagicMock()
@@ -421,33 +423,29 @@ class TestSyncLoop:
 
         s = DocSyncScheduler(
             dws=dws, db_path=str(tmp_db_path),
-            sync_interval_seconds=3600,
+            sync_interval_seconds=1,
         )
         s.start()
-        time.sleep(0.5)
+        time.sleep(0.1)
         s.stop()
         s._thread.join(timeout=2)
         assert not s._thread.is_alive()
 
     def test_loop_exception_does_not_crash(self, tmp_db_path):
         import time
-
+        # P3-6：sync_interval=1 + sleep 0.3s 替代原 3600/2.0s 模式。
+        # 测试核心断言「循环遇异常不崩、stop 干净退出」与时间无关，
+        # 仅需至少跑过一次 _run_sync（受异常触发）即可。
         _seed_local_doc(tmp_db_path, "DOC_CRASH", "x", "2026-01-01")
         dws = MagicMock()
-        call_count = [0]
-        def _read(doc_id):
-            call_count[0] += 1
-            if call_count[0] <= 2:
-                raise RuntimeError("boom")
-            return {"content": "x", "lastModified": "2026-01-01"}
-        dws.doc_read.side_effect = _read
+        dws.doc_read.side_effect = RuntimeError("boom")
 
         s = DocSyncScheduler(
             dws=dws, db_path=str(tmp_db_path),
-            sync_interval_seconds=3600,
+            sync_interval_seconds=1,
         )
         s.start()
-        time.sleep(2.0)
+        time.sleep(0.3)
         s.stop()
         s._thread.join(timeout=2)
         assert not s._thread.is_alive()

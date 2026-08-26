@@ -153,17 +153,66 @@ def test_retry_primary_budget_exhausted_raises():
         pass
 
 
-def test_retry_primary_rate_limit_marks_and_rotates():
+def test_retry_primary_rate_limit_bails_and_cools_down():
     c = LLMClient(_cfg(model_pool=["m1", "m2"]))
-    # 两次都限频：每轮尝试都应 mark_rate_limited 且轮换池
-    impl, _ = _fake_do_chat([RuntimeError("rate_limit"), RuntimeError("rate_limit")])
+    # 限频后应立即跳过本模型（不再浪费同 call 内重试），并设置冷却 + 轮换池
+    impl, _ = _fake_do_chat([RuntimeError("rate_limit")])
     c._do_chat = impl
     with mock.patch("src.llm.client.mark_rate_limited") as m_rl:
         state = _RetryState(global_max_attempts=100)
         out = c._retry_primary_model(c.client, "m1", {"model": "m1"}, state, 2, 0.05)
     assert out is None
-    assert m_rl.call_count == 2
+    assert m_rl.call_count == 1
     assert state.rate_limited_observed is True
+    assert c._is_in_cooldown("m1") is True
+    assert c.model_pool == ["m2", "m1"]  # 限频模型移到池尾
+
+
+def test_retry_primary_rate_limit_respects_retry_after():
+    c = LLMClient(_cfg())
+    err = RuntimeError("429 rate_limit")
+    # 模拟带 Retry-After 头的响应
+    resp = mock.MagicMock()
+    resp.headers = {"retry-after": "5"}
+    err.response = resp
+    c._do_chat = _fake_do_chat([err])[0]
+    state = _RetryState(global_max_attempts=100)
+    out = c._retry_primary_model(c.client, "m1", {"model": "m1"}, state, 2, 0.05)
+    assert out is None
+    assert c._is_in_cooldown("m1") is True
+
+
+def test_retry_primary_cooldown_skips_immediately():
+    c = LLMClient(_cfg())
+    c._set_cooldown("m1", 60)
+    c._do_chat = _fake_do_chat([RuntimeError("should not be called")])[0]
+    state = _RetryState(global_max_attempts=100)
+    out = c._retry_primary_model(c.client, "m1", {"model": "m1"}, state, 2, 0.05)
+    assert out is None
+
+
+def test_retry_primary_timeout_exhaustion_sets_cooldown():
+    c = LLMClient(_cfg())
+    c._do_chat = _fake_do_chat([RuntimeError("timeout"), RuntimeError("timeout")])[0]
+    state = _RetryState(global_max_attempts=100)
+    out = c._retry_primary_model(c.client, "m1", {"model": "m1"}, state, 2, 0.05)
+    assert out is None
+    assert c._is_in_cooldown("m1") is True
+
+
+def test_backoff_sleep_jitter_disabled_is_deterministic():
+    c = LLMClient(_cfg())
+    assert c._backoff_sleep(0, 0.05, 2, 0.0) == 0.05
+    assert c._backoff_sleep(1, 0.05, 2, 0.0) == 0.10
+
+
+def test_backoff_sleep_jitter_randomizes_when_enabled():
+    c = LLMClient(_cfg())
+    vals = {c._backoff_sleep(0, 0.05, 2, 0.5) for _ in range(20)}
+    # jitter 开启后同一参数应出现多个不同值
+    assert len(vals) > 1
+    for v in vals:
+        assert 0.05 <= v <= 0.20  # [low, base*2^attempt*2]
 
 
 # ---------------- _try_fallback_pool ----------------

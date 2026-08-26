@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import threading
 import time
 from collections.abc import Iterator
@@ -66,6 +67,30 @@ class _LlmState:
 
 
 _llm_state = _LlmState()
+
+# 全局 LLM 并发槽位（跨所有 LLMClient 实例共享）。
+# 默认 0 = 不限制；配置 llm.max_concurrency > 0 时启用，保护免费额度不被批量任务打爆。
+_global_concurrency_lock = threading.Lock()
+_global_concurrency_semaphore: threading.Semaphore | None = None
+_global_concurrency_cap: int = 0
+
+
+def _ensure_global_semaphore(cap: int) -> threading.Semaphore | None:
+    """懒加载全局并发信号量；首个非零 cap 生效，后续不同 cap 仅记 debug。"""
+    global _global_concurrency_semaphore, _global_concurrency_cap
+    if cap <= 0:
+        return _global_concurrency_semaphore
+    with _global_concurrency_lock:
+        if _global_concurrency_semaphore is None:
+            _global_concurrency_semaphore = threading.Semaphore(cap)
+            _global_concurrency_cap = cap
+            logger.info("LLM 全局并发限制已启用: max_concurrency=%d", cap)
+        elif cap != _global_concurrency_cap:
+            logger.debug(
+                "LLM 全局并发限制已存在，忽略后续不同配置 cap=%d (当前=%d)",
+                cap, _global_concurrency_cap,
+            )
+    return _global_concurrency_semaphore
 
 
 def mark_rate_limited() -> None:
@@ -209,11 +234,22 @@ class LLMClient:
         if not api_key:
             logger.warning("LLM API 密钥未设置(config.llm.api_key 或 LLM_API_KEY 环境变量)")
         base_url = self._normalize_base_url(config.base_url)
+        # 统一绕过系统代理(HTTPS_PROXY 等):实测本地代理(如 127.0.0.1:7893)一旦处于
+        # 降级/断流状态,会让所有走代理的 LLM 请求在 timeout 内挂死,造成三层降级模型
+        # 中仅第二层备用(原本就 trust_env=False)幸存、其余全部超时的级联故障。
+        # agnes/kenari/bigmodel 均可直连(已实测),故主/备用/第二层统一 bypass 代理。
+        shared_http_client = None
+        if _HAS_HTTPX:
+            try:
+                shared_http_client = httpx.Client(trust_env=False)
+            except Exception as _exc:
+                logger.warning("__init__: httpx 客户端创建失败，降级为系统代理: %s", _exc)
         self.client = OpenAI(
             base_url=base_url,
             api_key=api_key or "dummy",
             timeout=config.timeout,
             max_retries=0,
+            http_client=shared_http_client,
         )
 
         # 备用模型配置(从环境变量或配置文件读取)
@@ -242,6 +278,17 @@ class LLMClient:
         # 池内除主模型外的部分(主模型失败后才依次尝试)
         self._pool_alternates = self.model_pool[1:]
 
+        # 限频/超时后的模型冷却状态（线程安全）。键为模型名，值为冷却到期时间戳。
+        self._cooldown_lock = threading.Lock()
+        self._cooldowns: dict[str, float] = {}
+
+        # 退避/冷却/并发配置（为免费 LLM 限频场景优化）
+        self.backoff_jitter = float(getattr(config, "backoff_jitter", 0.3))
+        self.rate_limit_cooldown = float(getattr(config, "rate_limit_cooldown", 30.0))
+        self.timeout_cooldown = float(getattr(config, "timeout_cooldown", 10.0))
+        self.max_concurrency = int(getattr(config, "max_concurrency", 0))
+        self._concurrency_semaphore = _ensure_global_semaphore(self.max_concurrency)
+
         if self.fallback_model or self.fallback_model_pool:
             fb_clients = {}
             # 备用池：fallback_model_pool 内每个模型共用 fallback_base_url/fallback_api_key
@@ -252,6 +299,7 @@ class LLMClient:
                         api_key=self.fallback_api_key or api_key or "dummy",
                         timeout=config.timeout,
                         max_retries=0,
+                        http_client=shared_http_client,
                     )
             # 单备用模型（旧）：fallback_model 单独建一个 client
             if self.fallback_model:
@@ -260,6 +308,7 @@ class LLMClient:
                     api_key=self.fallback_api_key or api_key or "dummy",
                     timeout=config.timeout,
                     max_retries=0,
+                    http_client=shared_http_client,
                 )
             self.fallback_clients = fb_clients
             self.fallback_order = list(fb_clients.keys())
@@ -275,9 +324,9 @@ class LLMClient:
             logger.info("LLM 客户端已初始化,base_url: %s,模型: %s(无备用模型)", base_url, config.model)
 
         # 第二层备用模型（fallback 全部失败后切换）
-        # 本地模型通常部署在 127.0.0.1，需要绕过系统代理避免 502
-        sf_http_client = None
-        if _HAS_HTTPX and self.secondary_fallback_base_url:
+        # 复用统一 bypass 代理的 httpx 客户端(shared_http_client),保持三层代理姿态一致。
+        sf_http_client = shared_http_client
+        if sf_http_client is None and _HAS_HTTPX and self.secondary_fallback_base_url:
             try:
                 sf_http_client = httpx.Client(trust_env=False)
             except Exception as _exc:
@@ -372,7 +421,55 @@ class LLMClient:
             pass
         return url
 
+    # ---- 限频/退避辅助方法 --------------------------------------------------
+    def _is_in_cooldown(self, model: str) -> bool:
+        """检查模型是否处于冷却期，并清理已过期条目。"""
+        now = time.time()
+        with self._cooldown_lock:
+            until = self._cooldowns.get(model, 0.0)
+            if until and now >= until:
+                self._cooldowns.pop(model, None)
+                return False
+            return now < until
 
+    def _set_cooldown(self, model: str, seconds: float) -> None:
+        """为指定模型设置冷却期（秒）。"""
+        if seconds <= 0:
+            return
+        until = time.time() + seconds
+        with self._cooldown_lock:
+            self._cooldowns[model] = until
+
+    @staticmethod
+    def _extract_retry_after(e: Exception) -> float | None:
+        """从 429 响应头中提取 Retry-After（秒），解析失败返回 None。"""
+        resp = getattr(e, "response", None)
+        if resp is None:
+            return None
+        headers = getattr(resp, "headers", None)
+        if not headers:
+            return None
+        ra = headers.get("retry-after") or headers.get("Retry-After")
+        if not ra:
+            return None
+        try:
+            return float(ra)
+        except (ValueError, TypeError):
+            return None
+
+    def _backoff_sleep(
+        self, attempt: int, base_backoff: float, max_retries: int, jitter: float
+    ) -> float:
+        """计算带 jitter 的退避等待秒数（不执行 sleep）。
+
+        attempt 从 0 开始。jitter<=0 时退回到固定指数退避，保证单测确定性。
+        """
+        if jitter <= 0:
+            return base_backoff * (2 ** attempt)
+        cap = base_backoff * (2 ** max(max_retries, 1)) * 2
+        low = base_backoff
+        high = base_backoff * (2 ** attempt) * 2
+        return min(cap, random.uniform(low, high))
 
     # ---- chat() 返回类型按 stream 参数分流 ----------------------------------
     # 运行时只有下方一个实现；这三条 @overload 仅供类型检查器区分返回类型：
@@ -418,6 +515,7 @@ class LLMClient:
         max_retries = 3 if not isinstance(raw_retries, int) else max(1, int(raw_retries))
         raw_backoff = getattr(self.config, "base_backoff", 2.0)
         base_backoff = 2.0 if not isinstance(raw_backoff, (int, float)) else float(raw_backoff)
+        backoff_jitter = self.backoff_jitter
 
         attempts = [(self.client, m) for m in self.model_pool]
 
@@ -433,6 +531,9 @@ class LLMClient:
         # 流式仅在主模型尝试，失败降级为非流式
         if stream:
             for client, model in attempts:
+                if self._is_in_cooldown(model):
+                    logger.debug("LLM 流式请求跳过冷却模型: %s", model)
+                    continue
                 logger.info("LLM 流式请求: 模型=%s，消息数=%d，工具数=%d",
                             model, len(messages), len(tools or []))
                 model_kwargs = dict(kwargs)
@@ -451,13 +552,16 @@ class LLMClient:
                     break
 
         for client, model in attempts:
+            if self._is_in_cooldown(model):
+                logger.debug("LLM 请求跳过冷却模型: %s", model)
+                continue
             if not stream:
                 logger.info("LLM 请求: 模型=%s，消息数=%d，工具数=%d",
                             model, len(messages), len(tools or []))
             model_kwargs = dict(kwargs)
             model_kwargs["model"] = model
             result = self._retry_primary_model(
-                client, model, model_kwargs, state, max_retries, base_backoff
+                client, model, model_kwargs, state, max_retries, base_backoff, backoff_jitter
             )
             if result is not None:
                 return result
@@ -503,15 +607,20 @@ class LLMClient:
             f"Last primary: {state.last_err}, Last fallback: {state.last_fallback_err}"
         ) from state.last_fallback_err
 
-    def _retry_primary_model(self, client, model, model_kwargs, state, max_retries, base_backoff):
+    def _retry_primary_model(
+        self, client, model, model_kwargs, state, max_retries, base_backoff, backoff_jitter=0.0
+    ):
         """主模型池单模型重试原语（F7/F8 抽出）：对单模型做最多 max_retries 次指数退避重试。
 
         返回成功响应；若需尝试池内下一模型（重试耗尽或不可重试）返回 None。
-        内部处理：限频标记 + 主模型池轮换 + 全局预算熔断（check_budget 抛错）。
+        内部处理：限频标记 + 限频冷却 + 主模型池轮换 + 全局预算熔断（check_budget 抛错）。
         """
         for attempt in range(max_retries):
             state.note_attempt()
             state.check_budget("主模型池全部因限流失败")
+            if self._is_in_cooldown(model):
+                logger.debug("LLM 模型 %s 处于冷却期，跳过本模型", model)
+                return None
             try:
                 return self._do_chat(client, model_kwargs, stream=False)
             except Exception as e:
@@ -520,6 +629,10 @@ class LLMClient:
                 if is_rate_limited:
                     mark_rate_limited()
                     state.rate_limited_observed = True
+                    # 优先尊重服务端的 Retry-After，否则使用配置冷却期
+                    retry_after = self._extract_retry_after(e)
+                    cooldown_s = retry_after if retry_after is not None else self.rate_limit_cooldown
+                    self._set_cooldown(model, cooldown_s)
                     # 跨请求记忆：限频模型移到池尾，下次 chat() 不再优先尝试
                     try:
                         idx = self.model_pool.index(model)
@@ -528,17 +641,24 @@ class LLMClient:
                     except ValueError as _exc:
                         logger.debug(f"_retry_primary_model: swallowed exception: {_exc}")
                         pass
+                    logger.warning(
+                        "LLM(%s) 触发限频(429)，冷却 %.1fs 并跳过: %s", model, cooldown_s, e
+                    )
+                    return None
                 if not retryable:
                     logger.warning("LLM(%s) 失败（不可重试，跳至下一降级层）: %s", model, e)
                     return None
                 if attempt < max_retries - 1:
-                    wait = base_backoff * (2 ** attempt)
+                    wait = self._backoff_sleep(attempt, base_backoff, max_retries, backoff_jitter)
                     logger.warning(
                         "LLM(%s) 瞬时故障 (第%d/%d次重试)，等待 %.1fs 后重试: %s",
                         model, attempt + 1, max_retries, wait, e,
                     )
                     time.sleep(wait)
                     continue
+                # 重试耗尽且仍是可重试的瞬时故障：给短冷却，避免下一轮继续砸同一个模型
+                if retryable:
+                    self._set_cooldown(model, self.timeout_cooldown)
                 logger.warning("LLM(%s) 重试 %d 次后仍失败，尝试下一模型", model, max_retries)
         return None
 
@@ -552,6 +672,9 @@ class LLMClient:
             return None
         last_pool_err: Exception | None = None
         for fb_model in pool_order:
+            if self._is_in_cooldown(fb_model):
+                logger.debug("%s模型 %s 处于冷却期，跳过", label, fb_model)
+                continue
             fb_client = pool_clients[fb_model]
             logger.info("模型池全部失败，切换到%s模型: %s（还剩 %d 个备用）",
                         label, fb_model, len(pool_order) - pool_order.index(fb_model) - 1)
@@ -570,6 +693,13 @@ class LLMClient:
                 is_rate_limited, is_auth, _retryable = _classify_failure(fb_err)
                 if is_rate_limited:
                     state.rate_limited_observed = True
+                    retry_after = self._extract_retry_after(fb_err)
+                    cooldown_s = retry_after if retry_after is not None else self.rate_limit_cooldown
+                    self._set_cooldown(fb_model, cooldown_s)
+                    logger.warning(
+                        "%s模型 %s 触发限频(429)，冷却 %.1fs: %s",
+                        label, fb_model, cooldown_s, fb_err,
+                    )
                 if not _retryable or is_auth:
                     logger.warning("%s模型 %s 失败（不可重试/鉴权错误，尝试下一备用）: %s",
                                    label, fb_model, fb_err)
@@ -581,9 +711,16 @@ class LLMClient:
 
 
     def _do_chat(self, client: OpenAI, kwargs: dict, stream: bool = False) -> LLMResponse | Iterator[LLMStreamChunk]:
-        """执行实际的 LLM 调用。"""
+        """执行实际的 LLM 调用（含可选全局并发控制）。"""
         if stream:
             return self._do_chat_stream(client, kwargs)
+        if self._concurrency_semaphore:
+            with self._concurrency_semaphore:
+                return self._do_chat_impl(client, kwargs)
+        return self._do_chat_impl(client, kwargs)
+
+    def _do_chat_impl(self, client: OpenAI, kwargs: dict) -> LLMResponse:
+        """执行非流式 LLM 调用（不包含并发控制）。"""
         response = client.chat.completions.create(**kwargs)
         result = self._parse_response(response, kwargs)
         # 响应回来后才能拿到真实消费 token 数（请求阶段尚无 usage）
@@ -600,7 +737,11 @@ class LLMClient:
 
     def _do_chat_stream(self, client: OpenAI, kwargs: dict) -> Iterator[LLMStreamChunk]:
         """执行流式 LLM 调用，返回迭代器。"""
-        response = client.chat.completions.create(**kwargs, stream=True)
+        if self._concurrency_semaphore:
+            with self._concurrency_semaphore:
+                response = client.chat.completions.create(**kwargs, stream=True)
+        else:
+            response = client.chat.completions.create(**kwargs, stream=True)
         tools = kwargs.get("tools") or []
         valid_names = {t.get("function", {}).get("name") for t in tools if isinstance(t, dict)}
         model = kwargs.get("model", "?")

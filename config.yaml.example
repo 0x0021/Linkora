@@ -23,6 +23,21 @@
 #    值与本段 dingtalk 平台保持一致即可。
 # ============================================================
 platforms:
+  # —— 高级：多平台与按平台覆盖（override）——
+  # 本模板仅列单平台实例。生产可配置多个平台（钉钉/飞书/企微），platforms 为列表，
+  # 每个元素对应一个平台实例，adapter_type 决定适配器（见 config_models.PlatformConfig）。
+  # 每个平台支持 override 覆盖全局配置，键为 platform.<id>.override.{llm,rag,tools}，
+  # 仅对当前平台生效；空值沿用全局。覆盖结构详见 config_models.PlatformConfig 的
+  # PlatformConfig.override / llm / rag / tools 字段。
+  # 参考骨架（脱敏，endpoint/密钥请按需从 live config.yaml 复制，切勿提交真实值）：
+  #   - id: feishu
+  #     display_name: 飞书
+  #     enabled: true
+  #     adapter_type: feishu
+  #     override:
+  #       rag: { enabled: false }            # 该平台关闭 RAG
+  #       tools: { enable_kb_search: false } # 该平台禁用知识库搜索工具
+  # 另：safety.sensitive_words（敏感词过滤）已在下方 safety 段提供占位，按需填充。
   - id: dingtalk
     display_name: 钉钉
     enabled: true

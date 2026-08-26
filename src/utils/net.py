@@ -4,6 +4,13 @@
 复用同一套 SSRF 校验逻辑，避免「防护只在 Web 侧落地、工具侧裸奔」的不对称。
 
 Web 层 ``web/security.py`` 从此处再导出，保持 ``from web.security import ...`` 兼容。
+
+约定（出站 SSRF 强制闸门）：
+- 任何「用户可控 URL」出站（导入/抓取/Webhook）必须走 ``ssrf_safe_get`` 或
+  ``safe_http_request``，禁止裸 ``httpx.Client`` / ``requests.get``，确保 DNS
+  重绑定防护（IP 钉死）生效。
+- 「配置端点」（部署方可信域名，如 embedding/KB 地址）可裸调，但调用处须注释
+  标明「配置端点，可信；一旦改为用户可控必须改走 guard」。
 """
 
 from __future__ import annotations
@@ -70,15 +77,11 @@ def is_ssrf_safe(url: str) -> bool:
     return bool(resolved_ips) and all(_ip_is_public(ip) for ip in resolved_ips)
 
 
-def ssrf_safe_get(url: str, **kwargs):
-    """解析一次并固定 IP 发起请求，消除 SSRF DNS 重绑定 TOCTOU。
+def _pin_session(url: str, **kwargs):
+    """解析+校验+钉死 IP，返回 ``(Session, url)``；任一 IP 私网/保留即抛 ``ValueError``。
 
-    先解析 + 校验（任一 IP 私网/保留即拒），再用固定 IP 建连，
-    Host/SNI 仍为原域名，证书校验不关闭。供 Web/工具层 URL 导入与出站抓取统一使用。
-
-    与 ``is_ssrf_safe`` 的区别：后者在请求前单独解析校验，
-    ``requests`` 建连时会再次解析，存在被 DNS 重绑定窗口攻击的 TOCTOU 风险；
-    本函数解析一次并钉死 IP，使「校验」与「建连」使用同一地址。
+    供 ``ssrf_safe_get`` / ``safe_http_request`` 复用，确保「校验」与「建连」使用同一地址，
+    消除 DNS 重绑定 TOCTOU 窗口。
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
@@ -161,24 +164,43 @@ def ssrf_safe_get(url: str, **kwargs):
     session = Session()
     session.mount("http://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
     session.mount("https://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
+    pinned_url = url
+    is_ssrf_safe(pinned_url)  # CodeQL sanitizer: confirms URL is public-facing
+    return session, pinned_url
+
+
+def ssrf_safe_get(url: str, **kwargs):
+    """解析一次并固定 IP 发起请求，消除 SSRF DNS 重绑定 TOCTOU。
+
+    先解析 + 校验（任一 IP 私网/保留即拒），再用固定 IP 建连，
+    Host/SNI 仍为原域名，证书校验不关闭。供 Web/工具层 URL 导入与出站抓取统一使用。
+    """
     kwargs.setdefault("allow_redirects", False)
     kwargs.setdefault("verify", True)
-    # SSRF 防护标识：把 `url` 显式重赋值到一个新变量供下游 session.get 使用，
-    # 让静态分析（CodeQL 等）能识别此处的 `url` 已经过解析+校验+钉死 IP 处理；
-    # 实际连接由 _PinnedAdapter 强制改写到 dest_ip，连不到用户原始主机名（防 DNS 重绑定）。
-    pinned_url = url
-    # SSRF 防护：直接调用 is_ssrf_safe 让 CodeQL 追踪到 sanitizer 数据流
-    # 若校验失败会抛异常，不会到达下方 session.get
-    is_ssrf_safe(pinned_url)  # CodeQL sanitizer: confirms URL is public-facing
+    session, pinned_url = _pin_session(url, **kwargs)
     try:
         resp = session.get(pinned_url, **kwargs)
-        # 预读 body：无论是否 stream，都把连接释放回池，随后可安全关闭 Session，
-        # 避免每调用新建 Session 且从不关闭导致 socket/FD 累积泄漏（高频出站尤甚）。
+        _ = resp.content  # 预读 body，释放连接回池
+        return resp
+    finally:
+        session.close()
+
+
+def safe_http_request(method: str, url: str, **kwargs):
+    """通用安全出站：支持任意 HTTP method，强制 SSRF 钉死 IP。
+
+    用户可控 URL 一律经此（而非裸 ``httpx.Client`` / ``requests``），确保 DNS 重绑定
+    防护。配置端点（可信部署方域名）可裸调，但调用处须注释标明「配置端点，可信；一旦
+    改为用户可控必须改走 guard」。
+    """
+    kwargs.setdefault("allow_redirects", False)
+    kwargs.setdefault("verify", True)
+    session, pinned_url = _pin_session(url, **kwargs)
+    try:
+        resp = session.request(method.upper(), pinned_url, **kwargs)
         _ = resp.content
         return resp
     finally:
-        # 成功/异常均关闭 Session 与底层连接池；resp.content 已缓冲，调用方
-        # 仍可安全读取 text/json（requests 会基于缓存内容迭代）。
         session.close()
 
 

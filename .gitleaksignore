@@ -4,6 +4,11 @@
 # 非真实密钥。指纹格式：<commit>:<file>:<rule>:<line>。
 # 仅抑制此处列出的历史误报；任何新提交的密钥仍会被拦截。
 # 若某行后续引入了真实密钥，因其 commit 指纹变化，会自动重新触发告警。
+#
+# ⚠️ 禁止在本文件或任何文档注释中写入 base64 / JWT / 真实密钥字符串样例！
+#    历史事故：注释内 base64 JWT 示例被 generic-api-key 规则命中，导致 pre-commit
+#    fail_fast 死锁（仅能 --no-verify 一次性绕过）。文档密钥示例一律用占位符
+#    （如 `<JWT 头部.载荷.签名，已截断>`），并在下方登记对应文件指纹行忽略。
 
 615f3824d8827625621d8bf5069b1a8b1e536442:tests/test_feishu_adapter 2.py:generic-api-key:468
 615f3824d8827625621d8bf5069b1a8b1e536442:tests/test_feishu_adapter 2.py:generic-api-key:474

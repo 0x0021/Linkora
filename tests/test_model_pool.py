@@ -56,7 +56,40 @@ def test_model_pool_order_dedup():
 
 
 def test_pool_rotation_on_primary_failure(monkeypatch):
-    """主模型抛瞬时异常，重试耗尽后轮换到池内第一个备选并成功。"""
+    """主模型抛非限频瞬时故障，重试耗尽后轮换到池内第一个备选并成功。
+
+    注意：429/rate_limit 属限频故障，client 会立即跳过并冷却（见
+    test_pool_rotation_on_rate_limit_skip）。本例用 timeout 类瞬时故障，
+    走「可重试→指数退避重试 max_retries 次→耗尽后轮换」路径。
+    """
+    cfg = _make_config(model_pool=["alt-1", "alt-2"], fallback_model="fb",
+                       fallback_base_url="https://fb/v1")
+    cfg.max_retries = 3  # 显式设定，消除对 config.yaml 默认 max_retries 的隐式依赖
+    client = LLMClient(cfg)
+    monkeypatch.setattr("src.llm.client.time.sleep", lambda s: None)
+
+    calls = {"model": []}
+
+    def fake_do_chat(inner_client, kwargs, stream=False, **_kw):
+        calls["model"].append(kwargs["model"])
+        if kwargs["model"] == "primary-model":
+            raise RuntimeError("timeout: Connection reset by peer")
+        return _fake_response(kwargs["model"])
+
+    monkeypatch.setattr(client, "_do_chat", fake_do_chat)
+    result = client.chat([{"role": "user", "content": "hi"}])
+    assert result.content == "ok-from-alt-1"
+    # primary 重试 max_retries(3) 次全部失败，随后轮换到 alt-1 成功
+    assert calls["model"] == ["primary-model", "primary-model", "primary-model", "alt-1"]
+
+
+def test_pool_rotation_on_rate_limit_skip(monkeypatch):
+    """主模型触发限频(429)，立即跳过冷却并轮换到池内第一个备选（不浪费重试预算）。
+
+    设计意图（见 src/llm/client.py::_retry_primary_model 限频分支）：免费模型被
+    限流后短时内重试无意义，应跳过该模型、置冷却期，转尝试池中其余模型。调用序列
+    为 primary 一次（命中限频即跳过）+ alt-1 成功，而非重试三次。
+    """
     cfg = _make_config(model_pool=["alt-1", "alt-2"], fallback_model="fb",
                        fallback_base_url="https://fb/v1")
     cfg.max_retries = 3  # 显式设定，消除对 config.yaml 默认 max_retries 的隐式依赖
@@ -74,8 +107,8 @@ def test_pool_rotation_on_primary_failure(monkeypatch):
     monkeypatch.setattr(client, "_do_chat", fake_do_chat)
     result = client.chat([{"role": "user", "content": "hi"}])
     assert result.content == "ok-from-alt-1"
-    # primary 重试 max_retries(3) 次全部失败，随后轮换到 alt-1 成功
-    assert calls["model"] == ["primary-model", "primary-model", "primary-model", "alt-1"]
+    # 限频命中即跳过，primary 仅调用一次，随后轮换到 alt-1 成功
+    assert calls["model"] == ["primary-model", "alt-1"]
 
 
 def test_auth_error_skips_retry_and_rotates(monkeypatch):

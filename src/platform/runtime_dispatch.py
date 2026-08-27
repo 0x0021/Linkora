@@ -7,6 +7,7 @@ import logging
 import sqlite3
 
 from src.poller_utils import is_read_receipt_content
+from src.im_adapter.errors import IMAdapterError
 
 logger = logging.getLogger("src.platform.runtime")
 
@@ -152,7 +153,7 @@ class ReplyDispatchMixin(EngineMixinBase):
                 )
                 logger.info("[发送] 原生引用回复 DWS 返回: %s", native_result)
                 return True, native_result
-            except (sqlite3.Error, RuntimeError):
+            except (sqlite3.Error, RuntimeError, IMAdapterError):
                 # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送
                 logger.warning("[发送] 原生引用回复失败，降级为分片发送")
                 # 落到下方 _send 分支

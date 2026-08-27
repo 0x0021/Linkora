@@ -94,8 +94,8 @@ def test_check_budget_rate_limited_raises_special():
     try:
         s.check_budget("phase")
         raise AssertionError("should raise")
-    except LLMRateLimitExhaustedError:
-        pass
+    except LLMRateLimitExhaustedError as _e:
+        _ = _e  # 测试内预期异常，忽略
 
 
 def test_check_budget_no_ratelimit_raises_runtime():
@@ -103,8 +103,8 @@ def test_check_budget_no_ratelimit_raises_runtime():
     try:
         s.check_budget("phase")
         raise AssertionError("should raise")
-    except RuntimeError:
-        pass
+    except RuntimeError as _e:
+        _ = _e  # 测试内预期异常，忽略
 
 
 # ---------------- _retry_primary_model ----------------
@@ -149,8 +149,8 @@ def test_retry_primary_budget_exhausted_raises():
     try:
         c._retry_primary_model(c.client, "m1", {"model": "m1"}, state, 2, 0.05)
         raise AssertionError("should raise budget error")
-    except LLMRateLimitExhaustedError:
-        pass
+    except LLMRateLimitExhaustedError as _e:
+        _ = _e  # 测试内预期异常，忽略
 
 
 def test_retry_primary_rate_limit_bails_and_cools_down():

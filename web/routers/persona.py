@@ -881,8 +881,8 @@ async def recommend_few_shot(limit: int = 6):
             platform = "dingtalk"
             try:
                 platform = get_current_platform()
-            except Exception:
-                pass
+            except Exception as _e:
+                _ = _e  # 取当前平台失败则回退 dingtalk
             # 排除已采纳样例，避免推荐列表中重复出现用户已采纳的 pair
             cfg = _load_config()
             adopted = _read_few_shot_for_platform(store, platform, cfg)

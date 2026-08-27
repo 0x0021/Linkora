@@ -114,15 +114,15 @@ def _load_img_token_secret() -> bytes:
     try:
         if _IMG_TOKEN_SECRET_FILE.exists():
             return _IMG_TOKEN_SECRET_FILE.read_bytes()
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("_load_img_token_secret 读取失败，回退随机密钥: %s", _e)
     secret = os.urandom(32)
     try:
         _IMG_TOKEN_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
         _IMG_TOKEN_SECRET_FILE.write_bytes(secret)
         _IMG_TOKEN_SECRET_FILE.chmod(0o600)
-    except Exception:
-        pass  # 写盘失败则回退为本次内存密钥（重启会轮换，但不影响单次运行）
+    except Exception as _e:
+        logger.debug("写盘 img token secret 失败，回退内存密钥: %s", _e)
     return secret
 
 
@@ -441,8 +441,8 @@ async def _lazy_fill_icon_url_map() -> None:
     try:
         from web.dependencies import _fetch_market_rankings
         await _fetch_market_rankings(force=False)
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("_lazy_fill_icon_url_map 失败，忽略: %s", _e)
 
 
 async def _download_skill_icon(slug: str, icon_url: str) -> bool:
@@ -472,8 +472,8 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
                 if ctype.startswith("image/"):
                     dest.write_bytes(r.content)
                     return True
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("下载技能图标失败，忽略: %s", _e)
     return False
 
 

@@ -416,9 +416,9 @@ class LLMClient:
                     if ip.is_link_local:  # 169.254.0.0/16 含云元数据
                         logger.error("LLM base_url 指向链路本地/元数据地址，拒绝: %s", url)
                         return None  # 回退到默认端点，避免 SSRF
-        except (OSError, ValueError, TypeError):
+        except (OSError, ValueError, TypeError) as _e:
             # 本地模型（如 127.0.0.1）通常没有有效 hostname，SSRF 预检失败属正常
-            pass
+            logger.debug("SSRF 预检跳过（本地模型无有效 hostname）: %s", _e)
         return url
 
     # ---- 限频/退避辅助方法 --------------------------------------------------

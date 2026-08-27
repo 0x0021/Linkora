@@ -172,8 +172,8 @@ async def get_simulate_status():
                 capture_output=True, text=True, cwd=os.getcwd(),
             )
             status["system"]["version"] = result.stdout.strip() or "unknown"
-        except Exception:
-            pass
+        except Exception as _e:
+            _ = _e  # 取版本号失败则留 unknown
 
     except Exception as e:
         logger.error("获取模拟测试状态失败: %s", e)

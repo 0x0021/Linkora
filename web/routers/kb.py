@@ -310,8 +310,8 @@ def import_kb_from_url(body: dict | None = None):
                     # 等待网络空闲
                     try:
                         page.wait_for_load_state('networkidle', timeout=10000)
-                    except Exception:
-                        pass  # 超时也没关系，继续
+                    except Exception as _e:
+                        _ = _e  # 超时也没关系，继续
                     import time
                     time.sleep(2)  # 多等 2 秒让 JS 渲染
                     html_content = page.content()

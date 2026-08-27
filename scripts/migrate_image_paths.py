@@ -137,8 +137,8 @@ def migrate_single(old_rel: str, platform: str, account_id: str,
         if apply and old_abs.exists():
             try:
                 old_abs.unlink()
-            except OSError:
-                pass
+            except OSError as _e:
+                logging.getLogger(__name__).debug("迁移：删除旧文件失败，忽略: %s", _e)
         return new_rel, f"目标已存在复用: {new_rel}"
     if apply:
         new_abs.parent.mkdir(parents=True, exist_ok=True)

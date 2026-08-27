@@ -262,8 +262,8 @@ def test_run_launches_per_platform_poller_threads(monkeypatch):
 
     try:
         bot.run(web_port=0)
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # 测试内预期 bot.run 可能抛错，忽略
 
     assert any("poller-dingtalk" in (s or "") for s in started)
     assert not any("poller-feishu" in (s or "") for s in started)

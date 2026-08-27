@@ -486,5 +486,5 @@ def cross_process_lock(lock_name: str, workdir: str | None = None):
                 logger.warning("cross_process_lock: 释放锁失败: %s", _exc)
         try:
             lock_file.close()
-        except OSError:
-            pass
+        except OSError as _e:
+            logger.debug("cross_process_lock: 关闭锁文件失败，忽略: %s", _e)

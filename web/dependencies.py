@@ -404,8 +404,8 @@ async def _trigger_icon_prefetch(icon_url_map: dict[str, str]) -> None:
     try:
         from web.routers.image import prefetch_all_skill_icons
         await prefetch_all_skill_icons(icon_url_map)
-    except Exception:
-        pass
+    except Exception as _e:
+        logging.getLogger(__name__).debug("_trigger_icon_prefetch 失败，忽略: %s", _e)
 
 
 def _normalize_market_skill(item: dict) -> dict:

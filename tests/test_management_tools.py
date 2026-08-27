@@ -32,8 +32,8 @@ def store():
     for suffix in ("", "-wal", "-shm"):
         try:
             os.remove(path + suffix)
-        except OSError:
-            pass
+        except OSError as _e:
+            _ = _e  # 测试清理：忽略删除残留文件异常
 
 
 # ============================================================================
@@ -218,8 +218,8 @@ class TestMessageStatsTool:
         for key in list(store._conv_conns.keys()):
             try:
                 store._conv_conns[key][1].close()
-            except Exception:
-                pass
+            except Exception as _e:
+                _ = _e  # 测试清理：忽略关闭缓存连接异常
         store._conv_conns.clear()
         # 触发新连接失败：关闭主库后手动使会话库也失效
         store._closed = True

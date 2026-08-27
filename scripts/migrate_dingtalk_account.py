@@ -60,8 +60,8 @@ def _rewrite_rel(rel: str, real_dir: str) -> str:
             if isinstance(d, dict):
                 return json.dumps({k: _rewrite_rel(v, real_dir) for k, v in d.items()},
                                   ensure_ascii=False)
-        except Exception:
-            pass
+        except Exception as _e:
+            _ = _e  # 解析失败则按原始 rel 处理
     parts = rel.split("/")
     if len(parts) == 4 and parts[0] in ("dingtalk", "feishu", "wecom") and parts[1] != real_dir:
         parts[1] = real_dir

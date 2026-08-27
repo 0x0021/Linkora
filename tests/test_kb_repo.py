@@ -22,8 +22,8 @@ def store(tmp_db_path):
     yield s
     try:
         s.close()
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # 测试清理：忽略关闭异常
 
 
 @pytest.fixture

@@ -80,8 +80,8 @@ def _resolve_user_name() -> str:
                         if user:
                             user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "") or \
                                         user.get("name", "N/A")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    _ = _e  # 取当前用户名失败则保留 N/A
         else:
             dws = _api.get_dws()
             profile = dws._get_current_profile_local()

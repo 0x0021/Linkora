@@ -334,8 +334,8 @@ async def tool_staleness():
                     ttl_config = {
                         k: v for k, v in agent._TOOL_RESULT_TTL.items() if v > 0
                     }
-            except Exception:
-                pass
+            except Exception as _e:
+                _ = _e  # 读取 TTL 配置失败则留空
 
             return {
                 "available": True,

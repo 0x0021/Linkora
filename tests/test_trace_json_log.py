@@ -117,8 +117,8 @@ def _restore_logging():
         # 还原幂等标记，避免影响其它测试
         try:
             delattr(root, "_rid_filter_installed")
-        except AttributeError:
-            pass
+        except AttributeError as _e:
+            _ = _e  # 幂等还原：属性本就不存在则忽略
 
 
 def test_setup_logger_json_logs_writes_json(tmp_path, _restore_logging):

@@ -25,8 +25,8 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv()  # 若存在 .env，自动注入环境变量（不影响命令行已 export 的值）
-except ImportError:
-    pass  # 没有 python-dotenv 也能跑，只要手动 export 了变量
+except ImportError as _e:
+    _ = _e  # 没有 python-dotenv 也能跑，只要手动 export 了变量
 
 try:
     from openai import OpenAI

@@ -347,8 +347,8 @@ def _is_blocked_host(url: str) -> bool:
         # 字面量 IP 直接判定（如 http://169.254.169.254/）
         try:
             return _ip_is_blocked(ipaddress.ip_address(host_l))
-        except ValueError:
-            pass  # host 非字面 IP（域名），交给 ssrf_safe_get 在请求时校验
+        except ValueError as _e:
+            logger.debug("host 非字面 IP（域名），交给 ssrf_safe_get 在请求时校验: %s", _e)
         # 其余域名默认放行：ssrf_safe_get 会解析并校验公网可达
         return False
     except ValueError:

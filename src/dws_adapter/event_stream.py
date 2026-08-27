@@ -209,8 +209,8 @@ class EventStreamConsumer:
             logger.warning("[Stream] SIGTERM 超时，降级 SIGKILL（可能泄漏服务端订阅）")
             try:
                 proc.kill()
-            except ProcessLookupError:
-                pass
+            except ProcessLookupError as _e:
+                logger.debug("[Stream] 进程已退出，忽略 ProcessLookupError: %s", _e)
 
     # === 读线程 ===
 
@@ -220,8 +220,8 @@ class EventStreamConsumer:
             for line in proc.stderr:
                 if "[event] ready" in line:
                     self._on_ready(kind)
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as _e:
+            logger.debug("[Stream] _read_stderr 流读取结束: %s", _e)
 
     def _read_stdout(self, proc: subprocess.Popen, kind: str) -> None:
         assert proc.stdout is not None
@@ -240,8 +240,8 @@ class EventStreamConsumer:
                         self.on_message(msg)
                     except Exception as e:  # 回调异常不应杀死读线程
                         logger.exception("[Stream] on_message 回调异常: %s", e)
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as _e:
+            logger.debug("[Stream] _read_stdout 流读取结束: %s", _e)
         # 进程 stdout 关闭：monitor 会按退避重启；此处不自行重连（避免风暴）
         if self._running:
             logger.warning("[Stream] kind=%s 进程退出，monitor 将重连", kind)

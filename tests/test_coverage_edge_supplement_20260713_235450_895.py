@@ -30,8 +30,8 @@ class TestDocSyncSchedulerEdge:
         # 手动模拟一次带异常的循环迭代
         try:
             scheduler._run_sync()
-        except Exception:
-            pass  # 预期抛异常
+        except Exception as _e:
+            _ = _e  # 预期抛异常
 
         # 验证可以继续调用（不崩溃），且运行状态正常
         scheduler._running = False

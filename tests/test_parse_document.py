@@ -530,5 +530,5 @@ class TestParseImage:
         finally:
             try:
                 _os.unlink(tmp_path)
-            except OSError:
-                pass
+            except OSError as _e:
+                _ = _e  # 测试清理：忽略删除临时文件异常

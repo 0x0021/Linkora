@@ -839,6 +839,87 @@ class TestPollOnce:
         assert out == []
         p._warn_permission_once.assert_called()
 
+    def test_top_dws_imadapter_error_swallowed(self, poller_factory):
+        """IMAdapterError（如钉钉 MCP 网关瞬断 EOF）不应击穿 poller 线程。"""
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        _stub_poll_once_deps(p)
+        p._get_cached_top_conversations.side_effect = IMAdapterError("EOF")
+        out = p.poll_once()
+        assert out == []
+        p._warn_permission_once.assert_called()
+
+    def test_get_cached_top_conversations_imadapter_error_degrades(self, poller_factory):
+        """chat_list_top_conversations 抛 IMAdapterError 时降级返回旧缓存，不抛出。"""
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        stale = [{"openConversationId": "oc_cached", "title": "缓存会话"}]
+        p._top_convs_cache = stale
+        p._top_convs_cache_ts = 0.0  # 强制过期，触发真实 dws 调用
+        p.dws.chat_list_top_conversations.side_effect = IMAdapterError("EOF")
+        result = p._get_cached_top_conversations()
+        assert result == stale  # 降级返回旧缓存
+
+    def test_get_cached_top_conversations_imadapter_error_no_cache_returns_empty(self, poller_factory):
+        """无旧缓存时，IMAdapterError 降级返回空列表而非击穿线程。"""
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        p._top_convs_cache = []
+        p._top_convs_cache_ts = 0.0
+        p.dws.chat_list_top_conversations.side_effect = IMAdapterError("EOF")
+        result = p._get_cached_top_conversations()
+        assert result == []
+
+    def test_unread_imadapter_error_swallowed(self, poller_factory):
+        """钉钉 MCP 网关瞬断（IMAdapterError）拉未读会话时，应降级为[]而非击穿线程。"""
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        _stub_poll_once_deps(p)
+        p.dws.chat_message_list_unread_conversations.side_effect = IMAdapterError("EOF")
+        out = p.poll_once()
+        assert out == []
+
+    def test_list_all_imadapter_error_swallowed(self, poller_factory):
+        """_fetch_messages_via_list_all 内 dws 瞬断（IMAdapterError）应降级返回[]。"""
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        # 不调用 _stub_poll_once_deps（它桩掉了 _fetch_messages_via_list_all）；
+        # 改桩白名单避免 DB 依赖，直接验证 discovery 模块对 dws 瞬断的真实兜底。
+        p._build_list_all_whitelist = MagicMock(return_value=([], {}))
+        p.dws.chat_message_list_all.side_effect = IMAdapterError("EOF")
+        result = p._fetch_messages_via_list_all()
+        assert result == []
+
+    def test_poll_one_conversation_list_imadapter_error_returns_none(self, poller_factory):
+        """逐会话补拉 chat_message_list 抛 IMAdapterError 时应返回 None（跳过该会话）。"""
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        _stub_poll_once_deps(p)
+        conv = {"openConversationId": "oc_x", "title": "群X", "singleChat": False}
+        p.dws.chat_message_list.side_effect = IMAdapterError("EOF")
+        out = p._poll_one_conversation(conv, group_cache=None, forced_ids=set())
+        assert out is None
+
+    def test_run_loop_survives_imadapter_error(self, poller_factory):
+        """run_loop 外层兜底（belt）：poll_once 抛 IMAdapterError 不应杀死 poller 线程。"""
+        import threading
+        import time
+
+        from src.im_adapter.errors import IMAdapterError
+        p, _ = poller_factory()
+        _stub_poll_once_deps(p)
+        p.config.interval_seconds = 1
+        p.poll_once = MagicMock(side_effect=IMAdapterError("boom"))
+        t = threading.Thread(
+            target=p.run_loop, kwargs={"handler": lambda m: None}, daemon=True
+        )
+        t.start()
+        time.sleep(0.4)
+        calls = p.poll_once.call_count
+        p.stop()
+        t.join(timeout=3)
+        assert calls >= 1, "run_loop 至少应跑过一轮且未被异常杀死"
+
     def test_db_conv_fetch_error_swallowed(self, poller_factory):
         p, _ = poller_factory()
         _stub_poll_once_deps(p)

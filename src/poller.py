@@ -14,6 +14,7 @@ from src.config import PollerConfig
 # dws 形参按 BaseIMAdapter 声明：poller 只依赖这层通用 IM 契约，
 # 实参可能是钉钉 DwsAdapter，也可能是飞书 / 企微适配器。
 from src.im_adapter.base_adapter import BaseIMAdapter
+from src.im_adapter.errors import IMAdapterError
 from src.memory.sqlite_store import SQLiteStore
 from src.models import Message
 from src.dws_adapter.event_stream import EventStreamConsumer
@@ -163,7 +164,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
                     cur.get("corp_name", "?"), effective,
                     " [配置指定]" if self.target_org_corp_id else " [自动=当前登录组织]",
                 )
-        except RuntimeError as e:
+        except (RuntimeError, IMAdapterError) as e:
             logger.warning("[轮询器] 解析目标组织失败（不影响运行）: %s", e)
             self.current_org = {"corp_id": "", "corp_name": ""}
 
@@ -271,7 +272,7 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             except KeyboardInterrupt:
                 logger.debug("用户中断轮询")
                 break
-            except RuntimeError as e:
+            except (RuntimeError, IMAdapterError) as e:
                 self._last_error = str(e)[:500]
                 self._last_error_at = datetime.now()
                 logger.error("轮询出错：%s", e, exc_info=True)

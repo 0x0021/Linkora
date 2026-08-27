@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 
 from src.dws_adapter import DwsPermissionError
+from src.im_adapter.errors import IMAdapterError
 from src.models import Message
 from src.poller_mixins_base import PollerMixinBase
 from src.poller_utils import match_notification_signature
@@ -52,7 +53,7 @@ class PollerStrategyMixin(PollerMixinBase):
 
         try:
             discovered = self.dws.sync_external_contacts()  # type: ignore[attr-defined]
-        except RuntimeError as e:
+        except (RuntimeError, IMAdapterError) as e:
             logger.warning("[轮询器] 飞书外部联系人自动发现失败: %s", e)
             return
 
@@ -146,7 +147,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 cache[conv_id] = (now, info)
             else:
                 info = cached[1]
-        except (RuntimeError, ValueError) as e:
+        except (RuntimeError, ValueError, IMAdapterError) as e:
             logger.debug(
                 "[轮询器] 飞书 chat_type 纠错: 无法获取 %s 会话信息: %s",
                 title or conv_id[:24], e)
@@ -202,7 +203,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 "list_unread",
                 f"无权限访问 list-unread-conversations 接口（未读会话不享实时优先）: {e}"
             )
-        except (RuntimeError, ValueError) as e:
+        except (RuntimeError, ValueError, IMAdapterError) as e:
             logger.warning("列出未读会话失败（未读会话不享实时优先）: %s", e)
         return unread_convs
 
@@ -235,7 +236,7 @@ class PollerStrategyMixin(PollerMixinBase):
                     try:
                         self._dispatch_one(m, handler)
                         _fd += 1
-                    except RuntimeError as _e:
+                    except (RuntimeError, IMAdapterError) as _e:
                         logger.error("[轮询器] list-all 快通道派发失败（消息可能延迟）: %s", _e, exc_info=True)
                 if _fd:
                     logger.info(
@@ -245,7 +246,7 @@ class PollerStrategyMixin(PollerMixinBase):
             else:
                 result_msgs.extend(msgs)
             logger.debug("[轮询器] list-all 直接返回了 %d 条新消息", len(msgs))
-        except (RuntimeError, ValueError) as e:
+        except (RuntimeError, ValueError, IMAdapterError) as e:
             if self._is_global_permission_error(e):
                 # 组织级权限问题：仅按 key 去重警告一次，不阻断后续其他取信通道
                 self._warn_permission_once(
@@ -308,10 +309,10 @@ class PollerStrategyMixin(PollerMixinBase):
                     seen.add(oid)
                     all_conversations.append(c)
             logger.debug("[轮询器] + %d 个置顶/最近会话，总计 %d", len(top_convs), len(all_conversations))
-        except DwsPermissionError as e:
+        except (DwsPermissionError, IMAdapterError) as e:
             self._warn_permission_once(
                 "list_top",
-                f"无权限访问 list-top-conversations 接口，跳过置顶会话轮询: {e}"
+                f"无权限/网络异常访问 list-top-conversations，跳过置顶会话轮询: {e}"
             )
         except (RuntimeError, ValueError) as e:
             logger.warning("列出置顶会话失败: %s", e)
@@ -427,12 +428,12 @@ class PollerStrategyMixin(PollerMixinBase):
             return []
         try:
             joined = joined_fn()
-        except RuntimeError as e:
+        except (RuntimeError, IMAdapterError) as e:
             logger.warning("[轮询器] 拉取已加入群列表失败: %s", e)
             joined = []
         try:
             mine = mine_fn()
-        except RuntimeError as e:
+        except (RuntimeError, IMAdapterError) as e:
             logger.warning("[轮询器] 拉取自建群列表失败: %s", e)
             mine = []
         merged: dict[str, dict] = {}
@@ -604,7 +605,7 @@ class PollerStrategyMixin(PollerMixinBase):
                         title, chat_type, len(raw_msgs))
             # 拉取成功：清除该会话的连续权限失败计数
             self._perm_fail_streak.pop(open_id, None)
-        except (RuntimeError, ValueError) as e:
+        except (RuntimeError, ValueError, IMAdapterError) as e:
             self._handle_fetch_errors(e, open_id, title, is_single, chat_type)
             return None
 

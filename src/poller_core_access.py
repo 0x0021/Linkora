@@ -4,6 +4,7 @@ import logging
 import sqlite3
 import time
 
+from src.im_adapter.errors import IMAdapterError
 from src.memory.platform_context import get_current_platform
 from src.poller_mixins_base import PollerMixinBase
 
@@ -156,8 +157,11 @@ class AccessControlMixin(PollerMixinBase):
         """获取置顶/最近会话列表（带 TTL 缓存）。
 
         会话列表极少变化，无需每轮(默认5s)都打 DWS 的 chat_list_top_conversations。
-        缓存有效期内直接返回内存副本；过期或首次才真正请求。请求失败则抛出，
-        交由调用方的 try/except 处理（与直接调用行为一致）。
+        缓存有效期内直接返回内存副本；过期或首次才真正请求。请求失败（如钉钉 MCP
+        网关瞬断 EOF）不抛出——降级返回 TTL 内旧缓存，无旧缓存则降级空列表，
+        由调用方的 DB 兜底(步骤3)补齐。一次网络抖动不应击穿整个 poller 线程
+        （dws 把所有 CLI 失败归一成 IMAdapterError，LinkoraError 子类而非
+        RuntimeError，旧 except 接不住）。
         """
         ttl = getattr(self.config, "top_convs_cache_ttl_seconds", 120) or 120
         now = time.time()
@@ -165,7 +169,15 @@ class AccessControlMixin(PollerMixinBase):
             self._top_cache_hit_flag = True
             return self._top_convs_cache
         self._top_cache_hit_flag = False
-        fresh = self.dws.chat_list_top_conversations(limit=100)
+        try:
+            fresh = self.dws.chat_list_top_conversations(limit=100)
+        except IMAdapterError as e:
+            # 瞬断优先降级：有旧缓存退货架期缓存，无则空列表（调用方 DB 兜底）
+            logger.warning(
+                "[轮询器] 拉取置顶会话失败，降级%s: %s",
+                "返回旧缓存" if self._top_convs_cache else "空列表", e,
+            )
+            return self._top_convs_cache or []
         self._top_convs_cache = fresh or []
         self._top_convs_cache_ts = now
         return self._top_convs_cache
@@ -184,7 +196,7 @@ class AccessControlMixin(PollerMixinBase):
             accessible = self.dws.chat_list_top_conversations(limit=100)
             accessible_ids = {c.get("openConversationId") for c in accessible
                              if c.get("openConversationId")}
-        except sqlite3.Error as e:
+        except (sqlite3.Error, IMAdapterError) as e:
             logger.warning("[轮询器] 黑名单对账获取可访问会话失败（改用直接探测）: %s", e)
             accessible_ids = set()
         blocked = self.store._blacklist_repo.load_blocked_conversations()
@@ -237,8 +249,8 @@ class AccessControlMixin(PollerMixinBase):
                 except AttributeError:
                     # 非钉钉适配器没有 chat_conversation_info；保持拉黑，由该平台自身逻辑处理
                     logger.debug("[轮询器] 当前适配器不支持 chat_conversation_info，跳过探测: %s", name)
-                except (sqlite3.Error, RuntimeError) as e:
-                    # 仍不可达，保持拉黑（保密群 / 已退群 / 被踢等）
+                except (sqlite3.Error, RuntimeError, IMAdapterError) as e:
+                    # 仍不可达，保持拉黑（保密群 / 已退群 / 被踢等 / dws 瞬断）
                     logger.debug("[轮询器] 黑名单对账探测失败: %s | %s", name, e)
             self._reconcile_probe_idx = (start + len(batch)) % len(remaining)
         if unblocked:

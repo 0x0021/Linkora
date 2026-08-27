@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from src.models import Message
 from src.poller_mixins_base import PollerMixinBase
 from src.poller_utils import match_notification_signature
+from src.im_adapter.errors import IMAdapterError
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +67,13 @@ class DiscoveryMixin(PollerMixinBase):
                 self.config.list_all_max_window_days, start_str,
             )
 
-        result = self.dws.chat_message_list_all(
-            start_str, end_str, limit=100, max_pages=self.config.list_all_max_pages)
-        conv_list = result.get("conversationMessagesList", []) if isinstance(result, dict) else []
+        try:
+            result = self.dws.chat_message_list_all(
+                start_str, end_str, limit=100, max_pages=self.config.list_all_max_pages)
+            conv_list = result.get("conversationMessagesList", []) if isinstance(result, dict) else []
+        except (RuntimeError, ValueError, IMAdapterError) as e:
+            logger.warning("[轮询器] list-all 发现阶段调用失败（本轮不发现新会话）: %s", e)
+            return []
         # 发现阶段也把死会话拉黑（如已退群、被踢），避免后续每轮重复请求
         if isinstance(result, dict) and result.get("blocked_chats"):
             nb = self._block_chats_from_list_all(result, source="feishu_discovery")
@@ -235,25 +240,29 @@ class DiscoveryMixin(PollerMixinBase):
             logger.debug("[轮询器] list-all 触发周期全量扫描（发现新会话），白名单=%d",
                          len(whitelist_ids))
 
-        if use_full_scan:
-            result = self.dws.chat_message_list_all(
-                start_str, end_str, limit=100, max_pages=self.config.list_all_max_pages)
-            self._last_full_scan_time = now
-        else:
-            logger.debug("[轮询器] list-all 走白名单模式，仅拉 %d 个已知会话（跳过 +chat-list 全量翻页）",
-                         len(whitelist_ids))
-            result = self.dws.chat_message_list_all(
-                start_str, end_str, limit=100,
-                chat_ids=whitelist_ids, chat_meta=whitelist_meta,
-                max_pages=self.config.list_all_max_pages,
-            )
-        conv_list = result.get("conversationMessagesList", []) if isinstance(result, dict) else []
-        # 把遍历中命中的永久权限错误会话拉入当前账号黑名单，后续轮询直接跳过、不再遍历消息
-        if isinstance(result, dict) and result.get("blocked_chats"):
-            nb = self._block_chats_from_list_all(result, source="feishu_permission")
-            if nb:
-                logger.info("[轮询器] list-all 已将 %d 个不可达会话拉入黑名单", nb)
-        logger.debug("[轮询器] list-all 查询到 %d 条会话", len(conv_list))
+        try:
+            if use_full_scan:
+                result = self.dws.chat_message_list_all(
+                    start_str, end_str, limit=100, max_pages=self.config.list_all_max_pages)
+                self._last_full_scan_time = now
+            else:
+                logger.debug("[轮询器] list-all 走白名单模式，仅拉 %d 个已知会话（跳过 +chat-list 全量翻页）",
+                             len(whitelist_ids))
+                result = self.dws.chat_message_list_all(
+                    start_str, end_str, limit=100,
+                    chat_ids=whitelist_ids, chat_meta=whitelist_meta,
+                    max_pages=self.config.list_all_max_pages,
+                )
+            conv_list = result.get("conversationMessagesList", []) if isinstance(result, dict) else []
+            # 把遍历中命中的永久权限错误会话拉入当前账号黑名单，后续轮询直接跳过、不再遍历消息
+            if isinstance(result, dict) and result.get("blocked_chats"):
+                nb = self._block_chats_from_list_all(result, source="feishu_permission")
+                if nb:
+                    logger.info("[轮询器] list-all 已将 %d 个不可达会话拉入黑名单", nb)
+            logger.debug("[轮询器] list-all 查询到 %d 条会话", len(conv_list))
+        except (RuntimeError, ValueError, IMAdapterError) as e:
+            logger.warning("[轮询器] list-all 调用失败（本轮跳过 list-all 主通道）: %s", e)
+            return []
 
         new_messages = []
         latest_timestamp = None

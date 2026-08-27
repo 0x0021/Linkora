@@ -8,6 +8,7 @@ import logging
 import sqlite3
 from src.paths import get_skills_root
 from src.utils.security import mask_oid
+from src.im_adapter.errors import IMAdapterError
 
 
 logger = logging.getLogger("src.platform.runtime")
@@ -377,7 +378,7 @@ class SetupMixin(EngineMixinBase):
                     )
                     self.dws.chat_message_send(open_dingtalk_id=oid, text=notify_msg)
                     logger.info("[转人工] 已推送草稿通知 draft_id=%s 给主人", draft_id)
-            except RuntimeError as e:
+            except (RuntimeError, IMAdapterError) as e:
                 logger.warning("[转人工] DM 推送失败（草稿已落库 draft_id=%s）: %s", draft_id, e)
         except Exception as e:
             logger.warning("[转人工] 草稿落库失败: %s", e)
@@ -429,7 +430,7 @@ class SetupMixin(EngineMixinBase):
                         base["dept"] = dept
                     if not base.get("title"):
                         base["title"] = title
-            except RuntimeError as api_err:
+            except (RuntimeError, IMAdapterError) as api_err:
                 err_str = str(api_err)
                 if "TOKEN_VERIFIED_FAILED" in err_str or "该组织尚未开启 CLI 数据访问权限" in err_str:
                     logger.warning("个人钉钉模式：无法获取企业用户信息，跳过部门补全")
@@ -437,7 +438,7 @@ class SetupMixin(EngineMixinBase):
                     logger.debug("补拉用户部门失败（使用 profile 兜底）: %s", api_err)
 
             return base or {"userId": "", "userName": "个人用户", "orgName": "", "dept": "", "title": ""}
-        except RuntimeError as e:
+        except (RuntimeError, IMAdapterError) as e:
             err_str = str(e)
             if "TOKEN_VERIFIED_FAILED" in err_str or "该组织尚未开启 CLI 数据访问权限" in err_str:
                 logger.warning("个人钉钉模式：无法获取企业用户信息，跳过用户详情加载")

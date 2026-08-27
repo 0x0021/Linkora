@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 from src.image_path import account_id_dir, image_rel_path
 from src.poller_mixins_base import PollerMixinBase
+from src.im_adapter.errors import IMAdapterError
 
 if TYPE_CHECKING:
     from src.config import AppConfig
@@ -321,7 +322,7 @@ class OcrMixin(PollerMixinBase):
             if caption:
                 return f"{caption}\n[图片 - 无法识别文字]", rel_path
             return "[图片 - 无法识别文字]", rel_path
-        except (OSError, RuntimeError, ValueError):
+        except (OSError, RuntimeError, ValueError, IMAdapterError):
             # 文件 I/O / DWS CLI / 解析失败 → 容错降级
             logger.warning("[轮询器] 图片下载/OCR 失败")
             if caption:
@@ -381,7 +382,7 @@ class OcrMixin(PollerMixinBase):
             if caption:
                 return caption, rel_path
             return "[图片]", rel_path
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, IMAdapterError):
             # 下载失败 → 容错降级
             logger.warning("[轮询器] 自发送图片下载失败")
             if caption:
@@ -475,7 +476,7 @@ class OcrMixin(PollerMixinBase):
                 return "", ""
             logger.info("[轮询器] 接收%s已下载到本地: %s", media_type, rel)
             return str(out_path), rel
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, IMAdapterError):
             # 下载失败 → 容错返回空
             logger.warning("[轮询器] 接收文件下载失败")
             return "", ""
@@ -566,7 +567,7 @@ class OcrMixin(PollerMixinBase):
                         "[轮询器] 卡片图片下载为空: msg=%s key=%s",
                         msg_id[:20], key[:30],
                     )
-            except (OSError, RuntimeError):
+            except (OSError, RuntimeError, IMAdapterError):
                 logger.warning(
                     "[轮询器] 卡片图片下载失败: msg=%s key=%s",
                     msg_id[:20], key[:30],

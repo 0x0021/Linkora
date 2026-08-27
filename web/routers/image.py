@@ -453,10 +453,11 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
         logger.warning("[图标] 拒绝下载非公网图标 URL（疑似 SSRF）: %s", icon_url)
         return False
     icons_dir = get_skill_icons_dir().resolve()
-    safe = _slug_to_safe_name(slug)
-    dest = (icons_dir / f"{os.path.basename(safe)}.png").resolve()
-    # 路径穿透兜底（CodeQL py/path-injection 防护）：用同一个已解析的 icons_dir
-    # 既构造又校验，确保 dest 始终落在图标目录之内，杜绝 slug 穿透写盘。
+    # 路径净化：先用 os.path.basename 剥离目录分隔符（CodeQL 认可的 sanitizer），
+    # 再 allowlist 仅保留 [A-Za-z0-9_-]，确保 dest 不可能越出图标目录，杜绝 slug 穿透写盘。
+    raw = os.path.basename(slug)
+    safe_name = "".join(c for c in raw if c.isalnum() or c in "_-") or "default"
+    dest = (icons_dir / f"{safe_name}.png").resolve()
     if dest != icons_dir and not str(dest).startswith(str(icons_dir) + os.sep):
         logger.warning("[图标] 拒绝越界写入: %s", dest)
         return False

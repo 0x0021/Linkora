@@ -111,14 +111,14 @@ def _purge_one(db_path: str, label: str, args: argparse.Namespace) -> tuple[int,
         cnt = cur.fetchone()[0]
         try:
             cur.execute("UPDATE conversations SET message_count=? WHERE chat_id=?", (cnt, cid))
-        except sqlite3.OperationalError:
-            pass  # 无 conversations 表则跳过计数维护
+        except sqlite3.OperationalError as _e:
+            _ = _e  # 无 conversations 表则跳过计数维护
     # 清掉这些会话的摘要缓存（避免坏信息从 summary 二次注入）
     for cid in chats:
         try:
             cur.execute("DELETE FROM conversation_summaries WHERE chat_id=?", (cid,))
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as _e:
+            _ = _e  # 无 conversations 表则跳过计数维护
     if args.wipe_chat:
         for cid in chats:
             cur.execute("SELECT image_path FROM messages WHERE chat_id=? AND image_path != ''", (cid,))

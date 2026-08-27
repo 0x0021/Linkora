@@ -159,8 +159,8 @@ async def get_skill_detail(skill_name: str):
         raw_content = ""
         try:
             raw_content = Path(skill.source_path).read_text(encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as _e:
+            _ = _e  # 读取技能源文件失败则返回空内容
 
         return {
             "name": skill.name,

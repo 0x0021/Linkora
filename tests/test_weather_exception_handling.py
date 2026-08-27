@@ -40,8 +40,8 @@ class TestWeatherExceptionHandling:
         with pytest.raises(RuntimeError):
             try:
                 raise RuntimeError("Random error")
-            except (urllib.error.URLError, HTTPException, TimeoutError, ValueError):
-                pass
+            except (urllib.error.URLError, HTTPException, TimeoutError, ValueError) as _e:
+                _ = _e  # 该分支本就不捕获 RuntimeError，异常会继续外抛由 pytest.raises 接住
 
     def test_geocode_nominatim_with_url_error(self):
         """验证 _geocode_nominatim 在 URLError 时返回 None。"""

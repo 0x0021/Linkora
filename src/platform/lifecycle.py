@@ -203,8 +203,8 @@ class LifecycleMixin(EngineMixinBase):
             while self._running:
                 if self._shutdown_event.wait(1):
                     break
-        except KeyboardInterrupt:
-            pass
+        except KeyboardInterrupt as _e:
+            logger.debug("收到 KeyboardInterrupt，进入关闭流程: %s", _e)
         finally:
             self.shutdown()
             # 关闭所有平台的存储

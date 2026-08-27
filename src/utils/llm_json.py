@@ -63,8 +63,8 @@ def extract_json(text: str | None) -> Any | None:
         obj = json.loads(s)
         if isinstance(obj, (dict, list)):
             return obj
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as _e:
+        logger.debug("首轮整体 json.loads 失败，转入逐段解析: %s", _e)
     # 逐段 raw_decode 取首个 JSON（吃掉任意前缀噪声：围栏残留、寒暄、序号等）
     dec = json.JSONDecoder()
     idx, n = 0, len(s)

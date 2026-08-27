@@ -267,8 +267,8 @@ class VectorIndex:
             except Exception:
                 try:
                     os.unlink(tmp)
-                except OSError:
-                    pass
+                except OSError as _e:
+                    logger.debug("清理临时索引文件失败，忽略: %s", _e)
                 raise
 
             # 原子替换索引文件

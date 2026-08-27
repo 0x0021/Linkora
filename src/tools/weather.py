@@ -586,8 +586,8 @@ def _parse_date_range(query: str, today: datetime.date) -> tuple[list[datetime.d
                     y += 1
             try:
                 date_of_month.append(datetime.date(y, mo, day))
-            except ValueError:
-                pass
+            except ValueError as _e:
+                logger.debug("日期非法（如 2 月 30 日），跳过: %s", _e)
 
     # 4) 未来/今后/接下来 N 天
     future_n = None

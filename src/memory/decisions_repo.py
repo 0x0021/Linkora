@@ -164,8 +164,8 @@ class DecisionsRepo:
             logger.debug("[resilience] 回填 cited 标记失败: %s", e)
             try:
                 self.store.conn.rollback()
-            except sqlite3.Error:
-                pass
+            except sqlite3.Error as _e:
+                logger.debug("rollback 亦失败，忽略: %s", _e)
             return 0
 
     def get_quality_stats(self, time_range_hours: int | None = None) -> dict:

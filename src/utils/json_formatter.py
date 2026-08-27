@@ -69,8 +69,8 @@ class JSONFormatter(logging.Formatter):
             caller = getattr(record, "caller", None)
             if caller:
                 log_entry["caller"] = caller
-        except Exception:
-            pass
+        except Exception as _e:
+            logging.getLogger(__name__).debug("提取 caller 字段失败，忽略: %s", _e)
 
         return json.dumps(log_entry, ensure_ascii=False, default=str)
 

@@ -284,8 +284,8 @@ def poller_factory(tmp_db_path):
     for s in created:
         try:
             s.close()
-        except Exception:
-            pass
+        except Exception as _e:
+            _ = _e  # 测试清理：忽略关闭异常
 
 
 @pytest.fixture

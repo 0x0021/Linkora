@@ -188,8 +188,8 @@ def _collect_gpu() -> dict[str, Any]:
             return {"available": True, "backend": "nvidia-nvml", "devices": devices}
         finally:
             pynvml.nvmlShutdown()
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # NVML 不可用则尝试其它后端
 
     # 2) CUDA via torch（显存分配量，无利用率）
     try:
@@ -207,8 +207,8 @@ def _collect_gpu() -> dict[str, Any]:
                     "utilization_percent": None,
                 })
             return {"available": True, "backend": "cuda-torch", "devices": devices}
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # CUDA 不可用则尝试其它后端
 
     # 3) Apple Silicon MPS（仅能确认存在，无法读取显存/利用率）
     try:
@@ -223,8 +223,8 @@ def _collect_gpu() -> dict[str, Any]:
                 "memory_total_bytes": None,
                 "utilization_percent": None,
             }]}
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # MPS 不可用则回退 none
 
     return {"available": False, "backend": "none", "devices": [],
             "reason": "未检测到可用 GPU 库（pynvml / CUDA / MPS 均不可用）"}

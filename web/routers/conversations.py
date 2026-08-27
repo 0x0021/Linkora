@@ -70,8 +70,8 @@ def _resolve_current_user() -> tuple[str, str]:
                                 )
                             if not current_user_name:
                                 current_user_name = emp.get("orgUserName", "") or user.get("name", "")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    _ = _e  # 取当前用户失败则保留空值
         else:
             dws = _api.get_dws()
             profile = dws._get_current_profile_local()
@@ -97,8 +97,8 @@ def _resolve_current_user() -> tuple[str, str]:
                         )
                     if not current_user_name:
                         current_user_name = emp.get("orgUserName", "") or user.get("name", "")
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # 取当前用户失败则保留空值
     return current_user_id, current_user_name
 
 

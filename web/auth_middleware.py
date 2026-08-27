@@ -48,8 +48,8 @@ def _resolve_jwt_secret() -> str:
             if secret:
                 _runtime_jwt_secret = secret
                 return secret
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("解析 JWT 签名密钥失败，回退到临时随机密钥: %s", _e)
     _runtime_jwt_secret = secrets.token_urlsafe(32)
     logger.warning(
         "JWT 签名密钥未配置（web.jwt_secret 为空），已生成本进程临时随机密钥，"

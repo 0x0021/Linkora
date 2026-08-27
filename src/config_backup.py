@@ -75,8 +75,8 @@ def _atomic_copy(src: str, dst: str) -> None:
     except BaseException:
         try:
             os.unlink(tmp)
-        except OSError:
-            pass
+        except OSError as _e:
+            _ = _e  # 清理临时文件失败忽略
         raise
 
 
@@ -97,8 +97,8 @@ def _prune(dest_dir: str, prefix: str, keep: int) -> int:
         try:
             os.remove(old)
             removed += 1
-        except OSError:
-            pass
+        except OSError as _e:
+            _ = _e  # 删除旧备份失败忽略
     return removed
 
 

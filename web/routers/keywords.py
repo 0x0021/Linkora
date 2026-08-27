@@ -153,8 +153,8 @@ async def import_keywords(file: UploadFile = File(...)):
                     rules = data["rules"]
                 elif isinstance(data, dict) and "keywords" in data:
                     rules = data["keywords"]
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as _e:
+                _ = _e  # JSON 解析失败则回退到 txt 逐行解析
         elif file.filename and file.filename.endswith(".txt"):
             for line in text.splitlines():
                 line = line.strip()

@@ -17,8 +17,8 @@ def _clear_store_cache():
         for _s in stores.values():
             try:
                 _s.close()
-            except Exception:
-                pass
+            except Exception as _e:
+                _ = _e  # 测试清理：忽略关闭异常
         deps._store_local.stores = {}
 
 

@@ -251,8 +251,8 @@ def _store_with(conv_map: dict, ext_oids: set):
         c.execute("DELETE FROM blocked_conversations")
         c.commit()
         # 不关闭 c，供后续测试使用
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # 测试内预期异常，忽略
     return s
 
 
@@ -416,8 +416,8 @@ def test_disable_flag_skips_bot_fallback():
         c = store.conv_conn("dingtalk")
         c.execute("DELETE FROM blocked_conversations")
         c.commit()
-    except Exception:
-        pass
+    except Exception as _e:
+        _ = _e  # 测试内预期异常，忽略
     tool = SendMessageTool(dws=dws, store=store)
     r = tool.execute({"chat_id": "oc_99e7cb82efc36abffcd4e8b46eb80728",
                       "chat_type": "single", "text": "hi"})

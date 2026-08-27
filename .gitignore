@@ -44,6 +44,7 @@ env/
 # Project specific
 config.yaml
 config.local.yaml
+config 2.yaml
 data/
 logs/
 *.log

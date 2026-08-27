@@ -28,7 +28,7 @@ from starlette.concurrency import run_in_threadpool
 from PIL import Image
 
 import web.api as _api
-from src.paths import data_path, get_skill_icons_dir
+from src.paths import get_skill_icons_dir
 from src.utils.net import is_ssrf_safe
 from web.security import resolve_safe_ip  # SSRF 防护：白名单 host 仍可能 DNS 重绑定到内网，需钉公网 IP
 
@@ -104,35 +104,30 @@ def _make_thumb(orig: Path, thumb: Path, width: int, fmt: str | None, accept_web
         return (str(orig), _THUMB_MEDIA_BY_FMT.get(ext, "image/png"))
 
 
-# 签名密钥持久化到磁盘：避免每次服务重启都重新随机生成，
-# 否则重启会让所有已签发的图片 token 立即失效（前端需刷新页面才恢复）。
-# 首次启动时生成并写入，之后复用同一把密钥。
-_IMG_TOKEN_SECRET_FILE = data_path(".image_token_secret")
+# 图片签名密钥：不再落盘明文，改为从 web.jwt_secret 派生（消除 clear-text-storage 风险）。
+# - 已配置 web.jwt_secret（生产推荐）→ 跨重启稳定，已签发 token 不失效；
+# - 未配置 → 与 JWT 自身行为一致，回退为本次进程随机密钥（重启失效，仅开发态）。
+# 懒加载 + 进程内缓存，确保 _make_image_token / _verify_image_token 使用同一把密钥。
+_IMG_TOKEN_SECRET_CACHE: bytes | None = None
 
 
-def _load_img_token_secret() -> bytes:
-    try:
-        if _IMG_TOKEN_SECRET_FILE.exists():
-            return _IMG_TOKEN_SECRET_FILE.read_bytes()
-    except Exception as _e:
-        logger.debug("_load_img_token_secret 读取失败，回退随机密钥: %s", _e)
-    secret = os.urandom(32)
-    try:
-        _IMG_TOKEN_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _IMG_TOKEN_SECRET_FILE.write_bytes(secret)
-        _IMG_TOKEN_SECRET_FILE.chmod(0o600)
-    except Exception as _e:
-        logger.debug("写盘 img token secret 失败，回退内存密钥: %s", _e)
-    return secret
+def _get_img_token_secret() -> bytes:
+    global _IMG_TOKEN_SECRET_CACHE
+    if _IMG_TOKEN_SECRET_CACHE is not None:
+        return _IMG_TOKEN_SECRET_CACHE
+    from web.auth_middleware import _resolve_jwt_secret
 
-
-_IMG_TOKEN_SECRET = _load_img_token_secret()
+    jwt_secret = _resolve_jwt_secret()
+    _IMG_TOKEN_SECRET_CACHE = hmac.new(
+        b"linkora-image-token-v1", jwt_secret.encode("utf-8"), hashlib.sha256
+    ).digest()
+    return _IMG_TOKEN_SECRET_CACHE
 _IMG_TOKEN_TTL = 300  # 秒（5 分钟）
 
 
 def _make_image_token() -> str:
     exp = int(time.time()) + _IMG_TOKEN_TTL
-    sig = hmac.new(_IMG_TOKEN_SECRET, str(exp).encode(), hashlib.sha256).digest()
+    sig = hmac.new(_get_img_token_secret(), str(exp).encode(), hashlib.sha256).digest()
     return f"{exp}." + base64.urlsafe_b64encode(sig).decode()
 
 
@@ -150,7 +145,7 @@ def _verify_image_token(token: Optional[str]) -> bool:
         sig = base64.urlsafe_b64decode(sig_b64)
     except Exception:
         return False
-    expected = hmac.new(_IMG_TOKEN_SECRET, str(exp).encode(), hashlib.sha256).digest()
+    expected = hmac.new(_get_img_token_secret(), str(exp).encode(), hashlib.sha256).digest()
     return hmac.compare_digest(sig, expected)
 
 
@@ -457,8 +452,14 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
     if not is_ssrf_safe(icon_url):
         logger.warning("[图标] 拒绝下载非公网图标 URL（疑似 SSRF）: %s", icon_url)
         return False
+    icons_dir = get_skill_icons_dir()
     safe = _slug_to_safe_name(slug)
-    dest = get_skill_icons_dir() / f"{os.path.basename(safe)}.png"
+    dest = (icons_dir / f"{os.path.basename(safe)}.png").resolve()
+    # 路径穿透兜底（CodeQL py/path-injection 防护）：dest 必须落在 icons_dir 之内
+    icons_resolved = icons_dir.resolve()
+    if dest != icons_resolved and not str(dest).startswith(str(icons_resolved) + os.sep):
+        logger.warning("[图标] 拒绝越界写入: %s", dest)
+        return False
     if dest.is_file():
         return True  # 已有缓存，幂等跳过
     try:

@@ -452,14 +452,16 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
     if not is_ssrf_safe(icon_url):
         logger.warning("[图标] 拒绝下载非公网图标 URL（疑似 SSRF）: %s", icon_url)
         return False
-    icons_dir = get_skill_icons_dir().resolve()
-    # 路径净化：先用 os.path.basename 剥离目录分隔符（CodeQL 认可的 sanitizer），
-    # 再 allowlist 仅保留 [A-Za-z0-9_-]，确保 dest 不可能越出图标目录，杜绝 slug 穿透写盘。
+    # slug 来自外部排行榜元数据，视为不可信输入。
+    # 净化链：os.path.basename 剥离目录分隔符 → allowlist 仅留 [A-Za-z0-9_-]
+    # → os.path.realpath 规范化拼接结果（CodeQL 认可的 path-injection sanitizer）
+    # → 前缀校验兜底，确保 dest 永远落在图标目录内，杜绝 slug 穿透写盘。
     raw = os.path.basename(slug)
     safe_name = "".join(c for c in raw if c.isalnum() or c in "_-") or "default"
-    dest = (icons_dir / f"{safe_name}.png").resolve()
-    if dest != icons_dir and not str(dest).startswith(str(icons_dir) + os.sep):
-        logger.warning("[图标] 拒绝越界写入: %s", dest)
+    icons_dir_abs = os.path.realpath(str(get_skill_icons_dir()))
+    dest = os.path.realpath(os.path.join(icons_dir_abs, safe_name + ".png"))
+    if dest != icons_dir_abs and not dest.startswith(icons_dir_abs + os.sep):
+        logger.warning("[图标] 拒绝越界写入（slug 经净化后仍越界）")
         return False
     if dest.is_file():
         return True  # 已有缓存，幂等跳过

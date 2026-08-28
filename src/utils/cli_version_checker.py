@@ -5,7 +5,7 @@
   - 有更新时自动升级（各 CLI 自带升级命令，不依赖 Homebrew）。
 
   - wecom-cli   企业微信 CLI         安装 ``npm i -g @wecom/cli``        升级 ``npm i -g @wecom/cli@latest``
-  - lark-cli    飞书 Lark CLI        安装 ``npm i -g lark-cli``          升级 ``lark-cli update``
+  - lark-cli    飞书 Lark CLI        安装 ``npx @larksuite/cli@latest install``  升级 ``lark-cli update``
   - dws         钉钉 Workspace CLI   安装 ``npm i -g dingtalk-workspace-cli``  升级 ``dws upgrade -y``
 
 检测逻辑：
@@ -92,7 +92,9 @@ CLI_DEFINITIONS: dict[str, CliSpec] = {
         "lark-cli", "飞书 Lark CLI",
         check_cmd=["lark-cli", "update", "--check", "--json"],
         update_cmd=["lark-cli", "update"],
-        install_cmd=["npm", "install", "-g", "lark-cli"],
+        # 真实包是 @larksuite/cli（其 bin 即 lark-cli）；无作用域的 lark-cli 是
+        # 另一个无 bin 字段的包（v0.1.0），npm i -g lark-cli 装不出二进制会死循环。
+        install_cmd=["npx", "@larksuite/cli@latest", "install"],
         check_kind="json",
     ),
     "dws": CliSpec(
@@ -207,21 +209,31 @@ def _has_upstream_update(spec: CliSpec, installed: str, timeout: int = 60) -> bo
         return bool(latest and cur and latest > cur)
 
     if spec.check_kind == "json":
-        # lark-cli --json：对比 current/latest，或读 outdated 布尔
+        # 版本对比：优先真实 lark-cli 的 current_version/latest_version，
+        # 兼容旧/其它 CLI 的 current/installed/version 与 latest/available/target。
         try:
             data = json.loads(blob)
         except Exception as _exc:  # noqa: BLE001
             logger.debug(f"_has_upstream_update: swallowed exception: {_exc}")
             return _UPDATE_KEYWORDS_RE.search(blob) is not None
-        cur = data.get("current") or data.get("installed") or data.get("version")
-        lat = data.get("latest") or data.get("available") or data.get("target")
+        cur = (data.get("current_version") or data.get("current")
+               or data.get("installed") or data.get("version"))
+        lat = (data.get("latest_version") or data.get("latest")
+               or data.get("available") or data.get("target"))
         parsed_cur = _parse_version(str(cur)) if cur else None
         parsed_lat = _parse_version(str(lat)) if lat else None
         if parsed_cur and parsed_lat and parsed_lat > parsed_cur:
             return True
+        # 布尔标记
         for k in ("outdated", "updateAvailable", "hasUpdate", "needUpdate", "update_available"):
             if data.get(k):
                 return True
+        # action 语义字段（lark-cli：already_up_to_date 表示无需更新）
+        action = str(data.get("action", "")).lower()
+        if action in ("update_available", "upgrade_available", "outdated", "update_required"):
+            return True
+        if action in ("already_up_to_date", "up_to_date"):
+            return False
         return False
 
     # text（dws 等）：关键词命中表示有更新

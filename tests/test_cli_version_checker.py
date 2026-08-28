@@ -184,3 +184,55 @@ def test_not_installed_skipped(tmp_path, monkeypatch):
     result = vc.run_checks(str(tmp_path))
     assert result["wecom-cli"]["status"] == "not_installed"
     assert result["dws"]["status"] == "not_installed"
+
+
+def test_lark_real_json_shape_update_detected(tmp_path, patched, monkeypatch):
+    """真实 @larksuite/cli 的 update --check --json 键为 current_version /
+    latest_version / action。修复前解析器只认 current/latest/outdated，全部 miss，
+    导致永远检测不到更新；本测试锁死真实形态。"""
+    from src.paths import set_data_dir
+    set_data_dir(str(tmp_path / "data"))
+
+    def _run(cmd, *a, **k):
+        c = list(cmd)
+        if c and c[-1] == "--version":
+            return subprocess.CompletedProcess(cmd, 0, "lark-cli version 1.0.78", "")
+        if c[0] == "lark-cli" and "update" in c and "--check" in c:
+            return subprocess.CompletedProcess(
+                cmd, 0,
+                '{"action":"update_available","current_version":"1.0.78",'
+                '"latest_version":"1.0.80","ok":true}', "")
+        if c[0] == "lark-cli" and "update" in c:
+            return subprocess.CompletedProcess(cmd, 0, "ok", "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(vc.subprocess, "run", _run)
+    result = vc.run_checks(str(tmp_path))
+    assert result["lark-cli"]["status"] == "update_available"
+    assert result["lark-cli"]["update_status"] == "updated"
+
+
+def test_lark_real_json_shape_up_to_date(tmp_path, patched, monkeypatch):
+    """真实输出 action=already_up_to_date 且 latest==current → 不应误报更新。
+    预置历史版本以模拟非首跑，此时状态应为 up_to_date 且不触发后台更新。"""
+    from src.paths import set_data_dir
+    set_data_dir(str(tmp_path / "data"))
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "cli_versions.json").write_text(
+        __import__("json").dumps({"lark-cli": {"installed": "1.0.91"}}), encoding="utf-8")
+
+    def _run(cmd, *a, **k):
+        c = list(cmd)
+        if c and c[-1] == "--version":
+            return subprocess.CompletedProcess(cmd, 0, "lark-cli version 1.0.91", "")
+        if c[0] == "lark-cli" and "update" in c and "--check" in c:
+            return subprocess.CompletedProcess(
+                cmd, 0,
+                '{"action":"already_up_to_date","current_version":"1.0.91",'
+                '"latest_version":"1.0.91","ok":true}', "")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(vc.subprocess, "run", _run)
+    result = vc.run_checks(str(tmp_path))
+    assert result["lark-cli"]["status"] == "up_to_date"
+    assert "update_status" not in result["lark-cli"]

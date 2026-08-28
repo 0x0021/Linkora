@@ -11,7 +11,7 @@
 | 平台 | CLI（安装命令） | 最低版本 | 登录方式 |
 |---|---|---|---|
 | 钉钉 | `dingtalk-workspace-cli`（`npm i -g dingtalk-workspace-cli`） | — | `dws auth login`，`dws profile list` 确认目标组织 |
-| 飞书 | `lark-cli`（`npm i -g lark-cli`） | **v1.0.72+** | `lark-cli login` |
+| 飞书 | `lark-cli`（`npx @larksuite/cli@latest install`） | **v1.0.72+** | `lark-cli auth login` |
 | 企业微信 | `@wecom/cli`（`npm i -g @wecom/cli`） | **v0.1.9+** | `wecom-cli` 扫码登录（通常交互式） |
 
 **症状 → 修复**：

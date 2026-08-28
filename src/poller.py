@@ -106,9 +106,18 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         self._group_enum_cache_ts: float = 0.0
         # 长尾会话按会话限频抓取的时间戳（openConversationId -> 上次抓取 epoch）
         self._last_fetch_time: dict[str, float] = {}
+        # 长尾限频轮次级节流：openConversationId -> 上次抓取的轮次号（self._poll_count）。
+        # 与 _last_fetch_time 时间窗口叠加，提供「不依赖轮询速度」的稳定节流，
+        # 彻底修复串行慢轮询击穿时间窗口导致长尾限频形同虚设的问题。
+        self._last_fetch_round: dict[str, int] = {}
         # 平台级 chat 限频退避冷却（platform_id -> 冷却到期 epoch）：
         # 命中 DWS RATE_LIMIT_ERROR 后暂停该平台 chat 抓取，避免继续猛打已限流接口。
         self._chat_rate_limited_until: dict[str, float] = {}
+        # 并发保护锁：所有被多线程（受控并发 per-conversation 抓取）读写的共享实例字典
+        # （_last_fetch_time / _last_fetch_round / _perm_fail_streak / _feishu_conv_info_cache /
+        # _chat_rate_limited_until / _inaccessible_conversations / _perm_warned / _last_poll_time /
+        # _processed_msg_ids 等）的临界区都用它串行化。subprocess CLI 调用留在锁外以保留并发收益。
+        self._poll_shared_lock = threading.Lock()
 
         # 持久化黑名单：启动时从 DB 加载，避免重启后对已离职/非好友/被踢群等
         # 无权限会话反复触发 dws 的 OAuth 弹窗（这是「反复弹」的根因）
@@ -339,14 +348,16 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         mid = d.get("message_id")
         if not mid:
             return
-        if mid in self._processed_msg_ids:  # 跨轮去重：避免与轮询重复处理
-            return
+        with self._poll_shared_lock:
+            if mid in self._processed_msg_ids:  # 跨轮去重：避免与轮询重复处理
+                return
         msg = self._build_stream_message(d)
         if msg is None:
             return
-        self._processed_msg_ids[mid] = True
-        if len(self._processed_msg_ids) > self.config.max_processed_msg_ids:
-            self._processed_msg_ids.popitem(last=False)
+        with self._poll_shared_lock:
+            self._processed_msg_ids[mid] = True
+            if len(self._processed_msg_ids) > self.config.max_processed_msg_ids:
+                self._processed_msg_ids.popitem(last=False)
         self._stream_queue.put(msg)
 
     def _build_stream_message(self, d: dict) -> "Message | None":

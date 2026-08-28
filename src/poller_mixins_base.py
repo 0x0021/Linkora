@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from src.component_base import LinkoraComponentBase
@@ -49,9 +50,15 @@ class PollerMixinBase(LinkoraComponentBase):
     _last_error: Any
     _last_error_at: Any
     _last_fetch_time: Any
+    _last_fetch_round: Any
     _last_poll_at: Any
     _chat_rate_limited_until: Any
     _last_poll_time: Any
+    _poll_shared_lock: Any
+    # 类级 fallback 锁：未显式初始化（如单元测试 Fake 不调 MessagePoller.__init__）时，
+    # 所有实例共享此锁即可满足并发临界区串行化；生产 MessagePoller.__init__ 会用独立
+    # 实例锁覆盖它，保证各平台轮询器锁隔离。
+    _poll_shared_lock = threading.Lock()
     _metadata_unavailable: Any
     _ocr_cache_lock: Any
     _ocr_call_lock: Any

@@ -181,6 +181,16 @@ class PollerConfig(BaseModel):
     # 每轮(默认5s)都打一次 chat_message_list。未读会话不受影响（实时优先）。
     # list-all 主通道仍每轮保底抓取全部新消息，故不会漏消息。0 = 关闭限频。
     min_conversation_poll_interval_seconds: int = 60
+    # 每轮 per-conversation 抓取的并发 worker 数（受控并发）。
+    # 串行轮询 102 个会话单轮 ~70s，过长会击穿上方 min_conversation_poll_interval_seconds
+    # 窗口（轮询周期 > 限频窗口 → 长尾限频永不生效）。并发化把单轮耗时压到 ~70/N 秒，
+    # 让 60s 时间窗口限频自然生效，从源头削减 chat 接口请求量。1 或 0 = 退化为串行（旧行为）。
+    poll_concurrency: int = 4
+    # 长尾/静默会话（非未读）的轮次级节流：每 N 轮才抓取一次（N=1 → 隔轮抓）。
+    # 与时间窗口限频叠加，且**不依赖轮询速度**——无论串行多慢都不会被击穿，
+    # 是「长尾限频形同虚设」的根因修复。0 = 关闭（每轮都抓，靠时间窗口限频降级）。
+    # 未读/forced 会话不受此限（实时优先），list-all 主通道每轮仍全量拉，外部好友不丢。
+    min_conversation_poll_rounds: int = 1
     # 平台级限频退避冷却（秒）：当某平台 chat 接口返回 RATE_LIMIT_ERROR 时，
     # 全局暂停该平台 chat 抓取冷却秒数（不推进轮询游标、不丢消息），避免继续猛打
     # 已限流的接口、加剧限流风暴。冷却到期下一轮自动恢复。0 = 关闭退避（旧行为，不推荐）。

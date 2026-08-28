@@ -37,15 +37,17 @@ class DedupMixin(PollerMixinBase):
         内存优先（快速路径），数据库兜底（重启恢复 + LRU 淘汰恢复）。
         """
         # 优先查内存（快速路径）
-        if msg_id in self._processed_msg_ids:
-            self._processed_msg_ids.move_to_end(msg_id)
-            return True
+        with self._poll_shared_lock:
+            if msg_id in self._processed_msg_ids:
+                self._processed_msg_ids.move_to_end(msg_id)
+                return True
         # 再查数据库（防止内存中已淘汰但DB中有的记录，或刚重启）
         try:
             if self.store._message_repo.is_message_processed(msg_id):
                 # 同步到内存并标记为最近使用（LRU）
-                self._processed_msg_ids[msg_id] = True
-                self._processed_msg_ids.move_to_end(msg_id)
+                with self._poll_shared_lock:
+                    self._processed_msg_ids[msg_id] = True
+                    self._processed_msg_ids.move_to_end(msg_id)
                 return True
         except sqlite3.Error as e:
             logger.debug("[轮询器] 消息去重查询失败: %s", e)
@@ -56,7 +58,25 @@ class DedupMixin(PollerMixinBase):
 
         同时写入内存和数据库。如果传入 msg 且是合并消息，也标记所有原始 msg_id。
         """
-        self._processed_msg_ids[msg_id] = True
+        # 内存集合的读写在并发轮询（worker 线程 + stream 线程）下需串行化；
+        # DB 写放锁外以减少临界区。
+        orig_ids: list[str] = []
+        with self._poll_shared_lock:
+            self._processed_msg_ids[msg_id] = True
+            if msg is not None:
+                raw = getattr(msg, "raw", None)
+                if isinstance(raw, dict):
+                    _ids = raw.get("merged_original_ids") or raw.get("original_ids") or []
+                    if isinstance(_ids, str):
+                        _ids = [_ids]
+                    orig_ids = [i for i in _ids if i and i != msg_id]
+                    for orig_id in orig_ids:
+                        self._processed_msg_ids[orig_id] = True
+            # 移到末尾（LRU：最旧的在前面）
+            self._processed_msg_ids.move_to_end(msg_id)
+            # 超过容量限制时淘汰最旧的
+            while len(self._processed_msg_ids) > self.config.max_processed_msg_ids:
+                self._processed_msg_ids.popitem(last=False)
         try:
             self.store._message_repo.mark_message_processed(msg_id, chat_id)
         except sqlite3.Error as e:
@@ -64,24 +84,11 @@ class DedupMixin(PollerMixinBase):
         # 标记合并消息的所有原始 ID（防止未标记的消息被重复处理）
         # 兼容两套合并路径的 key：poller._combine_message_group 用 original_ids，
         # poller_utils.merge_consecutive_messages 用 merged_original_ids。
-        if msg is not None:
-            raw = getattr(msg, "raw", None)
-            if isinstance(raw, dict):
-                orig_ids = raw.get("merged_original_ids") or raw.get("original_ids") or []
-                if isinstance(orig_ids, str):
-                    orig_ids = [orig_ids]
-                for orig_id in orig_ids:
-                    if orig_id and orig_id != msg_id:
-                        self._processed_msg_ids[orig_id] = True
-                        try:
-                            self.store._message_repo.mark_message_processed(orig_id, chat_id)
-                        except sqlite3.Error:
-                            logger.warning("mark_message_processed failed for orig_id=%s", orig_id, exc_info=True)
-        # 移到末尾（LRU：最旧的在前面）
-        self._processed_msg_ids.move_to_end(msg_id)
-        # 超过容量限制时淘汰最旧的
-        while len(self._processed_msg_ids) > self.config.max_processed_msg_ids:
-            self._processed_msg_ids.popitem(last=False)
+        for orig_id in orig_ids:
+            try:
+                self.store._message_repo.mark_message_processed(orig_id, chat_id)
+            except sqlite3.Error:
+                logger.warning("mark_message_processed failed for orig_id=%s", orig_id, exc_info=True)
 
     def _is_self_message(self, message: Message) -> bool:
         """判断是否是自己发的消息（用于过滤，避免自己回自己）。"""
@@ -340,7 +347,8 @@ class DedupMixin(PollerMixinBase):
                     # ⚠️ 关键修正：chat_conversation_info 权限失败 ≠ 无法收发消息。
                     # 外部好友 / 跨组织单聊调该接口必失败，但消息通道正常。
                     # 因此【不拉黑】，仅记入内存集合避免重复调用，改用消息 sender 兜底。
-                    self._metadata_unavailable.add(open_id)
+                    with self._poll_shared_lock:
+                        self._metadata_unavailable.add(open_id)
                     logger.debug(
                         "[轮询器] chat_conversation_info 无权限（外部好友/跨组织单聊常见，"
                         "不影响收发），跳过元数据解析: %s | %s", open_id[:30], e

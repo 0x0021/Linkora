@@ -63,4 +63,7 @@ jobs:
       run: uv run ruff check src/
 
     - name: Run Pyright
-      run: uv run pyright src/
+      # 不要传路径参数：pyproject 的 [tool.pyright] include = ["src", "web"] 才是门禁范围，
+      # 传路径会覆盖 include。早期写成 `pyright src/` 导致 web/ 从未被类型门禁覆盖，
+      # 由此漏掉 web/routers/image.py「在 str 上调 Path 方法」的真实崩溃 bug（2026-08-28）。
+      run: uv run pyright

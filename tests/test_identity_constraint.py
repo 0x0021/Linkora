@@ -38,8 +38,10 @@ def test_identity_constraint_falls_back_when_no_title():
     assert "职位:" not in prompt, "无职位时不应注入『职位:』字段"
     assert "按主人能亲自动手的方向给方案" in prompt
     assert "找人/找部门/提工单" in prompt
-    # 兜底硬性规则仍在：分身无自我否定边界
-    assert "没有『我不负责/这不归我管』的边界" in prompt
+    # 兜底仍是「回答层面不推诿」；但旧的绝对规则（分身无边界）必须已移除——
+    # 它会让分身替主人接下归属未定的活（2026-08-28 事故）
+    assert "回答边界" in prompt
+    assert "没有『我不负责/这不归我管』的边界" not in prompt
 
 
 def test_identity_constraint_works_for_non_it_roles():
@@ -72,13 +74,22 @@ def test_identity_constraint_with_external_speaker():
     assert "执行者" in prompt
 
 
-def test_identity_constraint_has_no_self_denial_boundary():
-    """硬性规则：分身没有『我不负责/这不归我管』的边界，技术问题都给方案。"""
-    # 有职位
-    prompt = build_system_prompt_core(_fake_agent(user_title="IT运维"))
-    assert "没有『我不负责/这不归我管』的边界" in prompt
-    assert "所有技术问题都按主人能亲自动手处理的方向给方案" in prompt
-    # 无职位兜底
-    prompt2 = build_system_prompt_core(_fake_agent(user_title=""))
-    assert "没有『我不负责/这不归我管』的边界" in prompt2
-    assert "所有技术问题都按主人能亲自动手处理的方向给方案" in prompt2
+def test_identity_constraint_no_self_denial_but_no_taking_on_work():
+    """回答层面「不推诿」（不甩锅别的部门），但绝不替主人接活——两者必须拆开且同时成立。
+
+    回归 2026-08-28 事故：旧规则「没有『我不负责/这不归我管』的边界」把
+    「回答不推诿」与「替主人承接任务」混为一谈，导致分身对「你能操作不？」
+    直接回「我这边按文档去操作」。
+    """
+    for label, prompt in (
+        ("有职位", build_system_prompt_core(_fake_agent(user_title="IT运维"))),
+        ("无职位兜底", build_system_prompt_core(_fake_agent(user_title=""))),
+    ):
+        # 旧的绝对规则必须已移除，否则与【承诺边界】自相矛盾、模型会择一执行
+        assert "没有『我不负责/这不归我管』的边界" not in prompt, label
+        # 回答层面仍不推诿（不能治好接活又退回甩锅）
+        assert "回答边界" in prompt, label
+        assert "按主人能亲自动手" in prompt, label
+        assert "不推诿" in prompt, label
+        # 且明确不许替主人接活
+        assert "【承诺边界" in prompt, label

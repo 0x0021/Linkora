@@ -219,3 +219,69 @@ def test_revert_masked_string_to_disk_original(monkeypatch):
     disk = {"llm": {"api_key": "***", "model": "gpt-4o"}}
     _revert_env_masked_secrets_to_disk(cfg_dict, disk)
     assert cfg_dict["llm"]["api_key"] == "***"
+
+
+def test_get_config_redacts_platform_adapter_secrets(monkeypatch):
+    """GET /api/config 的 platforms[].adapter 密钥（corp_secret/token/encoding_aes_key）
+    必须脱敏，不得明文回传（此前仅对 llm/embedding/web 做了 mask，漏了平台适配器）。"""
+    from web.routers.config import get_config, REDACTED_SENTINEL
+    fake_cfg = MagicMock()
+    fake_cfg.model_dump.return_value = {
+        "llm": {"api_key": "sk-real", "fallback_api_key": "", "model": "gpt-4o"},
+        "embedding": {"api_key": "ek-real", "hf_token": ""},
+        "web": {"auth_enabled": True, "auth_username": "admin", "auth_password": "pw"},
+        "platforms": [
+            {
+                "id": "wecom",
+                "adapter": {
+                    "corp_id": "cid",
+                    "corp_secret": "SECRET_CORP",
+                    "token": "SECRET_TOKEN",
+                    "encoding_aes_key": "SECRET_AES",
+                },
+                "poller": {"interval_seconds": 30},
+            },
+        ],
+    }
+    with patch("web.api._get_cfg", return_value=fake_cfg):
+        data = _run(get_config())
+    adapter = data["platforms"][0]["adapter"]
+    assert adapter["corp_secret"] == REDACTED_SENTINEL
+    assert adapter["token"] == REDACTED_SENTINEL
+    assert adapter["encoding_aes_key"] == REDACTED_SENTINEL
+    # 非密钥字段（corp_id）不应被脱敏
+    assert adapter["corp_id"] == "cid"
+
+
+def test_update_config_preserves_unknown_keys(monkeypatch):
+    """update_config 写回不得丢弃磁盘上的未知 key（pydantic extra=ignore 加载时
+    已丢弃，必须以原始磁盘配置为基底深合并保留）—— 配置红线 P0。"""
+    from web.routers.config import update_config
+    from web.api import ConfigUpdate
+    from src.config import AppConfig
+    from src.config_models import WebConfig
+
+    # 构造合法基准：auth 关闭（避免 fail-closed 校验），真实密码随 raw_disk 保留
+    base_cfg = AppConfig(web=WebConfig(auth_enabled=False, auth_password="pw-real"))
+    base_cfg.llm.system_prompt = "orig"
+    raw_disk = {
+        "llm": {"system_prompt": "orig"},
+        "my_custom_section": {"foo": "bar"},
+        "web": {"auth_password": "pw-real"},
+    }
+    captured = {}
+
+    def fake_write(d, changed_keys=None):
+        captured["dict"] = d
+        return {}
+
+    with patch("web.api.load_config", return_value=base_cfg), \
+         patch("web.routers.config._load_disk_config_raw", return_value=raw_disk), \
+         patch("web.api._write_config", side_effect=fake_write), \
+         patch("src.shared_state.get_config_reload_callback", return_value=None):
+        _run(update_config(ConfigUpdate(llm_system_prompt="new")))
+
+    written = captured["dict"]
+    assert written.get("my_custom_section") == {"foo": "bar"}, "未知顶层 key 在写回时被丢弃"
+    assert written["llm"]["system_prompt"] == "new"
+    assert written["web"]["auth_password"] == "pw-real"

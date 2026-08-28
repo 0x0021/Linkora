@@ -103,7 +103,17 @@ def test_example_config_has_no_unknown_tool_entries():
     example_path = Path("config.yaml.example")
     if not example_path.exists():
         pytest.skip("config.yaml.example 不存在，跳过")
-    cfg = load_config(str(example_path))
+    # example 的 web.auth_password 是占位哨兵（fail-closed 拒绝启动）；本测试只校验
+    # tools 白名单一致性，与鉴权无关，加载前关闭 auth 以隔离关注点（避免误触发拒绝）。
+    import tempfile
+
+    import yaml as _yaml
+
+    _raw = _yaml.safe_load(example_path.read_text(encoding="utf-8"))
+    _raw.setdefault("web", {})["auth_enabled"] = False
+    _tmp = Path(tempfile.mkdtemp()) / "config.yaml"
+    _tmp.write_text(_yaml.safe_dump(_raw, allow_unicode=True), encoding="utf-8")
+    cfg = load_config(str(_tmp))
     manifest = _manifest_tool_names()
     available = set(cfg.tools.available)
     unknown = available - manifest

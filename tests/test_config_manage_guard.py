@@ -57,6 +57,8 @@ class TestTypeCoercion:
         # AppConfig.model_validate 预校验以防损坏 config.yaml，字段不全的极简 dict 会被拒绝。
         example_path = _real_path(__file__).parent.parent / "config.yaml.example"
         config_dict = _real_yaml.safe_load(example_path.read_text(encoding="utf-8"))
+        # example 占位密码 fail-closed 拒绝启动；本测试校验类型强转，与鉴权无关，关闭 auth
+        config_dict.setdefault("web", {})["auth_enabled"] = False
         _patch_fs(monkeypatch, config_dict)
         t = ConfigManageTool()
         # LLM 传 JSON bool（非字符串）：旧代码 value.lower() 会崩，新代码应正确解析

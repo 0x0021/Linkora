@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 import src.tools.management as mgt
@@ -87,3 +88,22 @@ def test_update_merges_section_not_overwrite(monkeypatch, tmp_path):
     assert reloaded["tools"]["enabled"] is True
     # 同段其他键不被整体覆盖丢掉
     assert reloaded["tools"]["available"] == ["a", "b"]
+
+
+def test_placeholder_password_rejected_fail_closed():
+    """config.yaml.example 的占位密码必须 fail-closed 拒绝启动，强制用户设置真实密码。
+
+    回归护栏：曾漏将占位哨兵加入已知默认口令清单，导致抄模板后未改密码即以公开口令登入。
+    """
+    from src.config_models import WebConfig
+
+    with pytest.raises(ValueError):
+        WebConfig(auth_enabled=True, auth_password="REPLACE_WITH_YOUR_STRONG_PASSWORD")
+
+
+def test_example_still_ships_placeholder():
+    """示例模板须保留占位密码，否则上述 fail-closed 守卫失去意义（漂移预警）。"""
+    example = yaml.safe_load(
+        (REPO_ROOT / "config.yaml.example").read_text(encoding="utf-8")
+    )
+    assert example["web"]["auth_password"] == "REPLACE_WITH_YOUR_STRONG_PASSWORD"

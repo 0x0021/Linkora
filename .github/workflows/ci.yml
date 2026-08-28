@@ -32,7 +32,25 @@ jobs:
       # config.yaml 含密钥被 gitignore，CI 仓库内不存在；大量测试与 web 鉴权中间件
       # 依赖其存在（否则 FileNotFoundError / JWT 401）。example 已提交且无密钥，
       # 按官方文档 cp 出一份即可（jwt_secret 留空 → 进程内随机密钥缓存，测试内同源可用）。
-      run: cp config.yaml.example config.yaml
+      # 注意：example 的 auth_password 为占位符 REPLACE_WITH_YOUR_STRONG_PASSWORD，
+      # 会被 WebConfig 的 fail-closed 安全校验拒绝（生产预期行为：防止照搬模板裸奔）。
+      # CI 注入一次性随机强密码，使 auth_enabled=true 的测试配置合法通过校验，
+      # 同时保留安全门在 CI 中对真实 auth 路径的覆盖；该密钥仅存于 runner 临时文件，不入库。
+      run: |
+        cp config.yaml.example config.yaml
+        python - <<'PY'
+        import re, secrets
+        p = "config.yaml"
+        s = open(p, encoding="utf-8").read()
+        pw = secrets.token_urlsafe(24)
+        s = re.sub(
+            r"(auth_password:\s*')[^']*(')",
+            lambda m: m.group(1) + pw + m.group(2),
+            s, count=1,
+        )
+        open(p, "w", encoding="utf-8").write(s)
+        print("CI: injected randomized test auth_password (placeholder replaced)")
+        PY
 
     - name: Run tests
       run: |

@@ -272,7 +272,11 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
             except KeyboardInterrupt:
                 logger.debug("用户中断轮询")
                 break
-            except (RuntimeError, IMAdapterError) as e:
+            except Exception as e:
+                # 收窄的 (RuntimeError, IMAdapterError) 会放过 TypeError/KeyError/ValueError/
+                # sqlite3.Error/OSError 等，任一类未捕获异常都会冲出 run_loop 杀死轮询线程，
+                # 导致该平台永久静默停答。统一兜底为 Exception：记录错误并继续下一轮。
+                # 注意 KeyboardInterrupt/SystemExit 属 BaseException，不会被此处捕获。
                 self._last_error = str(e)[:500]
                 self._last_error_at = datetime.now()
                 logger.error("轮询出错：%s", e, exc_info=True)

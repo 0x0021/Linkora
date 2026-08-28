@@ -848,7 +848,12 @@ class WebConfig(BaseModel):
         """
         # 已知弱/默认口令：恢复出厂或遗漏配置时会写死这些值，等同公开，必须拒绝。
         # 注意：先 strip() 再判定，空白口令（"   "）与空口令同等视为未配置。
-        _KNOWN_DEFAULT_PASSWORDS = ("please-change-me", "changeme", "admin", "password")
+        _KNOWN_DEFAULT_PASSWORDS = (
+            "please-change-me", "changeme", "admin", "password",
+            # config.yaml.example 的占位密码：用户抄模板后若未替换即等同公开口令，
+            # 必须 fail-closed 拒绝启动，强制其设置真实密码。
+            "REPLACE_WITH_YOUR_STRONG_PASSWORD",
+        )
         _pw = (self.auth_password or "").strip()
         if self.auth_enabled and (not _pw or _pw in _KNOWN_DEFAULT_PASSWORDS):
             raise ValueError(

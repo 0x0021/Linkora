@@ -135,6 +135,12 @@ class TestPrimaryDbInitTimeout:
         primary = primary_mod.PrimaryMixin.__new__(primary_mod.PrimaryMixin)
         cfg_dst = tmp_path / "config.yaml"
         _shutil.copy("config.yaml.example", cfg_dst)
+        # example 占位密码会被 fail-closed 拒绝启动；本测试关注超时，与鉴权无关，关闭 auth
+        import yaml as _yaml
+
+        _raw = _yaml.safe_load(cfg_dst.read_text(encoding="utf-8"))
+        _raw.setdefault("web", {})["auth_enabled"] = False
+        cfg_dst.write_text(_yaml.safe_dump(_raw, allow_unicode=True), encoding="utf-8")
         primary.config = load_config(str(cfg_dst))
         primary.platforms = {}
         primary.config_path = str(cfg_dst)

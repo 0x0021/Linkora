@@ -123,3 +123,32 @@ def test_poller_mark_read_respects_config_off(tmp_db_path):
     poller.run_loop(handler)
 
     store._message_repo.save_message.assert_called()
+
+
+def test_poller_loop_survives_generic_exception(tmp_db_path, monkeypatch):
+    """poll_once 抛非 (RuntimeError, IMAdapterError) 异常（如 ValueError）不应冲出
+    run_loop 杀死轮询线程；应记录 _last_error 并继续下一轮。
+
+    回归护栏：曾仅 catch (RuntimeError, IMAdapterError)，任一其它异常（KeyError/
+    TypeError/sqlite3.Error/OSError）都会让该平台永久静默停答。
+    """
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda *a, **k: None)
+    dws = MagicMock()
+    poller, store = _make_poller(tmp_db_path, dws)
+    calls = {"n": 0}
+
+    def boom(handler=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ValueError("boom generic")
+        poller._running = False
+        return []
+
+    poller.poll_once = boom
+    poller.run_loop(lambda m: None)
+
+    assert calls["n"] >= 2, "run_loop 应在捕获首轮异常后继续下一轮"
+    assert poller._last_error, "应记录 _last_error"
+    assert "boom generic" in poller._last_error

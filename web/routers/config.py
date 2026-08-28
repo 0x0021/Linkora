@@ -518,12 +518,16 @@ async def restore_default_config():
             current = _api.load_config(_api.CONFIG_PATH)
             # 深合并：以出厂默认作基底，用当前磁盘配置（用户全部既有设置）覆盖，
             # 既补齐缺失结构，又不丢弃任何用户参数（多平台凭证、自定义 llm/storage 等均保留）。
-            merged = _deep_merge(default_skeleton, current.model_dump())
+            disk_raw = _load_disk_config_raw()
+            # 以磁盘原始配置（含未知 key）为基底 → 合入出厂默认骨架补齐结构 → 覆盖当前已知字段，
+            # 确保「恢复默认」不丢任何用户既有参数（含未知 key）。
+            merged = _deep_merge(_deep_merge(disk_raw, default_skeleton), current.model_dump())
         except Exception as e:
             logger.warning("[config] 读取当前配置失败，按纯出厂默认骨架恢复: %s", e)
         # 若合并后密码仍为空或已知默认值（例如原配置未设密码），强制用本次生成的随机
         # 强口令，保证重启后能用该口令登录，且不落公开默认口令。
-        _known = ("please-change-me", "changeme", "admin", "password", "")
+        _known = ("please-change-me", "changeme", "admin", "password",
+                  "REPLACE_WITH_YOUR_STRONG_PASSWORD", "")
         _web = merged.setdefault("web", {})
         _pw_applied = False
         if _web.get("auth_enabled") and (_web.get("auth_password") or "") in _known:
@@ -566,6 +570,10 @@ async def get_config(platform: str = ""):
             if p.get("llm"):
                 p["llm"]["api_key"] = _mask(p["llm"].get("api_key", ""))
                 p["llm"]["fallback_api_key"] = _mask(p["llm"].get("fallback_api_key", ""))
+            # 脱敏适配器密钥（corp_secret / token / encoding_aes_key / app_secret 等），
+            # 避免 platforms[].adapter 以明文回传（下方 feishu/wecom 块仅为空值 decoy）。
+            if p.get("adapter"):
+                p["adapter"] = _redact_secrets(p["adapter"])
         for p in data.get("platforms") or []:
             pid = p.get("id", "")
             if pid in ("feishu", "wecom"):
@@ -636,8 +644,12 @@ async def update_config(update: ConfigUpdate):
         # ---- Validation & save ----
         _validate_update_config(update)
         cfg_dict = cfg.model_dump()
-        # 写回前：把被 env 明文/mask 污染的 secret 还原为磁盘原值，避免明文落盘
-        _revert_env_masked_secrets_to_disk(cfg_dict, _load_disk_config_raw())
+        # 写回前：以磁盘原始配置（含未知 key）为基底深合并，保留用户既有参数
+        # （pydantic extra=ignore 在加载时已丢弃未知 key，直接 model_dump 写回会丢参数）
+        raw = _load_disk_config_raw()
+        cfg_dict = _deep_merge(raw, cfg_dict)
+        # 再把被 env 明文/mask 污染的 secret 还原为磁盘原值，避免明文落盘
+        _revert_env_masked_secrets_to_disk(cfg_dict, raw)
         wresult = _api._write_config(cfg_dict,
                            changed_keys={"llm", "rag", "poller", "memory", "skills", "embedding"})
         try:
@@ -741,8 +753,11 @@ async def update_system_prompt(update: SystemPromptUpdate):
         config = _api.load_config(_api.CONFIG_PATH)
         config.llm.system_prompt = update.system_prompt
         cfg_dict = config.model_dump()
-        # 写回前：即便只改提示词，load_config 仍注入了 env 明文密钥，需还原为磁盘原值
-        _revert_env_masked_secrets_to_disk(cfg_dict, _load_disk_config_raw())
+        # 即便只改提示词，也要保留磁盘上的未知 key（extra=ignore 已丢弃），避免写回丢参数
+        raw = _load_disk_config_raw()
+        cfg_dict = _deep_merge(raw, cfg_dict)
+        # load_config 注入了 env 明文密钥，需还原为磁盘原值，避免明文落盘
+        _revert_env_masked_secrets_to_disk(cfg_dict, raw)
         _api._write_config(cfg_dict)
         return {"success": True, "message": "系统提示词更新成功"}
     except Exception as e:

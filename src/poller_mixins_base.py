@@ -50,6 +50,7 @@ class PollerMixinBase(LinkoraComponentBase):
     _last_error_at: Any
     _last_fetch_time: Any
     _last_poll_at: Any
+    _chat_rate_limited_until: Any
     _last_poll_time: Any
     _metadata_unavailable: Any
     _ocr_cache_lock: Any

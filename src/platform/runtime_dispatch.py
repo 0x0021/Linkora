@@ -200,19 +200,49 @@ class ReplyDispatchMixin(EngineMixinBase):
                 self._mark_inbound_processed(message)
                 return False, None
         return True, result
+    def _extract_platform_msg_id(self, result, reply_uuid: str):
+        """从各平台发送返回值中归一化提取真实平台消息 id。
+
+        钉钉 DWS：``{"result": {"openTaskId": "..."}}``
+        飞书 lark-cli：``{"data": {"message_id": "om_..."}}``（兼容扁平 ``{"message_id": ...}``）
+        企微 CLI：``{"noop_uuid": "<调用方 uuid>"}``（CLI 不返回真实平台 id，退化为 reply_uuid）
+
+        返回平台真 id；企微返回调用方 uuid（=reply_uuid）；都无法提取时返回 None，
+        由调用方 fallback 到 reply_uuid。
+        """
+        if not result or not isinstance(result, dict):
+            return None
+        # 钉钉 DWS
+        rt = result.get("result")
+        if isinstance(rt, dict) and rt.get("openTaskId"):
+            return rt["openTaskId"]
+        # 飞书 lark-cli（标准 data.message_id，兼容扁平化）
+        d = result.get("data")
+        if isinstance(d, dict) and d.get("message_id"):
+            return d["message_id"]
+        if result.get("message_id"):
+            return result["message_id"]
+        # 企微 CLI 不返回真实 id，回传调用方 uuid
+        if result.get("noop_uuid"):
+            return result["noop_uuid"]
+        return None
+
     def _record_reply_success(self, message: Message, filtered: str,
                               reply_uuid: str, result) -> None:
         """发送成功后的记账：去重标记、冷却时间、防重复 msg_id、持久化 AI 回复、合并消息补标。"""
-        # 提取真实 msg_id（DWS 返回的 openTaskId）并标记去重
-        real_msg_id = None
+        # 归一化提取平台真实 msg_id（钉钉 openTaskId / 飞书 data.message_id /
+        # 企微 noop_uuid），用于持久化与去重。钉钉/飞书拿到平台真 id 后，下一轮
+        # 轮询拉回自身消息的 msg_id 可直接命中 messages 表（role='assistant'），
+        # 优先于脆弱的 content+time 兜底（±120s 窗口），从根上消除回声环。
+        platform_msg_id = None
         if not self.dws.dry_run and result and isinstance(result, dict):
-            real_msg_id = (result.get("result") or {}).get("openTaskId", None)
-            if real_msg_id:
-                try:
-                    self.poller._mark_msg_processed(real_msg_id, message.chat_id)
-                    logger.info("[去重] 已标记 AI 回复为已处理: %s", real_msg_id[:30])
-                except (sqlite3.Error, RuntimeError) as me:
-                    logger.warning("[去重] 标记失败: %s", me)
+            platform_msg_id = self._extract_platform_msg_id(result, reply_uuid)
+        if platform_msg_id:
+            try:
+                self.poller._mark_msg_processed(platform_msg_id, message.chat_id)
+                logger.info("[去重] 已标记 AI 回复为已处理: %s", str(platform_msg_id)[:30])
+            except (sqlite3.Error, RuntimeError) as me:
+                logger.warning("[去重] 标记失败: %s", me)
 
         # 更新最后回复时间（用于回复冷却）
         try:
@@ -244,7 +274,7 @@ class ReplyDispatchMixin(EngineMixinBase):
         # 持久化 AI 回复到数据库
         from src.models import Message as MessageModel
         ai_message = MessageModel(
-            msg_id=reply_uuid,
+            msg_id=platform_msg_id or reply_uuid,
             chat_id=message.chat_id,
             chat_type=message.chat_type,
             chat_name=message.chat_name,
@@ -260,8 +290,8 @@ class ReplyDispatchMixin(EngineMixinBase):
 
         # 【关键修复】立即标记 AI 回复为已处理，避免下一轮轮询拉取自己的消息
         try:
-            self.poller._mark_msg_processed(reply_uuid, message.chat_id)
-            logger.info("[去重] 已标记 AI 回复为已处理: %s", reply_uuid[:20])
+            self.poller._mark_msg_processed(platform_msg_id or reply_uuid, message.chat_id)
+            logger.info("[去重] 已标记 AI 回复为已处理: %s", (platform_msg_id or reply_uuid)[:20])
         except sqlite3.Error as e:
             # 仅 DB 层失败才兜底；非 DB 错误仍向上抛
             logger.warning("[去重] 标记 AI 回复为已处理失败: %s", e)

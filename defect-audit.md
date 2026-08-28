@@ -2,10 +2,10 @@
 
 > 范围：飞书 CLI 安装/更新 bug 已在上一轮修复（commit `dcaa4bd`），本报告覆盖**其余缺陷**。
 > 方法：全量测试基线 + 三个只读子系统审计（配置读写 / Web 安全 / 轮询与适配器）+ 静态扫描 + 真实 CLI 行为验证。
-> 测试基线：修复前 3824 passed → 修复后 **3829 passed**（+5 新增锁死测试），2 skipped / 2 xfailed，无失败。
+> 测试基线：修复前 3824 passed → 修复后 **3836 passed**（+12 新增锁死测试，含 P1 回声环 7 项），2 skipped / 2 xfailed，无失败。
 > 门禁：ruff / pyright（改后源文件 0 错误）/ check_deps / gitleaks 全绿。
 
-## 一、已修复（本轮，F1–F4）
+## 一、已修复（本轮，F1–F5）
 
 ### F4 · [P0] Web 写回静默丢弃未知配置 key
 - **位置**：`web/routers/config.py` → `update_config`(:638)、`update_system_prompt`(:743)、`restore_default_config`(:521)
@@ -39,17 +39,19 @@
 - **修复**：`except` 放宽为 `Exception`（`KeyboardInterrupt`/`SystemExit` 属 `BaseException` 不受影响，仍可中断）
 - **测试**：`test_poller_loop_survives_generic_exception`
 
+### F5 · [P1] 飞书/企微自身回复回声死循环（续，回声环根因修复）
+- **位置**：`src/platform/runtime_dispatch.py` `_record_reply_success`（原 line 209 写死 `result["result"]["openTaskId"]`）
+- **根因**：bot 持久化 assistant 行用本地 `reply_uuid` 作 `msg_id`，而下一轮轮询拉回自身消息的 `msg_id` 是平台真 id（飞书 `om_xxx` / 钉钉 `openMessageId` / 企微 `msgid`），二者永不相等 → self 检测（`_check_if_bot_message`）只能退守 content+time 兜底（±120s），时间/格式偏差即漏判 → 无限回声。`_record_reply_success` 对飞书/企微 `real_msg_id=None`，只标了本地 `reply_uuid`。
+- **修复**：新增 `_extract_platform_msg_id(result, reply_uuid)` 归一化提取——钉钉 `result.openTaskId` / 飞书 `data.message_id`（兼容扁平 `message_id`）/ 企微 `noop_uuid`（=reply_uuid 退化）；并用该平台真 id 同时①持久化 assistant 行 `msg_id`、②`_mark_msg_processed` 去重标记。钉钉/飞书拿到真 id 后，下一轮拉回自身消息 `msg_id` 直接命中 `messages` 表第一道防线（`role='assistant'`），从根消除回声环；content+time 兜底保留为第二道防线。
+- **测试**：`tests/test_reply_self_dedup.py` 7 项（`_extract_platform_msg_id` 三平台形态 + `_record_reply_success` 持久化/去重用平台真 id、企微 fallback）；既有 `test_poller.py::test_check_if_bot_message_msg_id_match_takes_priority` 已覆盖 msg_id 命中优先。
+
 ## 二、计划中（本轮未实现，避免引入跨平台回归）
 
-### P1 · 飞书/企微自身回复回声死循环
-- **位置**：`src/platform/runtime_dispatch.py:209` `_record_reply_success`；`feishu.py` / `wecom.py` `chat_message_reply`
-- **根因（已核实）**：去重标记写死 DingTalk 的 `result["result"]["openTaskId"]`；飞书返回 `data.message_id`/`identity`、企微返回 `errcode`/`noop_uuid`（`feishu.py:494` / `wecom.py:747`），`real_msg_id=None` → 只标了本地 `reply_uuid`；轮询重拉回来的平台消息（`om_xxx`）与 `reply_uuid` 不匹配。在 **bot-fallback**（飞书默认 `--as bot`，`feishu.py:612`）或 **self 检测失效**（`primary.py:350` 当前用户 ID 为空）时，自身回复被当作用户消息 → 无限回声。
-- **修复方案**：各适配器 send 返回归一化 `platform_msg_id`；`_record_reply_success` 优先用它标记去重，并将 assistant 行以平台 msg_id 为键持久化，使 `_check_if_bot_message` 按 id 命中。
-- **实现步骤**：① 飞书/企微 `chat_message_reply` 返回含 `platform_msg_id` 的 dict；② `runtime_dispatch` 提取并 `_mark_msg_processed`；③ `message_repo` 以平台 msg_id 存 assistant 行；④ 加单测覆盖「重拉自身回复不再应答」。
-- **风险**：跨三平台派发重构，需充分单测；故先规划，单独 PR。
+### P1 · 飞书/企微自身回复回声死循环 — **已修复，见 F5**
+- 原根因与方案见 F5；本轮已落地，未引入跨平台回归（钉钉行为不变、企微退化为 reply_uuid 保持现状）。
 
 ### P2 · 飞书/企微回复重拉后被误存为 user（历史污染）
-- 同 P1 根因；修复随 P1 一并落地。
+- 随 F5 一并落地（平台真 id 持久化 + `_check_if_bot_message` 按 id 命中）。
 
 ### P3 · `data/skills/.../stock_query.py` 硬编码东方财富 token
 - **位置**：`data/skills/stock-price-query/scripts/stock_query.py:50` `EASTMONEY_TOKEN` 明文

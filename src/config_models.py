@@ -181,6 +181,10 @@ class PollerConfig(BaseModel):
     # 每轮(默认5s)都打一次 chat_message_list。未读会话不受影响（实时优先）。
     # list-all 主通道仍每轮保底抓取全部新消息，故不会漏消息。0 = 关闭限频。
     min_conversation_poll_interval_seconds: int = 60
+    # 平台级限频退避冷却（秒）：当某平台 chat 接口返回 RATE_LIMIT_ERROR 时，
+    # 全局暂停该平台 chat 抓取冷却秒数（不推进轮询游标、不丢消息），避免继续猛打
+    # 已限流的接口、加剧限流风暴。冷却到期下一轮自动恢复。0 = 关闭退避（旧行为，不推荐）。
+    chat_rate_limit_cooldown_seconds: int = 60
 
 
 class KeywordRule(BaseModel):

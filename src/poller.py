@@ -106,6 +106,9 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         self._group_enum_cache_ts: float = 0.0
         # 长尾会话按会话限频抓取的时间戳（openConversationId -> 上次抓取 epoch）
         self._last_fetch_time: dict[str, float] = {}
+        # 平台级 chat 限频退避冷却（platform_id -> 冷却到期 epoch）：
+        # 命中 DWS RATE_LIMIT_ERROR 后暂停该平台 chat 抓取，避免继续猛打已限流接口。
+        self._chat_rate_limited_until: dict[str, float] = {}
 
         # 持久化黑名单：启动时从 DB 加载，避免重启后对已离职/非好友/被踢群等
         # 无权限会话反复触发 dws 的 OAuth 弹窗（这是「反复弹」的根因）

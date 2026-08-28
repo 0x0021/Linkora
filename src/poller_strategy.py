@@ -477,9 +477,42 @@ class PollerStrategyMixin(PollerMixinBase):
             logger.debug("[轮询器] 跳过双写（%s，内容前60字符已存在）：%s",
                          msg.sender_name, msg.content[:30])
 
+    # ── 平台级 chat 限频退避（RATE_LIMIT_ERROR 断路器）──
+    # DWS chat 接口偶发返回服务端业务级限流（server_error_code=RATE_LIMIT_ERROR，
+    # operation=chat/list_conversation_message_v2）。旧逻辑只记 WARNING 并跳过该会话、
+    # 下轮继续猛打——相当于在已限流的接口上反复撞墙，既刷日志又把限流窗口拉长。
+    # 现改为：命中即进入平台级冷却，冷却期内暂停本平台所有 chat 抓取（不推进轮询游标、
+    # 不丢消息），给服务端限流窗口留出恢复时间，冷却到期自动恢复。
+
+    def _is_chat_rate_limit_error(self, err: Exception) -> bool:
+        """判断异常是否由 DWS chat 接口限流（RATE_LIMIT_ERROR）引起。"""
+        return "RATE_LIMIT_ERROR" in str(err).upper()
+
+    def _enter_chat_rate_limit_cooldown(self) -> None:
+        """进入平台级 chat 限频冷却（基于 config.chat_rate_limit_cooldown_seconds）。"""
+        cooldown = getattr(self.config, "chat_rate_limit_cooldown_seconds", 60) or 0
+        if cooldown <= 0:
+            return
+        key = self.platform_id or ""
+        self._chat_rate_limited_until[key] = time.time() + cooldown
+        logger.info(
+            "[轮询器] 检测到 %s 平台 chat 接口限流(RATE_LIMIT_ERROR)，"
+            "进入 %ds 退避：暂停 chat 抓取以免加剧限流（不丢消息，到期自动恢复）",
+            key or "?", cooldown,
+        )
+
+    def _in_chat_rate_limit_cooldown(self) -> bool:
+        """当前是否处于平台级 chat 限频冷却期。"""
+        until = self._chat_rate_limited_until.get(self.platform_id or "", 0.0)
+        return bool(until) and time.time() < until
+
     def _handle_fetch_errors(self, err: Exception, open_id: str, title: str,
                              is_single: bool, chat_type: str) -> bool:
         """处理消息拉取阶段的各种异常；return True 表示应 continue 跳过该会话。"""
+        # 平台级限流：进入冷却并跳过本会话（下轮从同一游标重试，不丢消息）
+        if self._is_chat_rate_limit_error(err):
+            self._enter_chat_rate_limit_cooldown()
+            return True
         if self._is_permission_error(err):
             if is_single:
                 err_str = str(err).lower()
@@ -555,6 +588,15 @@ class PollerStrategyMixin(PollerMixinBase):
         skipped_throttle = self._should_skip_longtail_fetch(open_id, open_id in forced_ids)
         if skipped_throttle:
             logger.debug("[轮询器] 会话 %s 限频跳过本轮抓取", title or open_id[:20])
+            return None
+
+        # 平台级 chat 限频冷却：刚命中 RATE_LIMIT_ERROR 时暂停本平台 chat 抓取，
+        # 避免继续猛打已限流的接口。不推进 _last_poll_time（未真正抓取），
+        # 冷却到期后从同一游标重试，消息不会丢失。
+        if self._in_chat_rate_limit_cooldown():
+            remain = self._chat_rate_limited_until.get(self.platform_id or "", 0.0) - time.time()
+            logger.debug("[轮询器] 会话 %s 跳过本轮抓取（平台限频退避中，剩余 %.0fs）",
+                         title or open_id[:20], max(remain, 0.0))
             return None
 
         # 保存/更新会话缓存

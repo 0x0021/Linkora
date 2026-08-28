@@ -98,8 +98,9 @@ class AccessControlMixin(PollerMixinBase):
         # + 内存 _inaccessible_conversations）已能在轮询时跳过该会话，删行是破坏性
         # 副作用——会丢失会话元数据，且删行后该会话从 DB 兜底层消失、即便访问恢复
         # 也无法自愈。保留行还能让 _reconcile_blocklist 在访问恢复时自动解除黑名单。
-        already = open_id in self._inaccessible_conversations
-        self._inaccessible_conversations.add(open_id)
+        with self._poll_shared_lock:
+            already = open_id in self._inaccessible_conversations
+            self._inaccessible_conversations.add(open_id)
         if already:
             # 已拉黑（如每轮重复命中）：避免重复 WARN 刷屏，降为 debug
             logger.debug(
@@ -140,18 +141,28 @@ class AccessControlMixin(PollerMixinBase):
     def _should_skip_longtail_fetch(self, open_id: str, forced: bool) -> bool:
         """长尾会话是否应跳过本轮抓取（限频）。
 
-        forced(未读会话)=False 永不跳过；interval<=0 关闭限频；从未抓取过也不跳过。
-        仅当距上次真实抓取不足 min_conversation_poll_interval_seconds 时跳过。
+        forced(未读会话)=False 永不跳过；从未抓取过也不跳过。
+        两层叠加：
+        1) 时间窗口：距上次真实抓取不足 min_conversation_poll_interval_seconds 则跳过；
+        2) 轮次级节流（不依赖轮询速度，永不击穿）：每 min_conversation_poll_rounds 轮才抓一次。
+        任一层命中即跳过。
         """
         if forced:
             return False
         interval = getattr(self.config, "min_conversation_poll_interval_seconds", 60) or 0
-        if interval <= 0:
+        rounds = getattr(self.config, "min_conversation_poll_rounds", 0) or 0
+        if interval <= 0 and rounds <= 0:
             return False
-        last = self._last_fetch_time.get(open_id, 0.0)
-        if not last:
-            return False
-        return (time.time() - last) < interval
+        with self._poll_shared_lock:
+            last_time = self._last_fetch_time.get(open_id, 0.0)
+            last_round = self._last_fetch_round.get(open_id, -1)
+        if interval > 0 and last_time:
+            if (time.time() - last_time) < interval:
+                return True
+        if rounds > 0 and last_round >= 0:
+            if (self._poll_count - last_round) <= rounds:
+                return True
+        return False
 
     def _get_cached_top_conversations(self) -> list:
         """获取置顶/最近会话列表（带 TTL 缓存）。
@@ -259,8 +270,11 @@ class AccessControlMixin(PollerMixinBase):
 
     def _warn_permission_once(self, key: str, message: str) -> None:
         """权限相关警告只打印一次，避免日志刷屏。"""
-        if key not in self._perm_warned:
-            self._perm_warned.add(key)
+        with self._poll_shared_lock:
+            should_warn = key not in self._perm_warned
+            if should_warn:
+                self._perm_warned.add(key)
+        if should_warn:
             logger.warning("[轮询器] %s", message)
 
     def _is_permission_error(self, error: Exception) -> bool:
@@ -332,10 +346,11 @@ class AccessControlMixin(PollerMixinBase):
         ``self._perm_fail_streak.pop(open_id, None)`` 清除计数（瞬时错误自愈）。
         """
         threshold = getattr(self.config, "blacklist_min_consecutive_failures", 3) or 0
-        self._perm_fail_streak[open_id] = self._perm_fail_streak.get(open_id, 0) + 1
-        streak = self._perm_fail_streak[open_id]
-        if threshold <= 0 or streak >= threshold:
-            self._perm_fail_streak.pop(open_id, None)
+        with self._poll_shared_lock:
+            self._perm_fail_streak[open_id] = self._perm_fail_streak.get(open_id, 0) + 1
+            streak = self._perm_fail_streak[open_id]
+            if threshold <= 0 or streak >= threshold:
+                self._perm_fail_streak.pop(open_id, None)
             return True, streak
         return False, streak
 

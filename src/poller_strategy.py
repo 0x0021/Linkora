@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 from src.dws_adapter import DwsPermissionError
@@ -130,21 +131,20 @@ class PollerStrategyMixin(PollerMixinBase):
             # 避免 _build_group_list_all_cache（遍历所有群）/ _fetch_conversation_messages
             # 对同一会话重复发起 subprocess CLI 调用。
             import time
-            cache = getattr(self, "_feishu_conv_info_cache", None)
             cache_ttl = getattr(self, "_feishu_conv_info_cache_ttl", 300)  # 5 分钟 TTL
-            if cache is None:
-                cache = {}
-                self._feishu_conv_info_cache = cache
-            # 清理过期条目
             now = time.time()
-            expired_keys = [k for k, (t, _) in cache.items() if now - t > cache_ttl]
-            for k in expired_keys:
-                del cache[k]
-            _miss = object()
-            cached = cache.get(conv_id, _miss)
-            if cached is _miss:
+            # 缓存字典本身在并发轮询下被多线程读写，临界区用 _poll_shared_lock 串行化；
+            # 慢速的 subprocess CLI 调用（chat_conversation_info）放到锁外，保留并发收益。
+            with self._poll_shared_lock:
+                cache = self._feishu_conv_info_cache
+                expired_keys = [k for k, (t, _) in cache.items() if now - t > cache_ttl]
+                for k in expired_keys:
+                    del cache[k]
+                cached = cache.get(conv_id)
+            if cached is None:
                 info = self.dws.chat_conversation_info(conv_id)
-                cache[conv_id] = (now, info)
+                with self._poll_shared_lock:
+                    self._feishu_conv_info_cache[conv_id] = (now, info)
             else:
                 info = cached[1]
         except (RuntimeError, ValueError, IMAdapterError) as e:
@@ -494,7 +494,8 @@ class PollerStrategyMixin(PollerMixinBase):
         if cooldown <= 0:
             return
         key = self.platform_id or ""
-        self._chat_rate_limited_until[key] = time.time() + cooldown
+        with self._poll_shared_lock:
+            self._chat_rate_limited_until[key] = time.time() + cooldown
         logger.info(
             "[轮询器] 检测到 %s 平台 chat 接口限流(RATE_LIMIT_ERROR)，"
             "进入 %ds 退避：暂停 chat 抓取以免加剧限流（不丢消息，到期自动恢复）",
@@ -503,7 +504,8 @@ class PollerStrategyMixin(PollerMixinBase):
 
     def _in_chat_rate_limit_cooldown(self) -> bool:
         """当前是否处于平台级 chat 限频冷却期。"""
-        until = self._chat_rate_limited_until.get(self.platform_id or "", 0.0)
+        with self._poll_shared_lock:
+            until = self._chat_rate_limited_until.get(self.platform_id or "", 0.0)
         return bool(until) and time.time() < until
 
     def _handle_fetch_errors(self, err: Exception, open_id: str, title: str,
@@ -594,7 +596,8 @@ class PollerStrategyMixin(PollerMixinBase):
         # 避免继续猛打已限流的接口。不推进 _last_poll_time（未真正抓取），
         # 冷却到期后从同一游标重试，消息不会丢失。
         if self._in_chat_rate_limit_cooldown():
-            remain = self._chat_rate_limited_until.get(self.platform_id or "", 0.0) - time.time()
+            with self._poll_shared_lock:
+                remain = self._chat_rate_limited_until.get(self.platform_id or "", 0.0) - time.time()
             logger.debug("[轮询器] 会话 %s 跳过本轮抓取（平台限频退避中，剩余 %.0fs）",
                          title or open_id[:20], max(remain, 0.0))
             return None
@@ -615,7 +618,9 @@ class PollerStrategyMixin(PollerMixinBase):
         # 兜底（瞬时重试 / 拉黑自愈），不再在此硬跳过（原 list-direct 单聊权限错误不适用群路径）。
 
         # 记录本次抓取时间（供长尾限频判断，仅真正发起请求时更新）
-        self._last_fetch_time[open_id] = time.time()
+        with self._poll_shared_lock:
+            self._last_fetch_time[open_id] = time.time()
+            self._last_fetch_round[open_id] = self._poll_count
 
         try:
             if is_single:
@@ -646,7 +651,8 @@ class PollerStrategyMixin(PollerMixinBase):
             logger.debug("[轮询器] 从 %s（类型=%s）获取了 %d 条原始消息",
                         title, chat_type, len(raw_msgs))
             # 拉取成功：清除该会话的连续权限失败计数
-            self._perm_fail_streak.pop(open_id, None)
+            with self._poll_shared_lock:
+                self._perm_fail_streak.pop(open_id, None)
         except (RuntimeError, ValueError, IMAdapterError) as e:
             self._handle_fetch_errors(e, open_id, title, is_single, chat_type)
             return None
@@ -837,9 +843,11 @@ class PollerStrategyMixin(PollerMixinBase):
             max_ts = max(all_timestamps)
             # 飞书时间戳精度为分钟级，直接使用 max_ts 而非 +1s
             if type(self.dws).__name__ == 'FeishuCliAdapter':
-                self._last_poll_time[open_id] = max_ts
+                with self._poll_shared_lock:
+                    self._last_poll_time[open_id] = max_ts
             else:
-                self._last_poll_time[open_id] = max_ts + timedelta(seconds=1)
+                with self._poll_shared_lock:
+                    self._last_poll_time[open_id] = max_ts + timedelta(seconds=1)
             # 同步更新数据库
             if conv_messages:
                 try:
@@ -849,11 +857,13 @@ class PollerStrategyMixin(PollerMixinBase):
                     )
                 except sqlite3.Error as e:
                     logger.debug("[轮询器] 更新会话信息失败: %s", e)
-            logger.debug("[轮询器] 更新 %s 的轮询时间点: %s",
-                         title, self._last_poll_time[open_id])
+            with self._poll_shared_lock:
+                last_poll_repr = self._last_poll_time[open_id]
+            logger.debug("[轮询器] 更新 %s 的轮询时间点: %s", title, last_poll_repr)
         else:
             # 这条会话一条消息都没有，往前推配置的时间避免空转
-            self._last_poll_time[open_id] = datetime.now() - timedelta(minutes=self.config.empty_poll_protection_minutes)
+            with self._poll_shared_lock:
+                self._last_poll_time[open_id] = datetime.now() - timedelta(minutes=self.config.empty_poll_protection_minutes)
 
     def _global_deduplicate(self, messages: list) -> list:
         """全局去重：同轮次内 + 跨轮次已处理消息。"""
@@ -925,15 +935,8 @@ class PollerStrategyMixin(PollerMixinBase):
         # === 5. 群消息批量预取 ===
         group_cache = self._build_group_list_all_cache(all_conversations)
 
-        throttled_skip = 0
-        for conv in all_conversations:
-            result = self._poll_one_conversation(conv, group_cache, forced_ids)
-            if result is None:
-                continue
-            merged_msgs, _, skipped = result
-            new_messages.extend(merged_msgs)
-            if skipped:
-                throttled_skip += 1
+        new_messages_part, throttled_skip = self._poll_conversations(all_conversations, group_cache, forced_ids)
+        new_messages.extend(new_messages_part)
 
         # === 6. 全局去重 ===
         deduped = self._global_deduplicate(new_messages)
@@ -953,3 +956,49 @@ class PollerStrategyMixin(PollerMixinBase):
             )
 
         return deduped
+
+    def _poll_conversations(self, all_conversations: list[dict], group_cache,
+                            forced_ids: set[str]) -> tuple[list, int]:
+        """对每个会话执行 per-conversation 抓取，返回 (合并消息列表, 长尾限频跳过数)。
+
+        受控并发（config.poll_concurrency>1 时）把串行 DWS 调用摊到 N 个 worker；
+        共享实例字典的临界区已统一用 self._poll_shared_lock 串行化，subprocess 调用留锁外。
+        poll_concurrency<=1 退化为串行（保持旧行为确定性）。单 worker 异常被捕获为单会话
+        跳过，不冲垮整轮轮询。结果聚合在主线程完成（extend 单线程安全）。
+        """
+        new_messages: list = []
+        throttled_skip = 0
+        conc = max(1, getattr(self.config, "poll_concurrency", 1) or 1)
+        if conc <= 1:
+            for conv in all_conversations:
+                result = self._poll_one_conversation(conv, group_cache, forced_ids)
+                if result is None:
+                    continue
+                merged_msgs, _, skipped = result
+                new_messages.extend(merged_msgs)
+                if skipped:
+                    throttled_skip += 1
+            return new_messages, throttled_skip
+        # 受控并发：per-conversation 抓取并行化。主要耗时在 dws subprocess 调用
+        # （已确认线程安全：每次调用独立子进程，per-conversation 链路不写适配器共享状态），
+        # 并发收益来自把 102 次串行 CLI 调用摊到 N 个 worker。共享实例字典的读写临界区
+        # 已统一用 self._poll_shared_lock 串行化，subprocess 调用留在锁外。
+        # 单 worker 内的异常不影响整体：被捕获为单会话跳过，不冲垮整轮轮询。
+        with ThreadPoolExecutor(max_workers=conc, thread_name_prefix="poll-conv") as ex:
+            futures = [
+                ex.submit(self._poll_one_conversation, conv, group_cache, forced_ids)
+                for conv in all_conversations
+            ]
+            for f in futures:
+                try:
+                    result = f.result()
+                except Exception as e:  # noqa: BLE001
+                    logger.error("[轮询器] 单会话并发抓取异常（已跳过，不影响其他会话）: %s", e, exc_info=True)
+                    continue
+                if result is None:
+                    continue
+                merged_msgs, _, skipped = result
+                new_messages.extend(merged_msgs)
+                if skipped:
+                    throttled_skip += 1
+        return new_messages, throttled_skip

@@ -141,6 +141,63 @@ def _redact_sensitive(text: str) -> str:
     return text
 
 
+class NoLogInjectionFilter(logging.Filter):
+    """日志注入（CWE-117）防线：把日志消息与参数中的 CR/LF 转义成字面量。
+
+    外部可控输入（登录用户名、部门 id、技能 slug、会话 id、异常文本等）原样进日志时，
+    攻击者可用换行符伪造出额外的日志行（如把「登录失败」伪造成「登录成功」），
+    误导审计与事后排查。这里在 logging 层统一处理，一处覆盖全部调用点，
+    包括未来新增的日志，比在每个调用点各写三个 .replace() 更不易遗漏。
+
+    说明：CodeQL 是静态分析，识别不到运行期 filter（同 net.py 的 is_ssrf_safe 处境），
+    故 py/log-injection 另在 .github/codeql/codeql-config.yml 用 query-filters 排除；
+    本类的行为由 tests/test_log_injection_filter.py 单测兜底。
+    """
+
+    # 一次 translate 同时处理 CR/LF，比链式 replace 更省且无遗漏
+    _TRANSLATION = {ord("\r"): "\\r", ord("\n"): "\\n"}
+
+    @classmethod
+    def _clean(cls, value: object) -> object:
+        if isinstance(value, str) and ("\n" in value or "\r" in value):
+            return value.translate(cls._TRANSLATION)
+        return value
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.msg
+            if isinstance(msg, str) and ("\n" in msg or "\r" in msg):
+                record.msg = msg.translate(self._TRANSLATION)
+            args = record.args
+            if args:
+                if isinstance(args, dict):
+                    record.args = {k: self._clean(v) for k, v in args.items()}
+                else:
+                    record.args = tuple(self._clean(v) for v in args)
+        except Exception:
+            # 净化失败绝不能吞掉日志本身
+            return True
+        return True
+
+
+def install_no_log_injection_filter() -> None:
+    """给 root logger 与所有已注册 handler 安装日志注入防线（幂等）。
+
+    注意不能只靠「root 上是否已装」的全局标记提前返回：setup_logger 会清空并
+    重建 handler，若据此跳过，重建后的 handler 就失去防护。故 filter 实例复用，
+    但每次调用都按 handler 补齐。
+    """
+    root = logging.getLogger()
+    f = getattr(root, "_no_log_injection_filter", None)
+    if not isinstance(f, NoLogInjectionFilter):
+        f = NoLogInjectionFilter()
+        setattr(root, "_no_log_injection_filter", f)  # noqa: B010  # Logger 动态属性，setattr 绕过静态检查
+        root.addFilter(f)
+    for h in root.handlers:
+        if not any(isinstance(x, NoLogInjectionFilter) for x in h.filters):
+            h.addFilter(f)
+
+
 class ColoredFormatter(logging.Formatter):
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -490,6 +547,8 @@ def setup_logger(level: str = "info", log_file: str | None = None,
 
     from src.utils.request_id import install_log_filter
     install_log_filter()
+    # 日志注入（CWE-117）防线：统一剥离日志消息/参数中的 CR/LF，覆盖全部调用点
+    install_no_log_injection_filter()
 
 
 def get_log_buffer() -> InMemoryLogHandler:

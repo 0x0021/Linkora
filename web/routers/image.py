@@ -463,11 +463,13 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
     if dest != icons_dir_abs and not dest.startswith(icons_dir_abs + os.sep):
         logger.warning("[图标] 拒绝越界写入（slug 经净化后仍越界）")
         return False
-    # os.path.realpath() 返回 str，而它是 CodeQL 认可的 path-injection sanitizer，
-    # 不能换成 Path.resolve()，故文件读写另包一层 Path(dest)。
-    # 否则 dest.is_file() / dest.write_bytes() 会抛 AttributeError（str 无这些方法）。
-    dest_path = Path(dest)
-    if dest_path.is_file():
+    # 全程保持 dest 为 str 并走 os 路径函数。os.path.realpath() 是 CodeQL 认可的
+    # path-injection sanitizer，但只对 str 生效；此前为调用 .is_file()/.write_bytes()
+    # 而包了一层 Path(dest)，反而打断了 sanitizer 的数据流追踪，
+    # 使 #722/#723 两条 high 告警一直消不掉。改回 os.path.isfile / open 即可两全：
+    # realpath 本就返回 str，不需要 Path 包装（包装才是当初 AttributeError 的来源），
+    # 且净化链对 CodeQL 保持可见。
+    if os.path.isfile(dest):
         return True  # 已有缓存，幂等跳过
     try:
         async with httpx.AsyncClient(
@@ -478,7 +480,8 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
             if r.status_code == 200:
                 ctype = r.headers.get("content-type", "")
                 if ctype.startswith("image/"):
-                    dest_path.write_bytes(r.content)
+                    with open(dest, "wb") as _f:
+                        _f.write(r.content)
                     return True
     except Exception as _e:
         logger.debug("下载技能图标失败，忽略: %s", _e)

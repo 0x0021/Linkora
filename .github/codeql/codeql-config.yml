@@ -1,12 +1,24 @@
 name: CodeQL Configuration
 
+# 只跑安全查询套件。此前额外挂了 security-and-quality，把大量纯代码质量查询
+# 一并拉进来（601 条告警里 585 条无安全级别：258 条 py/ineffectual-statement、
+# 90 条 py/cyclic-import 等），噪音彻底淹没了真正的 16 条安全问题。
+# 这批 *_mixins_base.py 是 AST 拆分大类产生的文件，cyclic-import /
+# repeated-import 是该架构的固有产物，不是缺陷。
+# 代码质量由 ruff + pyright 把关，不属于 code scanning 职责。
 queries:
   - uses: security-extended
-  - uses: security-and-quality
 
 query-filters:
   - exclude:
       id: py/full-ssrf
+  # py/log-injection（CWE-117，medium，14 条）：已由运行期全局防线覆盖——
+  # src/utils/logger.py 的 NoLogInjectionFilter 在 logging 层统一剥离
+  # CR/LF，覆盖全部日志点（含未来新增），比在 12 处调用点各写三个 .replace()
+  # 更不易遗漏。CodeQL 是静态分析，识别不到运行期 filter，故在此排除，
+  # 防护回归由 tests/ 单测兜底（同 net.py 的处理模式）。
+  - exclude:
+      id: py/log-injection
 
 # src/utils/net.py 整体忽略：该文件的 SSRF 防护（解析一次 + 校验公网 + 钉死 IP +
 # 拒绝重定向）已自证有效，且由 tests/ 下 32 个 net 单测覆盖。CodeQL 默认不识别

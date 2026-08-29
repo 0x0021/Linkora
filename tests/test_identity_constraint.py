@@ -5,7 +5,7 @@
 """
 from types import SimpleNamespace
 
-from src.llm.system_prompt import build_system_prompt_core
+from src.llm.system_prompt import build_system_prompt, build_system_prompt_core
 
 
 def _fake_agent(user_title: str, user_name: str = "主人", user_dept: str = "研发部",
@@ -93,3 +93,65 @@ def test_identity_constraint_no_self_denial_but_no_taking_on_work():
         assert "不推诿" in prompt, label
         # 且明确不许替主人接活
         assert "【承诺边界" in prompt, label
+
+
+def _fake_full_agent() -> SimpleNamespace:
+    """补齐 build_system_prompt 所需属性的 fake（few-shot / 技能 / 风格段留空）。"""
+    cfg = SimpleNamespace(
+        system_prompt="你是助手。",
+        advanced=SimpleNamespace(max_chars_daily_chat=200, max_chars_tech_issue=600),
+        dynamic_few_shot=False,
+        few_shot_examples=[],
+    )
+    return SimpleNamespace(
+        config=cfg, user_name="张三", user_dept="研发部", org_name="X公司",
+        user_title="IT运维", platform_id="dingtalk",
+        tool_router=None, skill_manager=None, skills_config=None,
+        few_shot_examples=[], _get_style_prompt=lambda: "",
+    )
+
+
+def test_commitment_boundary_does_not_imply_owner_is_present():
+    """承诺边界不得再假设「主人就在对话对面」。
+
+    回归 2026-08-29：旧措辞「把决定权交回本人」「先跟本人对一下再答复你」
+    全程第三人称称呼主人，隐含主人在场。但分身是与外部同事对话，
+    主人根本不在这个会话里——模型为满足「交回本人」便虚构主人在场，
+    把当前对话者错认成主人/转述者，反问「这条消息是某某发来的吗」。
+    """
+    prompt = build_system_prompt_core(_fake_agent(user_title="IT运维"))
+    # 旧的歧义动作指令必须消失
+    assert "把决定权交回本人" not in prompt
+    # 改为「向对方说明」+ 显式禁止反问发件人
+    assert "★谁在和你说话" in prompt
+    assert "主人本人并不在这个会话里" in prompt
+    assert "严禁反问对方" in prompt
+    # 承诺边界本身不能被削弱，也不能因此退化成甩锅病
+    assert "一律不得替主人答应" in prompt
+    assert "不要因此变得畏缩" in prompt
+
+
+def test_speaker_anchor_sits_at_recency_position():
+    """身份锚定必须落在完整 prompt 末尾近因位，光靠开头那一份不够。
+
+    实测 core 里的「对话者:xxx(外部)」位于全文第 55 字符（占比 1.3%），
+    身后压着 4318 字符、30 个指令段，末尾是带「最高优先级」的承诺边界。
+    按本项目已验证的近因效应，开头身份信息几乎不参与最终决策。
+    """
+    prompt = build_system_prompt(_fake_full_agent(), sender_name="魏欣悦")
+    anchor_at = prompt.rfind("【当前对话者】")
+    assert anchor_at != -1, "完整 prompt 末尾必须有身份锚定"
+    # 必须压在承诺边界提醒之后，否则纠正不了它「交回本人」的副作用
+    assert anchor_at > prompt.rfind("【承诺边界提醒】")
+    # 距末尾足够近，确保不被后续内容稀释
+    assert len(prompt) - anchor_at < 400
+    tail = prompt[anchor_at:]
+    assert "魏欣悦" in tail
+    assert "不要反问这条消息是谁发的" in tail
+
+
+def test_sender_missing_does_not_fall_silent():
+    """sender 缺失时不得静默跳过整段身份——否则模型默认对面是主人本人。"""
+    prompt = build_system_prompt_core(_fake_agent(user_title="IT运维"))
+    assert "对话者:未能识别(外部)" in prompt
+    assert "不要向对方追问姓名" in prompt

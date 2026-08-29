@@ -453,22 +453,24 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
         logger.warning("[图标] 拒绝下载非公网图标 URL（疑似 SSRF）: %s", icon_url)
         return False
     # slug 来自外部排行榜元数据，视为不可信输入。
-    # 净化链：os.path.basename 剥离目录分隔符 → allowlist 仅留 [A-Za-z0-9_-]
-    # → os.path.realpath 规范化拼接结果（CodeQL 认可的 path-injection sanitizer）
-    # → 前缀校验兜底，确保 dest 永远落在图标目录内，杜绝 slug 穿透写盘。
+    # 三重净化：os.path.basename 剥离目录分隔符 → allowlist 仅留 [A-Za-z0-9_-]
+    # （safe_name 在数学上不可能含路径分隔符或 ".."，这是主防线）
+    # → os.path.realpath 规范化拼接结果 → 前缀校验兜底，确保 dest 落在图标目录内。
+    #
+    # 前缀校验务必保持「单个 not startswith → return False」的最简形式：
+    # 实测写成 `dest != icons_dir_abs and not dest.startswith(...)` 这种复合条件时，
+    # CodeQL 无法将其识别为 barrier guard，py/path-injection 告警消不掉
+    # （且前半段恒真——dest 永远是 dir/xxx.png，本就是冗余条件）。
     raw = os.path.basename(slug)
     safe_name = "".join(c for c in raw if c.isalnum() or c in "_-") or "default"
     icons_dir_abs = os.path.realpath(str(get_skill_icons_dir()))
     dest = os.path.realpath(os.path.join(icons_dir_abs, safe_name + ".png"))
-    if dest != icons_dir_abs and not dest.startswith(icons_dir_abs + os.sep):
+    if not dest.startswith(icons_dir_abs + os.sep):
         logger.warning("[图标] 拒绝越界写入（slug 经净化后仍越界）")
         return False
-    # 全程保持 dest 为 str 并走 os 路径函数。os.path.realpath() 是 CodeQL 认可的
-    # path-injection sanitizer，但只对 str 生效；此前为调用 .is_file()/.write_bytes()
-    # 而包了一层 Path(dest)，反而打断了 sanitizer 的数据流追踪，
-    # 使 #722/#723 两条 high 告警一直消不掉。改回 os.path.isfile / open 即可两全：
-    # realpath 本就返回 str，不需要 Path 包装（包装才是当初 AttributeError 的来源），
-    # 且净化链对 CodeQL 保持可见。
+    # 全程保持 dest 为 str 并走 os 路径函数：os.path.realpath() 返回的就是 str，
+    # 若包一层 Path(dest) 再调 .is_file()/.write_bytes() 反而会打断后续推导，
+    # 且那层包装正是当初 AttributeError 的来源。直接用 os.path.isfile / open 即可。
     if os.path.isfile(dest):
         return True  # 已有缓存，幂等跳过
     try:

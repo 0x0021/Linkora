@@ -7,7 +7,6 @@ import logging
 import sqlite3
 
 from src.poller_utils import is_read_receipt_content
-from src.im_adapter.errors import IMAdapterError
 
 logger = logging.getLogger("src.platform.runtime")
 
@@ -57,8 +56,17 @@ class ReplyDispatchMixin(EngineMixinBase):
                     logger.info("[发送] 原生引用回复 DWS 返回: %s", native_result)
                     return True, native_result
                 except (sqlite3.Error, RuntimeError) as e:
-                    # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送
-                    logger.warning("[发送] 原生引用回复（群聊）失败，降级为分片发送: %s", e)
+                    # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送。
+                    # DWS 话题圈守卫（topic_quote_guard_unavailable / convThreadEnabled）
+                    # 会拦截非话题圈群聊的引用回复，属预期内降级，不刷 warning 噪声。
+                    _msg = str(e)
+                    if "topic_quote_guard" in _msg or "convThreadEnabled" in _msg:
+                        logger.debug(
+                            "[发送] 群聊原生引用回复被话题圈守卫拦截（预期内降级）: %s",
+                            _msg[:80],
+                        )
+                    else:
+                        logger.warning("[发送] 原生引用回复（群聊）失败，降级为分片发送: %s", e)
                     # 落到下方 _send_possibly_sharded 分支
             result = self._send_possibly_sharded(
                 chat_id=message.chat_id,
@@ -134,29 +142,13 @@ class ReplyDispatchMixin(EngineMixinBase):
         logger.info("[发送] 单聊回复: chat_id=%s, chat_name=%s, peer_user_id=%s, peer_oid=%s, sender_id=%s",
                     message.chat_id, message.chat_name, peer_user_id, peer_oid, message.sender_id)
 
-        # === 原生引用回复（单聊 UX 优化）===
-        # 用 dws 原生 chat message reply 在会话内展示「引用气泡」。
-        # 仅当被回复消息的 id + 发送者 + 会话 id 齐全时启用；原生失败（参数缺失 /
-        # 接口异常）时 fallback_to_send=False 让其抛异常，落到下方 _send 分片发送
-        # 分支（含外部好友 oc_ 处理 / peer 纠错），避免重复发送、保证回复永不丢失。
-        _ref_msg_id = message.msg_id or ""
-        _ref_sender = message.sender_id or ""
-        _conv_id = message.chat_id or ""
-        if _ref_msg_id and _ref_sender and _conv_id:
-            try:
-                logger.info("[发送] 尝试原生引用回复（单聊）: chat_id=%s ref=%s",
-                            _conv_id, _ref_msg_id[:20])
-                native_result = self.dws.chat_message_reply(
-                    text=filtered, title=reply_title, uuid=reply_uuid,
-                    ref_msg_id=_ref_msg_id, ref_sender=_ref_sender,
-                    conversation_id=_conv_id, fallback_to_send=False,
-                )
-                logger.info("[发送] 原生引用回复 DWS 返回: %s", native_result)
-                return True, native_result
-            except (sqlite3.Error, RuntimeError, IMAdapterError):
-                # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送
-                logger.warning("[发送] 原生引用回复失败，降级为分片发送")
-                # 落到下方 _send 分支
+        # === 单聊不尝试原生「引用回复」===
+        # DWS 的引用回复内部会校验 convThreadEnabled（话题圈），而单聊永远不是
+        # 话题圈，故该调用必被 topic_quote_guard_unavailable 拦截后再降级——每条
+        # 单聊回复都白试一次 DWS 调用并刷 warning（2026-08-31 现场：郭建辉单聊
+        # 每条回复都走「尝试原生引用回复→守卫拦截→降级为分片发送」）。
+        # 单聊本就只有一方，引用气泡无信息增量；直接走普通发送，回复永不丢失。
+        logger.debug("[发送] 单聊跳过原生引用回复（DWS 话题圈守卫不支持单聊）")
 
         # 外部好友（跨租户）必须用 --chat-id oc_xxx 发送，而不能用
         # --user-id ou_xxx。后者触发飞书 230038 "cross tenant p2p chat operate forbid"。

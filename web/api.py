@@ -6,6 +6,7 @@ import ipaddress
 import logging
 import os
 import re
+import tempfile
 import threading
 import time
 import warnings
@@ -651,6 +652,25 @@ async def login(request: Request):
         )
 
 
+@app.post("/api/logout")
+async def logout_route(request: Request):
+    """用户登出：将当前 Bearer 令牌加入黑名单，使其立即失效。
+
+    Basic Auth 会话无状态、无令牌可吊销，故仅处理 Bearer（JWT）模式。
+    前端在用户主动退出或收到 401（令牌过期/吊销）时调用。
+    """
+    from web.auth_middleware import logout as _revoke_token
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Missing Bearer token", "success": False},
+        )
+    ok = _revoke_token(auth_header[7:].strip())
+    return JSONResponse(content={"success": ok})
+
+
 @app.get("/api/auth/me")
 async def get_current_user(request: Request):
     """获取当前登录用户信息。"""
@@ -828,13 +848,24 @@ def _write_config(config_dict: dict, changed_keys: set[str] | None = None) -> di
                 out.append(f"# ---------- {_SECTION_COMMENTS[key]} ----------")
         out.append(line)
     content = "\n".join(out)
-    # 原子写入：先写临时文件，再替换目标文件
-    tmp_path = CONFIG_PATH + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        f.write(content)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp_path, CONFIG_PATH)
+    # 原子写入：先写唯一临时文件，再 os.replace 替换目标文件。
+    # 用 tempfile.mkstemp 生成唯一临时名，避免并发写配置时两个请求共用
+    # 同一个 CONFIG_PATH+".tmp" 互相覆盖（2026-08-31 P3 修复）。
+    _dir = os.path.dirname(CONFIG_PATH) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=_dir, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, CONFIG_PATH)
+    finally:
+        # os.replace 成功后 tmp_path 已被移走；仅当替换未发生时清理残留（崩溃防护）。
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
     # 审计：高危写操作留痕（best-effort，失败不拖垮主流程）
     try:

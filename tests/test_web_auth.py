@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from fastapi import HTTPException
 
 
 class TestTokenManager:
@@ -254,11 +255,23 @@ class TestLoginLogout:
         assert 'password' in source.lower() or 'auth_password' in source
 
     def test_logout(self):
-        """登出应返回 True。"""
-        from web.auth_middleware import logout
+        """登出：合法令牌返回 True，非法/空令牌返回 False（2026-08-31 修复语义）。"""
+        from web.auth_middleware import (
+            TokenManager,
+            logout,
+            _revoked_token_hashes,
+            _hash_token,
+        )
 
-        result = logout("some-token")
-        assert result is True
+        mgr = TokenManager()
+        token = mgr.generate_token("u", "admin")
+        try:
+            assert logout(token) is True
+        finally:
+            _revoked_token_hashes.discard(_hash_token(token))
+        # 非法/空令牌无可吊销对象，返回 False
+        assert logout("not-a-valid-jwt") is False
+        assert logout("") is False
 
 
 class TestRBAC:
@@ -281,3 +294,40 @@ class TestRBAC:
         from web.auth_middleware import ROLE_VIEWER
 
         assert ROLE_VIEWER is not None
+
+
+class TestTokenRevocation:
+    """2026-08-31 修复回归：logout 真正吊销令牌，verify_token 拒绝已吊销令牌。
+
+    黑名单为模块级全局集合，测试后清理本测试的令牌哈希，避免污染其他用例。
+    """
+
+    def _cleanup(self, token: str) -> None:
+        from web.auth_middleware import _revoked_token_hashes, _hash_token
+
+        _revoked_token_hashes.discard(_hash_token(token))
+
+    def test_logout_revokes_token(self):
+        """登出后该令牌立即被 verify_token 拒绝（401）。"""
+        from web.auth_middleware import TokenManager, logout, _token_manager
+
+        mgr = TokenManager()
+        token = mgr.generate_token("revoke_me", "admin")
+        try:
+            assert logout(token) is True
+            with pytest.raises(HTTPException):
+                _token_manager.verify_token(token)
+        finally:
+            self._cleanup(token)
+
+    def test_revoked_token_still_rejected_after_relogin(self):
+        """已吊销令牌即便再次调用 logout 也返回 False（已被吊销）。"""
+        from web.auth_middleware import TokenManager, logout
+
+        mgr = TokenManager()
+        token = mgr.generate_token("relogin", "operator")
+        try:
+            assert logout(token) is True
+            assert logout(token) is False
+        finally:
+            self._cleanup(token)

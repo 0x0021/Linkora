@@ -11,8 +11,7 @@ import logging
 import secrets
 import threading
 import time
-from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 import jwt as _pyjwt
 from fastapi import Request, HTTPException
@@ -28,6 +27,18 @@ _TOKEN_EXPIRE_SECONDS = 3600 * 24  # 24 小时
 
 # 运行期解析出的 JWT 签名密钥（进程内缓存，保证签发与校验使用同一密钥）。
 _runtime_jwt_secret: str | None = None
+
+# 登出令牌黑名单（内存集合，存令牌的 SHA-256）。verify_token 校验时拒绝命中者。
+# 说明：单进程内有效；多 worker 部署时各 worker 独立（登出仅本 worker 生效），
+# 对本地管理工具可接受（令牌本身 24h 过期，重启进程也会清空）。如需跨 worker 一致，
+# 需外接共享存储（如 Redis），当前不引入以控制复杂度。
+_revoked_token_hashes: set[str] = set()
+_revoked_lock = threading.Lock()
+
+
+def _hash_token(token: str) -> str:
+    """令牌不可逆哈希，用于黑名单存储（不落明文令牌）。"""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _resolve_jwt_secret() -> str:
@@ -100,13 +111,16 @@ class TokenManager:
         )
 
     def verify_token(self, token: str) -> dict[str, Any]:
-        """验证令牌并返回 payload；非法/过期统一抛 401。"""
+        """验证令牌并返回 payload；非法/过期/已吊销统一抛 401。"""
         try:
-            return _pyjwt.decode(token, self._secret(), algorithms=["HS256"])
+            payload = _pyjwt.decode(token, self._secret(), algorithms=["HS256"])
         except _pyjwt.ExpiredSignatureError as exc:
             raise HTTPException(status_code=401, detail="Token expired") from exc
         except _pyjwt.InvalidTokenError as exc:
             raise HTTPException(status_code=401, detail=f"Token verification failed: {exc}") from exc
+        if _hash_token(token) in _revoked_token_hashes:
+            raise HTTPException(status_code=401, detail="Token revoked")
+        return payload
 
     def _sign(self, data: str) -> str:
         """HMAC-SHA256 签名（保留给历史单测手工构造 token 用）。
@@ -121,22 +135,6 @@ class TokenManager:
 
 # 全局令牌管理器实例
 _token_manager = TokenManager()
-
-
-def require_role(*roles: str) -> Callable:
-    """角色检查装饰器。"""
-    def decorator(f: Callable) -> Callable:
-        @wraps(f)
-        async def wrapper(request: Request, *args: Any, **kwargs: Any) -> Any:
-            role = getattr(request.state, "role", None)
-            if role not in roles:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Requires role: {', '.join(roles)}"
-                )
-            return await f(request, *args, **kwargs)
-        return wrapper
-    return decorator
 
 
 # ── 密码哈希（PBKDF2-HMAC-SHA256，stdlib，无外部依赖）──────────────────────
@@ -246,8 +244,19 @@ def login(username: str, password: str) -> dict[str, Any]:
 
 
 def logout(token: str) -> bool:
-    """用户登出（本地标记黑名单）。"""
-    # TODO: 实现令牌黑名单机制
+    """用户登出：将当前令牌加入黑名单，使其立即失效（verify_token 后续拒绝）。
+
+    仅对合法（可解析）的令牌生效；非法/空令牌返回 False（无可吊销对象）。
+    黑名单为进程内内存集合，多 worker 部署下仅本 worker 生效。
+    """
+    if not token:
+        return False
+    try:
+        _token_manager.verify_token(token)
+    except HTTPException:
+        return False
+    with _revoked_lock:
+        _revoked_token_hashes.add(_hash_token(token))
     return True
 
 

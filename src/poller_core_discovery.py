@@ -334,16 +334,18 @@ class DiscoveryMixin(PollerMixinBase):
                                 (msg.content or "")[:30])
                     continue
 
-                # 【无条件年龄门槛】超过 history_days 的远古消息不触发 AI 回复。
-                # 与 per-conversation 路径（poller_strategy._process_raw_messages）一致。
-                history_days = self.config.history_days
-                if history_days > 0 and msg.timestamp:
+                # 【无条件年龄门槛】超过阈值的老消息不触发 AI 回复。
+                # 与 per-conversation 路径（poller_strategy._process_raw_messages）一致，
+                # 门槛同样取 min(history_days, poll_new_message_max_age_hours/24)，
+                # 避免去重漏标时把几天前的老消息当新消息重放（详见该方法注释）。
+                max_age_days = self._max_new_message_age_days()
+                if max_age_days != float("inf") and msg.timestamp:
                     age_days = (datetime.now() - msg.timestamp).total_seconds() / 86400
-                    if age_days > history_days:
+                    if age_days > max_age_days:
                         logger.info(
-                            "[轮询器] list-all 跳过 %.1f 天前的远古消息（>%d 天阈值，"
+                            "[轮询器] list-all 跳过 %.2f 天前的老消息（>%.2f 天新消息阈值，"
                             "来自 %s，时间=%s）",
-                            age_days, history_days,
+                            age_days, max_age_days,
                             msg.sender_name, msg.timestamp,
                         )
                         continue

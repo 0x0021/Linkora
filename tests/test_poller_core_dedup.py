@@ -217,3 +217,57 @@ class TestCheckIfBotMessage:
         dup.store.conv_conn.return_value.cursor.side_effect = __import__("sqlite3").Error("db down")
         msg = _make_msg("m1")
         assert dup._check_if_bot_message(msg) is False
+
+
+# ============ _max_new_message_age_days（新消息年龄门槛） ============
+
+class FakeAgeDedup(DedupMixin):
+    """带 config 的最小 fake。config 用 SimpleNamespace 以便精确控制两个阈值。"""
+
+    def __init__(self, history_days=7, poll_max_age_hours=24):
+        from types import SimpleNamespace
+        self.config = SimpleNamespace(
+            history_days=history_days,
+            poll_new_message_max_age_hours=poll_max_age_hours,
+        )
+
+
+class TestMaxNewMessageAgeDays:
+    """2026-08-31 事故回归：新消息门槛必须与 history_days 解耦。
+
+    history_days 语义是「取多少天历史当上下文」，7 天合理；但若直接拿它判定
+    「这条消息够不够新」，去重一旦漏标（handler 抛错不标记 / 服务中断），
+    list-all 会把几天前的老消息重放并与当前新消息合并投喂。
+    事故：8-25 截图在 8-31 重放，AI 对当天「VDI 更新后黑屏」回「收到，问题已解决就好。」
+    """
+
+    def test_takes_stricter_of_two_limits(self):
+        # history_days=7，但 poll 门槛 24h → 取 1 天
+        assert FakeAgeDedup(history_days=7, poll_max_age_hours=24)._max_new_message_age_days() == 1.0
+
+    def test_history_days_wins_when_stricter(self):
+        # history_days=1 天，poll 门槛 72h → 取 1 天
+        assert FakeAgeDedup(history_days=1, poll_max_age_hours=72)._max_new_message_age_days() == 1.0
+
+    def test_six_day_old_message_now_excluded(self):
+        """事故核心：6 天前的消息必须被门槛挡住（旧逻辑 history_days=7 会放行）。"""
+        limit = FakeAgeDedup(history_days=7, poll_max_age_hours=24)._max_new_message_age_days()
+        assert 5.99 > limit  # 6 天老消息超阈值 → 跳过
+
+    def test_recent_message_still_allowed(self):
+        """服务离线一夜（<24h）后重启，仍应能补回消息，不能因收紧而漏回。"""
+        limit = FakeAgeDedup(history_days=7, poll_max_age_hours=24)._max_new_message_age_days()
+        assert 0.5 < limit  # 12 小时前的消息仍在阈值内
+
+    def test_zero_cap_falls_back_to_history_days(self):
+        assert FakeAgeDedup(history_days=3, poll_max_age_hours=0)._max_new_message_age_days() == 3.0
+
+    def test_both_disabled_returns_inf(self):
+        assert FakeAgeDedup(history_days=0, poll_max_age_hours=0)._max_new_message_age_days() == float("inf")
+
+    def test_missing_attrs_do_not_crash(self):
+        """旧配置没有新字段时，getattr 兜底必须不炸。"""
+        from types import SimpleNamespace
+        dup = DedupMixin()
+        dup.config = SimpleNamespace(history_days=7)  # 缺 poll_new_message_max_age_hours
+        assert dup._max_new_message_age_days() == 7.0

@@ -17,6 +17,26 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# DWS 塞进消息 content 的「工具元信息」噪声（供 _resolve_image_content 的 caption 兜底剥离）。
+#
+# 这些串是给 CLI/下游工具读的，不是用户写的字。写进 caption 会导致它们随 OCR 卡片
+# 一起进 LLM 上下文和消息记录页：一段 base64 噪声 + 一句「注意：如需下载使用 dws
+# chat message download-media 命令下载」顶在图片内容前面，既浪费 token，又容易让
+# 模型把它误认成某种需要执行/回应的指令。
+#
+# 注意：只在本文件的 caption 兜底里剥离，**不能**改 _raw_to_message 的原始 content——
+# _extract_media_id 依赖其中的 mediaId= 才能下载原图，提前剥离会导致 OCR 拿不到图。
+_MEDIA_NOISE_PATTERNS = (
+    r"mediaId\s*=\s*[^\s)\]&]+",                    # mediaId=$xxx（圆括号/方括号内均可）
+    r"file_?[Ii]d\s*[:=]\s*[^\s)\]&]+",             # fileId: xxx / file_id=xxx
+    # 「注意：如需下载…」必须非贪婪截止到「命令下载」：DWS 是把它**拼在 mediaId 之后**的，
+    # 而用户的随图文字可能还在它后面（如「…命令下载 帮我看下这个报错」）。
+    # 旧写法吃到行尾，会把用户真写的字一并吞掉。
+    r"注意：如需下载.*?命令下载",
+    r"注意：如需下载.*",                              # 兜底：格式变了（无「命令下载」）时吃到行尾
+    r"\[(?:图片消息|文件|视频消息|语音消息|图片)\]",    # [图片消息] 这类类型前缀
+)
+
 
 def _search_image_key(obj):
     """递归查找飞书 post 图文混排结构里第一个 image_key。
@@ -238,30 +258,33 @@ class OcrMixin(PollerMixinBase):
         # 【兜底】如果 _extract_image_caption 未命中，但 fallback（_extract_content
         # 的返回值）包含非 mediaId 的实质文字，很可能是 DWS 把随图文字嵌在
         # content 字段的非预期位置。捞出来当 caption，避免用户文字被静默丢弃。
+        #
+        # ⚠️ DWS 会往 content 里塞「给 CLI 工具看」的元信息，它们绝不是用户写的：
+        #   [图片消息](mediaId=$iwEe...) 注意：如需下载使用dws chat message download-media命令下载
+        #   [文件] xxx.md fileId: bva6xxx 注意：如需下载使用dws drive download命令下载
+        # 必须先把这些噪声整段剥离，再看剩下的是不是人话。
+        #
+        # 旧实现的 split 正则只认 `[?&]mediaId=`，而钉钉实际是 `(mediaId=` —— 前面的
+        # 左圆括号匹配不上，导致整串 mediaId + 「注意：如需下载…」被当成随图文字，
+        # 连同 base64 噪声与工具指令一起进了 LLM 上下文（既污染 prompt，又让模型
+        # 误以为那是某种系统指令）与消息记录页。
         if not caption and fallback:
             fb = fallback.strip()
-            # 排除纯 mediaId 串、纯 JSON、纯 URL 等非用户文字
+            # 排除纯 JSON、纯 URL 等非用户文字
             if (len(fb) > 6
-                    and not fb.startswith("mediaId=")
                     and not fb.startswith("{")
                     and not fb.startswith("http")
-                    and "[图片]" not in fb
                     and not fb.startswith("*")):
-                # 如果 fallback 含 mediaId= 则截取其前/后可能附带的文字
-                if "mediaId=" in fb:
-                    parts = re.split(r"[?&]mediaId=[^\s&]*", fb)
-                    candidate = "".join(p.strip() for p in parts if p.strip())
-                    if len(candidate) > 4:
-                        caption = candidate
-                        logger.info(
-                            "[轮询器][caption-兜底] 从 fallback 提取到随图文字: %s",
-                            caption[:80]
-                        )
-                elif any('\u4e00' <= c <= '\u9fff' for c in fb):
-                    # 含中文且不是已知格式 → 直接当作用户文字
-                    caption = fb
+                cleaned = fb
+                for pat in _MEDIA_NOISE_PATTERNS:
+                    cleaned = re.sub(pat, " ", cleaned)
+                # 收拢剥离后残留的空括号与空白
+                cleaned = re.sub(r"[\s()\[\]]+", " ", cleaned).strip(" -—:：,，。")
+                # 剥掉噪声后必须仍剩「像人话」的内容（含中文），否则视为无随图文字
+                if len(cleaned) > 1 and any('\u4e00' <= c <= '\u9fff' for c in cleaned):
+                    caption = cleaned
                     logger.info(
-                        "[轮询器][caption-兜底-fallback] 使用 fallback 作为随图文字: %s",
+                        "[轮询器][caption-兜底] 从 fallback 提取到随图文字: %s",
                         caption[:80]
                     )
 

@@ -16,9 +16,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
+
+from src.tools.utils import cross_process_lock
 
 if TYPE_CHECKING:  # 仅类型标注，避免运行时循环导入
     from src.config_models import ProactiveConfig
@@ -189,18 +192,30 @@ class ProactiveDigestScheduler:
             logger.info("[主动触达] 今日已推送过，跳过")
             return
 
-        items = self.collect_items()
-        title = f"📋 近 {self._cfg.lookback_hours} 小时对话摘要（共 {len(items)} 段）"
-        digest = build_digest(items, self._cfg.max_summary_chars, title=title)
-        try:
-            if self._cfg.owner_user_id:
-                self._adapter.chat_message_send(title="每日对话摘要", text=digest,
-                                                user=self._cfg.owner_user_id)
-            else:
-                self._adapter.chat_message_send(title="每日对话摘要", text=digest,
-                                                open_dingtalk_id=self._cfg.owner_open_dingtalk_id)
-            logger.info("[主动触达] 已推送（%d 段）", len(items))
-            self._mark_sent_now()
-        except Exception as e:
-            # 推送失败不影响主回复链路，仅记录警告；不 mark，下次窗口再试
-            logger.warning("[主动触达] 推送失败: %s", e)
+        # 跨进程互斥锁：web + worker 各启动一份 scheduler，防止双发。
+        # 锁文件放在 data/ 目录下，与 doc-sync 同级。
+        data_dir = os.path.dirname(getattr(self._store, 'db_path', '') or 'data')
+        with cross_process_lock("proactive-digest", workdir=data_dir) as acquired:
+            if not acquired:
+                logger.info("[主动触达] 另一进程正在推送，跳过本次")
+                return
+            # 获取锁后再次检查（另一进程可能刚完成推送并写了 meta）
+            if self._last_sent_date() == today:
+                logger.info("[主动触达] 获取锁后确认今日已推送，跳过")
+                return
+
+            items = self.collect_items()
+            title = f"📋 近 {self._cfg.lookback_hours} 小时对话摘要（共 {len(items)} 段）"
+            digest = build_digest(items, self._cfg.max_summary_chars, title=title)
+            try:
+                if self._cfg.owner_user_id:
+                    self._adapter.chat_message_send(title="每日对话摘要", text=digest,
+                                                    user=self._cfg.owner_user_id)
+                else:
+                    self._adapter.chat_message_send(title="每日对话摘要", text=digest,
+                                                    open_dingtalk_id=self._cfg.owner_open_dingtalk_id)
+                logger.info("[主动触达] 已推送（%d 段）", len(items))
+                self._mark_sent_now()
+            except Exception as e:
+                # 推送失败不影响主回复链路，仅记录警告；不 mark，下次窗口再试
+                logger.warning("[主动触达] 推送失败: %s", e)

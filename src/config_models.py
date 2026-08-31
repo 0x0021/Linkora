@@ -59,6 +59,17 @@ class PollerConfig(BaseModel):
     messages_per_conversation: int = 20
     history_window: int = 20
     history_days: int = 3  # 历史消息取最近 N 天；与 config.yaml 对齐，避免环境未加载 yaml 时掉回 1 天导致跨天失忆
+    # 轮询侧「新消息」年龄门槛（小时），与 history_days 相互独立。
+    # history_days 语义是「取多少天的历史作为上下文/RAG 语料」（7 天合理）；
+    # 而这里判定的是「一条消息够不够新、要不要触发 AI 回复」。
+    # 两者混用会出事故：去重表一旦漏标（handler 抛错时不标记、服务中断、
+    # 历史同步路径异常），list-all 会在 history_days 窗口内把几天前的老消息
+    # 当新消息重放，与当前新消息合并成同一批投喂，LLM 把新报障认成旧话题的
+    # 收尾（2026-08-31 事故：6 天前的旧截图被重放，AI 对当天新故障回
+    # 「收到，问题已解决就好。」）。
+    # 取 min(history_days*24, 本值) 生效；0 表示不额外收紧（仅用 history_days）。
+    # 24h 兼顾「服务离线一夜后仍能补回消息」与「绝不重放隔天老消息」。
+    poll_new_message_max_age_hours: int = 24
     # 会话间隔切分：相邻两条历史消息间隔超过此分钟数时，认为是新的对话轮次，
     # 只保留最近一段连续对话，避免把陈年无关旧话题（如两周前的闲聊）带入当前上下文。
     # 0 表示禁用切分（回退到纯 days+window 取数）。默认 360 分钟(6h)：当天连续聊算一段，隔夜/隔天自动断开。

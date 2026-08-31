@@ -17,6 +17,21 @@ logger = logging.getLogger(__name__)
 # 故内容相同时再叠加时间窗判据。窗口取 2s 纯为容错余量（理论差值为 0）。
 _DUP_CONTENT_WINDOW_SECONDS = 2.0
 
+# 同一防抖批次内，消息**服务端时间戳**的允许跨度（秒）。
+#
+# 防抖窗口硬上限约 120s（见 _compute_debounce_delay 的 hard_cap），所以用户正常连发
+# 的消息，其服务端时间戳跨度不可能超过几分钟。跨度远大于此只可能是去重漏标
+# （handler 抛错不标记 / 服务中断 / 历史同步异常）导致 list-all 把**几天前**的老消息
+# 重放进了当前批次。
+#
+# 这类重放危害极大：老消息会与用户刚发的消息合并成同一批投喂，LLM 于是把用户的
+# 新问题认成旧话题的延续。实测事故（2026-08-31）：8-25 的「桌面分配失败」截图被
+# 重放并与当天「VDI 更新后黑屏」合并，AI 回了「收到，问题已解决就好。」——因为
+# 8-25 那个话题当时确实已经解决，而当天其实是火绒误杀 explorer 的全新故障。
+#
+# 300s 远大于防抖上限（不会误伤正常连发），又远小于「隔小时/隔天」的重放间隔。
+_STALE_BATCH_GAP_SECONDS = 300.0
+
 
 def _is_same_physical_message(a, b, window_seconds: float = _DUP_CONTENT_WINDOW_SECONDS) -> bool:
     """判断两条消息是否为「同一条物理消息的重复投递」。
@@ -42,6 +57,9 @@ def _is_same_physical_message(a, b, window_seconds: float = _DUP_CONTENT_WINDOW_
 
 
 class MessageLoopMixin(EngineMixinBase):
+    # 重放判定阈值（说明见模块级 _STALE_BATCH_GAP_SECONDS）；做成类属性便于测试覆盖
+    _STALE_BATCH_GAP_SECONDS = _STALE_BATCH_GAP_SECONDS
+
     def _is_incomplete_message(self, message: Message) -> bool:
         """单条消息是否为「不完整/纯数据」型（结构化数据、但本条无请求动词）。
 
@@ -103,6 +121,55 @@ class MessageLoopMixin(EngineMixinBase):
         age = time.time() - first_seen
         delay = min(delay, max(1.0, hard_cap - age))
         return delay, incomplete_pending
+
+    def _drop_stale_messages_in_batch(self, messages: list) -> list:
+        """剔除批次里时间戳异常偏老的消息（历史重放防护的最后一道防线）。
+
+        轮询侧已有年龄门槛（_max_new_message_age_days），但那是按「距现在多久」判定；
+        这里补的是**批次内相对跨度**判定——即便老消息侥幸通过了年龄门槛（门槛配得很宽、
+        或时钟/时区异常），只要它与本批次最新消息差了几个小时以上，就绝不参与合并投喂。
+
+        合并投喂是危害的放大器：单条老消息最多让 AI 多回一句，但一旦与新消息合并，
+        LLM 会把用户的新问题理解成旧话题的收尾，直接给出「问题已解决就好」这类
+        风马牛不相及的回复。
+
+        保守原则：时间戳缺失/不可解析时一律保留——宁可多投喂，绝不可丢用户的真消息。
+        """
+        if len(messages) <= 1:
+            return messages
+
+        def _epoch(m) -> float | None:
+            t = getattr(m, "timestamp", None)
+            if t is None:
+                return None
+            try:
+                # 用 Unix 时间戳比较，天然规避 naive/aware 混用相减抛 TypeError
+                return t.timestamp()
+            except Exception:
+                return None
+
+        stamps = [_epoch(m) for m in messages]
+        if any(s is None for s in stamps):
+            # 时间戳不全 → 无法判断新老，保守全保留
+            return messages
+
+        newest = max(stamps)  # type: ignore[arg-type]
+        kept: list = []
+        dropped: list = []
+        for m, s in zip(messages, stamps, strict=True):
+            if newest - s <= self._STALE_BATCH_GAP_SECONDS:  # type: ignore[operator]
+                kept.append(m)
+            else:
+                dropped.append(m)
+
+        if dropped:
+            logger.warning(
+                "[防抖] 批次内剔除 %d 条时间戳异常偏老的消息（与最新消息相差 >%.0f 秒，"
+                "疑为去重漏标导致的历史重放，不参与合并投喂）：丢弃内容=%s",
+                len(dropped), self._STALE_BATCH_GAP_SECONDS,
+                [(getattr(m, "content", "") or "")[:30] for m in dropped][:5],
+            )
+        return kept or messages
 
     def get_debounce_metrics(self) -> dict:
         """返回「纯数据/不完整」批次防抖的监控指标（P1-C），供 /api/debounce-metrics 读取。
@@ -513,6 +580,11 @@ class MessageLoopMixin(EngineMixinBase):
                     continue
                 refreshed.append(m)
             messages = refreshed
+
+            # 【历史重放防护】剔除批次内时间戳异常偏老的消息，再进入合并。
+            # 必须在合并之前：一旦老消息被拼进 merged_content，LLM 就会把用户的新问题
+            # 认成旧话题的收尾（详见 _STALE_BATCH_GAP_SECONDS 处的事故说明）。
+            messages = self._drop_stale_messages_in_batch(messages)
 
             # 【关键修复】把 OCR 刷新得到的真实文本回写到数据库。
             # 原因：poller 的异步 OCR 回写（update_message_content）在 debounce 合并流程下

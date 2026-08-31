@@ -77,6 +77,7 @@ platforms:
       reply_send_min_interval: 0.2                    # 两条回复最小发送间隔（秒），防刷屏
       reply_send_rate_limit_backoff_seconds: 60.0    # 发送被限流后的退避时长（秒）
       owner_present_cooldown_seconds: 600            # 真人在场冷却（秒）：窗口内真人活跃则 AI 不插嘴，离场超时后接管
+      poll_new_message_max_age_hours: 24             # 轮询侧「新消息」年龄门槛（小时）：超过则不触发 AI 回复。取 min(history_days, 本值/24)；与 history_days（上下文取数窗口）解耦，防止去重漏标时把几天前的老消息重放成新消息。0=不额外收紧
       suppress_when_owner_read: true                 # 已读闸门：DWS 判定会话已读(无未读)则 AI 不回；新未读消息仍照常回。失真漏回时设 false
       mark_read_after_process: true                  # 处理完后将该会话消息标记为已读
       # —— 背压 / 并发 ——
@@ -161,6 +162,7 @@ platforms:
   #     first_run_ignore_older_than_minutes: 5
   #     reply_cooldown_seconds: 10
   #     owner_present_cooldown_seconds: 600
+  #     poll_new_message_max_age_hours: 24
   #     suppress_when_owner_read: true
   #     mark_read_after_process: true
   #     max_dispatch_per_cycle: 30
@@ -226,6 +228,7 @@ platforms:
   #     first_run_ignore_older_than_minutes: 5
   #     reply_cooldown_seconds: 10
   #     owner_present_cooldown_seconds: 600
+  #     poll_new_message_max_age_hours: 24
   #     suppress_when_owner_read: true
   #     mark_read_after_process: true
   #     max_dispatch_per_cycle: 30

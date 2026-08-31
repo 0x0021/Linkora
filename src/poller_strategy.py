@@ -759,18 +759,24 @@ class PollerStrategyMixin(PollerMixinBase):
                                  int(age_minutes), msg.sender_name, msg.timestamp)
                     continue
 
-            # 【无条件年龄门槛】超过 history_days 的远古消息不触发 AI 回复。
+            # 【无条件年龄门槛】超过阈值的老消息不触发 AI 回复。
             # 即使去重表被清空（重启/维护）导致 DWS 重新拉到老消息，
             # 也不应把一个月前的「好的」当作当前对话处理（2026-08 线上事故）。
             # 首次运行的 first_run_ignore 已在上游处理过；本检查覆盖所有后续轮次。
-            history_days = self.config.history_days
-            if history_days > 0 and msg.timestamp:
+            #
+            # 门槛取 min(history_days, poll_new_message_max_age_hours/24)：
+            # history_days 是「取多少天历史当上下文」，宽是合理的；但拿它当「新消息」
+            # 判据就太宽了——去重一旦漏标，几天前的老消息会被重放并与当前新消息
+            # 合并投喂（2026-08-31 事故：6 天前的旧截图导致 AI 对当天新故障回
+            # 「收到，问题已解决就好。」）。故此处用独立且更严的门槛兜底。
+            max_age_days = self._max_new_message_age_days()
+            if max_age_days != float("inf") and msg.timestamp:
                 age_days = (datetime.now() - msg.timestamp).total_seconds() / 86400
-                if age_days > history_days:
+                if age_days > max_age_days:
                     logger.info(
-                        "[轮询器] 跳过 %.1f 天前的远古消息（>%d 天阈值，"
+                        "[轮询器] 跳过 %.2f 天前的老消息（>%.2f 天新消息阈值，"
                         "来自 %s，时间=%s，内容=%s）",
-                        age_days, history_days,
+                        age_days, max_age_days,
                         msg.sender_name, msg.timestamp,
                         (msg.content or "")[:40],
                     )

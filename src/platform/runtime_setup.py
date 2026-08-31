@@ -47,7 +47,11 @@ class SetupMixin(EngineMixinBase):
             # 【Phase 3 多平台】KB 搜索工具绑定到主平台(dingtalk)库：工具注册表为全平台
             # 共享单例，RAG 检索以主平台知识库为准（各平台独立知识库隔离留待后续细化）。
             self.tool_router.register(
-                KBSearchTool(store=self.platforms["dingtalk"].store, embedding_config=embedding_config)
+                KBSearchTool(
+                    store=self.platforms["dingtalk"].store,
+                    embedding_config=embedding_config,
+                    embedding_client=getattr(self, "embedding_client", None),
+                )
             )
             logger.info(
                 "[RAG] 热重载：kb_search 工具已重建（embedding_enabled=%s）",

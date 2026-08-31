@@ -7,11 +7,15 @@ RAG 知识库搜索工具。
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from src.config import EmbeddingConfig
 from src.memory.sqlite_store import SQLiteStore
 from src.tools.base import BaseTool
 from src.tools.utils import safe_float, safe_int
+
+if TYPE_CHECKING:  # 仅用于签名注解名解析（ruff），运行期仍走局部延迟导入以保持可 patch
+    from src.memory.embedding import EmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -90,46 +94,52 @@ class KBSearchTool(BaseTool):
     # 意图关键词：仅作为「显式要求搜索知识库」时的触发短语（RAG 背景检索已由系统提示词自动注入）
     intent_keywords: list[str] = []
 
-    def __init__(self, store: SQLiteStore, embedding_config: "EmbeddingConfig | dict | None" = None):
+    def __init__(self, store: SQLiteStore, embedding_config: "EmbeddingConfig | dict | None" = None,
+                 embedding_client: "EmbeddingClient | None" = None):
         """
         初始化 RAG 搜索工具。
 
         Args:
             store: SQLite 存储器（包含知识库表）
             embedding_config: Embedding 配置（字典或 EmbeddingConfig 对象）
+            embedding_client: 共享 EmbeddingClient 实例（由 runtime_setup 单例注入）。
+                提供时直接复用，避免每进程重复加载同一个本地模型（双份显存/启动耗时）；
+                未提供且 embedding 启用时，降级为自行创建（兼容独立/测试/飞书导入路径）。
         """
         self.store = store
         self.embedding_config = embedding_config or {}
-        self.embedding_client = None
+        # 【双份加载修复】优先复用注入的共享 EmbeddingClient（runtime_setup 中 background
+        # 加载的单例）；记忆工具 / doc_sync / 语义路由均复用同一实例，消除进程内重复建模。
+        self.embedding_client = embedding_client
 
         # 从知识库动态提取意图关键词（必须在 embedding 加载前完成，不依赖模型）
         self.intent_keywords = self._build_intent_keywords()
         logger.info("[RAG] 动态意图关键词已提取: %s", list(self.intent_keywords)[:10])
 
-        # 延迟加载 EmbeddingClient（避免启动时依赖问题）
-        enabled = False
-        if isinstance(self.embedding_config, dict):
-            enabled = self.embedding_config.get("enabled", False)
-        else:
-            enabled = getattr(self.embedding_config, "enabled", False)
+        # 未注入共享客户端且 embedding 启用时，才自行创建（兼容独立/测试/飞书导入等未走注入的路径）
+        if self.embedding_client is None:
+            enabled = False
+            if isinstance(self.embedding_config, dict):
+                enabled = self.embedding_config.get("enabled", False)
+            else:
+                enabled = getattr(self.embedding_config, "enabled", False)
 
-        if enabled:
-            try:
-                from src.memory.embedding import EmbeddingClient
-                from src.config import EmbeddingConfig
+            if enabled:
+                try:
+                    from src.memory.embedding import EmbeddingClient
 
-                if isinstance(self.embedding_config, dict):
-                    config_obj = EmbeddingConfig(**self.embedding_config)
-                else:
-                    config_obj = self.embedding_config
+                    if isinstance(self.embedding_config, dict):
+                        config_obj = EmbeddingConfig(**self.embedding_config)
+                    else:
+                        config_obj = self.embedding_config
 
-                self.embedding_client = EmbeddingClient(config_obj)
-                logger.info("[RAG] Embedding 客户端已加载")
-            except Exception as e:
-                logger.warning("[RAG] Embedding 客户端加载失败: %s", e)
-                self.embedding_client = None
-        else:
-            logger.info("[RAG] Embedding 未启用，将使用全文检索（兜底方案）")
+                    self.embedding_client = EmbeddingClient(config_obj)
+                    logger.info("[RAG] Embedding 客户端已加载（独立实例）")
+                except Exception as e:
+                    logger.warning("[RAG] Embedding 客户端加载失败: %s", e)
+                    self.embedding_client = None
+            else:
+                logger.info("[RAG] Embedding 未启用，将使用全文检索（兜底方案）")
 
     def _build_intent_keywords(self) -> list[str]:
         """

@@ -118,10 +118,10 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 # 创建临时 notes 文件（gh release create --notes-file 需要）
-NOTES_FILE=$(mktemp "/tmp/linkora-release-${VERSION}-XXXXXX.md")
+NOTES_FILE=$(mktemp "/tmp/linkora-release-${VERSION}-XXXXXX")
 printf '%s\n' "$NOTES" > "$NOTES_FILE"
 
-REPO=$(git remote get-url "$REMOTE" | sed -E 's#.*[:/]([^/]+/[^/]+?)(\.git)?$#\1#')
+REPO=$(git remote get-url "$REMOTE" | sed -E 's#\.git$##; s#(https://[^/]+/|git@[^:]+:)##')
 
 cleanup() { rm -f "$NOTES_FILE"; }
 trap cleanup EXIT

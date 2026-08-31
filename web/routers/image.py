@@ -150,19 +150,25 @@ def _verify_image_token(token: Optional[str]) -> bool:
 
 
 @router.get("/api/image-token")
-async def issue_image_token(response: Response):
+async def issue_image_token(response: Response, request: Request = None):
     """领取图片访问 token（需 Basic Auth）。
 
     除返回 JSON 兼容旧前端外，同时下发 HttpOnly Cookie(img_token)。
     新版前端改由 Cookie 携带鉴权、图片 URL 不再含 token，从而保证图片地址
     稳定、浏览器可长期缓存，避免每轮 token 轮换引发整屏图片重复下载。
+
+    Cookie 的 Secure 标记按连接方式推断：仅当请求经 HTTPS 时才置 Secure，
+    本地 HTTP（如 localhost 开发）不加，避免图片 Cookie 在明文下被丢弃导致
+    图片加载失败（2026-08-31 P3 安全增强）。
     """
     token = _make_image_token()
+    secure = bool(request is not None and getattr(request.url, "scheme", "") == "https")
     response.set_cookie(
         "img_token",
         token,
         max_age=_IMG_TOKEN_TTL,
         httponly=True,
+        secure=secure,
         samesite="lax",
         path="/",
     )

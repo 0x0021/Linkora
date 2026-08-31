@@ -207,6 +207,7 @@ platforms:
     poller:
       interval_seconds: 10
       history_days: 3
+      poll_new_message_max_age_hours: 24   # 仅处理最近 N 小时内的新消息（默认 24，防历史重放）
       max_concurrent_replies: 4
       skip_msg_types: [system, app]
     adapter:

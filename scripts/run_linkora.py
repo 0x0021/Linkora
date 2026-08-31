@@ -47,12 +47,20 @@ _RESET = "\033[0m"
 # 短标签右补空格，保证后续所有列（时间戳/级别/模块名/消息）纵向对齐。
 _CTX_WIDTH = 13  # len("[web+worker]")
 
-# 跨进程去重：web/worker 启动期会各自打印一遍相同的初始化序列。按「消息正文」
-# 去重（忽略 ANSI 着色、时间戳、request_id 差异）——同一行若另一进程已打印过，
-# 则折叠为单条 [web+worker]，避免启动日志看起来像双份。进程独有行保留各自前缀。
+# 跨进程去重：web/worker 会各自打印一遍相同的初始化/调度序列。按「消息正文」去重
+# （忽略 ANSI 着色、时间戳、[rid=xxxx] 差异）——同一正文若另一进程也打印，折叠为
+# 【单条】[web+worker]，杜绝「[worker] + [web+worker]」双行；进程独有行保留各自前缀，
+# 同进程重复行仍照常打印（保留频次可见性）。
+# 实现：首条到达先缓冲一个极短窗口（_DEDUP_WINDOW），窗口内另一进程发来同正文 →
+# 取消防冲、合并打印一次 [web+worker]；窗口内无伙伴 → 按原前缀打印一次。
 _dedup_lock = threading.Lock()
-_seen_by: dict[str, set[str]] = {}
-_merged: set[str] = set()
+_print_lock = threading.Lock()                       # 保护 stdout，避免多线程 print 交错
+_monotonic = time.monotonic                         # 复用，避免重复调用属性查找
+_seen_done: dict[str, set[str]] = {}                 # 已最终输出的正文 key → 已参与打印的进程集合
+_last_emit: dict[str, float] = {}                    # 正文 key → 上次实际输出的 monotonic 时间
+_pending: dict[str, tuple[threading.Timer, str]] = {}  # 等待伙伴中的 key → (定时器, 首到进程)
+_DEDUP_WINDOW = 0.15                                 # 秒：等待伙伴的最大延迟
+_DEDUP_RATE_WINDOW = 2.0                             # 秒：同正文短时重复（如单进程内重复初始化）也折叠，避免刷屏
 # 正文归一化：去掉 ANSI 转义、行首时间戳(HH:MM:SS[.mmm])、[rid=xxxx]，仅比对实质内容
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 _TS_RE = re.compile(r"^\s*\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?\s*")
@@ -66,36 +74,69 @@ def _normalize(body: str) -> str:
     return s.strip()
 
 
-def _classify(prefix: str, body: str) -> tuple[bool, str]:
-    """返回 (是否打印, 实际前缀标签)。
+def _emit(label: str, text: str) -> None:
+    """按 label 选色输出一行（线程安全）。
 
-    - 首次出现                  → (True, prefix)
-    - 另一进程已打印过同正文     → 折叠为 'web+worker'，仅首次折叠时打印
-    - 已折叠过的正文再次到达     → (False, '') 后续完全抑制
-    同进程内重复行始终照常打印（不折叠）。
+    label=web+worker → 灰（合并行）；web → 青；worker → 黄。
     """
-    key = _normalize(body)
-    if not key:
-        return True, prefix
+    color = _GRAY if label == "web+worker" else (_CYAN if label == "web" else _YELLOW)
+    with _print_lock:
+        print(f"{color}[{label:<{_CTX_WIDTH - 2}}]{_RESET} {text}", flush=True)
+
+
+def _flush_single(key: str, prefix: str, text: str) -> None:
+    """窗口超时仍无伙伴 → 视为单进程独有行，按原 prefix 打印一次。"""
     with _dedup_lock:
-        if key in _merged:
-            return False, ""
-        if key in _seen_by and prefix not in _seen_by[key]:
-            _seen_by[key].add(prefix)
-            _merged.add(key)
-            return True, "web+worker"
-        _seen_by.setdefault(key, set()).add(prefix)
-        # 防止内存无限增长（极少触发）
-        if len(_seen_by) > 4000:
-            _seen_by.clear()
-            _merged.clear()
-        return True, prefix
+        _pending.pop(key, None)
+        _seen_done[key] = {prefix}
+        _last_emit[key] = _monotonic()
+        if len(_seen_done) > 8000:        # 防内存无限增长，清空后旧行失去去重能力（可接受）
+            _seen_done.clear()
+            _last_emit.clear()
+    _emit(prefix, text)
+
+
+def _classify(prefix: str, text: str) -> None:
+    """跨进程去重调度（无返回值，结果通过 _emit 输出）。
+
+    - key 已最终输出过
+        · 距上次 < _DEDUP_RATE_WINDOW（短时重复，如单进程内重复初始化）→ 抑制，避免双份
+        · 距上次较久的真实重复 → 照常打印（两进程都见过则合并为 [web+worker]）
+    - key 正在等待伙伴（另一进程先到）→ 取消防冲定时器，合并打印 [web+worker] 一次
+    - key 首次出现                   → 缓冲并启动窗口定时器，等待伙伴
+    """
+    key = _normalize(text)
+    if not key:
+        _emit(prefix, text)               # 空/纯控制行：直接原样输出
+        return
+    now = _monotonic()
+    with _dedup_lock:
+        if key in _pending:
+            timer, first_prefix = _pending.pop(key)
+            timer.cancel()
+            _seen_done[key] = {first_prefix, prefix}
+            _last_emit[key] = now
+            _emit("web+worker", text)
+            return
+        if key in _seen_done:
+            if now - _last_emit.get(key, 0.0) < _DEDUP_RATE_WINDOW:
+                return                      # 短时重复 → 抑制
+            _seen_done[key].add(prefix)
+            _last_emit[key] = now
+            label = "web+worker" if len(_seen_done[key]) > 1 else prefix
+            _emit(label, text)
+            return
+        timer = threading.Timer(_DEDUP_WINDOW, _flush_single, args=(key, prefix, text))
+        timer.daemon = True
+        _pending[key] = (timer, prefix)
+        timer.start()
 
 
 def _pump(prefix: str, color: str, stream, dedup: bool = True) -> None:
     """读取子进程管道（文本模式），加前缀后转发到父进程 stdout。
 
-    dedup=True 时对消息正文做跨进程去重，重复行折叠为 [web+worker]。
+    dedup=True 时正文做跨进程去重（见 _classify，最终每行仅输出一次）；
+    dedup=False 时逐行原样加前缀输出（调试两进程差异用 --no-dedup）。
     """
     try:
         for line in iter(stream.readline, ""):
@@ -103,13 +144,10 @@ def _pump(prefix: str, color: str, stream, dedup: bool = True) -> None:
             if not text:
                 continue
             if dedup:
-                ok, label = _classify(prefix, text)
-                if not ok:
-                    continue
-                if label == "web+worker":
-                    print(f"{_GRAY}[{label:<{_CTX_WIDTH - 2}}]{_RESET} {text}", flush=True)
-                    continue
-            print(f"{color}[{prefix:<{_CTX_WIDTH - 2}}]{_RESET} {text}", flush=True)
+                _classify(prefix, text)
+            else:
+                with _print_lock:
+                    print(f"{color}[{prefix:<{_CTX_WIDTH - 2}}]{_RESET} {text}", flush=True)
     except Exception:  # noqa: BLE001
         pass
     finally:

@@ -17,7 +17,7 @@ jobs:
       # pytest 必须带此变量（本地同理，见项目约定）。
       KMP_DUPLICATE_LIB_OK: "TRUE"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Install uv
       uses: astral-sh/setup-uv@v5

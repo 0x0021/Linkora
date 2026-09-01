@@ -92,6 +92,20 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
         os.makedirs(self._conv_root, exist_ok=True)
         return os.path.join(self._conv_root, f"{platform}__{digest}.db")
 
+    def conv_db_path(self, platform: str, fallback_corp_id: Optional[str] = None) -> str:
+        """返回某平台【当前账号】会话 DB 的物理路径（只读计算，不创建目录/不打开连接）。
+
+        与 :meth:`_conv_db_path` 同公式，但**不**调用 ``os.makedirs``、不打开连接，
+        供外部（如孤儿会话库扫描）在不产生副作用的前提下拿到"应用实际会写入的会话分库
+        路径"，用于判断 ``data/conversations/`` 下哪些分库仍被活跃平台绑定。
+
+        注意：``db_path``（全局主库 ``linkora.db``）与此处的会话分库是**不同文件**；
+        孤儿扫描必须用本方法而非 ``db_path``，否则会把全部会话分库误判为孤儿。
+        """
+        account_id = account_identity.resolve_account_id(platform, fallback_corp_id)
+        digest = hashlib.sha256(account_id.encode("utf-8")).hexdigest()[:16]
+        return os.path.join(self._conv_root, f"{platform}__{digest}.db")
+
     def conv_conn(self, platform: str, fallback_corp_id: Optional[str] = None) -> sqlite3.Connection:
         """返回【当前线程 × 平台当前账号】独立的会话库连接（懒创建 + 缓存）。
 

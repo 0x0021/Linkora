@@ -118,3 +118,64 @@ def test_scan_empty_active_reclaims_all(tmp_path):
 
 def test_scan_missing_dir_returns_empty(tmp_path):
     assert scan_and_reclaim_orphan_tmp_images(tmp_path / "nope", set(), tmp_path) == ([], 0)
+
+
+def test_conv_db_path_contract(tmp_path):
+    """契约(D4 根因)：会话分库路径位于 conversations/ 下，且**不等于**全局主库 db_path。
+
+    孤儿扫描必须用会话分库路径（conv_db_path）构建 active 集，否则 active_paths 永远
+    匹配不上 data/conversations/*.db，会把全部会话分库（含活跃账号）误判为孤儿并删图。
+    """
+    from src.memory.sqlite_store import SQLiteStore
+
+    store = SQLiteStore(db_path=str(tmp_path / "linkora.db"))
+    conv_path = store.conv_db_path("dingtalk")
+
+    assert "conversations" in conv_path
+    assert conv_path.endswith(".db")
+    assert conv_path != store.db_path
+    assert Path(conv_path).parent == tmp_path / "conversations"
+
+
+def test_scan_orphan_method_excludes_active_conv_db(tmp_path, monkeypatch):
+    """回归(D4)：_scan_orphan_conversation_dbs 必须用 store.conv_db_path 排除活跃库，
+    否则活跃账号图片会被误删（2026-09-01 事故）。
+
+    通过 monkeypatch data_path 把扫描限定在 tmp_path，避免触碰真实 data/。
+    """
+    import src.paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "data_path", lambda name: tmp_path / name)
+
+    conv = tmp_path / "conversations"
+    conv.mkdir(parents=True, exist_ok=True)
+    tmp_root = tmp_path / "tmp_images"
+
+    active_path = conv / "dingtalk__active.db"
+    _make_db(active_path, ["dingtalk/acct/chat/active_ocr.png", "dingtalk/acct/chat/active_ocr2.png"])
+    orphan_db = conv / "dingtalk__orphan_real.db"
+    _make_db(orphan_db, ["dingtalk/acct/chat/orphan_ocr.png"])
+
+    active_img = _make_img(tmp_root, "dingtalk/acct/chat/active_ocr.png")
+    active_img2 = _make_img(tmp_root, "dingtalk/acct/chat/active_ocr2.png")
+    orphan_img = _make_img(tmp_root, "dingtalk/acct/chat/orphan_ocr.png")
+
+    class FakeStore:
+        # 旧代码的错误来源：用全局主库路径做 active 匹配
+        db_path = str(tmp_path / "linkora.db")
+
+        def conv_db_path(self, platform, fallback_corp_id=None):
+            return str(active_path)
+
+    from types import SimpleNamespace
+
+    from src.platform.memory import MemoryMixin
+
+    host = MemoryMixin()
+    host.platforms = {"dingtalk": SimpleNamespace(store=FakeStore())}
+
+    host._scan_orphan_conversation_dbs()
+
+    assert active_img.exists() and active_img2.exists()  # 活跃账号图片保留（回归点）
+    assert not orphan_img.exists()  # 孤儿图片回收
+    assert orphan_db.exists()  # 孤儿库本体不删

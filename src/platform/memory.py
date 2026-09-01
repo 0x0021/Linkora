@@ -461,10 +461,16 @@ class MemoryMixin(EngineMixinBase):
 
         conv_dir = data_path("conversations")
         active_paths: set[str] = set()
-        for ctx in self.platforms.values():
+        for pid, ctx in self.platforms.items():
             store = getattr(ctx, "store", None)
-            if store is not None and getattr(store, "db_path", None):
-                active_paths.add(store.db_path)
+            # 必须用会话分库真实路径（conv_db_path），而非全局主库 db_path；
+            # 否则 active_paths 永远匹配不上 data/conversations/*.db，会把全部
+            # 会话分库（含活跃账号）误判为孤儿并删除其图片（D4 回归，2026-09-01 事故根因）。
+            if store is not None and hasattr(store, "conv_db_path"):
+                try:
+                    active_paths.add(store.conv_db_path(pid))
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[孤儿库扫描] 计算平台 %s 活跃会话库路径失败（跳过该平台）: %s", pid, exc)
         if not active_paths:
             logger.info("[孤儿库扫描] 活跃平台集为空，跳过 tmp_images 回收（安全起见）")
             return

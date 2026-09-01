@@ -13,7 +13,7 @@
 | **D7** 三张全局表无保留策略 | `tool_execution_repo/feedback_repo/draft_repo` 加 `cleanup_old_*`；`memory.py` 加 `_start_global_tables_cleanup_scheduler()`（每 24h，`lifecycle` 接入）；保留期复用 `messages_retention_days`(90天)，不新增配置 | 代码已合入（`ed86045`） |
 | **D9** 飞书 1024 维陈旧索引 | 飞书未启用，纯数据修复：`feishu-ai.db` 5 条向量清空(保留content)+删 `feishu-ai.faiss`/`.map.json`（data/ 已 gitignore，不提交） | 已修复（根因未做代码防护，启用飞书前建议加"重建跳过异维 chunk"守卫） |
 | **D8** backup churn | `src/db_backup.py` 备份写盘后 SHA-256 比对去重（内容未变更跳过重复备份）+ `backup_max_count` 7→5（配置 `StorageConfig.backup_max_count` 同步）；新增 `tests/test_db_backup.py::TestContentDedup` | 代码已合入（本轮） |
-| **D4** 孤儿会话库 tmp_images 泄漏 | 新增 `src/platform/orphan_cleanup.py`（`scan_and_reclaim_orphan_tmp_images`/`collect_orphan_image_paths`）+ `memory.py::._scan_orphan_conversation_dbs`（启动期一次性，非线程）；`purge_orphan_images` 补 `base_dir` 修正分库 base 错配（真实根 `data/tmp_images`）；新增 `tests/test_orphan_cleanup.py`(7) | 代码已合入（本轮） |
+| **D4** 孤儿会话库 tmp_images 泄漏 | 新增 `src/platform/orphan_cleanup.py`（`scan_and_reclaim_orphan_tmp_images`/`collect_orphan_image_paths`）+ `MemoryMixin._scan_orphan_conversation_dbs`（启动期一次性）；`purge_orphan_images` 补 `base_dir`；`SQLiteStore.conv_db_path(platform)` 新访问器供精确匹配活跃分库。新增 `tests/test_orphan_cleanup.py`(9，含 2 项回归) | 首版误用 `store.db_path`(主库) 做 active 匹配致 14:43 误删 1268 张图(含活跃账号)，已修复并加回归测试 |
 | **D1** `except Exception` 膨胀（560 处，↑45） | 首轮治理 web/routers 静默吞异常 2 处补结构化日志：`web/routers/health.py:62`(warning 降级 None) / `web/routers/image.py:146`(debug token 解码失败)；其余 23 处带注释的有意探测（graceful degradation）保留，不盲改全仓 | 首轮已合入（本轮）；src/ 子系统后续批次延后 |
 | image.py:153 类型错误 | 补 `# type: ignore[reportArgumentType]`（同文件 :184 范式） | 已合入（`d672489`） |
 

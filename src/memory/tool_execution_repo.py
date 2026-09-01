@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -57,6 +57,29 @@ class ToolExecutionRepo:
             self.conn.commit()
         except Exception as e:
             logger.warning("[ToolLog] 记录工具日志失败: %s", e)
+
+    def cleanup_old_logs(self, retention_days: int) -> int:
+        """删除超过保留期的工具执行日志（tool_execution_logs），返回删除条数。
+
+        该表每次工具调用都写入、无任何既有保留策略，长期运行会无限增长
+        （D7）。created_at 为 Python isoformat 字符串，与同一格式计算的截止值
+        做字典序比较即可正确反映时间先后。
+        """
+        try:
+            cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
+            cur = self.conn.cursor()
+            cur.execute(
+                "DELETE FROM tool_execution_logs WHERE created_at < ?",
+                (cutoff,),
+            )
+            deleted = cur.rowcount
+            self.conn.commit()
+            if deleted:
+                logger.info("[工具日志清理] 已清理 %d 条超过 %d 天的旧记录", deleted, retention_days)
+            return deleted
+        except Exception as e:
+            logger.warning("[工具日志清理] 清理过期工具日志失败: %s", e)
+            return 0
 
     def stats(self, days: int) -> list[dict]:
         """最近 N 天各工具的调用次数 / 成功率(%) / 平均耗时(ms)，按调用次数降序。

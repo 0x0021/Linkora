@@ -243,6 +243,8 @@ def test_run_launches_per_platform_poller_threads(monkeypatch):
     bot._start_conversation_summary_scheduler = lambda: MagicMock()
     bot._start_decision_cleanup_scheduler = lambda: MagicMock()
     bot._start_messages_cleanup_scheduler = lambda: MagicMock()
+    bot._start_global_tables_cleanup_scheduler = lambda: MagicMock()
+    bot._start_wal_checkpoint_scheduler = lambda: MagicMock()
     # 主线程立即触发关闭，避免无限等待
     bot._shutdown_event = threading.Event()
     bot._running = True

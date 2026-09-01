@@ -178,6 +178,12 @@ class LifecycleMixin(EngineMixinBase):
             self._bg_threads.append(messages_cleanup_thread)
             logger.info("消息记录清理调度器已启动（每24小时执行一次）")
 
+            # 启动全局表清理调度器（D7：tool_execution_logs/feedback/message_drafts 保留期清理）
+            global_tables_cleanup_thread = self._start_global_tables_cleanup_scheduler()
+            global_tables_cleanup_thread.start()
+            self._bg_threads.append(global_tables_cleanup_thread)
+            logger.info("全局表清理调度器已启动（每24小时执行一次）")
+
             # 启动 WAL checkpoint 调度器（D3：防止各分库 WAL 长期累积）
             wal_checkpoint_thread = self._start_wal_checkpoint_scheduler()
             wal_checkpoint_thread.start()

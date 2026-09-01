@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -306,4 +306,27 @@ class DraftRepo:
         )
         self.store.conn.commit()
         return cur.rowcount
+
+    def cleanup_old_drafts(self, retention_days: int) -> int:
+        """删除超过保留期的草稿（message_drafts），返回删除条数。
+
+        该表无既有保留策略（D7）。草稿超过保留期（默认 90 天）视为已废弃，
+        无论处理状态；created_at 为 isoformat 字符串，与同一格式计算的截止值
+        做字典序比较即可正确反映时间先后。
+        """
+        try:
+            cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
+            cur = self.store.conn.cursor()
+            cur.execute(
+                "DELETE FROM message_drafts WHERE created_at < ?",
+                (cutoff,),
+            )
+            deleted = cur.rowcount
+            self.store.conn.commit()
+            if deleted:
+                logger.info("[草稿清理] 已清理 %d 条超过 %d 天的旧草稿", deleted, retention_days)
+            return deleted
+        except Exception as e:
+            logger.warning("[草稿清理] 清理过期草稿失败: %s", e)
+            return 0
 

@@ -37,7 +37,7 @@ jobs:
         python -m pytest tests/ --ignore=tests/test_account_isolation_integration.py --ignore=tests/test_account_identity.py --co -q > docs/TEST_COVERAGE.md
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: generated-docs
         path: |

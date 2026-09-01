@@ -119,3 +119,74 @@
 - SSRF（`utils/net.py` + `image.py` 钉死 IP、禁重定向、禁私网/回环/链路本地；CodeQL 误报以 `codeql-config.yml` 忽略 net.py + 排除 full-ssrf 抑制，防护由 32 个 net 单测兜底）
 - JWT 用 `pyjwt` 非 `eval`；密码 `PBKDF2` + `hmac.compare_digest`
 - 全量测试 **3911 passed / 2 skipped / 2 xfailed**（collect 3915）
+
+---
+
+## 四、本轮新增维度审计（2026-09-01）
+
+在原「配置读写 / Web 安全 / 轮询适配器 / 提示词」四类之外，新增扫描**资源泄漏 / 并发退出 / 运维 / 数据生命周期**四个维度。结论：发现 9 个新缺陷（D1–D9），其中 D2/D3 已落地代码修复、D5/D6 已隔离待回收、D9 为潜伏缺陷；其余按风险与改动面延后处理。
+
+### 4.1 已修复 / 已处置
+
+#### D2 · [P2] 长同步任务被硬切 + 阻塞 web 退出
+- **位置**：`web/routers/sync.py:255`（线程 `daemon=False`）+ `scripts/run_linkora.py:239`（只 `wait(10s)` 即 `p.kill()`）
+- **根因**：同步线程刻意非 daemon，意图「等线程自然结束、主进程不硬切」；但启动器 10s 后 SIGKILL，意图落空——worker 既来不及走到窗边界退出、也没机会写终态，效果比 daemon 更糟（被杀在写库中途），并拖住 web 进程退出。
+- **修复**（commit 待提交）：新增 `request_sync_stop_on_shutdown()`，在 FastAPI `lifespan` 关闭阶段复用既有 `CANCEL_FILE` 机制（worker 每个时间窗前读取、于窗边界干净退出）并 `join(timeout=8s)`；超时未退交由进程退出中断。让「等自然结束」真正成立。
+- **验证**：ruff / pyright(0) / 全量测试通过；重启后日志应见「WAL checkpoint 调度器已启动」与同步关闭提示。
+
+#### D3 · [P3] 无全局 WAL checkpoint → 分库 WAL 长期累积
+- **位置**：全仓仅 `src/memory/kb_repo.py:210` 一处 `PRAGMA wal_checkpoint(PASSIVE)`（删除文档后被动触发）
+- **根因**：活跃分库 `data/conversations/dingtalk__4c11dc67bc0226ad.db` WAL 实测累积 **4.0M** 未合并，放大读成本、拖长崩溃恢复、虚高备份体积。
+- **修复**（commit 待提交）：`MemoryMixin._start_wal_checkpoint_scheduler()` 每 30 分钟对 `self.platforms` 各 `ctx.store` 执行 `PRAGMA wal_checkpoint(PASSIVE)`；`daemon=True`，受 `self._running` / `self._shutdown_event` 控制可立即唤醒退出；遇忙（busy≠0）下个周期重试，不阻塞读写。已在 `lifecycle.py` 启动流程接入。
+- **验证**：重启日志见「WAL checkpoint 调度器已启动（每30分钟执行一次）」。
+
+#### D5 · [P2] 一次性备份在保留策略外、永不清退
+- **位置**：`data/migration_backup_20260810_150758`(93M) + `data/db_purge_backup_20260807_063755`(90M) + `data/_orphan_files_20260803`(4.2M) = **187M**
+- **根因**：`backup_max_count` 只管 `data/backups/`；这些历史遗留目录在策略外，长期占用。
+- **处置**：已隔离至 `data/_trash_20260901/`（瞬时可逆）。确认与当前运行无引用、非保留策略对象。**待用户确认后删除回收 187M**。
+
+#### D6 · [P2] 4.3G 模型目录已无引用
+- **位置**：`data/models/bge-m3`
+- **根因**：配置已切 `bge-small-zh-v1.5`（维度 512），运行日志确认实际加载维度=512；`bge-m3`(维度 1024) 全仓无引用（配置/代码/运行时均未加载），且已存 `kb_chunks` 向量实测 512 维（无维度错配）。
+- **处置**：已隔离至 `data/_trash_20260901/`。`bge-small` 实际位于 `~/.cache/huggingface/hub`，完全不依赖 `data/models`，隔离零风险。**待用户确认后删除回收 4.3G**。
+
+#### image.py 类型错误（附带修复）
+- **位置**：`web/routers/image.py:153` 原 `request: Request = None` 触发 pyright `reportArgumentType`；同文件 :184 已有正确范式 `# type: ignore[reportArgumentType]`。
+- **修复**：:153 补 `# type: ignore[reportArgumentType]`，与 :184 一致。运行时 FastAPI 特例注入 `Request`、默认 `None` 永不触发，行为不变。
+- **注意**：切勿改成 `Request | None = None`——FastAPI 会误将其当作 Pydantic 响应字段致 `FastAPIError`（已踩坑验证）。
+
+### 4.2 潜伏 / 延后处理（需设计决策或配置改动，本轮未动手）
+
+#### D9 · [P3] 飞书知识库 1024 维陈旧 FAISS 索引（潜伏）
+- **位置**：`data/feishu-ai.faiss`（维度 **1024**、ntotal=5）+ `data/feishu-ai.db` 的 `kb_chunks`（向量维度 **1024**）
+- **根因**：旧 `bge-m3`(1024) 遗留；当前模型 512 维 → 飞书知识库语义检索实质失效（维度错配）。
+- **状态**：**潜伏**——飞书平台当前未启用（日志「未启用，跳过运行期初始化」），仅启用飞书时触发。启用前需 `rm data/feishu-ai.faiss` 并对 `kb_chunks` 重新向量化。
+
+#### D1 · [P1] `except Exception` 膨胀（515 → 560，+45）
+- **集中**：`web/routers/` `persona.py`(33) `metrics.py`(20) `kb.py`(18) `config.py`(18) `api.py`(16)。
+- **影响**：宽泛捕获易把真实故障降级成「正常返回」，掩盖缺陷。需先定收敛策略（白名单改具体异常 / 重抛 / 结构化日志）再批量治理，本轮未动。
+
+#### D4 · [P2] 孤儿会话库永不清理
+- **位置**：`src/platform/memory.py:264` 仅遍历 `self.platforms` 活跃库
+- **现象**：`data/conversations/` 11 个分库仅 1 个活跃（有 WAL）；`dingtalk__490224ac5f43564b.db`(29M) 等不参与清理，其 `tmp_images` 亦不回收。
+- **处置**：需判断「停用账号库」清理策略（保留期 / 归档），属设计决策，延后。
+
+#### D7 · [P3] 三张表无保留策略
+- **位置**：`tool_execution_logs`(1529 行，每次工具调用都写) / `feedback` / `message_drafts`
+- **对比**：`messages` / `decisions` / `routing_quality` 均有清理调度。
+- **处置**：为 `tool_execution_logs` 等加定期清理（或按 `config.yaml` 新增保留天数），需改配置，按红线不擅自改参数值，延后。
+
+#### D8 · [P3] 备份 churn
+- **位置**：`backup_on_start: true`
+- **现象**：频繁重启时 8/31 三小时内产生 6 份 ×18M 备份。
+- **处置**：建议改为「按变更/每日一次」或降 `backup_max_count`；属配置改动，延后。
+
+### 4.3 本轮确认干净（免重复审计）
+- **命令注入**：全仓无 `shell=True`（`web/dependencies.py:320` 已去该反模式）。
+- **SQL 注入**：`keyword_rule_repo:98` / `kb_repo:143` / `docs_repo:92` 列名走 `allowed_fields` 白名单，值全部参数化。
+- **HTTP 挂起**：所有 `requests` / `httpx` 调用均带 `timeout`（0 处遗漏）。
+- **日志轮转**：`src/utils/logger.py:534` 已配 `RotatingFileHandler`。
+- **SQLite 并发**：WAL + `busy_timeout=5000` 已配。
+- **备份正确性**：用官方 `Connection.backup()`（正确处理 WAL，非 `shutil.copy`）；`backup_max_count` 生效（保留数=上限）。
+- **消息/图片清理**：覆盖多平台分库并与 `image_cleanup.py` 联动。
+- **`linkora.db` 的 `messages=0` 非缺陷**：消息存 `data/conversations/<platform>__<account>.db` 分库，`linkora.db` 为全局库（设计如此）。

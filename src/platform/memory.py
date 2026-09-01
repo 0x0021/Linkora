@@ -402,3 +402,48 @@ class MemoryMixin(EngineMixinBase):
 
         thread = threading.Thread(target=summary_loop, daemon=True, name="conversation-summary")
         return thread
+
+    def _start_wal_checkpoint_scheduler(self) -> threading.Thread:
+        """周期 WAL checkpoint（D3 修复）：避免各分库 WAL 长期累积。
+
+        背景：此前全仓仅 ``kb_repo.delete_kb_document`` 删除文档后被动执行一次
+        ``PRAGMA wal_checkpoint(PASSIVE)``，缺少周期性合并。实测活跃分库
+        ``data/conversations/dingtalk__*.db`` 的 WAL 累积到 4MB 未合并，
+        会放大读成本、拖长崩溃恢复时间，也让备份体积虚高。
+
+        PASSIVE 模式不阻塞读写；遇忙（有活跃读持有 WAL）留给下个周期重试，
+        因此不追求一次成功，只保证长期不增长。
+        """
+        interval_min = 30
+
+        def checkpoint_loop():
+            while self._running:
+                for ctx in self.platforms.values():
+                    if ctx.store is None:
+                        continue
+                    try:
+                        # store.conn 是按线程懒创建的连接；checkpoint 是库级操作，
+                        # 由本线程自己的连接发起即可，不影响其他线程的读写。
+                        row = ctx.store.conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+                        # 返回 (busy, log, checkpointed)；busy!=0 表示有活跃读持有 WAL
+                        if row and row[0]:
+                            logger.debug(
+                                "[WAL] 平台 %s checkpoint 遇忙（有活跃读持有 WAL），下个周期重试",
+                                ctx.id,
+                            )
+                    except sqlite3.Error as e:
+                        logger.warning("[WAL] 平台 %s checkpoint 失败（可忽略）: %s", ctx.id, e)
+                    except RuntimeError as e:
+                        # store 已关闭（进程退出中）：不再重试，直接结束本线程
+                        logger.debug("[WAL] 平台 %s 存储已关闭，停止 checkpoint: %s", ctx.id, e)
+                        return
+
+                # 每 30 分钟执行一次（等待期间可被关闭信号立即唤醒）
+                for _ in range(interval_min * 60):
+                    if not self._running:
+                        break
+                    if self._shutdown_event.wait(1):
+                        break
+
+        thread = threading.Thread(target=checkpoint_loop, daemon=True, name="wal-checkpoint")
+        return thread

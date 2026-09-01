@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import ipaddress
@@ -162,6 +163,16 @@ from contextlib import asynccontextmanager
 async def _lifespan(_: FastAPI):
     _migrate_schemas_on_startup()
     yield
+    # 关闭阶段：请求进行中的历史同步任务协作式退出（D2）。
+    # 同步线程为非 daemon，若这里不主动通知，启动器 wait(10s) 后即 SIGKILL，
+    # worker 来不及走到窗边界退出、也没机会写终态，反被硬切在写库中途。
+    try:
+        from web.routers.sync import request_sync_stop_on_shutdown
+
+        await asyncio.to_thread(request_sync_stop_on_shutdown)
+    except Exception as e:  # noqa: BLE001
+        # 关闭路径上的异常不得阻碍进程退出
+        logger.warning("[同步] 关闭时请求同步任务退出失败（可忽略）: %s", e)
 
 
 # 全链路 gzip 压缩：HTML / JSON API / 静态 bundle 一并压缩（首屏文本体积约降 75–86%）。

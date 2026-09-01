@@ -254,26 +254,29 @@ class SetupMixin(EngineMixinBase):
         self.platforms["dingtalk"].summary_scheduler = dingtalk_scheduler
         logger.info("[H2-A] 主平台 dingtalk 后台异步摘要调度器已启动")
 
-        # H2-B：主平台(dingtalk)接线每小时滚动摘要调度器（配置 rolling_enabled=true 才启动）。
-        from src.llm.rolling_summary_scheduler import RollingSummaryScheduler
-        rolling_cfg = self.config.memory.conversation_summary.get("rolling", {})
-        rolling_enabled = rolling_cfg.get("enabled", True)
-        rolling_interval = rolling_cfg.get("interval_minutes", 60)
-        rolling_lookback = rolling_cfg.get("lookback_minutes", 60)
-        if rolling_enabled:
-            rolling_scheduler = RollingSummaryScheduler(
+        # 动态（信号驱动）摘要调度器：取代原固定 1 小时周期轮询（H2-B RollingSummaryScheduler）。
+        # 配置 memory.conversation_summary.dynamic.enabled=true 才启动；按信号（静默/体量/陈旧）触发，
+        # 收集逻辑为「自上次摘要 last_summary_at 起的增量」，不再盲取固定时间窗。
+        from src.llm.dynamic_summary_scheduler import DynamicSummaryScheduler
+        dynamic_cfg = self.config.memory.conversation_summary.get("dynamic", {})
+        dynamic_enabled = dynamic_cfg.get("enabled", True)
+        if dynamic_enabled:
+            dynamic_scheduler = DynamicSummaryScheduler(
                 agent=self.platforms["dingtalk"].llm_agent,
                 store=self.store,
                 platform="dingtalk",
-                lookback_minutes=rolling_lookback,
-                interval_minutes=rolling_interval,
+                check_interval_seconds=dynamic_cfg.get("check_interval_seconds", 60),
+                quiet_minutes=dynamic_cfg.get("quiet_minutes", 10),
+                min_messages=dynamic_cfg.get("min_messages", 3),
+                max_messages_per_chat=dynamic_cfg.get("max_messages_per_chat", 100),
+                max_age_hours=dynamic_cfg.get("max_age_hours", 24),
+                scan_days=dynamic_cfg.get("scan_days", 7),
             )
-            rolling_scheduler.start()
-            self.platforms["dingtalk"].rolling_summary_scheduler = rolling_scheduler
-            logger.info("[H2-B] 主平台 dingtalk 滚动摘要调度器已启动（间隔=%dmin，回溯=%dmin）",
-                        rolling_interval, rolling_lookback)
+            dynamic_scheduler.start()
+            self.platforms["dingtalk"].dynamic_summary_scheduler = dynamic_scheduler
+            logger.info("[动态摘要] 主平台 dingtalk 动态摘要调度器已启动")
         else:
-            logger.info("[H2-B] 滚动摘要调度器未启用（memory.conversation_summary.rolling.enabled=false）")
+            logger.info("[动态摘要] 动态摘要调度器未启用（memory.conversation_summary.dynamic.enabled=false）")
 
         # P4-13：主平台(dingtalk)接线每日主动摘要推送（默认关闭，enabled 才启动）。
         from src.llm.proactive_digest import ProactiveDigestScheduler

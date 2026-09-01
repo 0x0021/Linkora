@@ -711,6 +711,16 @@ class MemoryConfig(BaseModel):
         "max_messages_per_conversation": 50,
         "summary_interval_hours": 24,
         "summary_ratio": 0.4,
+        # 动态（信号驱动）摘要：取代原固定 1 小时周期轮询（H2-B RollingSummaryScheduler）
+        "dynamic": {
+            "enabled": True,
+            "check_interval_seconds": 60,   # 轻量评估心跳（仅 DB 查询，不调 LLM）
+            "quiet_minutes": 10,            # 会话静默达到该时长且有新内容 → 摘要
+            "min_messages": 3,             # 自上次摘要以来的未摘要消息数下限
+            "max_messages_per_chat": 100,   # 未摘要消息达上限 → 立即摘要（防无限增长）
+            "max_age_hours": 24,           # 距上次摘要超该时长且有新内容 → 刷新
+            "scan_days": 7,                # 扫描最近 N 天内有更新的会话
+        },
     })
     # F18 RAG 检索规模化：向量索引类型与幽灵向量自动清理。
     # vector_index_type: "flat"（默认，IndexFlatIP 精确 O(N) 暴力检索）

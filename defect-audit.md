@@ -199,6 +199,21 @@
 - **位置**：`backup_on_start: true`
 - **现象**：频繁重启时 8/31 三小时内产生 6 份 ×18M 备份。
 - **处置（已处理，代码级，2026-09-01）**：`db_backup.py::_backup_now_inner` 备份写盘后与最近一次备份做 SHA-256 内容比对，逻辑内容一致则丢弃本次（不留存），消除频繁无变更重启产生的相同备份堆积（churn）；`backup_max_count` 默认 7→5（`config_models.storage.backup_max_count` + `DatabaseBackup` 构造器）。测试 `tests/test_db_backup.py::TestContentDedup`（4 项）。同秒双备份极端边界（文件名撞车）仍各存一份，属罕见（子秒级重启），未特殊处理。
+- **补充（2026-09-01 续）**：live `config.yaml` 4 处 `backup_max_count: 7` 与 `config.yaml.example` 同步改为 5，使运行期保留数真正生效（此前仅模型默认值改了，live 仍 pin 7）。
+
+#### 摘要机制重构（非缺陷，2026-09-01）
+- **原机制**：`RollingSummaryScheduler`（H2-B）固定每小时轮询，遍历活跃会话、盲取最近 N 分钟消息生成摘要——无论会话是否有新内容都触发 LLM，浪费且错过非整点活跃会话。
+- **新机制**：`DynamicSummaryScheduler`（信号驱动）。轻量心跳（默认 60s，仅 DB 查询不调 LLM）周期性评估哪些会话「需要」摘要，仅对满足条件的会话调 LLM：
+  1. 静默触发：会话静默 ≥ `quiet_minutes`(10) 且自上次摘要以来有 ≥ `min_messages`(3) 条新消息；
+  2. 体量触发：自上次摘要以来未摘要消息数 ≥ `max_messages_per_chat`(100)（防无限增长）；
+  3. 陈旧触发：距上次摘要 ≥ `max_age_hours`(24) 且有新内容。
+- **收集逻辑重构**：原固定时间窗（last N 分钟）改为「自 `conversations.last_summary_at` 起的增量收集」（`message_repo.collect_dynamic_summary_messages`），做到只摘要真正新增内容；成功后 `mark_conversation_summarized` 更新 `last_summary_at` 防重。
+- **文件**：新增 `src/llm/dynamic_summary_scheduler.py` + `tests/test_dynamic_summary_scheduler.py`(5)；删除 `src/llm/rolling_summary_scheduler.py`；`message_repo` 新增 `get_chats_needing_dynamic_summary`；`runtime_setup/base/lifecycle` 接线改写；配置 `conversation_summary.rolling`→`dynamic`（`config_models`/`config.py` schema/`config.yaml.example` 同步）。
+
+#### D1 · [P1] `except Exception` 膨胀 —— 本轮 AST 结论
+- **扫描**：src/ 共 309 处 broad-except（含 `except Exception` / `BaseException` / 裸 `except`）。
+- **结论**：定位「真正静默裸吞」（`pass`/`continue`/`return` 单语句且无日志）12 处，逐一核查均为**有意 fail-soft 探针**：幂等 DDL（`draft_repo.py` ALTER 列已存在属预期）、naive/aware 时间相减 TypeError 保守回退（`message_loop.py`）、日志净化失败绝不吞日志本身（`utils/logger.py`）、异常已上抛为结构化错误（`approval/dingtalk.py`、`tools/*` 的 `return {"error": f"...{e}"}`）。均带注释或 `noqa: BLE001` 说明，**非缺陷**。
+- **处置**：按既定策略（不盲改全仓 560 处）**保留不改动**；后续仅对新增代码 / 明确误吞点做 case-by-case 治理。web/routers 2 处首轮已补结构化日志。
 
 ### 4.3 本轮确认干净（免重复审计）
 - **命令注入**：全仓无 `shell=True`（`web/dependencies.py:320` 已去该反模式）。

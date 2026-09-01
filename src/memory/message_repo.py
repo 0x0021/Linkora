@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from src.models import Message
@@ -20,6 +20,23 @@ if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_iso_ts(value: object) -> "datetime | None":
+    """把 SQLite 存的时间字符串解析为带时区的 datetime（UTC）；无法解析返回 None。"""
+    if not value:
+        return None
+    text = str(value)
+    try:
+        ts = text
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
 
 
 class MessageRepo:
@@ -634,6 +651,107 @@ class MessageRepo:
             logger.debug("[摘要] 更新 last_summary_at 失败（不影响流程）: %s", e)
 
     # ============ 计数 / 聚合（供 Web 状态与统计面板） ============
+
+    # ---- 动态摘要（信号驱动）辅助 ----
+    def _rows_to_messages(self, rows: list) -> "list[Message]":
+        """把 messages 行集转为时间正序的 Message 列表（集中复用映射，避免重复构造）。"""
+        messages: "list[Message]" = []
+        for row in rows:
+            try:
+                ts = datetime.fromisoformat(row["timestamp"])
+            except (ValueError, TypeError) as _exc:
+                logger.warning(f"dynamic_summary: 解析 timestamp 失败，回退当前时间: {_exc}")
+                ts = datetime.now()
+            messages.append(Message(
+                msg_id=row["msg_id"] or f"local-{row['id']}",
+                chat_id=row["chat_id"],
+                chat_type=(row["chat_type"] or ""),
+                chat_name=None,
+                sender_id=row["sender_id"] or "",
+                sender_name=row["sender_name"] or "",
+                content=row["content"] or "",
+                msg_type=row["msg_type"] or "text",
+                timestamp=ts,
+                raw={},
+                role=row["role"] or "user",
+            ))
+        return messages
+
+    def get_chats_needing_dynamic_summary(self, quiet_minutes: int = 10,
+                                          min_messages: int = 3,
+                                          max_messages_per_chat: int = 100,
+                                          max_age_hours: int = 24,
+                                          scan_days: int = 7,
+                                          min_message_count: int = 1,
+                                          platform: str = "") -> list[dict]:
+        """找出满足动态摘要信号条件的会话（仅评估，不调 LLM）。
+
+        触发条件（满足其一即需摘要）：
+          1) 静默触发：距最后一条消息 ≥ quiet_minutes 且自上次摘要以来有 ≥ min_messages 条新消息；
+          2) 体量触发：自上次摘要以来未摘要消息数 ≥ max_messages_per_chat；
+          3) 陈旧触发：距上次摘要 ≥ max_age_hours 且有任意新内容。
+        """
+        cur = self._cc().cursor()
+        cur.execute(
+            """SELECT c.chat_id, c.chat_name,
+                      (SELECT COUNT(*) FROM messages m
+                         WHERE m.chat_id = c.chat_id AND m.is_archived = 0
+                           AND (c.last_summary_at IS NULL OR m.timestamp >= c.last_summary_at)) AS unsummarized,
+                      (SELECT MAX(timestamp) FROM messages m WHERE m.chat_id = c.chat_id) AS last_msg_ts,
+                      c.last_summary_at AS last_summary_at
+               FROM conversations c
+               WHERE c.updated_at >= datetime('now', ?)
+                 AND c.message_count >= ?
+               ORDER BY c.message_count DESC""",
+            (f"-{scan_days} days", min_message_count),
+        )
+        rows = cur.fetchall()
+        now = datetime.now(timezone.utc)
+        out: list[dict] = []
+        for r in rows:
+            unsummarized = int(r["unsummarized"] or 0)
+            if unsummarized < min_messages:
+                continue
+            last_msg_ts = _parse_iso_ts(r["last_msg_ts"])
+            last_summary_at = _parse_iso_ts(r["last_summary_at"])
+            quiet_ok = last_msg_ts is not None and (now - last_msg_ts).total_seconds() >= quiet_minutes * 60
+            volume_ok = unsummarized >= max_messages_per_chat
+            stale_ok = last_summary_at is None or (now - last_summary_at).total_seconds() >= max_age_hours * 3600
+            if quiet_ok or volume_ok or stale_ok:
+                out.append({
+                    "chat_id": r["chat_id"],
+                    "chat_name": r["chat_name"] or (r["chat_id"] or "")[:20],
+                    "unsummarized": unsummarized,
+                })
+        return out
+
+    def collect_dynamic_summary_messages(self, chat_id: str, max_messages: int = 100,
+                                         platform: str = "") -> "list[Message]":
+        """收集「自上次摘要以来」的未归档消息（时间正序），供动态摘要使用。
+
+        以 conversations.last_summary_at 为起点收集增量；无起点时回退为最近 N 条。
+        做到「只摘要真正新增的内容」，取代原固定时间窗盲取。
+        """
+        cur = self._cc().cursor()
+        cur.execute("SELECT last_summary_at FROM conversations WHERE chat_id = ?", (str(chat_id),))
+        row = cur.fetchone()
+        since = row["last_summary_at"] if row else None
+        if since:
+            cur.execute(
+                "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 AND timestamp >= ? "
+                "ORDER BY timestamp ASC LIMIT ?",
+                (str(chat_id), since, max_messages),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 "
+                "ORDER BY timestamp DESC LIMIT ?",
+                (str(chat_id), max_messages),
+            )
+            rows = list(cur.fetchall())
+            rows.reverse()
+            return self._rows_to_messages(rows)
+        return self._rows_to_messages(list(cur.fetchall()))
 
     def count_messages(self, platform: str = "") -> int:
         """当前平台会话库的消息总条数。"""

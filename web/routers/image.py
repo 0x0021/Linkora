@@ -152,7 +152,7 @@ def _verify_image_token(token: Optional[str]) -> bool:
 
 
 @router.get("/api/image-token")
-async def issue_image_token(response: Response, request: Request = None):  # type: ignore[reportArgumentType]
+async def issue_image_token(response: Response, request: Request = None):  # type: ignore
     """领取图片访问 token（需 Basic Auth）。
 
     除返回 JSON 兼容旧前端外，同时下发 HttpOnly Cookie(img_token)。
@@ -183,7 +183,7 @@ async def serve_image(
     it: Optional[str] = None,
     w: Optional[int] = None,
     fmt: Optional[str] = None,
-    request: Request = None,  # type: ignore[reportArgumentType]
+    request: Request = None,  # type: ignore
 ):
     """提供持久化 OCR 图片（签名 token 校验，嵌套子目录如 张三/ocr_xxx.png）。
 

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from src.models import Message
 from src.memory.platform_context import get_current_platform
 from src.memory.image_cleanup import purge_orphan_images
+from src.paths import data_path
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -118,7 +119,9 @@ class MessageRepo:
                 image_paths = [r[0] for r in cur.fetchall()]
                 cur.execute("DELETE FROM messages WHERE created_at < ?", (before,))
                 self._cc().commit()
-                removed_files = purge_orphan_images(self.store.db_path, image_paths)
+                removed_files = purge_orphan_images(
+                    self.store.db_path, image_paths, base_dir=str(data_path("tmp_images"))
+                )
                 logger.info("清理 %d 条旧消息记录（%s 天前），删除孤儿图片 %d 个",
                             count, retention_days, removed_files)
         return {"deleted_count": count, "before_ts": before}
@@ -302,7 +305,9 @@ class MessageRepo:
                 )
             self._cc().commit()
             if deleted and image_path:
-                purge_orphan_images(self.store.db_path, [image_path])
+                purge_orphan_images(
+                    self.store.db_path, [image_path], base_dir=str(data_path("tmp_images"))
+                )
             return deleted
 
     def mark_message_withdrawn(self, msg_id: str) -> bool:

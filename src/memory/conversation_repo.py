@@ -18,6 +18,7 @@ from typing import Optional, TYPE_CHECKING
 from src.memory.sqlite_store import ConversationSummaryRow
 from src.memory.platform_context import get_current_platform
 from src.memory.image_cleanup import purge_orphan_images
+from src.paths import data_path
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -211,7 +212,9 @@ class ConversationRepo:
         cur.execute(f"DELETE FROM conversations WHERE chat_id IN ({placeholders})", chat_ids)
         deleted = cur.rowcount
         conn.commit()
-        removed_files = purge_orphan_images(self.store.db_path, image_paths)
+        removed_files = purge_orphan_images(
+            self.store.db_path, image_paths, base_dir=str(data_path("tmp_images"))
+        )
         logger.info("[SQLiteStore] 批量删除会话 %d 个: %s，删除孤儿图片 %d 个",
                     deleted, chat_ids[:5], removed_files)
         return deleted

@@ -1,8 +1,9 @@
 """摘要连续性补跑（SummaryBackfill）：检测停机时长，按自然日补齐遗漏窗口的摘要。
 
 背景与问题：
-- 现有 ``RollingSummaryScheduler``（H2-B）与 ``ProactiveDigestScheduler``（P4-13）
-  均基于「当前时间滚动窗口」，进程中断期间不会写缓存、也不会补跑错过的那一天。
+- 原 ``RollingSummaryScheduler``（H2-B，固定 1 小时周期轮询）已重构为信号驱动的
+  ``DynamicSummaryScheduler``；``ProactiveDigestScheduler``（P4-13）仍基于墙钟时间。
+- 两者在进程中断期间都不会写缓存、也不会补跑错过的那一天。
 - 用户中途关机/未运行 Linkora，再启动时「当天 / 近七天」摘要会出现空洞，破坏连续性。
 
 本模块职责（best-effort，非阻塞主回复链路）：

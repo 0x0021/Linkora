@@ -59,14 +59,14 @@ class LifecycleMixin(EngineMixinBase):
                 ctx.summary_scheduler.stop()
             except RuntimeError as e:  # noqa: BLE001
                 logger.warning("停止平台 %s 摘要调度器出错（可忽略）: %s", pid, e)
-        # 3c. 停止各平台 H2-B 滚动摘要调度器（每平台独立 daemon 线程）
+        # 3c. 停止各平台动态（信号驱动）摘要调度器（每平台独立 daemon 线程）
         for pid, ctx in self.platforms.items():
-            if getattr(ctx, "rolling_summary_scheduler", None) is None:
+            if getattr(ctx, "dynamic_summary_scheduler", None) is None:
                 continue
             try:
-                ctx.rolling_summary_scheduler.stop()
+                ctx.dynamic_summary_scheduler.stop()
             except RuntimeError as e:  # noqa: BLE001
-                logger.warning("停止平台 %s 滚动摘要调度器出错（可忽略）: %s", pid, e)
+                logger.warning("停止平台 %s 动态摘要调度器出错（可忽略）: %s", pid, e)
 
         # 4. join 内存/摘要守护线程（已由 _shutdown_event 唤醒，应迅速退出）
         for th in self._bg_threads:

@@ -45,10 +45,11 @@ _KNOWN_DICT_KEYS: dict[str, set[str]] = {
     "root.memory.retrieval": {"min_similarity"},
     "root.memory.conversation_summary": {
         "enabled", "max_messages_per_conversation", "summary_interval_hours", "summary_ratio",
-        "rolling",
+        "dynamic",
     },
-    "root.memory.conversation_summary.rolling": {
-        "enabled", "interval_minutes", "lookback_minutes", "min_messages",
+    "root.memory.conversation_summary.dynamic": {
+        "enabled", "check_interval_seconds", "quiet_minutes", "min_messages",
+        "max_messages_per_chat", "max_age_hours", "scan_days",
     },
 }
 

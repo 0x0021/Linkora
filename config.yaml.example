@@ -48,7 +48,7 @@ platforms:
       backup_enabled: true                           # 是否启用自动备份
       backup_dir: ./data/backups                     # 备份文件目录
       backup_interval_hours: 24                      # 备份间隔（小时），24 = 每天一次
-      backup_max_count: 7                            # 保留最近多少份备份
+      backup_max_count: 5                            # 保留最近多少份备份
       backup_on_start: true                          # 启动时立即备份一次
       decisions_retention_days: 14                   # 决策追踪表留存天数（≤0 表示不按时间清理）
       messages_retention_days: 90                    # 消息记录留存天数（≤0 表示不清理）
@@ -145,7 +145,7 @@ platforms:
   #     backup_enabled: true
   #     backup_dir: ./data/backups
   #     backup_interval_hours: 24
-  #     backup_max_count: 7
+  #     backup_max_count: 5
   #     backup_on_start: true
   #     decisions_retention_days: 14
   #     messages_retention_days: 90
@@ -211,7 +211,7 @@ platforms:
   #     backup_enabled: true
   #     backup_dir: ./data/backups
   #     backup_interval_hours: 24
-  #     backup_max_count: 7
+  #     backup_max_count: 5
   #     backup_on_start: true
   #     decisions_retention_days: 14
   #     messages_retention_days: 90
@@ -444,11 +444,14 @@ memory:
     max_messages_per_conversation: 50              # 单会话参与摘要的最大消息数
     summary_interval_hours: 24                      # 摘要间隔（小时）
     summary_ratio: 0.4                             # 摘要压缩比
-    rolling:                                       # 滚动摘要（H2-B）：每小时提取最近 N 分钟消息生成摘要
-      enabled: true                                # 是否启用滚动摘要（与 H2-A 事件驱动摘要互补）
-      interval_minutes: 60                         # 调度间隔（分钟），默认每小时一次
-      lookback_minutes: 60                         # 回溯窗口（分钟），默认取最近 1 小时消息
-      min_messages: 3                              # 触发摘要的最小消息数（不足则跳过）
+    dynamic:                                       # 动态（信号驱动）摘要：取代原固定 1 小时周期轮询（H2-B）
+      enabled: true                                # 是否启用动态摘要
+      check_interval_seconds: 60                   # 轻量评估心跳（秒），仅做 DB 查询、不调 LLM
+      quiet_minutes: 10                            # 会话静默达到该时长且有新内容 → 触发摘要
+      min_messages: 3                              # 自上次摘要以来的未摘要消息数下限
+      max_messages_per_chat: 100                   # 未摘要消息数达上限 → 立即摘要（防无限增长）
+      max_age_hours: 24                            # 距上次摘要超过该时长且有新内容 → 刷新
+      scan_days: 7                                 # 扫描最近 N 天内有更新的会话
 
   # 向量索引（F18 RAG 检索规模化）：类型与幽灵向量自动清理
   vector_index_type: flat                           # flat=精确暴力检索(默认)；hnsw=近似检索，规模增长时提速显著

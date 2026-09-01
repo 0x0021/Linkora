@@ -7,7 +7,7 @@ self.store.conn for per-thread connection access. Zero behavior change.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -35,6 +35,28 @@ class FeedbackRepo:
         # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
         assert cur.lastrowid is not None
         return cur.lastrowid
+
+    def cleanup_old_feedback(self, retention_days: int) -> int:
+        """删除超过保留期的用户反馈（feedback），返回删除条数。
+
+        feedback 表无既有保留策略（D7）。created_at 为 isoformat 字符串，
+        与同一格式计算的截止值做字典序比较即可正确反映时间先后。
+        """
+        try:
+            cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
+            cur = self.store.conn.cursor()
+            cur.execute(
+                "DELETE FROM feedback WHERE created_at < ?",
+                (cutoff,),
+            )
+            deleted = cur.rowcount
+            self.store.conn.commit()
+            if deleted:
+                logger.info("[反馈清理] 已清理 %d 条超过 %d 天的旧反馈", deleted, retention_days)
+            return deleted
+        except Exception as e:
+            logger.warning("[反馈清理] 清理过期反馈失败: %s", e)
+            return 0
 
 
     def get_feedback(self, limit: int = 200) -> list[dict]:

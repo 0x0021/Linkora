@@ -124,7 +124,7 @@
 
 ## 四、本轮新增维度审计（2026-09-01）
 
-在原「配置读写 / Web 安全 / 轮询适配器 / 提示词」四类之外，新增扫描**资源泄漏 / 并发退出 / 运维 / 数据生命周期**四个维度。结论：发现 9 个新缺陷（D1–D9），其中 D2/D3 已落地代码修复、D5/D6 已隔离待回收、D9 为潜伏缺陷；其余按风险与改动面延后处理。
+在原「配置读写 / Web 安全 / 轮询适配器 / 提示词」四类之外，新增扫描**资源泄漏 / 并发退出 / 运维 / 数据生命周期**四个维度。结论：发现 9 个新缺陷（D1–D9），其中 D2/D3 已落地代码修复、D5/D6 已回收释放 4.5G、D7 已落地全局表保留期清理、D9 已做数据级修复（清空飞书陈旧向量+删 faiss）；D1/D4/D8 按风险与改动面延后处理（D1 需治理策略、D4 需清理策略设计、D8 需配置权衡）。
 
 ### 4.1 已修复 / 已处置
 
@@ -159,8 +159,8 @@
 
 #### D9 · [P3] 飞书知识库 1024 维陈旧 FAISS 索引（潜伏）
 - **位置**：`data/feishu-ai.faiss`（维度 **1024**、ntotal=5）+ `data/feishu-ai.db` 的 `kb_chunks`（向量维度 **1024**）
-- **根因**：旧 `bge-m3`(1024) 遗留；当前模型 512 维 → 飞书知识库语义检索实质失效（维度错配）。
-- **状态**：**潜伏**——飞书平台当前未启用（日志「未启用，跳过运行期初始化」），仅启用飞书时触发。启用前需 `rm data/feishu-ai.faiss` 并对 `kb_chunks` 重新向量化。
+- **根因**：旧 `bge-m3`(1024) 遗留；当前模型 512 维 → `_full_rebuild_from_db` 按「最多 chunk 维度族」选 `best_dim`=1024 建索引，而查询用 512 维 → 维度错配、飞书 KB 实质失效。
+- **处置（已处理，数据级）**：飞书未启用，故纯数据修复（data/ 已 gitignore，不需提交）——`UPDATE kb_chunks SET embedding=''` 清空 5 条陈旧向量（**保留 content 供后续重嵌**）+ `rm data/feishu-ai.faiss` 及其 `.map.json`。重嵌仅在导入/同步时发生（`feishu_importer.py:151` / `doc_sync_scheduler.py:162`），无周期重嵌循环，故启用飞书并重新同步 KB 前索引为空（安全、不崩）。**根因未做代码层防护**（store 重建时不感知当前模型维度），后续启用飞书前建议加「重建时跳过异维 chunk 并标记重嵌」的守卫，本轮未动。
 
 #### D1 · [P1] `except Exception` 膨胀（515 → 560，+45）
 - **集中**：`web/routers/` `persona.py`(33) `metrics.py`(20) `kb.py`(18) `config.py`(18) `api.py`(16)。
@@ -172,9 +172,13 @@
 - **处置**：需判断「停用账号库」清理策略（保留期 / 归档），属设计决策，延后。
 
 #### D7 · [P3] 三张表无保留策略
-- **位置**：`tool_execution_logs`(1529 行，每次工具调用都写) / `feedback` / `message_drafts`
+- **位置**：`tool_execution_logs`(1533 行，每次工具调用都写) / `feedback` / `message_drafts`
 - **对比**：`messages` / `decisions` / `routing_quality` 均有清理调度。
-- **处置**：为 `tool_execution_logs` 等加定期清理（或按 `config.yaml` 新增保留天数），需改配置，按红线不擅自改参数值，延后。
+- **处置（已处理，代码级）**：三表均为**全局表（仅 `linkora.db`，非分平台库）**。新增
+  - `tool_execution_repo.cleanup_old_logs()` / `feedback_repo.cleanup_old_feedback()` / `draft_repo.cleanup_old_drafts()`（`DELETE ... WHERE created_at < 截止值`，截止值用 Python isoformat 计算，字典序比较时序正确）
+  - `EngineMixin._start_global_tables_cleanup_scheduler()`（daemon 线程，每 24h，`lifecycle.start()` 接入）
+  - 保留期复用既有 `storage.messages_retention_days`（默认 90 天），**不引入新配置项、不改配置值**（符合红线）。
+  - 单元测试已 mock 新增调度器（与既有 4 个清理调度器一致），避免 startup 序列增长导致 `test_run_launches_per_platform_poller_threads` 误失败。
 
 #### D8 · [P3] 备份 churn
 - **位置**：`backup_on_start: true`

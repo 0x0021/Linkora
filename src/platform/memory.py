@@ -249,6 +249,45 @@ class MemoryMixin(EngineMixinBase):
         thread = threading.Thread(target=cleanup_loop, daemon=True, name="decision-cleanup")
         return thread
 
+    def _start_global_tables_cleanup_scheduler(self) -> threading.Thread:
+        """启动全局表保留期清理调度器（每24小时执行一次）。
+
+        清理三张「无既有保留策略」的全局表（D7），防止无限增长：
+        - tool_execution_logs（每次工具调用都写入，增长最快）
+        - feedback（用户反馈）
+        - message_drafts（待处理草稿）
+        这些表仅存在于全局库 linkora.db（非分平台库），故直接对 self.store 清理。
+        保留期复用 storage.messages_retention_days（默认 90 天），不引入新配置项。
+        """
+        retention_days = self.config.storage.messages_retention_days
+
+        def cleanup_loop():
+            while self._running:
+                store = self.store
+                if store is not None:
+                    try:
+                        n_logs = store._tool_execution_repo.cleanup_old_logs(retention_days)
+                        n_feedback = store._feedback_repo.cleanup_old_feedback(retention_days)
+                        n_drafts = store._draft_repo.cleanup_old_drafts(retention_days)
+                        if n_logs or n_feedback or n_drafts:
+                            logger.info(
+                                "[全局表清理] 已清理 tool_logs=%d feedback=%d drafts=%d（保留 %d 天前）",
+                                n_logs, n_feedback, n_drafts, retention_days,
+                            )
+                    except Exception as e:
+                        logger.error("[全局表清理] 定时清理失败: %s", e)
+                        if isinstance(e, sqlite3.OperationalError):
+                            logger.warning("[全局表清理] 疑似 SQLite 锁定/事务冲突，下次周期重试")
+
+                for _ in range(24 * 60):
+                    if not self._running:
+                        break
+                    if self._shutdown_event.wait(60):
+                        break
+
+        thread = threading.Thread(target=cleanup_loop, daemon=True, name="global-tables-cleanup")
+        return thread
+
     def _start_messages_cleanup_scheduler(self) -> threading.Thread:
         """启动消息记录清理调度器（每24小时执行一次）。
 

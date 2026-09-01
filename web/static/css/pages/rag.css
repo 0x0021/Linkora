@@ -4,6 +4,12 @@
     min-height: 0;
 }
 
+/* 概览统计卡片横向占满：RAG 概览固定 5 张卡片，原 repeat(6,1fr) 会留 1/6 空位。
+   改用 flex 等价铺满，避免右侧空隙。 */
+#rag-overview-content > .stats-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .rag-sidebar {
     width: 320px;
     background: var(--bg-surface);

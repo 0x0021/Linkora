@@ -164,12 +164,24 @@
 
 #### D1 · [P1] `except Exception` 膨胀（515 → 560，+45）
 - **集中**：`web/routers/` `persona.py`(33) `metrics.py`(20) `kb.py`(18) `config.py`(18) `api.py`(16)。
-- **影响**：宽泛捕获易把真实故障降级成「正常返回」，掩盖缺陷。需先定收敛策略（白名单改具体异常 / 重抛 / 结构化日志）再批量治理，本轮未动。
+- **影响**：宽泛捕获易把真实故障降级成「正常返回」，掩盖缺陷。需先定收敛策略再批量治理。
+- **治理策略（全仓统一，长期生效）**：
+  1. **收窄异常类型**：能预判具体异常的，改 `except (ValueError, KeyError, sqlite3.OperationalError, OSError, ...)`，不捕 `Exception`/`BaseException`。
+  2. **安全/数据边界必须暴露**：SSRF、密钥、权限、写盘、事务类异常禁止静默吞；要么 `logger.error` 后重抛，要么显式 fail-closed 并 `logger.warning`。
+  3. **结构化日志，不裸吞**：任何 `except` 处理体必须 `logger.error/warning/debug("...: %s", e)` 暴露异常，禁止 `_ = e` / 空 `except: pass` 隐藏真实故障。
+  4. **有意探测（graceful degradation）保留**：可选增强（取当前用户/设备探测/版本号/平台回退）失败→安全默认，带注释的 `_ = _e # 失败则保留空值` 属设计内，按 `logger.debug` 级别排障即可，不告警避免噪声。
+  5. **禁止盲改全仓**：560 处分散各子系统，按子系统分批（web/routers → src/...），每批带回归测试。
+- **首轮（web/routers）结果（2026-09-01）**：AST 扫描出 25 处 broad-except，其中 23 处为带注释的有意优雅降级探测（如 `取当前用户失败则保留空值`、`CUDA 不可用则回退 none`、`超时也没关系，继续`），按策略④保留；仅 2 处真实把故障静默降级、无注释，已补日志：
+  - `web/routers/health.py:62` 健康指标取数失败 → 补 `logger.warning`（区分「无消息」与「查询失败」）。
+  - `web/routers/image.py:146` 图片 token 签名解码失败（fail-closed 拒绝）→ 补 `logger.debug`（排查伪造 token，不刷 error 噪声）。
+  - 其余 23 处有意探测按策略④保留，不告警。
+- **后续批次**：`src/` 各子系统（轮询/工具/适配器）的 broad-except 治理，按子系统分批推进（本轮未做）。
 
 #### D4 · [P2] 孤儿会话库永不清理
 - **位置**：`src/platform/memory.py:264` 仅遍历 `self.platforms` 活跃库
 - **现象**：`data/conversations/` 11 个分库仅 1 个活跃（有 WAL）；`dingtalk__490224ac5f43564b.db`(29M) 等不参与清理，其 `tmp_images` 亦不回收。
-- **处置**：需判断「停用账号库」清理策略（保留期 / 归档），属设计决策，延后。
+- **处置（已处理，代码级，2026-09-01）**：新增 `src/platform/orphan_cleanup.py`（`scan_and_reclaim_orphan_tmp_images`）+ `MemoryMixin._scan_orphan_conversation_dbs()`，启动期一次性扫描 `data/conversations/`：剔除活跃平台库（`self.platforms` 的 `store.db_path`）与备份类文件名，对孤儿库只读取 `messages.image_path`、按真实 `tmp_images` 根（`data_path("tmp_images")`）回收其引用图片；孤儿库本体不删（保留决策空间）；活跃集为空则跳过回收（安全护栏）。`purge_orphan_images` 新增 `base_dir` 参数，修正分库在 `conversations/` 而图片根在 `data/tmp_images` 的 base 错配。启动接入 `lifecycle.start()`（D4 块末尾）。测试 `tests/test_orphan_cleanup.py`（7 项）。
+- **附带发现（D10，待处理）**：活跃分库删除消息时 `purge_orphan_images(self.store.db_path, ...)` 默认 base = `<db_path 父目录>/tmp_images` = `data/conversations/tmp_images`，而真实图片在 `data/tmp_images` → 当前活跃删除**实际不回收图片**（潜在泄漏）。建议 message_repo/conversation_repo 同样传 `base_dir=str(data_path("tmp_images"))` 修正，需评估活跃行为变更 + 测试适配，延后单独处理。
 
 #### D7 · [P3] 三张表无保留策略
 - **位置**：`tool_execution_logs`(1533 行，每次工具调用都写) / `feedback` / `message_drafts`
@@ -183,7 +195,7 @@
 #### D8 · [P3] 备份 churn
 - **位置**：`backup_on_start: true`
 - **现象**：频繁重启时 8/31 三小时内产生 6 份 ×18M 备份。
-- **处置**：建议改为「按变更/每日一次」或降 `backup_max_count`；属配置改动，延后。
+- **处置（已处理，代码级，2026-09-01）**：`db_backup.py::_backup_now_inner` 备份写盘后与最近一次备份做 SHA-256 内容比对，逻辑内容一致则丢弃本次（不留存），消除频繁无变更重启产生的相同备份堆积（churn）；`backup_max_count` 默认 7→5（`config_models.storage.backup_max_count` + `DatabaseBackup` 构造器）。测试 `tests/test_db_backup.py::TestContentDedup`（4 项）。同秒双备份极端边界（文件名撞车）仍各存一份，属罕见（子秒级重启），未特殊处理。
 
 ### 4.3 本轮确认干净（免重复审计）
 - **命令注入**：全仓无 `shell=True`（`web/dependencies.py:320` 已去该反模式）。

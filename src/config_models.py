@@ -307,7 +307,7 @@ class StorageConfig(BaseModel):
     backup_enabled: bool = True
     backup_dir: str = DEFAULT_BACKUP_DIR
     backup_interval_hours: int = 24
-    backup_max_count: int = 7
+    backup_max_count: int = 5
     backup_on_start: bool = True
     decisions_retention_days: int = 30  # 决策追踪表留存天数（0/负数视为不清理）
     messages_retention_days: int = 90  # 消息记录留存天数（0/负数视为不清理）

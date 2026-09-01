@@ -59,7 +59,9 @@ async def health():
             store = get_store()
             return store._message_repo.get_last_processed_at(platform=get_current_platform())
         result["last_message_processed"] = await run_in_threadpool(_last_msg)
-    except Exception:
+    except Exception as e:
+        # 健康指标取数失败：静默置 None 会掩盖 store/查询异常（无法区分「无消息」与「查询失败」）
+        logger.warning("健康检查-最近消息处理时间获取失败（已降级为 None）: %s", e)
         result["last_message_processed"] = None
 
     return result

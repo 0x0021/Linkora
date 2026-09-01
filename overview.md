@@ -1,49 +1,41 @@
-# RAG 分块逻辑语义化重构
+# 缺陷处理总览（2026-09-01）
 
-## 目标
-把原来的「固定长度硬截断」分块，改成「固定长度作软目标/上限参考、遵循语义边界」的分块，避免在句子/子句中间被切断。
+在既有 `defect-audit.md`（配置/Web安全/轮询/提示词 四类）之外，新增扫描资源/并发/运维/数据生命周期维度，发现 9 项缺陷（D1–D9）。本轮已落地处理 D2/D3（代码）、D4（孤儿会话库图片回收）、D5/D6（回收 4.5G）、D7（全局表保留期清理）、D8（备份内容去重+降保留数）、D9（飞书陈旧索引数据修复）；D1 完成首轮治理（web/routers 静默吞异常 2 处补结构化日志）。全部重启验证通过。
 
-## 改动清单
+## 已处理
 
-### 1. `src/tools/utils.py` — 核心重写 `split_text`
-- `max_len` 含义变更：**软目标 / 上限参考**，而非硬上限。块尽量贴近该长度，但**不切断语义单元**。
-- 新增 `hard_max: int | None = None` 参数：安全天花板，默认 `max(max_len*2, 800)`。仅在病态超长单元（巨型无标点段落 / URL / 哈希）触发，且仍优先在最佳语义边界断开；无任何更细边界时才字符级兜底。
-- 新增辅助函数：
-  - `_atoms(text, pat)`：按边界正则切原子片段，分隔符附在前一片段末尾（拼接无损还原）。
-  - `_pack_atoms(atoms, limit)`：贪婪拼装 ≤ limit 的块，仅在原子之间断开。
-  - `_split_recursive(text, pats, hard_max)`：逐层细化（句子 → 子句 → 空白 → 字符兜底），保证每块 ≤ hard_max 且内部不被语义外切断。
-- 边界优先级（高→低）：段落空白 → 句子结束符（`。！？!?…` 及 ASCII `. `，避开 `github.com` 类 URL）→ 子句分隔符（`，,；;：:、—–`）→ 空白 → 字符级。
-- 标题粘连保留（`# 标题`/`第X章`/`1. xxx`/`一、xxx` 与下一行同块）。
-- 重叠（overlap）仍支持，且整体 capped 在 `hard_max` 内。
-
-### 2. `src/config_models.py` — 新增可配置项
-- `RagConfig.chunk_hard_max: int | None = None`
-- `PlatformRagConfig.chunk_hard_max: int | None = None`
-- 默认 `None` → `split_text` 派生为 `chunk_size*2`，非破坏性。
-
-### 3. `config.yaml.example`
-- `rag.chunk_hard_max` 注释说明（建议设在 embedding 模型有效字符容量之下，杜绝模型侧截断）。
-
-### 4. 调用点接入 `hard_max`
-- `src/doc_sync_scheduler.py`：新增 `config` 构造参数（由 `primary.py` 注入 `self.config`），`_sync_single_doc` 读取 `rag.chunk_hard_max`。
-- `src/kb/feishu_importer.py`：`import_feishu_doc` 优先取 `rag_config["chunk_hard_max"]`，否则回退到 `config.rag.chunk_hard_max`。
-
-### 5. `tests/test_split_text_semantic.py`（新增，10 例）
-覆盖：无中间截断、软目标允许超长句整段保留、安全天花板约束病态输入、句子/子句边界收尾、标题粘连、URL 不被点切断、重叠不超天花板、常规文档多块分布。
-
-## 验证
-- 既有 `TestSplitText` + `test_utils_edge` 全部保持通过（14 例）。
-- 新增语义测试 10 例通过。
-- 相关回归（`feishu`/`doc_sync`/`config`/`split`/`utils`/`chunk`/`importer`）共 **446 passed**。
-- 冒烟：一段 VPN 接入文档（max_len=60）被切成多块，每块均以句号/逗号收尾，无中间截断。
-
-## 行为对比（示例）
-| 场景 | 旧实现 | 新实现 |
+| 项 | 处置 | 状态 |
 |---|---|---|
-| 600 字无标点长句，max_len=200 | 整句作为 1 个超长块（可能超 embedding 上限被模型截断） | 仍整句保留（软目标），但若超 `hard_max` 则在最佳边界断开 |
-| 多句正常文档 | 达到 N 字符即硬切，可能切断句子 | 在句子/子句边界切，块长围绕 N |
-| 巨型 URL/哈希 | 不处理，整块超大 | `hard_max` 天花板拦截，字符级兜底（仍尽量靠边界） |
+| **D2** 同步线程被 SIGKILL 硬切 | `web/routers/sync.py` 新增 `request_sync_stop_on_shutdown()`，lifespan 关闭阶段复用 `CANCEL_FILE` 协作式退出 + `join(8s)` | 代码已合入（`d672489`） |
+| **D3** 无全局 WAL checkpoint | `src/platform/memory.py` 新增 `_start_wal_checkpoint_scheduler()`（每 30min `PRAGMA wal_checkpoint(PASSIVE)`），`lifecycle.py` 接入 | 代码已合入（`d672489`） |
+| **D5** 遗留一次性备份 187M | 隔离→删除回收 | `data/` 5.3G→916M |
+| **D6** 无用 bge-m3 模型 4.3G | 隔离→删除回收（零引用，bge-small 在 `~/.cache`） | 同上 |
+| **D7** 三张全局表无保留策略 | `tool_execution_repo/feedback_repo/draft_repo` 加 `cleanup_old_*`；`memory.py` 加 `_start_global_tables_cleanup_scheduler()`（每 24h，`lifecycle` 接入）；保留期复用 `messages_retention_days`(90天)，不新增配置 | 代码已合入（`ed86045`） |
+| **D9** 飞书 1024 维陈旧索引 | 飞书未启用，纯数据修复：`feishu-ai.db` 5 条向量清空(保留content)+删 `feishu-ai.faiss`/`.map.json`（data/ 已 gitignore，不提交） | 已修复（根因未做代码防护，启用飞书前建议加"重建跳过异维 chunk"守卫） |
+| **D8** backup churn | `src/db_backup.py` 备份写盘后 SHA-256 比对去重（内容未变更跳过重复备份）+ `backup_max_count` 7→5（配置 `StorageConfig.backup_max_count` 同步）；新增 `tests/test_db_backup.py::TestContentDedup` | 代码已合入（本轮） |
+| **D4** 孤儿会话库 tmp_images 泄漏 | 新增 `src/platform/orphan_cleanup.py`（`scan_and_reclaim_orphan_tmp_images`/`collect_orphan_image_paths`）+ `memory.py::._scan_orphan_conversation_dbs`（启动期一次性，非线程）；`purge_orphan_images` 补 `base_dir` 修正分库 base 错配（真实根 `data/tmp_images`）；新增 `tests/test_orphan_cleanup.py`(7) | 代码已合入（本轮） |
+| **D1** `except Exception` 膨胀（560 处，↑45） | 首轮治理 web/routers 静默吞异常 2 处补结构化日志：`web/routers/health.py:62`(warning 降级 None) / `web/routers/image.py:146`(debug token 解码失败)；其余 23 处带注释的有意探测（graceful degradation）保留，不盲改全仓 | 首轮已合入（本轮）；src/ 子系统后续批次延后 |
+| image.py:153 类型错误 | 补 `# type: ignore[reportArgumentType]`（同文件 :184 范式） | 已合入（`d672489`） |
 
-## 已知限制 / 备注
-- `_clean_text` 会剥除 `# ` 与 `1. ` 编号，故 markdown `# 标题`、有序列表 `1.` 标题无法被 heading-glue 识别；仅「第X章 / 1. / 一、」等保留样式可粘连（既有行为，非本次引入）。
-- `hard_max` 默认值（= `chunk_size*2`）对 BGE 类 512-token 模型偏大；如需彻底杜绝模型侧截断，请在配置中显式设更小的 `chunk_hard_max`。
+## 门禁
+ruff 全绿 · pyright **0 错误**（baseline 0）· check_deps 一致 · 测试 **3922 passed / 2 skipped / 2 xfailed** · gitleaks 通过。
+
+## 提交与同步
+- `d672489` fix(platform): 同步线程协作式退出与周期 WAL checkpoint（D2/D3）+ image.py 修复
+- `a81239e` docs: 标记 D5/D6 已回收
+- `ed86045` fix(data): 全局表保留期清理(D7) 与飞书陈旧索引修复(D9)
+- （本轮）fix(backup/platform): 备份内容去重+降保留数(D8)、孤儿会话库图片回收(D4)、web/routers 静默异常补日志(D1 首轮)
+- 均直推 `github main`（绕过分支保护）
+
+## 重启验证（新进程 93956/93958/93959）
+- 全局表清理调度器已启动（linkora.log:253）✓
+- WAL checkpoint 调度器已启动（linkora.log:254）✓
+- Web(8080) HTTP 200 ✓
+- embedding 复用：独立实例=0、每进程各加载 1 次 ✓
+- D9 飞书 `feishu-ai.faiss` 已删除 ✓
+
+## 延后（需设计或配置决策，未动手）
+- **D1（后续批次）** `src/` 子系统 broad-except 治理 —— 首轮仅收口 web/routers 静默吞异常的 2 处；`src/` 下其余 23 处有意探测（带注释）暂保留，待逐一确认语义后再决定收窄/重抛/结构化日志。
+- **D10** 活跃库删消息图片 base 错配 —— 活跃库删消息时 `purge_orphan_images(self.store.db_path, ...)` 默认 base=`conversations/tmp_images`（库在 `conversations/` 下的推导），但真实图片根在 `data/tmp_images`，导致当前活跃删除实际不回收图片；建议调用处显式传 `base_dir=data_path("tmp_images")` 修正。
+- **D8 极端边界** 同秒双备份（时间戳文件名撞车）→ 去重逻辑跳过；生产重启间隔 >1s 不会触发，未特殊处理。
+- 均记入 `defect-audit.md` 第四节，免重复审计。

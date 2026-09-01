@@ -143,12 +143,12 @@
 #### D5 · [P2] 一次性备份在保留策略外、永不清退
 - **位置**：`data/migration_backup_20260810_150758`(93M) + `data/db_purge_backup_20260807_063755`(90M) + `data/_orphan_files_20260803`(4.2M) = **187M**
 - **根因**：`backup_max_count` 只管 `data/backups/`；这些历史遗留目录在策略外，长期占用。
-- **处置**：已隔离至 `data/_trash_20260901/`（瞬时可逆）。确认与当前运行无引用、非保留策略对象。**待用户确认后删除回收 187M**。
+- **处置**：已隔离并删除回收 187M（确认与当前运行无引用、非保留策略对象）。`data/` 由 5.3G 降至 916M。
 
 #### D6 · [P2] 4.3G 模型目录已无引用
 - **位置**：`data/models/bge-m3`
 - **根因**：配置已切 `bge-small-zh-v1.5`（维度 512），运行日志确认实际加载维度=512；`bge-m3`(维度 1024) 全仓无引用（配置/代码/运行时均未加载），且已存 `kb_chunks` 向量实测 512 维（无维度错配）。
-- **处置**：已隔离至 `data/_trash_20260901/`。`bge-small` 实际位于 `~/.cache/huggingface/hub`，完全不依赖 `data/models`，隔离零风险。**待用户确认后删除回收 4.3G**。
+- **处置**：已隔离并删除回收 4.3G。`bge-small` 实际位于 `~/.cache/huggingface/hub`，完全不依赖 `data/models`，删除零风险。
 
 #### image.py 类型错误（附带修复）
 - **位置**：`web/routers/image.py:153` 原 `request: Request = None` 触发 pyright `reportArgumentType`；同文件 :184 已有正确范式 `# type: ignore[reportArgumentType]`。

@@ -91,6 +91,51 @@ def _is_running_stale(status: dict) -> bool:
         return False
     return not _thread_alive(status.get("job_id"))
 
+
+def request_sync_stop_on_shutdown(timeout: float = 8.0) -> None:
+    """Web 关闭时请求进行中的同步任务**协作式**退出（D2 修复）。
+
+    背景：同步线程是 ``daemon=False``，意图是「等线程自然结束、主进程退出不硬切」；
+    但启动器 ``scripts/run_linkora.py`` 关闭时只 ``wait(10s)`` 就 SIGKILL，
+    意图根本无法达成——worker 既来不及走到窗边界退出，也没机会写终态，
+    效果反而比 daemon 线程更糟（被杀在写库中途）。
+
+    这里在 FastAPI lifespan 的关闭阶段主动复用既有 ``CANCEL_FILE`` 机制
+    （worker 每个时间窗前读取，于窗边界干净退出），并短程 join 给出收尾窗口，
+    让「等自然结束」真正成立；超时仍未退出则交由进程退出中断。
+    """
+    with _active_threads_lock:
+        running = {jid: t for jid, t in _active_threads.items() if t.is_alive()}
+    if not running:
+        return
+
+    logger.info(
+        "[同步] Web 关闭：请求 %d 个同步任务协作式退出（%s）",
+        len(running), ", ".join(running),
+    )
+    try:
+        with open(CANCEL_FILE, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "job_ids": list(running),
+                    "requested_at": time.time(),
+                    "reason": "web_shutdown",
+                },
+                f, ensure_ascii=False,
+            )
+    except OSError as e:
+        logger.warning("[同步] 写取消标记失败（将仅等待线程自然结束）: %s", e)
+
+    deadline = time.monotonic() + timeout
+    for jid, t in running.items():
+        remaining = max(0.0, deadline - time.monotonic())
+        t.join(timeout=remaining)
+        if t.is_alive():
+            logger.warning("[同步] job %s 未在 %.1fs 内退出，进程退出时将被中断", jid, timeout)
+        else:
+            logger.info("[同步] job %s 已协作式退出", jid)
+
+
 # 允许的合法平台——单一真源见 src/constants.SUPPORTED_PLATFORMS
 # （不再在 web 层另持副本，避免加平台时漏改一处导致漂移）。
 
@@ -210,7 +255,11 @@ async def sync_history(req: SyncHistoryRequest, platform: str = Query(default=""
     t = threading.Thread(
         target=_runner,
         name=f"sync-history-{job_id}",
-        daemon=False,  # 非 daemon：等线程自然结束（主进程退出时不会硬切）
+        # 非 daemon：等线程自然结束（主进程退出时不会硬切）。
+        # 配合 request_sync_stop_on_shutdown()——Web lifespan 关闭阶段会复用
+        # CANCEL_FILE 请求本任务于窗边界协作式退出并短程 join，否则启动器
+        # （scripts/run_linkora.py）10s 后就 SIGKILL，"不硬切"的意图会落空。
+        daemon=False,
     )
     with _active_threads_lock:
         # 清理上一次已死的 thread 引用，避免 dict 累积

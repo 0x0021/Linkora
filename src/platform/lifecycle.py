@@ -178,6 +178,12 @@ class LifecycleMixin(EngineMixinBase):
             self._bg_threads.append(messages_cleanup_thread)
             logger.info("消息记录清理调度器已启动（每24小时执行一次）")
 
+            # 启动 WAL checkpoint 调度器（D3：防止各分库 WAL 长期累积）
+            wal_checkpoint_thread = self._start_wal_checkpoint_scheduler()
+            wal_checkpoint_thread.start()
+            self._bg_threads.append(wal_checkpoint_thread)
+            logger.info("WAL checkpoint 调度器已启动（每30分钟执行一次）")
+
         try:
             if start_ingestion:
                 # 【Phase 3 多平台】每个启用的平台在独立线程运行各自的轮询器，按平台上下文

@@ -160,7 +160,7 @@
 #### D9 · [P3] 飞书知识库 1024 维陈旧 FAISS 索引（潜伏）
 - **位置**：`data/feishu-ai.faiss`（维度 **1024**、ntotal=5）+ `data/feishu-ai.db` 的 `kb_chunks`（向量维度 **1024**）
 - **根因**：旧 `bge-m3`(1024) 遗留；当前模型 512 维 → `_full_rebuild_from_db` 按「最多 chunk 维度族」选 `best_dim`=1024 建索引，而查询用 512 维 → 维度错配、飞书 KB 实质失效。
-- **处置（已处理，数据级）**：飞书未启用，故纯数据修复（data/ 已 gitignore，不需提交）——`UPDATE kb_chunks SET embedding=''` 清空 5 条陈旧向量（**保留 content 供后续重嵌**）+ `rm data/feishu-ai.faiss` 及其 `.map.json`。重嵌仅在导入/同步时发生（`feishu_importer.py:151` / `doc_sync_scheduler.py:162`），无周期重嵌循环，故启用飞书并重新同步 KB 前索引为空（安全、不崩）。**根因未做代码层防护**（store 重建时不感知当前模型维度），后续启用飞书前建议加「重建时跳过异维 chunk 并标记重嵌」的守卫，本轮未动。
+- **处置（已处理，数据级）**：飞书未启用，故纯数据修复（data/ 已 gitignore，不需提交）——`UPDATE kb_chunks SET embedding=''` 清空 5 条陈旧向量（**保留 content 供后续重嵌**）+ `rm data/feishu-ai.faiss` 及其 `.map.json`。重嵌仅在导入/同步时发生（`feishu_importer.py:151` / `doc_sync_scheduler.py:162`），无周期重嵌循环，故启用飞书并重新同步 KB 前索引为空（安全、不崩）。**根因已在代码层缓解**：`_full_rebuild_from_db`（`sqlite_store_index.py:344-365`）已按向量维度分组、仅对 `best_dim` 维度族建索引、其余异维 chunk 计入 `skipped` 跳过（日志可见 `skipped N 异维`），故启用飞书触发重建时不会再用陈旧 1024 维建错索引；「标记重嵌」因重嵌仅发生在导入/同步、且无周期重嵌循环，且飞书当前未启用、数据已清，暂不引入（避免过度工程）。综上 D9 代码层已闭环，无需再改。
 
 #### D1 · [P1] `except Exception` 膨胀（515 → 560，+45）
 - **集中**：`web/routers/` `persona.py`(33) `metrics.py`(20) `kb.py`(18) `config.py`(18) `api.py`(16)。
@@ -184,7 +184,7 @@
 - **回归（2026-09-01 14:43，已修复）**：首版 `_scan_orphan_conversation_dbs` 用 `self.platforms[...].store.db_path` 构建 active 集，但 `db_path` 是**全局主库** `data/linkora.db`，与 `data/conversations/*.db` 会话分库**不是同一文件** → active_paths 永远匹配不上任何分库 → 全部 9 个会话分库（含活跃账号 `dingtalk__4c11dc67bc0226ad.db`）被误判为孤儿，一次回收 **1268 个 tmp_images**（含活跃账号历史消息图片；这些本地 OCR/附件缓存可由钉钉 mediaId 重新下载，消息文本与结构不受影响）。
   - **根因修复**：给 `SQLiteStore` 新增公开访问器 `conv_db_path(platform)`（与 `_conv_db_path` 同公式 `conversations/{platform}__{sha256(account_id)[:16]}.db`、无副作用），`_scan_orphan_conversation_dbs` 改为逐平台用 `store.conv_db_path(pid)` 构建 active 集。验证 `conv_db_path("dingtalk")` 正确解析到 `data/conversations/dingtalk__4c11dc67bc0226ad.db`。
   - **回归测试**：`tests/test_orphan_cleanup.py` 新增 `test_conv_db_path_contract`（契约：会话分库路径在 conversations/ 下且 ≠ 主库 db_path）+ `test_scan_orphan_method_excludes_active_conv_db`（直接驱动 `_scan_orphan_conversation_dbs`，断言活跃图片保留、孤儿图片回收；将来若改回用 `db_path` 会立即失败）。测试共 9 项通过。
-- **附带发现（D10，待处理）**：活跃分库删除消息时 `purge_orphan_images(self.store.db_path, ...)` 默认 base = `<db_path 父目录>/tmp_images` = `data/conversations/tmp_images`，而真实图片在 `data/tmp_images` → 当前活跃删除**实际不回收图片**（潜在泄漏）。建议 message_repo/conversation_repo 同样传 `base_dir=str(data_path("tmp_images"))` 修正，需评估活跃行为变更 + 测试适配，延后单独处理。
+- **附带发现（D10，已修复，2026-09-01）**：活跃分库删除消息时 `purge_orphan_images(self.store.db_path, ...)` 默认 base = `<db_path 父目录>/tmp_images` = `data/conversations/tmp_images`，而真实图片根在 `data/tmp_images` → 活跃删除**实际不回收图片**（磁盘泄漏）。**修复**：`message_repo.py`（`cleanup_old_messages` 与 `delete_message` 两处）+ `conversation_repo.py`（`delete_conversations`）调用均显式传 `base_dir=str(data_path("tmp_images"))`（函数早已支持该参数，仅调用点漏传）；新增 `tests/test_image_cleanup.py` 的 `TestD10NestedConversationDb`（2 项）专门用「会话库嵌套在 conversations/ 下」的布局回归，确认图片根 `data/tmp_images` 下的文件被正确删除（旧默认 base 会漏删）。门禁全绿（ruff / pyright 0 / check_deps / 全量 3931 passed / gitleaks）。已直推 `github main`。
 
 #### D7 · [P3] 三张表无保留策略
 - **位置**：`tool_execution_logs`(1533 行，每次工具调用都写) / `feedback` / `message_drafts`

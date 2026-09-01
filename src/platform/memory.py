@@ -442,6 +442,45 @@ class MemoryMixin(EngineMixinBase):
         thread = threading.Thread(target=summary_loop, daemon=True, name="conversation-summary")
         return thread
 
+    def _scan_orphan_conversation_dbs(self) -> None:
+        """启动期孤儿会话库检测 + ``tmp_images`` 回收（D4）。
+
+        ``data/conversations/`` 下可能存在不再绑定任何活跃平台的遗留分库（账号解绑 /
+        重装 / 迁移残留）。这些库的 ``messages`` 仍引用 ``data/tmp_images`` 图片，但活跃
+        清理链路（按 ``ctx.store``）扫不到 → 图片永久累积。
+
+        逻辑（实现见 ``src.platform.orphan_cleanup``）：
+        1) 列目录，剔除活跃平台库（``self.platforms`` 的 ``store.db_path``）与备份类文件；
+        2) 对每个孤儿库只读打开，按真实 ``tmp_images`` 根回收其引用的孤儿图片；
+        3) 记 INFO 汇总（孤儿库名 + 回收图片数），**不删除孤儿库本身**（保留决策空间）。
+
+        活跃集为空时跳过回收（安全起见，避免误删活跃账号图片）。
+        """
+        from src.paths import data_path
+        from src.platform.orphan_cleanup import scan_and_reclaim_orphan_tmp_images
+
+        conv_dir = data_path("conversations")
+        active_paths: set[str] = set()
+        for ctx in self.platforms.values():
+            store = getattr(ctx, "store", None)
+            if store is not None and getattr(store, "db_path", None):
+                active_paths.add(store.db_path)
+        if not active_paths:
+            logger.info("[孤儿库扫描] 活跃平台集为空，跳过 tmp_images 回收（安全起见）")
+            return
+
+        orphan_names, reclaimed = scan_and_reclaim_orphan_tmp_images(
+            conv_dir, active_paths, data_path("tmp_images")
+        )
+        if orphan_names:
+            logger.info(
+                "[孤儿库扫描] 发现 %d 个孤儿会话库（不删除，保留决策空间）: %s；"
+                "回收 tmp_images 图片 %d 个",
+                len(orphan_names), ", ".join(orphan_names), reclaimed,
+            )
+        else:
+            logger.info("[孤儿库扫描] 未发现孤儿会话库")
+
     def _start_wal_checkpoint_scheduler(self) -> threading.Thread:
         """周期 WAL checkpoint（D3 修复）：避免各分库 WAL 长期累积。
 

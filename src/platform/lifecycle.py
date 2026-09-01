@@ -190,6 +190,12 @@ class LifecycleMixin(EngineMixinBase):
             self._bg_threads.append(wal_checkpoint_thread)
             logger.info("WAL checkpoint 调度器已启动（每30分钟执行一次）")
 
+            # 启动期孤儿会话库扫描 + tmp_images 回收（D4：一次性，非线程）
+            try:
+                self._scan_orphan_conversation_dbs()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("孤儿会话库扫描异常（已忽略，不影响启动）: %s", e)
+
         try:
             if start_ingestion:
                 # 【Phase 3 多平台】每个启用的平台在独立线程运行各自的轮询器，按平台上下文

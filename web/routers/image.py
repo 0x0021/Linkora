@@ -143,7 +143,9 @@ def _verify_image_token(token: Optional[str]) -> bool:
         return False
     try:
         sig = base64.urlsafe_b64decode(sig_b64)
-    except Exception:
+    except Exception as e:
+        # 安全边界：签名解码失败 fail-closed 拒绝（return False），debug 级记录便于排查伪造/异常 token
+        logger.debug("图片 token 签名解码失败（拒绝访问）: %s", e)
         return False
     expected = hmac.new(_get_img_token_secret(), str(exp).encode(), hashlib.sha256).digest()
     return hmac.compare_digest(sig, expected)

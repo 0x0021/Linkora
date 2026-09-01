@@ -19,16 +19,23 @@ logger = logging.getLogger(__name__)
 _THUMB_DIRNAME = ".thumbs"
 
 
-def purge_orphan_images(db_path: str, rel_paths: list[str]) -> int:
+def purge_orphan_images(db_path: str, rel_paths: list[str], base_dir: str | None = None) -> int:
     """删除相对 ``data/tmp_images`` 的孤儿图片文件，返回成功删除的文件数。
 
     仅删存在且可删的文件；任何异常（权限/并发/路径越界）静默跳过，不影响主流程。
     ⚠️ 路径越界护栏：``image_path`` 虽经 ``safe_path_component`` 清掉 ``/``，仍做一层
     ``base.resolve() in p.parents`` 校验，防止极端情况下 ``../`` 穿越删到系统文件。
+
+    ``base_dir``：图片根目录。默认 ``<db_path 所在目录>/tmp_images``（与旧调用兼容），
+    但当分库位于 ``data/conversations/`` 而图片根实际在 ``data/tmp_images`` 时，
+    须显式传入 ``base_dir=str(data_path("tmp_images"))`` 才能正确定位（见孤儿库回收 D4）。
     """
     if not rel_paths:
         return 0
-    base = (Path(db_path).resolve().parent / "tmp_images").resolve()
+    if base_dir is not None:
+        base = Path(base_dir).resolve()
+    else:
+        base = (Path(db_path).resolve().parent / "tmp_images").resolve()
     thumbs_root = (base / _THUMB_DIRNAME).resolve()
     removed = 0
     for rel in rel_paths:

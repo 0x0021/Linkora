@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 import threading
@@ -22,6 +23,26 @@ from src.paths import data_path
 logger = logging.getLogger(__name__)
 
 
+def _sha256_file(path: Path) -> str:
+    """计算文件 SHA-256（按块读取，避免大备份占满内存）。"""
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _latest_existing_backup(backup_dir: Path, stem: str, exclude: Path | None = None) -> Path | None:
+    """返回目录下该库最近一次（mtime 最大）的备份文件，排除 exclude。
+
+    用于 D8 内容去重：与本次待写备份比对，逻辑内容一致即丢弃本次。
+    """
+    candidates = [p for p in backup_dir.glob(f"{stem}_*.db") if p != exclude]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
 class DatabaseBackup:
     """数据库自动备份器，支持定时备份和手动触发。"""
 
@@ -30,7 +51,7 @@ class DatabaseBackup:
         db_path: str,
         backup_dir: str = str(data_path("backups")),
         interval_hours: int = 24,
-        max_backups: int = 7,
+        max_backups: int = 5,
         backup_on_start: bool = True,
     ):
         self.db_path = db_path
@@ -111,18 +132,22 @@ class DatabaseBackup:
             self._backup_lock.release()
 
     def _backup_now_inner(self) -> str | None:
-        """实际备份逻辑（已被进程内/跨进程锁保护）。"""
+        """实际备份逻辑（已被进程内/跨进程锁保护）。
+
+        D8 内容去重：备份写盘后，与最近一次备份做 SHA-256 比对，逻辑内容一致
+        则删除本次（不留存），消除频繁无变更重启产生的海量相同备份（churn）。
+        内容不同才保留为正式备份。
+        """
+        db_file = Path(self.db_path)
+        if not db_file.exists():
+            logger.error("数据库文件未找到: %s", self.db_path)
+            return None
+
+        db_stem = Path(self.db_path).stem
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = self.backup_dir / f"{db_stem}_{timestamp}.db"
+
         try:
-            db_file = Path(self.db_path)
-            if not db_file.exists():
-                logger.error("数据库文件未找到: %s", self.db_path)
-                return None
-
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            db_stem = Path(self.db_path).stem
-            backup_name = f"{db_stem}_{timestamp}.db"
-            backup_path = self.backup_dir / backup_name
-
             src_conn = sqlite3.connect(self.db_path)
             src_conn.execute("PRAGMA busy_timeout=5000")
             try:
@@ -133,6 +158,19 @@ class DatabaseBackup:
                     dst_conn.close()
             finally:
                 src_conn.close()
+
+            # D8 内容去重：与最近一次备份比对，逻辑内容一致则丢弃本次。
+            # exclude=backup_path 避免把刚写好的本次纳入候选（取上一份）。
+            latest = _latest_existing_backup(self.backup_dir, db_stem, exclude=backup_path)
+            if latest is not None and _sha256_file(latest) == _sha256_file(backup_path):
+                logger.info(
+                    "数据库内容未变更，跳过重复备份: %s（已有最新: %s）",
+                    db_stem,
+                    latest.name,
+                )
+                backup_path.unlink(missing_ok=True)
+                self._cleanup_old_backups()
+                return None
 
             logger.info("数据库已备份到: %s (大小: %.1f MB)",
                         backup_path, backup_path.stat().st_size / 1024 / 1024)

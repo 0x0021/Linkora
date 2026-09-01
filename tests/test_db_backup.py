@@ -19,7 +19,7 @@ class TestInit:
         assert backup.db_path == db
         assert backup.backup_dir.name == "backups"
         assert backup.interval_seconds == 24 * 3600
-        assert backup.max_backups == 7
+        assert backup.max_backups == 5
         assert backup.backup_on_start is True
         assert backup._running is False
         assert backup._thread is None
@@ -163,6 +163,76 @@ class TestBackupNow:
         with patch.object(backup, "_cleanup_old_backups") as mock_cleanup:
             backup.backup_now()
             mock_cleanup.assert_called_once()
+
+
+# ============================================================================
+# D8 内容去重（churn 修复）：逻辑内容相同的连续备份只保留一份
+# ============================================================================
+class TestContentDedup:
+    """真实 SQLite 落盘，校验 SHA-256 内容比对去重。
+
+    用默认（DELETE 日志）模式保证字节级确定性：未提交则不改主库文件，
+    两次备份字节完全一致→被去重；提交后内容变化→写入新备份。
+    """
+
+    @pytest.fixture
+    def backup(self, tmp_path):
+        src = tmp_path / "app.db"
+        conn = sqlite3.connect(str(src))
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)")
+        conn.commit()
+        conn.close()
+        b = DatabaseBackup(
+            db_path=str(src),
+            backup_dir=str(tmp_path / "backups"),
+            max_backups=5,
+            backup_on_start=False,
+        )
+        return b
+
+    @staticmethod
+    def _list(backup) -> list:
+        return sorted(backup.backup_dir.glob("app_*.db"))
+
+    def test_first_backup_is_written(self, backup):
+        res = backup.backup_now()
+        assert res is not None
+        assert len(self._list(backup)) == 1
+
+    def test_identical_content_skips_duplicate(self, backup):
+        backup.backup_now()
+        time.sleep(1.1)  # 错开秒级时间戳，避免文件名撞车导致去重失效
+        before = self._list(backup)
+        # 源库未变更，再次启动备份应被内容去重跳过（不写新文件）
+        res = backup.backup_now()
+        after = self._list(backup)
+        assert res is None
+        assert after == before
+        assert len(after) == 1
+
+    def test_content_change_writes_new_backup(self, backup):
+        backup.backup_now()
+        time.sleep(1.1)
+        conn = sqlite3.connect(backup.db_path)
+        conn.execute("INSERT INTO t(v) VALUES ('new')")
+        conn.commit()
+        conn.close()
+        res = backup.backup_now()
+        assert res is not None
+        assert len(self._list(backup)) == 2
+
+    def test_recovery_after_change_then_identical(self, backup):
+        # 变更→新备份；再不变更→去重；累计仅 2 份
+        backup.backup_now()
+        time.sleep(1.1)
+        conn = sqlite3.connect(backup.db_path)
+        conn.execute("INSERT INTO t(v) VALUES ('a')")
+        conn.commit()
+        conn.close()
+        assert backup.backup_now() is not None
+        time.sleep(1.1)
+        assert backup.backup_now() is None  # 同内容再跳
+        assert len(self._list(backup)) == 2
 
 
 # ============================================================================

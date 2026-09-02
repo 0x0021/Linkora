@@ -10,6 +10,10 @@ from typing import Any
 
 from src.audit import audit
 from src.config import ToolsConfig
+from src.tools.idempotency import (
+    SIDE_EFFECT_TOOLS,
+    SideEffectIdempotencyGuard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +202,8 @@ class ToolRouter:
         # ToolRouter 被主轮询/后台任务/Web 多线程共享，需加锁保护。
         self._confirm_lock = threading.Lock()
         self._confirmations: dict[str, dict[str, PendingConfirmation]] = {}
+        # 副作用工具幂等护栏：at-least-once 重放防护（详见 src/tools/idempotency.py）
+        self._idem = SideEffectIdempotencyGuard()
 
     @property
     def consecutive_failures(self) -> dict[str, int]:
@@ -355,6 +361,20 @@ class ToolRouter:
         此处 except 分支仅作最终防线（safe_execute 自身异常时兜底）。
         """
         start = time.time()
+        # —— 副作用幂等护栏：at-least-once 重放防护 ——
+        # 窗口内重复调用（同一条消息被重放）直接返回首次成功结果，不再真正执行副作用。
+        if tool_name in SIDE_EFFECT_TOOLS:
+            is_replay, cached = self._idem.get(tool_name, session_key, args)
+            if is_replay:
+                logger.warning(
+                    "[幂等护栏] 工具 %s 在重放窗口内重复调用（session=%s），"
+                    "跳过真实执行，返回首次成功结果",
+                    tool_name, session_key or "<none>",
+                )
+                return ToolCallResult(
+                    tool_name=tool_name, args=args, success=True,
+                    result=cached, error="", duration_ms=0,
+                )
         try:
             result: Any = tool.safe_execute(args)
             duration = int((time.time() - start) * 1000)
@@ -383,6 +403,9 @@ class ToolRouter:
                 audit("tool_execution", tool_name, "success",
                       session_key=session_key, target=tool_name,
                       detail=f"duration_ms={duration}")
+                # 成功执行的副作用工具记录幂等结果，供重放时返回一致内容
+                if tool_name in SIDE_EFFECT_TOOLS:
+                    self._idem.record_success(tool_name, session_key, args, result)
             return ToolCallResult(
                 tool_name=tool_name, args=args, success=not is_error,
                 result=result if not is_error else None,

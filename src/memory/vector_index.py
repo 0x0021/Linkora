@@ -357,7 +357,7 @@ class VectorIndex:
             else:
                 self._emb_cache = None
 
-            logger.info("索引已从 %s 加载，包含 %d 个向量", load_path, self._index.ntotal)
+            logger.info("索引已从 %s 加载，包含 %d 个向量", load_path, loaded.ntotal)
             return True
 
     @property

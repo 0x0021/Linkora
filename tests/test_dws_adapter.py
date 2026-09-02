@@ -69,6 +69,36 @@ class TestErrorClassification:
         assert classify_dws_error("TIMEOUT") is DwsRetryableError
         assert classify_dws_error("Authentication Failed") is DwsNonRetryableError
 
+    def test_connection_closed_is_retryable(self):
+        """瞬时连接断开（iPaaS COMM_ERROR / connection has been closed）应判可重试。
+
+        复现 2026-09-02 线上事故：dws 返回 success=false，error.message 只有笼统的
+        "business error: success=false"，但 technical_detail 暴露真实原因是
+        "COMM_ERROR ... connection has been closed suddenly"。修复前该串被误判为
+        不可重试，导致一次后端抖动就永久失败（dws exit 1）。
+        """
+        raw = ("iPaaS 调用失败: COMM_ERROR\n"
+               "error message : Invalid call is removed because "
+               "connection has been closed suddenly ")
+        assert classify_dws_error(raw) is DwsRetryableError
+        # base.run() 拼装后的「可分类诊断串」形态（message + technical_detail 等）
+        enriched = ("business error: success=false | "
+                    "technical_detail=iPaaS 调用失败: COMM_ERROR "
+                    "error message : Invalid call is removed because "
+                    "connection has been closed suddenly | "
+                    "reason=invalid_request | server_error_code=PARAM_ERROR")
+        assert classify_dws_error(enriched) is DwsRetryableError
+
+    def test_connection_reset_and_broken_pipe_retryable(self):
+        """其它连接层瞬时错误也应可重试。"""
+        assert classify_dws_error("connection reset by peer") is DwsRetryableError
+        assert classify_dws_error("broken pipe") is DwsRetryableError
+        assert classify_dws_error("iPaaS 调用失败: COMM_ERROR") is DwsRetryableError
+
+    def test_generic_success_false_still_non_retryable(self):
+        """仅笼统文案、无连接层线索时仍保持不可重试（不扩大误判面）。"""
+        assert classify_dws_error("business error: success=false") is DwsError
+
 
 # ============ AI 标记（--ai-tag）开关测试 ============
 

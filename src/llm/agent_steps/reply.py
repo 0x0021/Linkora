@@ -65,8 +65,10 @@ def finish_reply(
             fallback_text = "知识库中暂未收录相关信息。"
         return make_reply(agent, fallback_text, False, routing_mode, routed_tools)
     clean = enforce_brevity(agent, text.strip())
+    # 传 agent 让 enforce_brevity 读到真实长度上限配置（否则退回默认 150 字）
     clean = ensure_complete_reply(clean, agent.client,
-                                  getattr(agent, "_auto_complete_enabled", True))
+                                  getattr(agent, "_auto_complete_enabled", True),
+                                  agent=agent)
     clean, _gated = gate_reply(clean, agent.user_name, agent.user_title)
     if _gated:
         logger.info("[B闸门] 非流式回复命中末端闸门，已整句替换为安全模板")

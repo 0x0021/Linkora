@@ -1048,6 +1048,15 @@ class TestReplyIncompleteness:
                 "再由部门向公司申请预算及。建议协助评估走正规采购渠道。")
         assert _is_reply_incomplete(text), "中间句'申请预算及。'截断被漏判"
 
+    def test_emoji_placeholder_tail_not_flagged(self):
+        """★ 2026-09-02 事故：以 [抱拳] 这类表情占位符收尾是正常的，
+        之前末字符是 ']' 被当成"无句末标点"误判为截断，进而触发续写补全，
+        把模型凭空编造的"明白了，我这就去…"（冒充对方口吻）拼进对外回复。"""
+        assert not _is_reply_incomplete("你先去对接一下ERP里的信息，然后走OA提交申请就行。[抱拳]")
+        assert not _is_reply_incomplete("好的，有需要再喊我。[微笑][抱拳]")
+        # 表情后面没有正文时也不该被判截断
+        assert not _is_reply_incomplete("[抱拳]")
+
 
 class TestEnsureCompleteReply:
     """★ 2026-07-28 截断确定性修复：末尾自动续写补全（agent._ensure_complete_reply）。
@@ -1132,6 +1141,39 @@ class TestEnsureCompleteReply:
         result = agent._ensure_complete_reply(partial)
         assert "申请预算及相关流程" in result, f"中间句未补全: {result!r}"
         assert "建议协助评估走正规采购渠道" in result, f"后半段被丢: {result!r}"
+        assert _is_reply_incomplete(result) is False, f"续写后仍不完整: {result!r}"
+
+    def test_emoji_tail_reply_never_continuated(self):
+        """★ 2026-09-02 事故回归：以 [抱拳] 收尾的完整回复绝不能触发续写。
+
+        否则续写器会把它当成"未完"并编出一段冒充对方口吻的话（"明白了，我这就
+        去…"）拼到回复末尾，直接发给了同事。
+        """
+        client = MagicMock()
+        client.chat.return_value = self._resp("明白了，我这就去对接ERP信息，然后提交OA审批申请。")
+        agent = self._make_agent(client)
+        text = ("收到，你是售前岗位，开通CRM需要走审批流程。流程如下："
+                "第一步先确认ERP里的业务员信息。第二步提交OA审批申请。"
+                "你先去对接一下ERP里的信息，然后走OA提交申请就行。[抱拳]")
+        result = agent._ensure_complete_reply(text)
+        client.chat.assert_not_called()
+        assert result == text
+
+    def test_tail_only_completion_when_no_sentence_break(self):
+        """找不到句子级断点时，只把末尾那一小段喂给续写器（不拿整段原文）。
+
+        整段原文句子层面都完整，模型只会把它理解成"接着说下一句"，从而编造内容。
+        """
+        client = MagicMock()
+        client.chat.return_value = self._resp("，走完OA流程就能开通。")
+        agent = self._make_agent(client)
+        text = ("前面几句都是完整的。审批通过之后IT会配置权限。"
+                "最后这段还没收尾")
+        result = agent._ensure_complete_reply(text)
+        client.chat.assert_called_once()
+        fed = client.chat.call_args.kwargs.get("messages") or client.chat.call_args[0][0]
+        assert fed[-1]["content"] == "最后这段还没收尾", f"喂给续写器的不是尾巴: {fed[-1]!r}"
+        assert result.startswith(text), f"原文被破坏: {result!r}"
         assert _is_reply_incomplete(result) is False, f"续写后仍不完整: {result!r}"
 
 

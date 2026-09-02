@@ -78,6 +78,12 @@ def classify_dws_error(error_msg: str) -> type[DwsError]:
     # 可重试错误模式
     retryable_patterns = [
         "timeout", "timed out", "connection refused",
+        # 瞬时连接断开（iPaaS/后端抖动）：应重试自愈而非判死。
+        # 见 2026-09-02 线上事故：technical_detail 报
+        # "COMM_ERROR ... connection has been closed suddenly" 被误判不可重试。
+        "connection has been closed", "connection closed", "connection reset",
+        "comm_error", "comminterrupt", "broken pipe", "econnreset",
+        "ipaaS 调用失败", "ipaaS call failed",
         "network unreachable", "temporary failure",
         "503", "504", "service unavailable", "gateway timeout",
     ]

@@ -37,7 +37,9 @@ def get_store(db_path: Optional[str] = None) -> SQLiteStore:
     # 归一化为绝对路径，保证同一文件不会因相对路径差异产生重复实例
     # 使用 os.path.abspath 而非 Path.resolve()：避免在 macOS 上跟随 /var→/private/var
     # 等符号链接，导致 db_path 与调用方预期不一致。
-    resolved = os.path.abspath(db_path)
+    # 注：cfg.storage.path 经 pydantic 动态构造，pyright 推断为 Unknown，先归一化为 str
+    # 以满足 abspath 的 StrPath 类型（运行时 storage.path 已被 config 校验为非空字符串）。
+    resolved = os.path.abspath(str(db_path))
 
     with _lock:
         if resolved not in _instances or getattr(_instances[resolved], "_closed", False):

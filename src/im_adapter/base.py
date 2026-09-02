@@ -190,7 +190,21 @@ class BaseIMAdapter:
 
                 if isinstance(data, dict) and data.get("success") is False:
                     err = data.get("error", {})
-                    msg = err.get("message", str(data)) if isinstance(err, dict) else str(err)
+                    # 拼装「可分类诊断串」：DWS/iPaaS 常在 error.message 只给笼统的
+                    # "business error: success=false"，真正原因藏在 technical_detail /
+                    # reason / server_error_code / category 里（如 COMM_ERROR、连接被关闭）。
+                    # 不把这些喂给 _classify_error 会导致瞬时连接断开被误判为不可重试、
+                    # 一次后端抖动就永久失败（见 2026-09-02 线上 dws exit 1 事故）。
+                    if isinstance(err, dict):
+                        parts = [str(err.get("message", ""))]
+                        for key in ("technical_detail", "reason",
+                                    "server_error_code", "category"):
+                            v = err.get(key)
+                            if v:
+                                parts.append(f"{key}={v}")
+                        msg = " | ".join(p for p in parts if p)
+                    else:
+                        msg = str(err)
                     error_class = self._classify_error(msg)
                     raise error_class(f"{self.cli_path} error: {msg}")
 

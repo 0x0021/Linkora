@@ -13,6 +13,7 @@ from src.llm import system_prompt as _system_prompt
 from src.llm.style import Citation
 from src.llm.rag_inject import inject_rag_knowledge  # noqa: F401  # 保留以兼容测试 monkey-patch
 from src.llm.message_wrap import wrap_incoming_message  # noqa: F401  # 保留以兼容测试 monkey-patch
+from src.llm.reply_helper import ensure_complete_reply
 from src.llm.client import LLMClient, LLMResponse
 from src.llm.prompt_builder import PromptBuilder
 from src.llm.tool_orchestrator import ToolOrchestrator
@@ -307,68 +308,22 @@ class LLMAgent:
         return _style.enforce_brevity(self, reply)
 
     def _ensure_complete_reply(self, text: str) -> str:
-        """末尾自动续写补全（截断确定性修复）。
+        """末尾自动续写补全（截断确定性修复）——thin wrapper。
 
-        弱模型/早停可能导致回复以连接词（及/与/然后…）、逗号或无结尾标点收尾。
-        检测到不完整时，用一次低成本 LLM 续写把句子补全到正常句号/问号；
-        仅尝试一次，失败（限流/网络/解析）即降级返回原文，绝不阻塞主回复。
-        补全后经 enforce_brevity 再次清洗（清泄漏/粘连标点/主人身份词）。
-        可用 self._auto_complete_enabled 关闭。
+        实际逻辑已拆到 src/llm/reply_helper.py（非流式与流式两条链路共用同一份实现，
+        避免两处逻辑漂移）。保留此方法以兼容既有测试与 monkey-patch。
 
-        分段续写（2026-07-28 修复）：之前把整段文本丢给续写器，若中间句截断、
-        后面跟了完整句（如"申请预算及。建议协助评估走正规采购渠道。"），续写器会被
-        后面的完整句带偏不补。现改为**只把第一个断点句（含之前）喂给续写器**补全，
+        分段续写（2026-07-28 修复）：只把「第一个断点句（含之前）」喂给续写器补全，
         再把原始后半段拼回，避免后面完整句干扰、也不丢内容。
+        ★ 2026-09-02 修复：找不到句子级断点时只续写末尾尾巴，不再拿整段原文
+        去续写（否则模型会编出冒充对方口吻的新内容拼进对外回复）。
         """
-        if not getattr(self, "_auto_complete_enabled", True):
-            return text
-        if not text or not _style._is_reply_incomplete(text):
-            return text
-        try:
-            # 找第一个不完整断点（以连接词/逗号收尾的句），只补全到该断点。
-            segments = _style._split_sentences(text)
-            break_idx = -1
-            for i, seg in enumerate(segments):
-                if _style._segment_is_incomplete(seg):
-                    break_idx = i
-                    break
-            # 正常不会走到这里（_is_reply_incomplete 已为真），兜底用整段。
-            partial = "".join(segments[:break_idx + 1]).rstrip() if break_idx >= 0 else text.rstrip()
-            rest = "".join(segments[break_idx + 1:]) if break_idx >= 0 else ""
-            messages = [
-                {"role": "system", "content": (
-                    "你是文本续写器。下面是一句话的未完部分，请只输出它缺失的结尾，"
-                    "使其成为一个语法完整、以句号或问号正常结尾的句子。"
-                    "严禁重复已给出的内容，不要添加任何解释、前缀、引号或换行。"
-                )},
-                {"role": "user", "content": partial},
-            ]
-            resp = self.client.chat(messages, stream=False, temperature=0.2)
-            cont = getattr(resp, "content", "") or ""
-            cont = cont.strip()
-            if not cont:
-                return text
-            # 去重：若 partial 末尾（去掉句末标点）以连接词结尾、且续写以同词开头，
-            # 削掉续写开头的连接词，避免"及。及"这类重复。
-            tail = partial.rstrip().rstrip("。！？!?")
-            for c in _style._REPLY_CONNECTORS:
-                if tail.endswith(c) and cont.startswith(c):
-                    cont = cont[len(c):].lstrip()
-                    break
-            # 拼接：补后的前半段 + 原始后半段（断点之后的所有句子，原样保留）。
-            combined = partial.rstrip().rstrip("。！？!?") + cont + rest
-            finalized = self._enforce_brevity(combined)
-            if not _style._is_reply_incomplete(finalized):
-                logger.info("[续写补全] 已补全截断回复: %d -> %d 字符 (断点句=%d/%d)",
-                            len(text), len(finalized), break_idx + 1, len(segments))
-                return finalized
-            # 仍不完整（极少见）：返回最佳努力结果，不再二次调用 LLM。
-            logger.warning("[续写补全] 续写后仍未完整，返回最佳努力结果")
-            return finalized
-        except (TypeError, ValueError, RuntimeError) as e:
-            # 续写补全失败（模型未加载/上下文超长等）不影响主回复
-            logger.warning("[续写补全] 调用失败，降级返回原文: %s", e)
-            return text
+        return ensure_complete_reply(
+            text,
+            self.client,
+            getattr(self, "_auto_complete_enabled", True),
+            agent=self,
+        )
 
     def _get_embedding_client(self):
         # 实际逻辑已拆到 src/llm/style.py；此处保留 thin wrapper。

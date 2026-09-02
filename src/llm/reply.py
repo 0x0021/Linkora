@@ -459,6 +459,15 @@ _REPLY_CONNECTORS = (
 )
 _TERMINAL_PUNCT = "。！？!?…"
 
+# 平台表情占位符（钉钉/飞书等把 emoji 序列化成 [抱拳] [微笑] 这类中括号词）。
+# 回复以表情收尾是正常且常见的（"……就行。[抱拳]"），不应被当成"没有句末标点"。
+_RE_TRAILING_EMOJI = _re.compile(r"(?:\s*\[[^\[\]]{1,10}\])+$")
+
+
+def _strip_trailing_emoji(text: str) -> str:
+    """剥掉结尾连续的表情占位符，返回用于判断"是否收尾"的正文。"""
+    return _RE_TRAILING_EMOJI.sub("", text.rstrip()).rstrip()
+
 
 def _split_sentences(text: str) -> "list[str]":
     """按句末标点切分（保留标点），过滤空段。用于逐句检测截断。"""
@@ -507,8 +516,15 @@ def _is_reply_incomplete(text: str) -> bool:
     for seg in _split_sentences(s):
         if _segment_is_incomplete(seg):
             return True
-    # 3) 整条无句末标点 + 篇幅足够 + 非列表/冒号收尾
-    if s[-1] not in _TERMINAL_PUNCT and len(s) >= 30 and s[-1] not in "：:、":
+    # 3) 整条无句末标点 + 篇幅足够 + 非列表/冒号收尾。
+    #    注意：先剥掉尾部表情占位符（[抱拳] 等）——以表情收尾是正常收尾，
+    #    否则末字符是 "]" 会被误判成被截断，进而触发续写补全往回复末尾编内容
+    #    （2026-09-02 事故：结尾 "[抱拳]" 被判截断，续写器凭空编出
+    #     "明白了，我这就去…" 这种冒充对方口吻的话拼进对外回复）。
+    body = _strip_trailing_emoji(s)
+    if not body:
+        return False
+    if body[-1] not in _TERMINAL_PUNCT and len(body) >= 30 and body[-1] not in "：:、":
         return True
     return False
 

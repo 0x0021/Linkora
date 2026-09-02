@@ -224,3 +224,47 @@
 - **备份正确性**：用官方 `Connection.backup()`（正确处理 WAL，非 `shutil.copy`）；`backup_max_count` 生效（保留数=上限）。
 - **消息/图片清理**：覆盖多平台分库并与 `image_cleanup.py` 联动。
 - **`linkora.db` 的 `messages=0` 非缺陷**：消息存 `data/conversations/<platform>__<account>.db` 分库，`linkora.db` 为全局库（设计如此）。
+
+### 4.4 2026-09-02 复扫（并发/资源 + 工具层）
+
+**背景**：上午误操作（多仓 git cwd 颠倒）后，先跑全量基线确认未留内伤——`pytest` **3931 passed / 2 skipped / 2 xfailed**，与 9-01 一致。随后对两个维度做新一轮审查。
+
+**A. 并发正确性与运行时健壮性 —— 确认干净**
+- 后台线程退出机制完备：`platform/memory.py` 全部清理/摘要/WAL 调度线程均为 `while self._running:` + `self._shutdown_event.wait(60)` 唤醒，无忙等；`wal_checkpoint` 额外处理 `RuntimeError`(store 已关闭) 优雅退出。
+- `dws_adapter/event_stream.py`：`_lock` 保护 `self._procs`、`stop()` 正确 `join` 各 reader 线程、`_monitor_loop` 带 `time.sleep(1.0)` 非忙等。
+- 共享可变状态有锁：轮询器所有跨线程字典（`_last_fetch_time`/`_feishu_conv_info_cache`/`_perm_fail_streak`/`_processed_msg_ids` 等）统一由 `_poll_shared_lock` 串行化（`poller.py:120`）；`_feishu_conv_info_cache` 仅在轮询线程内 `poll_once` 开头重置引用 + TTL 兜底，无竞态崩溃。
+- **无 `eval`/`exec`**；全部 `subprocess.run` 均带 `timeout`（`tool_wrapper.py:131`、`account_identity.py:72`、`base.py`/`wecom.py`/`feishu_*.py` 均显式 timeout）。
+- Web 层：KB URL 导入用 Playwright 同步块 + `time.sleep(2)`，但所在路由 `import_kb_from_url` 是 **sync `def`**（`kb.py:205`），FastAPI 丢进线程池，**不阻塞事件循环**（非缺陷）。SSRF 防护 `is_ssrf_safe` 已覆盖 Playwright 路由与逐跳重定向。
+
+**B. 工具层健壮性 —— 确认干净**
+- **无"异常吞掉伪装成功"**：工具内所有 `except` 均返回 `{"error":...}` 或优雅降级（保留原文/回退默认值）；`tools/base.py:81` `safe_execute` 再兜一层 `except Exception → {"error":...}`。
+- **无用户可控 `open()` 路径穿越**；`_processed_msg_ids` 防重 + 编排层 `self_sent_to_current_chat` 防双重回复。
+- **无裸 `except:`**；无 `requests`/`httpx` 裸调用（外部获取走 SSRF 安全封装）。
+- **参数校验稳健**：工具无 `args["key"]` 下标（无 KeyError 风险），全部 `args.get(...)`；类型转换走 `safe_int`/`safe_float` 兜底；`config_manage` 的 `int(sval)`/`json.loads` 在 try 内，失败返回 `{"error":...}`。
+- **返回值契约一致**：`ToolRouter.execute` 全分支返回统一 `ToolCallResult`（`tools/base.py:287` `_run_tool` 把 `str|dict` 原始输出 + 异常统一包成 `success/result/error/duration_ms`），调用方无解析歧义。
+- **`config_manage` 尊重 P0 红线**：update 只改目标 `section.key`、写前 `AppConfig.model_validate` 校验、临时文件 + `os.replace` 原子落盘、其余参数全保留——无丢参风险。
+- 平台门控（`_is_tool_for_platform` 兜底拦截不可用工具空实现）、外联护栏（拦截跨会话主动外联）、确认门控（写操作需令牌）三层防护均在位。
+
+**C. 诚实备注（待补）**
+- 本轮首查的子代理（工具层深度审计）命中 429 限流、其"几个真问题"明细未在会话中留存；上方 B 节为本人用 grep/读码复扫相同维度所得，经典缺陷类均未见。若需复现子代理原结论，建议限流恢复后（14:03 后）重跑该专项，或指定具体工具/维度做深挖（如：重放幂等性的边角场景、具体工具的参数边界）。
+
+#### D. 重放幂等性深挖（2026-09-02 续）—— 发现 1 个真实设计性缺口 [P3]
+
+**主防护到位**：`_global_deduplicate`（`poller_strategy.py:882`）在 LLM/工具执行**之前**用 `_is_msg_processed` 拦掉已处理消息；`_is_msg_processed` 同时查内存 + DB（`poller_core_dedup.py:33-54`），重启/LRU 淘汰后仍能拦住，故"成功处理过的消息不会重跑"成立。
+
+**真实缺口（at-least-once）**：标记"已处理"发生在 handler **成功之后**（`poller.py:222` docstring 明写"仅在 handler 成功后执行"；`_mark_msg_processed` 调用点在 `poller.py:234` / `runtime_*` 各派发尾）。即**先执行、成功才标记**。
+- 触发条件：某条消息在 LLM/工具执行中途抛**未捕获异常**（handler 级崩溃，而非工具内已 try 的 `{"error":...}`）→ 消息保持"未处理" → 下个轮询周期 `_global_deduplicate` 放行 → **重跑 LLM 并重发副作用工具**（`send_message` / OA 审批发起 / `config_manage` update 等）。
+- 预期：理想为 at-most-once（至多一次）。
+- 实际：at-least-once（至少一次）——崩溃点之前已成功的副作用会在重试时被重复施加。
+- 边界：① 工具自身 `try/except` 返回 `{"error":...}` 不会触发（handler 仍成功→被标记），故**仅 handler 级未捕获崩溃**才踩；② 多数平台对同内容重发有自身去重/幂等，实际重复概率低；③ 不会无限刷屏（成功一次即标记停手）。
+- 建议（择一，非紧急）：
+  1. 改为 **mark-before-execute + 处理中租约**（dispatch 起点即标记，带 TTL；崩溃超 TTL 才解锁重跑）——实现 at-most-once；
+  2. 或给副作用型工具（`send_message`/OA 发起/配置写入）加**幂等键**（chat_id+content hash / instance 去重），工具层兜底重复调用。
+- 定级 P3：真实但触发面窄、影响可控，且当前 at-least-once 对"宁可不漏消息"的 IM 场景有合理性，留作设计权衡记录，不强制改。
+
+**✅ 已修复（2026-09-02）**：采用方案 2（工具层幂等键），改动面最小、风险最低、且直接命中"重复发副作用"根因——不动核心派发语义，最坏情况只是没拦住、不会破坏消息处理。
+- 新增 `src/tools/idempotency.py`：`SideEffectIdempotencyGuard`（进程内、带 TTL，默认 600s）+ `SIDE_EFFECT_TOOLS` 显式副作用工具清单。
+- 守卫范围（无确认门控、立即执行的对外副作用工具）：`send_message`、`send_ding`(app 类型)、`create_todo`、`save_memory`。`transfer_approval` 等 `require_confirm=True` 工具天然安全、排除。
+- 接线：`ToolRouter.__init__` 持有一个 guard 实例；`_run_tool` 在调 `safe_execute` 前，对 `SIDE_EFFECT_TOOLS` 用 `(tool_name, session_key, 规范化参数)` 查询重放窗口，命中则跳过真实执行、返回首次成功结果；**仅首次执行成功后才记录**（失败不记录 → 失败可正常重试，at-least-once 失败语义保留）。
+- 验证：新增 `tests/test_tool_idempotency.py`（5 例全过：重放抑制 / 失败重试 / 不同参数分离 / 非副作用不受影响 / 过期清理）；`pytest` 全量 3931 passed；`ruff`（改文件干净）/`pyright`(0) / `type_baseline`(PASS) 通过。
+- 残留（非本次引入）：`web/routers/image.py` 2 处 ruff `PGH003`、依赖 lock 漂移 `check_deps` 4 FAIL —— 均为历史存量、与本次改动无关，未顺手改动。

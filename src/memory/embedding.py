@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
 import time
+from pathlib import Path
 from typing import cast
 
 import numpy as np
@@ -28,6 +30,64 @@ def _init_load_status(state: str = "pending") -> dict:
         "total": 0,            # 总字节
         "message": "",         # 进度描述 / 错误信息
     }
+
+
+def _status_path() -> Path:
+    """embedding 状态共享文件路径（web/worker 通过同一 data 目录交换状态）。"""
+    from src.paths import get_data_dir
+
+    return Path(get_data_dir()) / "embedding_status.json"
+
+
+def _persist_status(client: "EmbeddingClient | None", status: dict | None = None) -> None:
+    """把 embedding 状态持久化到 data/embedding_status.json，供 web 进程读取。
+
+    使用临时文件 + replace 保证原子写；失败静默降级，不影响主链路。
+    """
+    try:
+        path = _status_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        if status is None:
+            # 直接读内部 dict，避免从持锁上下文（reload/_init_local/_init_api）重入 self._lock 造成死锁
+            status = dict(client._load_status) if client else _init_load_status("unknown")
+
+        payload = {
+            "state": status.get("state", "unknown"),
+            "progress": status.get("progress", 0.0),
+            "downloaded": status.get("downloaded", 0),
+            "total": status.get("total", 0),
+            "message": status.get("message", ""),
+            "enabled": client.enabled if client else False,
+            "model": getattr(client.config, "model", None) if client else None,
+            "provider": getattr(client.config, "provider", None) if client else None,
+            "offline": bool(getattr(client.config, "offline", False)) if client else None,
+            "pid": os.getpid(),
+            "timestamp": int(time.time() * 1000),
+        }
+
+        tmp = path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except Exception:
+        logger.debug("持久化 embedding 状态失败", exc_info=True)
+
+
+def load_persisted_embedding_status(stale_ms: int = 60000) -> dict | None:
+    """读取 worker 持久化的 embedding 状态。超过 stale_ms 视为过期。"""
+    try:
+        path = _status_path()
+        if not path.exists():
+            return None
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
+        ts = payload.get("timestamp", 0)
+        if int(time.time() * 1000) - ts > stale_ms:
+            return None
+        return payload
+    except Exception:
+        return None
 
 
 class _ProgressTracker:
@@ -106,6 +166,7 @@ class EmbeddingClient:
 
         if not self._enabled:
             logger.info("向量嵌入已禁用")
+            _persist_status(self)
             return
 
         if config.provider == "local":
@@ -113,6 +174,7 @@ class EmbeddingClient:
             if background and not offline:
                 # 后台下载：不阻塞启动，Web 先起，进度可经 get_load_status() 轮询
                 self._load_status["state"] = "downloading"
+                _persist_status(self)
                 threading.Thread(
                     target=self._init_local, args=(config, True), daemon=True
                 ).start()
@@ -168,9 +230,10 @@ class EmbeddingClient:
 
             offline = bool(getattr(config, "offline", False))
             is_local = self._is_local_model_path(config.model)
-            self._load_status["state"] = "loading"
 
             device = self._get_optimal_device()
+            self._load_status["state"] = "loading"
+            _persist_status(self)
 
             if offline or is_local:
                 # 纯离线 / 本地路径：直接从本地加载模型，不联网
@@ -184,6 +247,7 @@ class EmbeddingClient:
                 logger.info("正在下载向量模型: %s（带进度）", config.model)
                 self._load_status["state"] = "downloading"
                 self._load_status["message"] = "准备下载模型文件…"
+                _persist_status(self)
                 tracker = _ProgressTracker(self._load_status)
                 tqdm_cls = _make_tqdm_class(tracker)
                 local_path = snapshot_download(
@@ -194,6 +258,7 @@ class EmbeddingClient:
                 )  # type: ignore[call-overload]
                 self._load_status["state"] = "loading"
                 self._load_status["message"] = "模型文件下载完成，正在加载…"
+                _persist_status(self)
                 self._model = SentenceTransformer(local_path, device=device)
             else:
                 # 同步直载：保持 local_files_only=offline 以兼容既有行为/测试
@@ -212,6 +277,7 @@ class EmbeddingClient:
             self._provider = "local"
             self._load_status["state"] = "ready"
             self._load_status["progress"] = 100.0
+            _persist_status(self)
 
             dim = self._model.get_embedding_dimension()
             param_dtype = next(self._model.parameters()).dtype
@@ -224,6 +290,7 @@ class EmbeddingClient:
             self._model = None
             self._load_status["state"] = "error"
             self._load_status["message"] = str(e)
+            _persist_status(self)
             logger.error("加载本地向量模型失败: %s", e)
 
     def _init_api(self, config: EmbeddingConfig) -> None:
@@ -234,6 +301,7 @@ class EmbeddingClient:
             self._enabled = False
             self._load_status["state"] = "error"
             self._load_status["message"] = "未安装 openai 库"
+            _persist_status(self)
             return
 
         api_key = os.environ.get("EMBEDDING_API_KEY") or config.api_key
@@ -244,6 +312,7 @@ class EmbeddingClient:
             self._enabled = False
             self._load_status["state"] = "error"
             self._load_status["message"] = "API 密钥未设置"
+            _persist_status(self)
             return
 
         self._api_client = OpenAI(
@@ -254,15 +323,18 @@ class EmbeddingClient:
         self._provider = "api"
         self._load_status["state"] = "ready"
         self._load_status["progress"] = 100.0
+        _persist_status(self)
         logger.info("向量嵌入 API 已初始化: %s @ %s", config.model, config.base_url)
 
     # ------------------------------------------------------------------
     # 状态查询
     # ------------------------------------------------------------------
     def get_load_status(self) -> dict:
-        """返回当前加载状态（可被 Web 轮询）。"""
+        """返回当前加载状态（可被 Web 轮询），并同步持久化到共享文件。"""
         with self._lock:
-            return dict(self._load_status)
+            status = dict(self._load_status)
+        _persist_status(self, status)
+        return status
 
     @property
     def enabled(self) -> bool:
@@ -284,6 +356,7 @@ class EmbeddingClient:
             if not self._enabled:
                 self._model = None
                 self._load_status = _init_load_status("disabled")
+                _persist_status(self, self._load_status)
                 logger.info("向量嵌入已在重新加载后禁用")
                 return
 
@@ -304,10 +377,12 @@ class EmbeddingClient:
                         self._enabled = True
                         self._load_status = _init_load_status("ready")
                         self._load_status["progress"] = 100.0
+                        _persist_status(self, self._load_status)
                         logger.warning("[reload] 本地模型重载失败，已回退到旧模型继续服务")
                 else:
                     # 在线：后台重新下载（带进度）
                     self._load_status = _init_load_status("downloading")
+                    _persist_status(self, self._load_status)
                     threading.Thread(
                         target=self._init_local, args=(self.config, True), daemon=True
                     ).start()
@@ -320,6 +395,7 @@ class EmbeddingClient:
                     self._enabled = True
                     self._load_status = _init_load_status("ready")
                     self._load_status["progress"] = 100.0
+                    _persist_status(self, self._load_status)
                     logger.warning("[reload] API 模型重载失败，已回退到旧模型继续服务")
 
         # 热重载后若模型变为启用（如 disabled->enabled），确保心跳保活随之启动

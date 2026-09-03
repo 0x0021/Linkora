@@ -29,7 +29,8 @@ class PrimaryMixin(EngineMixinBase):
         "添加", "开一下", "弄一下", "怎么", "如何", "需要", "我要", "给我",
     )
 
-    def __init__(self, config_path: str = "config.yaml"):
+    def __init__(self, config_path: str = "config.yaml", mode: str = "both"):
+        self.mode = mode
         self.config_path = config_path
         self.platforms: dict[str, PlatformContext] = {}
         # 提前初始化当前用户信息字段，避免 _init_user 内调用

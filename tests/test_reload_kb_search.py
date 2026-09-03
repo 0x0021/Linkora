@@ -57,8 +57,10 @@ def test_rebuild_kb_search_tool_enables():
     assert "kb_search" in app.tool_router._tools
     new = app.tool_router._tools["kb_search"]
     assert new is not old  # 确实重建了
-    # 新实例持有最新配置（enabled=True → 已加载 embedding_client）
-    assert new.embedding_client is not None
+    # 新实例持有最新配置（enabled=True）；构造期懒加载故 embedding_client 为 None，
+    # 首次检索时才按需加载（避免常驻 ~1GB 显存），与 web 模式不预加载一致。
+    assert new.embedding_client is None
+    assert getattr(new.embedding_config, "enabled", False) is True
 
 
 def test_rebuild_kb_search_tool_disables():

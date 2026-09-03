@@ -65,6 +65,13 @@ class SetupMixin(EngineMixinBase):
         except sqlite3.Error as e:
             logger.error("[RAG] 热重载重建 kb_search 失败: %s", e)
     def _setup_embedding(self) -> None:
+        # web 模式不预加载本地向量模型：模型由 worker 进程常驻加载，
+        # web 仅作管理/状态展示 + 按需 KB 操作（web/routers 的 _get_embedding_client
+        # 会在用户触发重向量化等操作时独立加载），避免 web 进程无谓占用 ~1GB MPS 显存。
+        if getattr(self, "mode", "both") == "web":
+            self.embedding_client = None
+            logger.info("嵌入: 已跳过预加载（web 模式，由 worker 进程负责常驻加载）")
+            return
         # background=True：本地模型在后台线程下载/加载，Web 服务先起，下载进度可经
         # /api/embedding-status 轮询；模型就绪前 embed() 优雅降级返回 []。
         self.embedding_client = EmbeddingClient(self.config.embedding, background=True)

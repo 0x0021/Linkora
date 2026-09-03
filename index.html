@@ -33,7 +33,7 @@
         </div>
 
         <h1>Linkora 文档站点</h1>
-        <p>自动生成文档站点，最后更新：2026-09-03 09:25:26</p>
+        <p>自动生成文档站点，最后更新：2026-09-03 09:40:31</p>
 
         <div class="stats" id="overview">
             <h2>项目统计</h2>
@@ -43,7 +43,7 @@
                     <div class="stat-label">API 类</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">437</div>
+                    <div class="stat-value">440</div>
                     <div class="stat-label">API 函数</div>
                 </div>
                 <div class="stat-card">
@@ -67,6 +67,24 @@
                     <th>描述</th>
                 </tr>
                 <tr>
+                    <td><code>DiscoveryMixin</code></td>
+                    <td><code>src.poller_core_discovery</code></td>
+                    <td>4</td>
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>DedupMixin</code></td>
+                    <td><code>src.poller_core_dedup</code></td>
+                    <td>7</td>
+                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
+                </tr>
+                <tr>
+                    <td><code>AccessControlMixin</code></td>
+                    <td><code>src.poller_core_access</code></td>
+                    <td>16</td>
+                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
+                </tr>
+                <tr>
                     <td><code>_PathOverrideState</code></td>
                     <td><code>src.paths</code></td>
                     <td>6</td>
@@ -76,95 +94,25 @@
 thread...</td>
                 </tr>
                 <tr>
-                    <td><code>Message</code></td>
-                    <td><code>src.models</code></td>
+                    <td><code>Ansi</code></td>
+                    <td><code>src.log_formatter</code></td>
                     <td>0</td>
                     <td>...</td>
                 </tr>
                 <tr>
-                    <td><code>LinkoraComponentBase</code></td>
-                    <td><code>src.component_base</code></td>
-                    <td>0</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>_AuditState</code></td>
-                    <td><code>src.audit</code></td>
-                    <td>3</td>
-                    <td>审计日志状态（替代 global _audit_path）。...</td>
-                </tr>
-                <tr>
-                    <td><code>_SyncCancelled</code></td>
-                    <td><code>src.poller_core_history</code></td>
-                    <td>0</td>
-                    <td>由 cancel_check 在同步过程中抛出，用于优雅中止历史同步（前端「取消」按钮）。...</td>
-                </tr>
-                <tr>
-                    <td><code>HistorySyncMixin</code></td>
-                    <td><code>src.poller_core_history</code></td>
-                    <td>5</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>DiscoveryMixin</code></td>
-                    <td><code>src.poller_core_discovery</code></td>
+                    <td><code>FancyConsoleFormatter</code></td>
+                    <td><code>src.log_formatter</code></td>
                     <td>4</td>
-                    <td>...</td>
+                    <td>增强控制台日志格式化器。
+
+- 单行：``HH:MM:SS 🟢 INFO    module_name          : 消息内容``
+- 多行：自动在后续...</td>
                 </tr>
                 <tr>
-                    <td><code>RuleResult</code></td>
-                    <td><code>src.rule_engine</code></td>
-                    <td>0</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>KeywordRule</code></td>
-                    <td><code>src.rule_engine</code></td>
+                    <td><code>StartupBanner</code></td>
+                    <td><code>src.log_formatter</code></td>
                     <td>1</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>RuleEngine</code></td>
-                    <td><code>src.rule_engine</code></td>
-                    <td>11</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>ParseMixin</code></td>
-                    <td><code>src.poller_core_parse</code></td>
-                    <td>13</td>
-                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
-                </tr>
-                <tr>
-                    <td><code>DocSyncScheduler</code></td>
-                    <td><code>src.doc_sync_scheduler</code></td>
-                    <td>11</td>
-                    <td>钉钉文档定时自动同步器。
-
-- 定期轮询已标记为"自动同步"的钉钉文档
-- 检测内容变化（通过 last_modified 或内容哈希）
-- 内容变化时自动重新...</td>
-                </tr>
-                <tr>
-                    <td><code>ModuleHotReloader</code></td>
-                    <td><code>src.dev_hot_reload</code></td>
-                    <td>11</td>
-                    <td>开发态模块热加载器。
-
-用法：
-    reloader = ModuleHotReloader(project_root="/path/to/linkora"...</td>
-                </tr>
-                <tr>
-                    <td><code>DecisionRecord</code></td>
-                    <td><code>src.decision_tracker</code></td>
-                    <td>0</td>
-                    <td>单条消息处理决策。...</td>
-                </tr>
-                <tr>
-                    <td><code>DecisionTracker</code></td>
-                    <td><code>src.decision_tracker</code></td>
-                    <td>7</td>
-                    <td>有界、进程内的决策记录器（支持多平台隔离）。...</td>
+                    <td>启动汇总横幅：在启动完成后输出一行汇总信息。...</td>
                 </tr>
                 <tr>
                     <td><code>LinkoraError</code></td>
@@ -196,6 +144,57 @@ thread...</td>
                     <td>0</td>
                     <td>数据库忙（SQLite Busy Timeout）。...</td>
                 </tr>
+                <tr>
+                    <td><code>DBSchemaError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>数据库 schema 不匹配（缺少列、表不存在等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 调用失败的基类。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMNetworkError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>网络相关 LLM 错误（连接失败、超时等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMRateLimitError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 服务限流（429 / Rate Limit Exceeded）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMAuthError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 认证失败（API Key 无效、过期等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMContentError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 内容安全拦截（敏感词、违规内容等）。...</td>
+                </tr>
+                <tr>
+                    <td><code>LLMTimeoutError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>LLM 调用超时。...</td>
+                </tr>
+                <tr>
+                    <td><code>IMAdapterError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>0</td>
+                    <td>IM 适配器错误的基类（IM 族根）。
+
+本模块只持有各族「族根」与根类 ``LinkoraError``；IM 族的具体子类（权限/限频/
+超时/资源不存在/...</td>
+                </tr>
             </table>
         </div>
 
@@ -207,84 +206,84 @@ thread...</td>
                     <th>用例数</th>
                 </tr>
                 <tr>
-                    <td><code>test_image_path.py</code></td>
+                    <td><code>test_poller_feishu_card_image.py</code></td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td><code>test_rag_metrics.py</code></td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td><code>test_memory_inject.py</code></td>
                     <td>9</td>
                 </tr>
                 <tr>
-                    <td><code>test_market_rankings_concurrency.py</code></td>
-                    <td>1</td>
+                    <td><code>test_semantic_routing.py</code></td>
+                    <td>22</td>
                 </tr>
                 <tr>
-                    <td><code>test_llm_client_no_fallback.py</code></td>
-                    <td>2</td>
+                    <td><code>test_metrics.py</code></td>
+                    <td>16</td>
                 </tr>
                 <tr>
-                    <td><code>test_timeout_guard.py</code></td>
-                    <td>7</td>
+                    <td><code>test_classifier.py</code></td>
+                    <td>10</td>
                 </tr>
                 <tr>
-                    <td><code>test_utils_edge.py</code></td>
+                    <td><code>test_rag_state_reset.py</code></td>
                     <td>3</td>
                 </tr>
                 <tr>
-                    <td><code>test_vector_index_atomic_save.py</code></td>
-                    <td>1</td>
+                    <td><code>test_shared_state.py</code></td>
+                    <td>2</td>
                 </tr>
                 <tr>
-                    <td><code>test_web_auth.py</code></td>
-                    <td>22</td>
+                    <td><code>test_json_parse_exception_handling.py</code></td>
+                    <td>8</td>
+                </tr>
+                <tr>
+                    <td><code>test_p2_dws_force_no_dry_run.py</code></td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><code>test_skill_loader.py</code></td>
+                    <td>41</td>
+                </tr>
+                <tr>
+                    <td><code>test_dependencies.py</code></td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td><code>test_web_routers_departments.py</code></td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td><code>test_skill_loader_supplement.py</code></td>
+                    <td>17</td>
+                </tr>
+                <tr>
+                    <td><code>test_e2e_kb_pipeline.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_dws_oa_approval.py</code></td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td><code>test_platform_whitelist.py</code></td>
+                    <td>3</td>
+                </tr>
+                <tr>
+                    <td><code>test_ssrf_safe_get.py</code></td>
+                    <td>3</td>
                 </tr>
                 <tr>
                     <td><code>test_wecom_download_size_limit.py</code></td>
                     <td>3</td>
                 </tr>
                 <tr>
-                    <td><code>test_tools_registry.py</code></td>
-                    <td>5</td>
-                </tr>
-                <tr>
-                    <td><code>test_rate_limit_lock.py</code></td>
-                    <td>4</td>
-                </tr>
-                <tr>
-                    <td><code>test_rag_inject.py</code></td>
-                    <td>17</td>
-                </tr>
-                <tr>
-                    <td><code>test_llm_rate_limit_degradation.py</code></td>
-                    <td>2</td>
-                </tr>
-                <tr>
-                    <td><code>test_coverage_edge_supplement_20260713_235450_895.py</code></td>
-                    <td>2</td>
-                </tr>
-                <tr>
-                    <td><code>test_poller.py</code></td>
-                    <td>61</td>
-                </tr>
-                <tr>
-                    <td><code>test_tools_chat.py</code></td>
-                    <td>25</td>
-                </tr>
-                <tr>
-                    <td><code>test_minutes_truncate.py</code></td>
-                    <td>4</td>
-                </tr>
-                <tr>
-                    <td><code>test_exception_hierarchy.py</code></td>
-                    <td>7</td>
-                </tr>
-                <tr>
-                    <td><code>test_db_backup.py</code></td>
-                    <td>36</td>
-                </tr>
-                <tr>
-                    <td><code>test_message_image_backfill.py</code></td>
-                    <td>4</td>
-                </tr>
-                <tr>
-                    <td><code>test_skillhub_install_security.py</code></td>
-                    <td>5</td>
+                    <td><code>test_document_clean_llm.py</code></td>
+                    <td>8</td>
                 </tr>
             </table>
         </div>

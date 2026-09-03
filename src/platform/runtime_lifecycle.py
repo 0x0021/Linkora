@@ -199,25 +199,28 @@ class LifecycleMixin(EngineMixinBase):
             # 如果 embedding 配置变更（enabled/provider/offline/model 任一变化），
             # 重新初始化模型并重建 KBSearchTool。offline 开关变更也在此触发重载，
             # 无需重启即可生效。
-            old_emb = self.embedding_client.config
-            old_emb_enabled = self.embedding_client.enabled
-            old_emb_sig = (
-                old_emb_enabled,
-                getattr(old_emb, "provider", ""),
-                bool(getattr(old_emb, "offline", False)),
-                getattr(old_emb, "model", ""),
-            )
-            self.embedding_client.config = self.config.embedding
-            new_emb = self.config.embedding
-            new_emb_sig = (
-                new_emb.enabled,
-                getattr(new_emb, "provider", ""),
-                bool(getattr(new_emb, "offline", False)),
-                getattr(new_emb, "model", ""),
-            )
-            if old_emb_sig != new_emb_sig:
-                self.embedding_client.reload()
-                self._rebuild_kb_search_tool()
+            # web 模式下 embedding_client 为 None（模型由 worker 常驻），跳过本段——
+            # 配置写入 yaml 后由 worker 自身热重载生效。
+            if self.embedding_client is not None:
+                old_emb = self.embedding_client.config
+                old_emb_enabled = self.embedding_client.enabled
+                old_emb_sig = (
+                    old_emb_enabled,
+                    getattr(old_emb, "provider", ""),
+                    bool(getattr(old_emb, "offline", False)),
+                    getattr(old_emb, "model", ""),
+                )
+                self.embedding_client.config = self.config.embedding
+                new_emb = self.config.embedding
+                new_emb_sig = (
+                    new_emb.enabled,
+                    getattr(new_emb, "provider", ""),
+                    bool(getattr(new_emb, "offline", False)),
+                    getattr(new_emb, "model", ""),
+                )
+                if old_emb_sig != new_emb_sig:
+                    self.embedding_client.reload()
+                    self._rebuild_kb_search_tool()
 
             logger.info("配置热重载完成")
         except Exception as e:

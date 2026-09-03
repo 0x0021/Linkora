@@ -116,30 +116,40 @@ class KBSearchTool(BaseTool):
         self.intent_keywords = self._build_intent_keywords()
         logger.info("[RAG] 动态意图关键词已提取: %s", list(self.intent_keywords)[:10])
 
-        # 未注入共享客户端且 embedding 启用时，才自行创建（兼容独立/测试/飞书导入等未走注入的路径）
+        # 未注入共享客户端时，不在构造期同步加载模型：避免 web 等不需要常驻
+        # 模型的进程无谓占用 ~1GB MPS 显存（web 模式本就不加载，详见
+        # runtime_setup._setup_embedding）。改为首次实际检索时按需懒加载
+        # （见 _ensure_embedding），记忆工具 / doc_sync / 语义路由仍复用共享实例。
         if self.embedding_client is None:
-            enabled = False
+            logger.debug("[RAG] 未注入共享 EmbeddingClient，将在首次检索时按需懒加载")
+
+    def _ensure_embedding(self) -> None:
+        """首次检索前按需构造 EmbeddingClient（同步加载）。
+
+        仅当未注入共享客户端且 embedding 配置启用时触发；web 等不常驻模型的进程
+        在构造期不会加载，真正用到时才加载，避免无谓的常驻显存占用。
+        """
+        if self.embedding_client is not None:
+            return
+        enabled = False
+        if isinstance(self.embedding_config, dict):
+            enabled = self.embedding_config.get("enabled", False)
+        else:
+            enabled = getattr(self.embedding_config, "enabled", False)
+        if not enabled:
+            return
+        try:
+            from src.memory.embedding import EmbeddingClient
+
             if isinstance(self.embedding_config, dict):
-                enabled = self.embedding_config.get("enabled", False)
+                config_obj = EmbeddingConfig(**self.embedding_config)
             else:
-                enabled = getattr(self.embedding_config, "enabled", False)
-
-            if enabled:
-                try:
-                    from src.memory.embedding import EmbeddingClient
-
-                    if isinstance(self.embedding_config, dict):
-                        config_obj = EmbeddingConfig(**self.embedding_config)
-                    else:
-                        config_obj = self.embedding_config
-
-                    self.embedding_client = EmbeddingClient(config_obj)
-                    logger.info("[RAG] Embedding 客户端已加载（独立实例）")
-                except Exception as e:
-                    logger.warning("[RAG] Embedding 客户端加载失败: %s", e)
-                    self.embedding_client = None
-            else:
-                logger.info("[RAG] Embedding 未启用，将使用全文检索（兜底方案）")
+                config_obj = self.embedding_config
+            self.embedding_client = EmbeddingClient(config_obj)
+            logger.info("[RAG] Embedding 客户端已加载（懒加载）")
+        except Exception as e:
+            logger.warning("[RAG] Embedding 客户端懒加载失败: %s", e)
+            self.embedding_client = None
 
     def _build_intent_keywords(self) -> list[str]:
         """
@@ -211,6 +221,8 @@ class KBSearchTool(BaseTool):
         try:
             # 方法 1：向量检索（如果 embedding 可用）
             embedding_results: list[dict] = []
+            # web 等未注入共享客户端时，首次检索按需懒加载模型
+            self._ensure_embedding()
             if self.embedding_client:
                 if query_embedding is None:
                     query_embedding = self.embedding_client.embed(query)

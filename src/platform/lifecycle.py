@@ -471,7 +471,7 @@ def main(root: str | None = None):
         print(f"{'='*60}\n")
         return
 
-    app = LinkoraEngine(config_path)
+    app = LinkoraEngine(config_path, mode=mode)
 
     # 启动 CLI 版本自检 + 后台异步更新（lark-cli / dws / 企微 CLI）。
     # 在 daemon 线程执行，不阻塞主流程；任何异常仅记日志，不影响启动。

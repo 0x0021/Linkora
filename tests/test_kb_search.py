@@ -136,7 +136,11 @@ class TestEmbeddingSearch:
         assert tool.embedding_client is None
 
     def test_embedding_config_as_object_enabled(self):
-        """embedding_config 为非字典对象（如 dataclass），enabled 属性为 True。"""
+        """embedding_config 为非字典对象（如 dataclass），enabled 属性为 True。
+
+        懒加载语义：构造期不加载模型（避免 web 等进程无谓常驻 ~1GB 显存），
+        首次检索时才按需构造 EmbeddingClient。
+        """
         store = MagicMock()
         store.conn.cursor.return_value.fetchall.return_value = []
         store._kb_repo.search_kb.return_value = [
@@ -151,7 +155,13 @@ class TestEmbeddingSearch:
             with patch("src.config.EmbeddingConfig") as MockCfg:
                 MockCfg.return_value = cfg
                 tool = KBSearchTool(store, cfg)
-        assert tool.embedding_client is not None
+            # 构造期不加载
+            MockEmb.assert_not_called()
+            assert tool.embedding_client is None
+            # 首次检索触发懒加载
+            tool.execute({"query": "测试"})
+            MockEmb.assert_called()
+            assert tool.embedding_client is not None
 
     def test_check_health_non_dict_config(self):
         """check_health 对非字典 config 的正确处理。"""
@@ -165,13 +175,20 @@ class TestEmbeddingSearch:
         assert h["embedding_enabled"] is True
 
     def test_embedding_client_init_failure(self):
-        """embedding 客户端初始化失败时降级。"""
+        """embedding 客户端首次检索懒加载失败时降级（不崩溃，退回全文检索）。"""
         store = MagicMock()
         store.conn.cursor.return_value.fetchall.return_value = []
+        store._kb_repo.search_kb_by_keyword.return_value = [
+            {"content": "F", "title": "T", "doc_type": "", "score": 0, "chunk_id": "c"},
+        ]
         with patch("src.memory.embedding.EmbeddingClient", side_effect=RuntimeError("no GPU")):
             tool = KBSearchTool(store, {"enabled": True})
-        assert tool.embedding_client is None
+            assert tool.embedding_client is None  # 构造期不加载
+            r = tool.execute({"query": "测试"})  # 懒加载失败 → 全文兜底
+        assert tool.embedding_client is None  # 失败后仍 None
         assert tool.intent_keywords is not None  # 仍正常创建
+        # 降级路径：全文检索返回结果或明确错误，绝不抛异常
+        assert r.get("success") or r.get("error")
 
     def test_search_by_embedding_exception(self):
         """向量检索内部异常时返回空列表。"""

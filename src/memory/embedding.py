@@ -74,8 +74,12 @@ def _persist_status(client: "EmbeddingClient | None", status: dict | None = None
         logger.debug("持久化 embedding 状态失败", exc_info=True)
 
 
-def load_persisted_embedding_status(stale_ms: int = 60000) -> dict | None:
-    """读取 worker 持久化的 embedding 状态。超过 stale_ms 视为过期。"""
+def load_persisted_embedding_status(stale_ms: int = 30000) -> dict | None:
+    """读取 worker 持久化的 embedding 状态。
+
+    普通状态（loading/downloading/pending/error）超过 stale_ms 视为过期；
+    ready 状态模型已稳定，放宽到 10 分钟，避免 worker 无查询时时间戳不刷新导致 web 误判。
+    """
     try:
         path = _status_path()
         if not path.exists():
@@ -83,7 +87,10 @@ def load_persisted_embedding_status(stale_ms: int = 60000) -> dict | None:
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
         ts = payload.get("timestamp", 0)
-        if int(time.time() * 1000) - ts > stale_ms:
+        state = payload.get("state", "unknown")
+        # ready 状态长期有效；其余状态按 stale_ms 判定，保证错误/禁用能及时反映
+        effective_stale_ms = 600000 if state == "ready" else stale_ms
+        if int(time.time() * 1000) - ts > effective_stale_ms:
             return None
         return payload
     except Exception:

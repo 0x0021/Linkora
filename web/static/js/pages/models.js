@@ -41,6 +41,7 @@ function badgeClass(state) {
     const map = {
         ready: 'success', loaded: 'success', idle: 'warning',
         pending: 'warning', downloading: 'warning', loading: 'warning',
+        delegated: 'success',
         disabled: 'muted', error: 'error', unknown: 'muted', not_loaded: 'muted',
     };
     return map[state] || 'muted';
@@ -50,6 +51,7 @@ function badgeText(state) {
     const map = {
         ready: '已就绪', loaded: '已加载', idle: '待命中',
         pending: '等待中', downloading: '下载中', loading: '加载中',
+        delegated: '运行中(worker)',
         disabled: '已禁用', error: '错误', unknown: '未知', not_loaded: '未加载',
     };
     return map[state] || state || '-';

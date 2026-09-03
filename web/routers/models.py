@@ -50,30 +50,68 @@ def _get_rerank_cfg():
 
 
 def _collect_embedding() -> dict[str, Any]:
-    """嵌入模型状态（复用 /api/embedding-status 的取数逻辑）。"""
+    """嵌入模型状态（复用 /api/embedding-status 的取数逻辑）。
+
+    web 模式不再预加载 embedding 模型，因此当前进程可能不持有 embedding_client。
+    此时优先读取 worker 进程持久化到 data/embedding_status.json 的共享状态；
+    共享状态不存在/过期时，按配置展示为 delegated（由 worker 常驻加载）。
+    """
     try:
+        from src.memory.embedding import load_persisted_embedding_status
+
         app_instance = get_app_instance()
         client = getattr(app_instance, "embedding_client", None) if app_instance else None
-        if client is None:
+        if client is not None:
+            status = client.get_load_status()
+            status["available"] = True
+            status["enabled"] = client.enabled
+            status["model"] = getattr(client.config, "model", None)
+            status["provider"] = getattr(client.config, "provider", None)
+            status["offline"] = bool(getattr(client.config, "offline", False))
+            return status
+
+        # web 模式不持有客户端：读 worker 持久化的共享状态
+        persisted = load_persisted_embedding_status(stale_ms=30000)
+        if persisted is not None:
+            state = persisted.get("state", "unknown")
+            available = state in ("ready", "loading", "downloading", "pending")
             return {
-                "available": False,
-                "enabled": False,
-                "model": None,
-                "provider": None,
-                "offline": None,
-                "state": "unknown",
-                "progress": 0.0,
-                "downloaded": 0,
-                "total": 0,
-                "message": "嵌入客户端未初始化",
+                "available": available,
+                "enabled": persisted.get("enabled", False),
+                "model": persisted.get("model"),
+                "provider": persisted.get("provider"),
+                "offline": persisted.get("offline"),
+                "state": state,
+                "progress": persisted.get("progress", 0.0),
+                "downloaded": persisted.get("downloaded", 0),
+                "total": persisted.get("total", 0),
+                "message": persisted.get("message", "") or "由 worker 进程常驻加载",
             }
-        status = client.get_load_status()
-        status["available"] = True
-        status["enabled"] = client.enabled
-        status["model"] = getattr(client.config, "model", None)
-        status["provider"] = getattr(client.config, "provider", None)
-        status["offline"] = bool(getattr(client.config, "offline", False))
-        return status
+
+        # 无共享状态时，按配置展示为 delegated（委托给 worker）
+        emb = None
+        try:
+            from src.config import load_config
+            from src.paths import get_config_path
+
+            cfg = load_config(str(get_config_path()))
+            emb = getattr(cfg, "embedding", None)
+        except Exception:  # noqa: BLE001
+            pass
+
+        enabled = bool(getattr(emb, "enabled", False)) if emb is not None else False
+        return {
+            "available": enabled,
+            "enabled": enabled,
+            "model": getattr(emb, "model", None) if emb is not None else None,
+            "provider": getattr(emb, "provider", None) if emb is not None else None,
+            "offline": bool(getattr(emb, "offline", False)) if emb is not None else None,
+            "state": "delegated",
+            "progress": 0.0,
+            "downloaded": 0,
+            "total": 0,
+            "message": "嵌入模型由 worker 进程常驻加载，web 进程不持有",
+        }
     except Exception as e:  # noqa: BLE001
         logger.debug("收集 embedding 状态失败: %s", e)
         return {

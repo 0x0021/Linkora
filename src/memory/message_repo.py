@@ -22,6 +22,68 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# ---- 摘要取材的「元消息」噪声过滤（P0）------------------------------------
+# 以下三类消息**不是真实对话内容**，而是本系统自己写回 messages 表的中间产物：
+#   1) role='system'：系统落库的摘要/提示消息；
+#   2) content 以「【对话摘要】」开头：历史版本把生成的摘要回写进会话正文；
+#   3) content 以「📋 …对话摘要…」开头：主动触达 digest 汇总推送后，
+#      推送副本被当作普通消息回灌到主人的会话里（内含**其他所有会话**的人和事）。
+# 若把它们当对话正文再次喂给 LLM，摘要会把完全不相关的会话内容复述进去，
+# 且每轮都会把上一轮的污染再放大一次（已在 dingtalk 主库观测到 379 条未归档噪声，
+# 横跨 344 个会话）。故凡是为摘要取材的 SQL，都必须带上本谓词。
+# 注意：谓词内列名不带表别名，以便同时用于无别名查询与 m.* 别名子查询。
+_SUMMARY_NOISE_SQL = (
+    " AND role != 'system'"
+    " AND content NOT LIKE '【对话摘要%'"
+    " AND content NOT LIKE '📋 %对话摘要%'"
+)
+
+# 跨时区比较的统一基准（P0）：messages.timestamp 与 conversations.last_summary_at
+# 历史上**不同基准不同格式**，直接字符串比较会静默失效，是「摘要取值范围不对」的元凶：
+#   - ``messages.timestamp``：应用层写入 —— 本地时间、ISO 'T' 分隔
+#     （'2026-09-04T14:20:12'，也可能带 '+08:00' 或微秒）；
+#   - ``conversations.last_summary_at``：SQLite ``datetime('now')`` 写入 —— **UTC**、
+#     空格分隔（'2026-09-04 06:20:17'）；另有部分历史行是应用层写入的本地 ISO。
+# 直接比较时 'T'(0x54) > ' '(0x20) 恒成立 → 时间部分失效、范围退化成「当天 0 点起」，
+# 再叠加 8 小时时区差 → 每次摘要都会把上次摘要前若干小时的旧内容重复纳入。
+#
+# 统一做法：**两侧都归算到 UTC** 再比较。
+#   - timestamp 侧：SQLite 把 naive 串视为本地时间，``datetime(x,'utc')`` 可正确转换；
+#     带时区后缀的串按其偏移原样归算，两种形态都能对齐。
+#   - last_summary_at 侧：naive 语义取决于格式 —— 空格分隔者是 UTC（须显式补 'Z'，
+#     否则 SQLite 会误当本地时间再减 8 小时），'T' 分隔者是本地时间。
+_TIMESTAMP_UTC_SQL = "datetime(timestamp, 'utc')"
+_TIMESTAMP_UTC_ALIAS_SQL = "datetime(m.timestamp, 'utc')"
+_LAST_SUMMARY_AT_UTC_SQL = (
+    "(CASE WHEN c.last_summary_at LIKE '%T%' "
+    "THEN datetime(c.last_summary_at, 'utc') "
+    "ELSE datetime(c.last_summary_at || 'Z', 'utc') END)"
+)
+
+
+def _normalize_since_to_utc(since: object) -> str:
+    """把 conversations.last_summary_at 归一成 UTC 的 ``'YYYY-MM-DD HH:MM:SS'``。
+
+    与 SQL 侧 ``datetime(timestamp, 'utc')`` 的输出同基准同格式，使比较等价（详见
+    模块顶部「跨时区比较的统一基准」注释）。入参为空或无法解析时返回空串（调用方
+    据此回退为「最近 N 条」）。
+
+    识别两种存储形态：
+      - 含 ``'T'``：应用层写入的本地 ISO（与 messages.timestamp 同源），naive 时按本地解释；
+      - 空格分隔：SQLite ``datetime('now')`` 产物，语义就是 UTC。
+    """
+    if since is None or since == "":
+        return ""
+    text = str(since).replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except (ValueError, TypeError):
+        logger.debug("summary: 无法解析 last_summary_at=%r，回退为无下界", since)
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.astimezone() if "T" in text else dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
 
 def _parse_iso_ts(value: object) -> "datetime | None":
     """把 SQLite 存的时间字符串解析为带时区的 datetime（UTC）；无法解析返回 None。"""
@@ -38,6 +100,25 @@ def _parse_iso_ts(value: object) -> "datetime | None":
         return dt
     except (ValueError, TypeError):
         return None
+
+
+def _parse_local_iso_ts(value: object) -> "datetime | None":
+    """把 messages.timestamp 解析为带时区的 datetime：**naive 串按本地时间解释**。
+
+    messages.timestamp 由应用层写入（本地时间，可能带 tz 后缀或微秒），而
+    ``_parse_iso_ts`` 把 naive 串按 UTC 解释——那对 ``last_summary_at``（SQLite
+    ``datetime('now')`` 产物、语义即 UTC）是对的，用在这里会整体偏 8 小时，
+    令「静默触发」等基于最后消息时间的判定失真（该摘的迟迟不摘）。
+    """
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.astimezone()  # naive → 按本地时区解释，再归一到 UTC 参与比较
+    return dt.astimezone(timezone.utc)
 
 
 class MessageRepo:
@@ -489,11 +570,15 @@ class MessageRepo:
 
         只取 is_archived=0 的消息，避免把已压缩的历史反复重喂给 LLM，
         既减少 token 消耗，也让每次摘要只处理「上次摘要以来的增量」。
+
+        同时排除摘要元消息（见 ``_SUMMARY_NOISE_SQL``）：本类是定时摘要链路的取材入口，
+        若不排除，历史摘要与 digest 回灌会把其他会话的内容混进本会话摘要。
         """
         cur = self._cc().cursor()
         cur.execute(
             "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 "
-            "ORDER BY timestamp DESC LIMIT ?",
+            + _SUMMARY_NOISE_SQL
+            + " ORDER BY timestamp DESC LIMIT ?",
             (str(chat_id), limit),
         )
         rows = list(cur.fetchall())
@@ -701,7 +786,13 @@ class MessageRepo:
             """SELECT c.chat_id, c.chat_name,
                       (SELECT COUNT(*) FROM messages m
                          WHERE m.chat_id = c.chat_id AND m.is_archived = 0
-                           AND (c.last_summary_at IS NULL OR m.timestamp >= c.last_summary_at)) AS unsummarized,
+                           AND (c.last_summary_at IS NULL OR """
+                      + _TIMESTAMP_UTC_ALIAS_SQL
+                      + " >= "
+                      + _LAST_SUMMARY_AT_UTC_SQL
+                      + ")"
+                      + _SUMMARY_NOISE_SQL
+                      + """) AS unsummarized,
                       (SELECT MAX(timestamp) FROM messages m WHERE m.chat_id = c.chat_id) AS last_msg_ts,
                       c.last_summary_at AS last_summary_at
                FROM conversations c
@@ -717,7 +808,9 @@ class MessageRepo:
             unsummarized = int(r["unsummarized"] or 0)
             if unsummarized < min_messages:
                 continue
-            last_msg_ts = _parse_iso_ts(r["last_msg_ts"])
+            # timestamp 是应用层写入的本地时间，须按本地解释（用 _parse_iso_ts 会偏 8 小时）
+            last_msg_ts = _parse_local_iso_ts(r["last_msg_ts"])
+            # last_summary_at 由 SQLite datetime('now') 写入，语义即 UTC
             last_summary_at = _parse_iso_ts(r["last_summary_at"])
             quiet_ok = last_msg_ts is not None and (now - last_msg_ts).total_seconds() >= quiet_minutes * 60
             volume_ok = unsummarized >= max_messages_per_chat
@@ -736,27 +829,37 @@ class MessageRepo:
 
         以 conversations.last_summary_at 为起点收集增量；无起点时回退为最近 N 条。
         做到「只摘要真正新增的内容」，取代原固定时间窗盲取。
+
+        排除摘要元消息（见 ``_SUMMARY_NOISE_SQL``），否则上轮摘要/digest 回灌会被
+        当成对话正文，把其他会话的人和事复述进本会话摘要。
         """
         cur = self._cc().cursor()
         cur.execute("SELECT last_summary_at FROM conversations WHERE chat_id = ?", (str(chat_id),))
         row = cur.fetchone()
-        since = row["last_summary_at"] if row else None
+        # last_summary_at 与 messages.timestamp 基准/格式均不同，须归算到 UTC 再比较
+        since = _normalize_since_to_utc(row["last_summary_at"]) if row else ""
         if since:
+            # 取「最新」的 max_messages 条：增量超限时宁可丢最旧的、也不能丢最新的
+            #（旧实现 ORDER BY ASC LIMIT 在超量时保留最旧、丢掉最新，新内容永远摘不到）
             cur.execute(
-                "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 AND timestamp >= ? "
-                "ORDER BY timestamp ASC LIMIT ?",
+                "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 AND "
+                + _TIMESTAMP_UTC_SQL
+                + " >= ? "
+                + _SUMMARY_NOISE_SQL
+                + " ORDER BY timestamp DESC LIMIT ?",
                 (str(chat_id), since, max_messages),
             )
         else:
             cur.execute(
                 "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 "
-                "ORDER BY timestamp DESC LIMIT ?",
+                + _SUMMARY_NOISE_SQL
+                + " ORDER BY timestamp DESC LIMIT ?",
                 (str(chat_id), max_messages),
             )
-            rows = list(cur.fetchall())
-            rows.reverse()
-            return self._rows_to_messages(rows)
-        return self._rows_to_messages(list(cur.fetchall()))
+        # 两条分支都按 DESC 取，统一 reverse 成时间正序（便于拼接对话）
+        rows = list(cur.fetchall())
+        rows.reverse()
+        return self._rows_to_messages(rows)
 
     def count_messages(self, platform: str = "") -> int:
         """当前平台会话库的消息总条数。"""

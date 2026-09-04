@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import time
 
+from src.constants import is_summary_noise_message
 from src.llm.agent_reply import AgentReply
 from src.llm.client import LLMResponse
 from src.llm.exceptions import LLMProcessingError, LLMRateLimitExhaustedError
@@ -322,6 +323,15 @@ def summarize_conversation(
 
     if max_messages and max_messages > 0 and len(messages) > max_messages:
         messages = messages[-max_messages:]
+    # 防御：摘要元消息（历史摘要回写 / digest 推送回灌 / system 消息）不是对话正文。
+    # 若混进来，LLM 会把它当成"对方说过的话"，把其他会话的人名和事项复述进本会话
+    # 摘要，且每轮把上轮污染再放大一次。SQL 取材侧已过滤，这里是第二道防线。
+    messages = [
+        m for m in messages
+        if not is_summary_noise_message(getattr(m, "content", ""), getattr(m, "role", ""))
+    ]
+    if not messages:
+        return ""
     owner_name = (owner_name or getattr(agent, "user_name", "") or "").strip()
     if not owner_name:
         # 兜底：部分调用方可能未显式传入，尝试从 system_prompt 中推断已格式化的主人名
@@ -363,6 +373,9 @@ def summarize_conversation(
 5. 凡是主人（{owner_label}）的消息，摘要中统一用「我」指代；严禁出现「我向{owner_label}…」「{owner_label}向我…」这类把主人当成第三方的矛盾描述。
 6. 如果对方称呼主人为具体称谓或昵称，摘要里仍用「我」指代，不要切换视角。
 7. 格式：以「【对话摘要】」开头。
+8. 只摘要下面给出的这段对话。若素材里出现以「【对话摘要】」或「📋 …对话摘要」开头的文本，
+   那是系统早前生成的历史摘要/推送副本，**不是本轮对话内容**，必须整段忽略，
+   严禁把它里面的任何人、任何事项复述进本次摘要（否则会把别的会话的事混进来）。
 
 只输出摘要内容，不要其他内容。"""},
         {"role": "user", "content": f"请对以下对话进行摘要：\n\n{conversation_str}"},

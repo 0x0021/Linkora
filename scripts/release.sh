@@ -9,6 +9,9 @@
 #   - 版本号以 pyproject.toml 的 `version` 为真相；也可在命令行显式传入覆盖。
 #   - Release notes 直接从 docs/CHANGELOG.md 抽取对应版本段（## vX.Y.Z 到下一个 ## v 为止），
 #     因此发版前请确保 CHANGELOG 已写好该版本段，且标题格式为 `## vX.Y.Z (YYYY-MM-DD)`。
+#   - 发版前若 CHANGELOG 顶部存在 `## 未发布 (YYYY-MM-DD)` 段，须先将其标题改成
+#     `## vX.Y.Z (YYYY-MM-DD)`（即「未发布段转正」）再跑本脚本——脚本只认 `## vX.Y.Z `
+#     开头的段，不会自动合并未发布段，找不到就报错中止。
 #   - tag 名固定为 `v<version>`（annotated），GitHub Release 标题为 `灵桥 Linkora v<version>`。
 #   - 远程固定为 `github`（0x0021/Linkora）；若该 remote 不存在则回退 `origin`。
 #   - 本脚本不触碰任何源码与配置（含 config.yaml），只动 tag / Release / CHANGELOG 读取。

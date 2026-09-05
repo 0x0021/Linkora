@@ -378,3 +378,39 @@ logger.debug("detail")
 - 使用模块级 logger
 - 敏感信息（API Key、Token）会被 logger 自动脱敏
 - 生产环境日志级别 `INFO`，开发调试可临时改为 `DEBUG`
+
+## CHANGELOG 维护与发版
+
+### 日常：随改动写入「未发布」段
+
+`docs/CHANGELOG.md` 顶部常驻一个 `## 未发布 (YYYY-MM-DD)` 段。**对外有影响的变更必须随修复/特性一起写进该段**，不要等发版时补记——历史上曾连续数个 bugfix 漏记，等到发版时已无从追溯。
+
+判定标准：
+
+- ✅ 写：用户能感知到的行为变化——新功能、缺陷修复、性能变化、配置默认值调整、升级注意事项。
+- ❌ 不写：纯内部工程细节——类型收敛、测试补充、CI 调整、代码重构。
+
+### 发版：未发布段转正
+
+1. 把 `## 未发布 (YYYY-MM-DD)` 标题改成 `## vX.Y.Z (YYYY-MM-DD)`，日期填发版当天。
+2. 若本次发版没有对外变更，直接删掉空的未发布段。
+3. 在 `pyproject.toml` 中 bump `version`。
+4. 跑 `bash scripts/release.sh`（建议先加 `--dry-run` 预览 Release notes 再实发）。
+
+`scripts/release.sh` 按 `## vX.Y.Z ` 抽取该段作为 GitHub Release notes，**找不到对应版本段会直接报错中止**（fail-closed）。所以「忘记把未发布段转正」只会让发版跑不起来，不会静默丢内容。
+
+### 文档同步的落点
+
+改完 CHANGELOG 后，其余站点大多自动同步，**不要手工改生成物**：
+
+| 落点 | 是否需手工改 | 说明 |
+| --- | --- | --- |
+| `docs/` 项目 Pages 站 | ❌ 自动 | Jekyll 从 `.md` 生成；`docs/index.html` 链接 `./CHANGELOG.html`，改 md 即生效 |
+| github.io 主站 | ✅ 仅发版时 | 独立仓 `0x0021.github.io`，`posts/` 下放的是 `linkora-vXXX-release.html` 版本文章；日常 bugfix 不建页 |
+| 项目站 | ❌ 自动 | 同 `docs/` Pages 站 |
+
+> ⚠️ `docs/` 是 Jekyll 源，文件内容**不得出现** Liquid 定界符（连续两个左花括号，或左花括号紧跟百分号），否则会被 Jekyll 当作模板解析、导致 Pages 构建失败。下面这条自查命令用字符类书写，因此它本身不会被自己匹配出来：
+>
+> ```bash
+> grep -rEn '[{][{]|[{]%' docs/*.md   # 无输出 = 合规
+> ```

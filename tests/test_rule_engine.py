@@ -860,3 +860,49 @@ def test_regex_no_match_returns_false(rule_engine):
     )
     matched, groups = kw.matches("hello world", stop_words=set(), timeout=0.3)
     assert matched is False
+
+
+# ============ 意图识别：礼貌语剥离回归测试 ============
+# 修复：请求句末加「谢谢/辛苦了」是客套，应归 business 而非被翻盘成纯致谢跳过。
+
+class TestIntentPoliteStrip:
+    """「请求 + 客套致谢」必须判为业务消息，纯致谢/确认仍判 social。"""
+
+    def _classify(self, text: str):
+        from src.intent.registry import default_registry
+        return default_registry.classify_disposition(
+            text, enabled=True,
+            pure_thank_max_length=20, pure_ack_max_length=10, pure_closing_max_length=20,
+        )
+
+    def test_request_with_trailing_thanks_is_business(self):
+        """请求 + 句末谢谢 → business（原 bug：被误判 thank_you 跳过）。"""
+        cases = [
+            "徐工，帮开一下VPN吧，谢谢",
+            "帮我把打印机修一下，谢谢",
+            "麻烦帮我开个账号，谢谢",
+            "徐工，VPN连不上了，麻烦看一下，谢谢",
+            "徐工帮我开下门禁，多谢",
+            "文件发我一下，谢谢啦",
+            "帮我看下报表",
+            "请问一下怎么弄",
+        ]
+        for t in cases:
+            res = self._classify(t)
+            assert res.disposition == "business", f"{t!r} 应判业务, 实得 {res.disposition}/{res.subtype}"
+
+    def test_pure_thanks_is_social_thank_you(self):
+        """纯致谢（或致谢 + 称呼）仍判 social.thank_you。"""
+        cases = ["谢谢", "谢谢徐工", "辛苦了", "谢谢啦", "感谢感谢"]
+        for t in cases:
+            res = self._classify(t)
+            assert res.disposition == "social" and res.subtype == "thank_you", \
+                f"{t!r} 应判致谢, 实得 {res.disposition}/{res.subtype}"
+
+    def test_ack_with_trailing_thanks_is_acknowledge(self):
+        """确认收到 + 句末谢谢 → acknowledge（不应被谢谢翻成 thank_you）。"""
+        cases = ["收到，谢谢", "好的，谢谢", "好的收到谢谢徐工"]
+        for t in cases:
+            res = self._classify(t)
+            assert res.disposition == "social" and res.subtype == "acknowledge", \
+                f"{t!r} 应判确认, 实得 {res.disposition}/{res.subtype}"

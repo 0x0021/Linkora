@@ -34,7 +34,9 @@ _DEFAULT_WINDOW = "today"
 @router.get("/api/summaries")
 async def get_summaries(
     limit: int = Query(30, ge=1, le=200),
-    max_chars: int = Query(200, ge=20, le=2000),
+    # 默认放宽到 600：卡片正文已支持多段显示，200 会把较长摘要（多日期滚动摘要常
+    # 超 200 字）在句中腰斩成「…」，看起来像内容缺失。
+    max_chars: int = Query(600, ge=20, le=2000),
     window: str = Query(_DEFAULT_WINDOW, pattern="^(today|yesterday|7days)$"),
     platform: str | None = Query(default=None),
     store=Depends(get_store_dep),

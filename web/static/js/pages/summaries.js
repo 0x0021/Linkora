@@ -92,6 +92,21 @@ function extractTodo(summary) {
 }
 
 // 今日汇总：解析 digest 并与 items 元数据关联，渲染为结构化卡片网格
+// 卡片正文渲染：剥掉首行冗余前缀，并把多日期小标「【对话摘要】YYYY-MM-DD」渲染成弱化日期标签。
+// 单条摘要可能跨多个自然日（滚动摘要），保留日期小标才能让「哪天说了什么」一目了然。
+function formatSummaryBody(text) {
+    if (!text) return '';
+    const body = String(text).replace(/^【对话摘要】\s*/, '').trim();
+    let html = simpleMarkdown(escapeHtml(body));
+    // 分段小标（build_digest 只剥了首个前缀，后续分段的标记仍在）
+    html = html.replace(/【对话摘要】\s*(\d{4}-\d{2}-\d{2})/g,
+        '<span class="digest-sub-date">$1</span>');
+    // 首段小标被剥掉后残留的「独立成行的纯日期」也统一渲染为日期标签
+    html = html.replace(/(^|<br>)\s*(\d{4}-\d{2}-\d{2})\s*(?=<br>|$)/g,
+        '$1<span class="digest-sub-date">$2</span>');
+    return html;
+}
+
 function renderDigestCards(digest, items) {
     if (!digest) return '';
     const metaByName = new Map();
@@ -119,6 +134,14 @@ function renderDigestCards(digest, items) {
         const m = line.match(/^•\s*\*\*(.+?)\*\*\s*：\s*(.+)$/);
         if (m) {
             entries.push({ name: m[1], content: m[2] });
+            continue;
+        }
+        // 续行回接：单条摘要常是按日期分段的多行文本（【对话摘要】YYYY-MM-DD 分段）。
+        // build_digest 只用空行分隔条目，摘要内部的换行被 split('\n') 后会落到这一
+        // 分支；若不回接到上一条目，卡片就只剩首行——当首行恰是「【对话摘要】2026-09-05」
+        // 这类纯日期头时，卡片看上去就只有一个日期、正文全丢。
+        if (entries.length) {
+            entries[entries.length - 1].content += '\n' + line;
         }
     }
     if (!entries.length) return renderDigestBlocks(digest);
@@ -134,8 +157,6 @@ function renderDigestCards(digest, items) {
         const todo = extractTodo(e.content);
         const [c1, c2] = avatarGradient(name);
         const nameInitial = avatarLetter(name);
-        const summary = e.content.replace(/^【对话摘要】\s*/, '').trim();
-
         return `
         <div class="digest-card">
             <div class="digest-card-head">
@@ -152,7 +173,7 @@ function renderDigestCards(digest, items) {
                     </div>
                 </div>
             </div>
-            <div class="digest-card-body">${simpleMarkdown(escapeHtml(summary))}</div>
+            <div class="digest-card-body">${formatSummaryBody(e.content)}</div>
             ${time ? `<div class="digest-card-foot"><i class="fa-regular fa-clock"></i>${time}</div>` : ''}
         </div>`;
     }).join('');
@@ -191,7 +212,7 @@ async function loadSummariesPage() {
     const body = document.getElementById('summaries-body');
     if (!body) return;
     try {
-        const r = await api.fetch(`/api/summaries?limit=30&window=${currentWindow}`);
+        const r = await api.fetch(`/api/summaries?limit=30&window=${currentWindow}&max_chars=2000`);
         if (!r || r.error) {
             if (body.innerHTML.indexOf('summaries-error') === -1) {
                 body.innerHTML = `<div class="summaries-error">
@@ -306,3 +327,10 @@ window.loadSummariesPage = loadSummariesPage;
 window.startSummariesPolling = startSummariesPolling;
 window.stopSummariesPolling = stopSummariesPolling;
 window.setWindow = setWindow;
+
+// 显式挂到 window：经典 <script> 中顶层 function 本就是全局，这里仅为在 ESM/测试环境下也能访问，
+// 便于 vitest 对纯函数做单元断言（浏览器内等价于 no-op）。
+if (typeof window !== 'undefined') {
+    window.renderDigestCards = renderDigestCards;
+    window.formatSummaryBody = formatSummaryBody;
+}

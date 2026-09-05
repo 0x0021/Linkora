@@ -415,6 +415,11 @@ _RE_TOOL_CALL_XML = _re.compile(
     _re.DOTALL,
 )
 
+#: 素材分段分隔线（「===== 2026-09-05 =====」）：summarize_conversation 按
+#: 「===== 日期 =====」给 LLM 分段喂素材，模型偶尔把分隔线照抄进输出，
+#: 违反「【对话摘要】YYYY-MM-DD」输出规范且污染 Web 摘要卡片。落库前整行剥离。
+_RE_MATERIAL_DATE_SEP = _re.compile(r'^\s*=+\s*\d{4}-\d{2}-\d{2}\s*=+\s*$', _re.MULTILINE)
+
 
 #: ── 流程词敏感检测正则 ──────────────────────────────────────────────────
 #: 当 kb_context 中不包含这些词但 reply 中出现时，说明模型在编造知识库中不存在的
@@ -769,6 +774,12 @@ def strip_internal_artifacts(text: str) -> str:
         return text
     cleaned = _RE_TOOL_CALL_XML.sub('', text)
     cleaned = _RE_INTERNAL_MARKERS.sub('', cleaned)
+    # 素材分段分隔线回显：「===== 2026-09-05 =====」是喂给 LLM 的素材格式，
+    # 摘要输出规范只允许「【对话摘要】YYYY-MM-DD」打头；模型偶尔照抄素材格式，
+    # 该行落库后 Web 摘要卡片首行只剩分隔线、看起来像空摘要。整行删除绝对安全
+    # （正常摘要正文不可能包含纯「=+ 日期 =+」行）。
+    cleaned = _RE_MATERIAL_DATE_SEP.sub('', cleaned)
+    # 剥离后可能留下行首空行，压掉首尾空白即可（段间结构不动）
     return cleaned.strip()
 
 

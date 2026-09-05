@@ -1448,3 +1448,33 @@ class TestGroundedAnswerNotFabrication:
         result2 = sanitize_reply(reply_with_score, kb_context="", rag_empty=True)
         assert "相关度" not in result2, f"相关度分数未剥离: {result2!r}"
         assert "78%" not in result2, f"相关度分数未剥离: {result2!r}"
+
+
+class TestStripMaterialDateSeparator:
+    """strip_internal_artifacts 应剥离 LLM 回显的素材分段分隔线。
+
+    summarize_conversation 以「===== 日期 =====」给模型分段喂素材，模型偶尔照抄
+    进输出；该行落库后 Web 摘要卡片首行只剩分隔线、看起来像空摘要（2026-09-05 事故）。
+    """
+
+    def test_leading_separator_stripped(self):
+        from src.llm.reply import strip_internal_artifacts
+        text = "===== 2026-09-05 =====\n【对话摘要】2026-09-05\n张保丁发送了报表截图。"
+        out = strip_internal_artifacts(text)
+        assert not out.startswith("====="), f"分隔线未剥离: {out!r}"
+        assert "张保丁发送了报表截图" in out
+
+    def test_mid_text_separator_stripped(self):
+        from src.llm.reply import strip_internal_artifacts
+        text = ("【对话摘要】2026-07-08\n汤天傲请我修改流程。\n"
+                "=====2026-09-05 =====\n【对话摘要】2026-09-05\n汤天傲提交申请。")
+        out = strip_internal_artifacts(text)
+        assert "=====" not in out, f"段间分隔线未剥离: {out!r}"
+        assert "汤天傲请我修改流程" in out and "汤天傲提交申请" in out
+
+    def test_no_false_positive_inline_equals(self):
+        """正文内非独立行的「=====」不应被误删。"""
+        from src.llm.reply import strip_internal_artifacts
+        text = "分隔符写法是 ===== 这样的，不是独立日期行"
+        out = strip_internal_artifacts(text)
+        assert "=====" in out, f"正常正文被误删: {out!r}"

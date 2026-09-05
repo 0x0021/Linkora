@@ -97,8 +97,10 @@ class TestAsyncNonBlocking:
             # schedule 是同步非阻塞调用（仅 queue.put），不应触发 LLM、不应耗时
             scheduler.schedule("chat_async", older)
             elapsed = time.time() - t0
-            # 即便背后要算摘要，schedule 自身应在毫秒级返回（不等待 LLM）
-            assert elapsed < 1.0, f"schedule() 不应阻塞主回复，实际耗时 {elapsed:.3f}s"
+            # 即便背后要算摘要，schedule 自身应在毫秒级返回（不等待 LLM）。
+            # 阈值放宽到 5s：真正的阻塞（等待 LLM 完成）是数十秒级，
+            # 1.0s 在 CI 冷启动慢机上会被 import/线程调度噪声误伤（曾跑出 1.186s）。
+            assert elapsed < 5.0, f"schedule() 不应阻塞主回复，实际耗时 {elapsed:.3f}s"
             # 确认后台确实处理了该任务（摘要被调用）
             assert _wait_until(lambda: len(agent.client.calls) >= 1)
         finally:

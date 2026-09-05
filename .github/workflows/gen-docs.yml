@@ -17,6 +17,9 @@ jobs:
       actions: write   # actions/upload-artifact 需要创建 artifact
     steps:
     - uses: actions/checkout@v7
+      with:
+        # 需要完整 tag 历史：gen_docs.py 用 `git describe --tags` 自动定位上次发版点
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v7
@@ -29,8 +32,10 @@ jobs:
         pip install -r requirements.txt
 
     - name: Generate CHANGELOG
+      # 只用 --changelog：--all 会把测试覆盖报告一起打进 stdout，
+      # 导致 CHANGELOG_PENDING.md 里混入无关内容。起始 tag 由脚本自动取最新 tag。
       run: |
-        python scripts/gen_docs.py --all --since v0.4.4 > docs/CHANGELOG_PENDING.md
+        python scripts/gen_docs.py --changelog > docs/CHANGELOG_PENDING.md
 
     - name: Generate test coverage report
       run: |

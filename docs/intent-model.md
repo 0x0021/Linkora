@@ -21,7 +21,7 @@
 |------|----|----------------------|--------------|
 | `business` 业务意图 | — | 消息包含可被助手处理的行动意图（提问/请求/指令），或涉及工作/生活领域的具体内容，需要响应或执行操作。与 social 互斥。 | 含疑问词（什么/怎么/为什么/多少/哪）；含请求动词（帮我/排查/创建）；命中领域关键词（审批/天气/文档/股价…）；或较长非套话消息 |
 | `social` 社交意图 | — | 消息仅为礼节性社交交换（致谢/确认/道别/问候/称赞/寒暄/情绪感叹），不含任何需执行或回答的请求/问题/指令。助手应跳过（或极简回应）。 | 短消息且命中社交词表、且不含 business 证据 |
-| ↳ `social.gratitude` 致谢 | social | 表达谢意、认可对方付出，无后续行动诉求 | 含感谢类词（谢谢/感谢/辛苦了/蟹蟹/thx）+ 长度 ≤ 阈值 |
+| ↳ `social.gratitude` 致谢 | social | 表达谢意、认可对方付出，无后续行动诉求 | 含感谢类词（谢谢/感谢/辛苦了/蟹蟹/thx）+ 长度 ≤ 阈值；**注：仅在剥离尾部礼貌语后判定，「请求 + 谢谢」整体归 `business`** |
 | ↳ `social.acknowledge` 确认收到 | social | 确认已读/知晓，无新请求或问题 | 含确认类词（收到/好的/OK/明白/嗯，短英文词边界匹配防误命中品牌名）+ 长度 ≤ 阈值；超长降级为 business |
 | ↳ `social.closing` 结束语 | social | 表达结束对话、暂时离开 | 含道别类词（再见/拜拜/晚安/先这样/收工/回头聊） |
 | ↳ `social.polite` 招呼/礼貌 | social | 问候、客套、引起注意或致歉，无实质请求 | 含招呼/客套词（你好/在吗/请问/抱歉/哈喽/早）+ 短消息 |
@@ -31,6 +31,7 @@
 
 > 优先级裁决（保证互斥）：`business` > `social.gratitude` > `social.polite` > `social.compliment` > `social.acknowledge` > `social.smalltalk` > `social.emotion` > `social.closing` > 默认 `business`。
 > 注：`polite` 早于 `acknowledge` 是为了让"你好"这类问候优先归为礼貌而非被单字"好"误判为确认收到（修复原实现的一个跳过 bug）；`compliment` 早于 `acknowledge` 是为了让"可以啊"这类赞许优先归为称赞而非被"可以"误判为确认收到。所有社交子型的长度阈值默认由 `pure_thank_max_length`（20）驱动（closing 用 `pure_closing_max_length`，acknowledge 用 `pure_ack_max_length`）。
+> 此外，社交子型判定前会先做**尾部礼貌语剥离**（`_strip_polite`）：「请求 + 谢谢」整体归 `business`；「收到，谢谢」剥离后核心为「收到」→ 归 `acknowledge`（不被谢谢翻成致谢）；纯致谢（剥离后核心为空）仍归 `thank_you`。详见下方处置层第 3 步。
 
 ### 第二层：行动意图（ACTION）—— 业务消息想要的抽象动作
 
@@ -66,10 +67,13 @@
 ## 匹配流程
 
 ### 处置层（`rule_engine` → `IntentRegistry.classify_disposition`）
-1. 空消息 / 未启用 → `business`
+1. 空消息 / 未启用 / 无文字内容 → `business`
 2. 命中 `business` 证据 → `business`（覆盖社交）
-3. 按优先级判定 `social` 子型，受长度阈值约束；`acknowledge` 超长降级为 `business`
-4. 其余 → `business`
+3. **礼貌语剥离（前处理）**：剥离消息**尾部**的礼节性致谢尾缀（谢谢 / 感谢 / 辛苦了 / 多谢 / 蟹蟹 / thank you …，含中英文、长尾缀优先匹配），再以剩余核心判定。理由：中文里「请求句末加谢谢」是客套（如「帮开一下 VPN 吧，谢谢」），核心仍是实质请求，应归 `business` 而非被一个「谢谢」翻盘成 `social.gratitude` 跳过。剥离只认**末尾**、不动句首的「请 / 麻烦」等请求助词。
+   - 剥离后核心仍含业务信号，或实字长度 ≥ 5 → `business`（`business` 优先级高于 `social`）。
+   - 社交子型判定改用**剥离后的核心**，避免「收到，谢谢」里的谢谢抢走判定；若剥离后核心为空（整句就是礼貌语），回退用原文 → 仍正确判为纯致谢。
+4. 按优先级判定 `social` 子型（基于剥离后的核心），受长度阈值约束；`acknowledge` 超长降级为 `business`
+5. 其余 → `business`
 
 ### 行动层 / 工具路由（`agent._keyword_match_tool_names`）
 - 基础工具（send_message / save_memory / recall_memory）恒含

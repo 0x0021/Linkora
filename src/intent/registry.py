@@ -20,6 +20,43 @@ logger = logging.getLogger(__name__)
 # 合并所有意图类别
 _ALL_INTENTS: list[IntentCategory] = DEFAULT_INTENTS + ACTION_INTENTS + DOMAIN_INTENTS
 
+# ---------------------------------------------------------------------------
+# 礼貌性尾缀（仅出现在消息尾部时剥离）。用于区分「纯致谢」与「请求 + 客套谢谢」。
+# 中文里「帮我开下VPN，谢谢」是请求句末加客套，剥离尾部谢谢后核心仍有实质内容，
+# 应归 business；而「谢谢」「谢谢徐工」剥离后核心为空/仅称呼，才是纯致谢。
+# 长尾缀排在前面（按长度降序匹配），避免「谢谢啦」被「谢谢」抢先截断留下「啦」。
+_POLITE_TRAILING: list[str] = sorted([
+    "感谢感谢", "多谢多谢", "感激不尽", "不胜感激",
+    "谢谢啦", "多谢啦", "谢啦啊", "辛苦了啊", "辛苦了啦",
+    "谢谢了", "谢谢啊", "谢谢你", "感谢你", "多谢了", "蟹蟹",
+    "感谢", "多谢", "谢了", "谢谢", "辛苦了", "辛苦", "受累了",
+    "麻烦了", "拜托了", "感恩", "感激", "比心", "么么哒",
+    "thank you", "thanks", "thank", "thx", "tks", "ty", "3q",
+], key=len, reverse=True)
+
+# 去除首尾空白与中英文标点
+_PUNCT_STRIP = "，。！？、；：,.!?;: \t\n\r（）()【】[]「」“”\"'"
+
+
+def _strip_polite(text: str) -> str:
+    """剥掉消息尾部的礼貌/致谢尾缀，返回剩余核心。
+
+    仅当尾缀位于消息末尾（去除标点后）才剥离，反复剥离直到无可剥。
+    句首的「麻烦/请」等请求助词不会被剥（它们在核心里，是业务信号）。
+    """
+    t = text.strip()
+    changed = True
+    while changed:
+        changed = False
+        t_stripped = t.strip(_PUNCT_STRIP)
+        low = t_stripped.lower()
+        for kw in _POLITE_TRAILING:
+            if low.endswith(kw.lower()):
+                t = t_stripped[: len(t_stripped) - len(kw)].strip(_PUNCT_STRIP)
+                changed = True
+                break
+    return t
+
 # 工具 → 抽象行动意图 的中心化映射
 TOOL_ACTION_MAP: dict[str, list[str]] = {
     # 基础工具
@@ -264,14 +301,34 @@ class IntentRegistry:
                 "business", None, "business",
                 f"业务消息：{content[:30]}...", confidence=round(conf, 2))
 
-        # 社交子型判定
+        # === 礼貌用语剥离（修复「请求 + 谢谢」被误判为纯致谢跳过）===
+        # 中文里请求句末加「谢谢/辛苦了」是客套，不是致谢。把尾部致谢尾缀剥掉，
+        # 若剩余核心仍有实质内容（含业务信号，或实字长度 ≥ 阈值），说明礼貌语只是附加，
+        # 消息主体是请求/内容 → 归 business，而非被一个「谢谢」翻盘成 skip。
+        core = _strip_polite(content)
+        if core and core != content:
+            core_substantive = re.sub(r"[\s\W]", "", core)
+            core_has_business = any(
+                match_keyword(kw, core, core.lower()) for kw in business.evidence_keywords
+            )
+            if core_has_business or len(core_substantive) >= 5:
+                conf = 1.0 if (core_has_business and len(core_substantive) >= 5) else 0.6
+                return DispositionResult(
+                    "business", None, "business",
+                    f"业务消息（剥离礼貌语后）:{core[:30]}...", confidence=round(conf, 2))
+
+        # 社交子型判定：用剥离礼貌语后的核心，避免「收到，谢谢」里的谢谢抢走判定。
+        # 若剥离后核心为空（整句就是礼貌语），回退用原文 → 仍正确判为纯致谢。
+        dispo_text = core if core else content
+        dispo_text_lower = dispo_text.lower()
+
         best_sub: Optional[str] = None
         best_hit_count: int = 0
         best_cat: Optional[IntentCategory] = None
 
         for sub_id in _SOCIAL_PRIORITY:
             cat = self._cats[sub_id]
-            hit_count = self._keyword_hit_count(cat, content, content_lower)
+            hit_count = self._keyword_hit_count(cat, dispo_text, dispo_text_lower)
             if hit_count == 0:
                 continue
 
@@ -283,16 +340,16 @@ class IntentRegistry:
             else:  # social.closing
                 max_len = pure_closing_max_length
 
-            if sub_id == "social.acknowledge" and max_len is not None and len(content) > max_len:
+            if sub_id == "social.acknowledge" and max_len is not None and len(dispo_text) > max_len:
                 logger.debug(
                     "[意图识别] 消息长度 %d > 阈值(%d)，跳过纯确认判断: %s",
-                    len(content), max_len, content[:30],
+                    len(dispo_text), max_len, dispo_text[:30],
                 )
                 return DispositionResult(
                     "business", None, "business",
-                    f"业务消息：{content[:30]}...", confidence=0.3)
+                    f"业务消息：{dispo_text[:30]}...", confidence=0.3)
 
-            if max_len is not None and len(content) > max_len:
+            if max_len is not None and len(dispo_text) > max_len:
                 continue
 
             if hit_count > best_hit_count:
@@ -305,7 +362,7 @@ class IntentRegistry:
             conf = 1.0 if best_hit_count >= 2 else 0.7
             return DispositionResult(
                 "social", label, best_sub,
-                f"{best_cat.name}（权重:{best_hit_count}）：{content}",
+                f"{best_cat.name}（权重:{best_hit_count}）:{dispo_text}",
                 confidence=round(conf, 2))
 
         # 边缘 Case 3: 无任何关键词命中

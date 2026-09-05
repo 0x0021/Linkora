@@ -345,6 +345,7 @@ def summarize_conversation(
         logger.warning("[摘要] 未提供 owner_name，摘要视角可能混乱；请调用方显式传入或设置 agent.user_name")
     owner_label = owner_name or "我"
     conversation_text = []
+    current_date = None
     for msg in messages:
         # 以「主人 / 当前用户」为第一人称视角标注，而非 AI 视角
         if owner_name and msg.sender_name == owner_name:
@@ -355,7 +356,14 @@ def summarize_conversation(
             role = msg.sender_name
         else:
             role = "对方"
-        conversation_text.append(f"{role}: {msg.content[:300]}")
+        # 时间戳取材库存的本地时间；按日期分段，让 LLM 能按天拆分摘要
+        ts = msg.timestamp
+        date_str = ts.strftime("%Y-%m-%d") if ts else "未知日期"
+        if date_str != current_date:
+            current_date = date_str
+            conversation_text.append(f"===== {date_str} =====")
+        time_str = ts.strftime("%H:%M") if ts else "--:--"
+        conversation_text.append(f"[{time_str}] {role}: {msg.content[:300]}")
     conversation_str = "\n".join(conversation_text)
 
     summary_prompt = [
@@ -366,14 +374,18 @@ def summarize_conversation(
 - 下面消息中标注为「我:」的，就是主人自己说的话；标注为「AI:」的是 AI 回复；其余是对方或其他人说的话。
 
 要求：
-1. 用中文输出，不超过 200 字。
-2. 包含对话的核心主题、关键信息和结论。
-3. 使用自然语言描述，不要使用列表或编号。
-4. 视角：绝对以主人（我）的第一人称总结——对方说了什么、我做了什么/回复了什么。
-5. 凡是主人（{owner_label}）的消息，摘要中统一用「我」指代；严禁出现「我向{owner_label}…」「{owner_label}向我…」这类把主人当成第三方的矛盾描述。
-6. 如果对方称呼主人为具体称谓或昵称，摘要里仍用「我」指代，不要切换视角。
-7. 格式：以「【对话摘要】」开头。
-8. 只摘要下面给出的这段对话。若素材里出现以「【对话摘要】」或「📋 …对话摘要」开头的文本，
+1. 用中文输出。素材按「===== 日期 =====」分段，**必须严格按日期划分摘要**：
+   每条摘要只允许包含**同一天**的消息内容，严禁把不同日期发生的事写进同一条摘要。
+2. 同一天内若讨论了多个互不相关的主题，**拆成多条独立摘要**——一条摘要只讲一个
+   主题相关的事，不相关的事项（不同的人、不同的事）绝不合并进同一条。
+3. 每条摘要格式：以「【对话摘要】YYYY-MM-DD」开头（日期为该条覆盖消息的日期），
+   随后用不超过 150 字的自然语言概括核心主题、关键信息和结论，不使用列表或编号。
+4. 多条摘要按日期先后排列、各占一段，不要在摘要之间添加任何过渡语或说明。
+5. 视角：绝对以主人（我）的第一人称总结——对方说了什么、我做了什么/回复了什么。
+6. 凡是主人（{owner_label}）的消息，摘要中统一用「我」指代；严禁出现「我向{owner_label}…」
+   「{owner_label}向我…」这类把主人当成第三方的矛盾描述。对方称呼主人的称谓/昵称
+   在摘要里也一律转为「我」，不要切换视角。
+7. 只摘要下面给出的这段对话。若素材里出现以「【对话摘要】」或「📋 …对话摘要」开头的文本，
    那是系统早前生成的历史摘要/推送副本，**不是本轮对话内容**，必须整段忽略，
    严禁把它里面的任何人、任何事项复述进本次摘要（否则会把别的会话的事混进来）。
 

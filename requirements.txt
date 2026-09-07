@@ -4,16 +4,16 @@
 
 # ---- 配置 / 环境 ----
 PyYAML==6.0.3
-pydantic==2.13.4
+pydantic==2.13.5
 python-dotenv==1.2.3
-platformdirs==4.11.3
+platformdirs==4.11.7
 
 # ---- LLM / 嵌入模型 ----
 openai==2.54.0
 numpy==2.5.2
-sentence-transformers==5.6.1
-huggingface_hub==1.28.0
-tokenizers==0.22.2
+sentence-transformers==5.7.0
+huggingface_hub==1.30.0
+tokenizers==0.23.2
 
 # ---- Web 服务 ----
 fastapi==0.141.1
@@ -26,7 +26,7 @@ python-multipart==0.0.32
 faiss-cpu==1.15.0
 requests==2.34.2
 jieba==0.42.1
-regex==2026.7.19
+regex==2026.9.3
 rapidocr-onnxruntime==1.2.3
 
 # ---- 文档解析 ----

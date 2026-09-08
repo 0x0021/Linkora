@@ -249,6 +249,13 @@ async function loadConfigPage() {
     _setChk('cfg-rag-intent-only', data.llm?.advanced?.rag_intent_only !== false);
     _setVal('cfg-rag-min-sim', data.llm?.advanced?.rag_min_similarity || 0.6);
     _setVal('cfg-rag-max-results', data.llm?.advanced?.rag_max_results || 1);
+    // RAG 严格问答模式（智能问答）
+    _setChk('cfg-rag-strict-mode', data.llm?.advanced?.rag_strict_mode === true);
+    _setVal('cfg-rag-strict-min-sim', data.llm?.advanced?.rag_strict_min_similarity ?? 0.5);
+    _setVal('cfg-rag-strict-max-results', data.llm?.advanced?.rag_strict_max_results || 3);
+    _setVal('cfg-rag-strict-no-hit-reply',
+        data.llm?.advanced?.rag_strict_no_hit_reply || '知识库中暂未收录相关内容，我无法凭已有信息作答。');
+    syncRagStrictUi();
 
     _setChk('cfg-poll-ai-tag', data.poller?.ai_tag_enabled !== false);
     _setChk('cfg-poll-mark-read', data.poller?.mark_read_after_process !== false);
@@ -388,6 +395,11 @@ async function saveConfig() {
         rag_intent_only: document.getElementById('cfg-rag-intent-only').checked,
         rag_min_similarity: parseFloat(document.getElementById('cfg-rag-min-sim').value) || undefined,
         rag_max_results: parseInt(document.getElementById('cfg-rag-max-results').value) || undefined,
+        // RAG 严格问答模式（智能问答）
+        rag_strict_mode: document.getElementById('cfg-rag-strict-mode').checked,
+        rag_strict_min_similarity: parseFloat(document.getElementById('cfg-rag-strict-min-sim').value) || undefined,
+        rag_strict_max_results: parseInt(document.getElementById('cfg-rag-strict-max-results').value) || undefined,
+        rag_strict_no_hit_reply: document.getElementById('cfg-rag-strict-no-hit-reply').value || undefined,
         // 高级轮询参数
         poller_ai_tag: document.getElementById('cfg-poll-ai-tag').checked,
         poller_mark_read: document.getElementById('cfg-poll-mark-read').checked,
@@ -402,6 +414,11 @@ async function saveConfig() {
     if (result && result.success) {
         if (status) { status.className = 'save-status show success'; status.textContent = '✓ 已保存'; setTimeout(() => { status.className = 'save-status'; }, 3000); }
         showToast(result.message || '配置保存成功');
+        // 保存后刷新顶栏徽章（清掉 /api/config 的前端缓存，否则读到旧值）
+        try {
+            if (typeof api.clearCache === 'function') api.clearCache();
+            if (typeof refreshRagModeBadge === 'function') await refreshRagModeBadge();
+        } catch (e) { /* 徽章刷新失败不影响保存结果 */ }
     } else {
         if (status) { status.className = 'save-status show error'; status.textContent = '✗ 保存失败'; setTimeout(() => { status.className = 'save-status'; }, 5000); }
         showToast(result?.message || '保存失败', 'error');
@@ -598,3 +615,41 @@ function switchConfigPanel(slug) {
 }
 window.switchConfigPanel = switchConfigPanel;
 
+
+// ===== RAG 严格问答模式：配置页内部状态同步 =====
+// 开关不能是个「改完不知道有没有生效」的黑盒：状态条 + 顶栏徽章 + 参数区联动一起更新。
+
+/** 按当前复选框状态刷新状态条与参数区联动（顶栏徽章由 syncRagModeBadge 统一负责） */
+function syncRagStrictUi() {
+    const chk = document.getElementById('cfg-rag-strict-mode');
+    const stateEl = document.getElementById('rag-strict-state');
+    const stateText = document.getElementById('rag-strict-state-text');
+    const stateHint = document.getElementById('rag-strict-state-hint');
+    const on = !!(chk && chk.checked);
+
+    if (stateEl) stateEl.classList.toggle('is-strict', on);
+    if (stateText) stateText.textContent = on ? '当前：严格问答（仅知识库）' : '当前：标准问答';
+    if (stateHint) {
+        stateHint.textContent = on
+            ? '开启：所有问答强制检索知识库，未收录即直答未收录'
+            : '关闭：恢复原有问答逻辑（意图门控 + 工具/技能 + 三级递进兜底）';
+    }
+
+    // 严格模式下参数需要展开；关闭时置灰，避免误导
+    ['cfg-rag-strict-min-sim', 'cfg-rag-strict-max-results', 'cfg-rag-strict-no-hit-reply'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = !on;
+        el.style.opacity = on ? '' : '0.55';
+    });
+}
+
+/** 复选框 onchange：立即反映（未保存标注为「待保存」） */
+function onRagStrictToggleChange() {
+    syncRagStrictUi();
+    const hint = document.getElementById('rag-strict-state-hint');
+    const chk = document.getElementById('cfg-rag-strict-mode');
+    if (hint && chk) {
+        hint.textContent = (chk.checked ? '将开启' : '将关闭') + ' · 需点击保存后生效';
+    }
+}

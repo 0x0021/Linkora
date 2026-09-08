@@ -356,6 +356,12 @@ llm:
     rag_fallback_min_similarity: 0.2               # RAG 兜底最小相似度
     rag_fallback_max_results: 2                    # RAG 兜底最大返回条数
     rag_max_retry_rounds: 1                        # RAG 检索最大重试轮次
+    # RAG 严格问答模式（智能问答，默认关）：开启后所有问答只依据知识库检索内容作答，
+    # 不使用通用大模型知识；知识库无相关内容时直接返回下方文案（不调用 LLM、不编造）
+    rag_strict_mode: false                         # 严格问答模式总开关
+    rag_strict_min_similarity: 0.5                 # 严格模式召回相似度门槛（覆盖 rag_min_similarity）
+    rag_strict_max_results: 3                      # 严格模式最多注入几条知识片段
+    rag_strict_no_hit_reply: "知识库中暂未收录相关内容，我无法凭已有信息作答。"  # 未命中时的固定回复
     # Phase 2 P2-6 BGE 本地离线重排（默认关；开启需本地已缓存 bge-reranker-base 权重）
     rerank_enabled: false                          # 重排总开关（默认关；opt-in 高级特性：开启需本地 BGE 权重并引入推理开销，属有意默认关；当前运行实例已开，效果见 docs/phase2_citation_confidence_design.md §6）
     rerank_model: BAAI/bge-reranker-base           # 重排模型

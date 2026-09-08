@@ -7,9 +7,14 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.llm.history import _RE_CHINESE, estimate_cost as _history_estimate_cost
-from src.llm.memory_inject import PUBLIC_MEMORY_BLOCK_MARK, inject_public_memories
+from src.llm.memory_inject import (
+    PUBLIC_MEMORY_BLOCK_MARK,
+    PublicMemoryInjectResult,
+    inject_public_memories,
+)
 from src.llm.message_wrap import wrap_incoming_message
 from src.llm.rag_inject import inject_rag_knowledge
+from src.llm.rag_strict import STRICT_BLOCK_MARK, resolve_strict_mode
 from src.llm.timeline import format_time_label, gap_notice, incoming_gap_notice
 
 if TYPE_CHECKING:
@@ -178,14 +183,24 @@ class PromptBuilder:
         query = _sanitize_rag_query(message.content.strip(), history)
         max_input_tokens = agent._max_input_tokens
 
+        # ★ 严格问答模式：开启后强制检索知识库（覆盖 rag_auto_inject / rag_intent_only），
+        #   并使用严格阈值与严格 RAG 块；关闭时 strict.enabled=False，参数全部走原值。
+        strict = resolve_strict_mode(agent)
+        if strict.enabled:
+            logger.info("[RAG严格模式] 已开启：强制检索知识库，min_sim=%.2f max_results=%d",
+                        strict.min_similarity, strict.max_results)
+
         # 自动注入 RAG 知识（实际逻辑已拆到 src/llm/rag_inject.py；此处仅状态透传）。
         system_content, rag_result = inject_rag_knowledge(
             query=query,
             system_content=system_content,
             agent=agent,
-            rag_auto_inject=agent._rag_auto_inject,
-            rag_intent_only=agent._rag_intent_only,
+            rag_auto_inject=agent._rag_auto_inject or strict.enabled,
+            rag_intent_only=agent._rag_intent_only and not strict.enabled,
             query_embedding=query_embedding,
+            override_min_similarity=strict.min_similarity if strict.enabled else None,
+            override_max_results=strict.max_results if strict.enabled else None,
+            strict=strict,
         )
         # 透传 RAG 命中状态给 Feature A（低置信度转人工）。
         agent._last_kb_best_score = rag_result.best_score
@@ -199,12 +214,16 @@ class PromptBuilder:
         # 自动注入公共记忆（团队共享知识，无隐私风险，每轮自动召回）。
         # 个人记忆保持 LLM 主动调 recall_memory（点对点隐私边界，不能自动注入）。
         # 复用 query_embedding，零额外 embedding 成本。
-        system_content, _mem_result = inject_public_memories(
-            query=query,
-            system_content=system_content,
-            agent=agent,
-            query_embedding=query_embedding,
-        )
+        # 严格问答模式下跳过：公共记忆不是知识库文档，注入会引入非 KB 事实来源。
+        if strict.enabled:
+            _mem_result = PublicMemoryInjectResult(injected=False, skipped_reason="strict-mode")
+        else:
+            system_content, _mem_result = inject_public_memories(
+                query=query,
+                system_content=system_content,
+                agent=agent,
+                query_embedding=query_embedding,
+            )
 
         # 历史消息分层处理：近期完整保留 + 早期摘要
         tiered_history = agent._apply_history_tiering(history)
@@ -323,11 +342,14 @@ class PromptBuilder:
             if system_content.endswith(_rag_block):
                 system_content = system_content[:-len(_rag_block)].rstrip()
                 _extracted = True
-            elif "【★RAG 知识库答案" in system_content:
+            else:
                 # 兜底：通过标记定位 RAG 块起始位置（容忍尾部空白差异）
-                _idx = system_content.rindex("【★RAG 知识库答案")
-                system_content = system_content[:_idx].rstrip()
-                _extracted = True
+                for _mark in ("【★RAG 知识库答案", STRICT_BLOCK_MARK):
+                    if _mark in system_content:
+                        _idx = system_content.rindex(_mark)
+                        system_content = system_content[:_idx].rstrip()
+                        _extracted = True
+                        break
             if _extracted:
                 messages[0]["content"] = system_content  # 同步更新已构建的消息
                 logger.info("[RAG] 权重提升：RAG 块从主 system prompt 抽出 → 独立消息（%d 字符，近因位）",

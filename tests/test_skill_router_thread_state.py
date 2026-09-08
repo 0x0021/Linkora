@@ -113,3 +113,42 @@ class TestRoutingDetailReaderName:
             "routing_trace 又用回了不存在的 _last_routing_detail，埋点会恒为空"
         )
         assert '"last_routing_detail"' in src
+
+
+class TestActivatedReadersCrossThread:
+    """get_activated_* 读取也必须在未初始化线程上安全兜底。
+
+    这些方法是 _select_tools → tool_router.select_tools 的下游消费方。
+    RAG 严格问答模式会跳过 activate_skills，导致处理消息的 worker 线程上
+    _tl.last_matches 从未被赋值；若直接读 self._tl.last_matches 会抛
+    AttributeError（'_RouterThreadState' object has no attribute 'last_matches'），
+    让整条 LLM 回复链路崩溃进死信队列。修复后统一走带 getattr 兜底的
+    last_matches 属性（与类注释「其余线程靠读取侧 getattr 兜底」语义一致）。
+    """
+
+    def test_activated_readers_safe_on_fresh_thread(self, monkeypatch):
+        """在未初始化 _tl 的新线程上读 get_activated_* 都不得抛异常。"""
+        router, td = _make_router(monkeypatch)
+        try:
+            box: dict = {}
+
+            def _worker():
+                try:
+                    box["name"] = router.get_activated_skill_name()
+                    box["names"] = router.get_activated_skill_names()
+                    box["tools"] = router.get_activated_tools()
+                    box["fallback"] = router.get_activated_fallback_tools()
+                except BaseException as e:  # noqa: BLE001 — 要的就是把异常带回主线程
+                    box["err"] = e
+
+            t = threading.Thread(target=_worker)
+            t.start()
+            t.join(timeout=5)
+
+            assert "err" not in box, f"跨线程读取激活结果抛异常: {box.get('err')!r}"
+            assert box["name"] is None
+            assert box["names"] == []
+            assert box["tools"] == []
+            assert box["fallback"] == []
+        finally:
+            td.cleanup()

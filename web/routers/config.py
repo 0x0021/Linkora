@@ -352,6 +352,18 @@ def _apply_rag_auto_inject(update: ConfigUpdate, cfg: AppConfig):
         cfg.llm.advanced.rag_max_results = update.rag_max_results
 
 
+def _apply_rag_strict_mode(update: ConfigUpdate, cfg: AppConfig):
+    """RAG 严格问答模式（智能问答）"""
+    if update.rag_strict_mode is not None:
+        cfg.llm.advanced.rag_strict_mode = update.rag_strict_mode
+    if update.rag_strict_min_similarity is not None:
+        cfg.llm.advanced.rag_strict_min_similarity = update.rag_strict_min_similarity
+    if update.rag_strict_max_results is not None:
+        cfg.llm.advanced.rag_strict_max_results = update.rag_strict_max_results
+    if update.rag_strict_no_hit_reply is not None:
+        cfg.llm.advanced.rag_strict_no_hit_reply = update.rag_strict_no_hit_reply
+
+
 def _apply_tool_routing(update: ConfigUpdate, cfg: AppConfig):
     """工具路由与限频"""
     if update.tool_routing_mode is not None:
@@ -633,6 +645,7 @@ async def update_config(update: ConfigUpdate):
         _apply_web(update, cfg)
         _apply_rag_chunking(update, cfg)
         _apply_rag_auto_inject(update, cfg)
+        _apply_rag_strict_mode(update, cfg)
         _apply_tool_routing(update, cfg)
         _apply_rule_engine(update, cfg)
         _apply_dlq(update, cfg)

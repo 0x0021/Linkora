@@ -6,13 +6,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        感谢报 Bug！请尽量填全下方信息，越具体我们修得越快。
+        感谢报 Bug！提交前请确认日志中**不含密钥、token、个人隐私信息**。
   - type: textarea
     id: what-happened
     attributes:
       label: 现象描述
-      description: 实际发生了什么？期望是什么？
-      placeholder: 简明的现象 + 期望行为
+      description: 实际发生了什么？期望行为是什么？
+      placeholder: 实际：... / 期望：...
     validations:
       required: true
   - type: dropdown
@@ -39,11 +39,21 @@ body:
         3. ...
     validations:
       required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 复现频率
+      options:
+        - 必现
+        - 偶发
+        - 仅出现一次，无法复现
+    validations:
+      required: false
   - type: textarea
     id: env
     attributes:
       label: 环境信息
-      description: 版本 / 系统 / 运行方式（docker 或 venv）
+      description: 版本 / 系统 / 运行方式
       placeholder: |
         - Linkora 版本 / commit：
         - 系统：macOS / Linux / Windows / Docker：

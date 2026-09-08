@@ -171,6 +171,15 @@ function renderSimStatus(data) {
     const llm = data.llm || {};
     const skills = data.skills || {};
     const system = data.system || {};
+    const rag = data.rag || {};
+
+    // 问答模式：严格（仅知识库）/ 标准
+    const modeChip = document.getElementById('sim-rag-mode-chip');
+    const modeVal = document.getElementById('sim-rag-mode');
+    if (modeVal) modeVal.textContent = rag.strict_mode ? '严格（仅知识库）' : '标准';
+    if (modeChip) modeChip.classList.toggle('is-strict', !!rag.strict_mode);
+    if (typeof syncRagModeBadge === 'function') syncRagModeBadge(!!rag.strict_mode);
+    _syncSimRagModeHint();
 
     const llmStatusEl = document.getElementById('sim-llm-status');
     const llmIconEl = document.getElementById('sim-llm-icon');
@@ -193,6 +202,21 @@ function renderSimStatus(data) {
     const versionEl = document.getElementById('sim-version');
     if (versionEl) {
         versionEl.textContent = system.version || '--';
+    }
+}
+
+/** 本次模式选择器的联动提示：让「跟随系统」时明确告知系统当前是哪一种 */
+function _syncSimRagModeHint() {
+    const sel = document.getElementById('simulate-rag-mode');
+    const hint = document.getElementById('sim-rag-mode-hint');
+    if (!sel || !hint) return;
+    const v = sel.value;
+    if (v === '') {
+        hint.textContent = window.__ragStrictOn ? '跟随系统：当前为严格问答' : '跟随系统：当前为标准问答';
+    } else if (v === 'true') {
+        hint.textContent = '本次强制严格问答（不改全局配置）';
+    } else {
+        hint.textContent = '本次强制标准问答（不改全局配置）';
     }
 }
 
@@ -446,6 +470,19 @@ function _buildEvidenceCardBody(res) {
 }
 
 // AI 回复卡片（放在 banner 区域，紧跟在 alert 后面）
+/** 回复卡右上角的模式标签：本次到底是按哪套逻辑答的，直接写在结果上 */
+function _buildRagModeTag(res) {
+    if (res.rag_strict === true) {
+        return res.no_hit_short_circuit
+            ? '<span class="sim-rag-tag is-miss"><i class="fa-solid fa-book-circle-xmark"></i>严格 · 未收录（未调 LLM）</span>'
+            : '<span class="sim-rag-tag is-strict"><i class="fa-solid fa-book-open"></i>严格 · 仅依据知识库</span>';
+    }
+    if (res.rag_strict === false) {
+        return '<span class="sim-rag-tag"><i class="fa-solid fa-comments"></i>标准模式</span>';
+    }
+    return '';
+}
+
 function _buildReplyCardHtml(res) {
     const replyText = (res.text || '').trim();
     return `
@@ -453,6 +490,7 @@ function _buildReplyCardHtml(res) {
             <div class="sim-card-header">
                 <div class="sim-card-icon sim-icon-robot"><i class="fa-solid fa-robot"></i></div>
                 <div class="sim-card-title">AI 回复</div>
+                ${_buildRagModeTag(res)}
             </div>
             <div class="sim-card-body">
                 <div class="sim-chat-bubble ${replyText ? '' : 'sim-chat-empty'} md-content">
@@ -486,6 +524,10 @@ async function sendSimulatedMessage() {
     const content = document.getElementById('simulate-content').value.trim();
     const senderName = document.getElementById('simulate-sender').value.trim();
     const enableStream = document.getElementById('simulate-stream').checked;
+    // 本次模式覆盖：'' = 跟随系统，'true'/'false' = 单次强制（不改全局配置）
+    const ragModeSel = document.getElementById('simulate-rag-mode');
+    const ragStrictRaw = ragModeSel ? ragModeSel.value : '';
+    const ragStrict = ragStrictRaw === '' ? null : (ragStrictRaw === 'true');
 
     if (!content) {
         showToast('请输入消息内容', 'warning');
@@ -514,11 +556,14 @@ async function sendSimulatedMessage() {
     const startTime = Date.now();
 
     try {
-        const res = await api.post('/api/simulate/message', {
+        const payload = {
             content,
             sender_name: senderName || '测试用户',
             enable_stream: enableStream,
-        }, { timeoutMs: 120000 });
+        };
+        if (ragStrict !== null) payload.rag_strict = ragStrict;
+
+        const res = await api.post('/api/simulate/message', payload, { timeoutMs: 120000 });
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
         if (timingEl) timingEl.textContent = elapsed + 's';
@@ -571,6 +616,113 @@ async function sendSimulatedMessage() {
     } finally {
         window.__simSending = false;
     }
+}
+
+/**
+ * 两种问答模式并排对比：同一条消息分别以「标准」和「严格」各跑一次。
+ *
+ * 必须**串行**请求：严格模式的单次覆盖是临时写 agent.rag_strict_override，
+ * 并发两个请求会互相踩踏覆盖值。
+ */
+async function compareRagModes() {
+    if (window.__simSending) return;
+    const content = document.getElementById('simulate-content').value.trim();
+    const senderName = document.getElementById('simulate-sender').value.trim() || '测试用户';
+    if (!content) {
+        showToast('请输入消息内容', 'warning');
+        return;
+    }
+
+    const timingEl = document.getElementById('sim-result-timing');
+    window.__simSending = true;
+    _setResultStatus('running');
+    if (timingEl) { timingEl.style.display = ''; timingEl.textContent = '执行中...'; }
+    _setSimulateBanner(`
+        <div class="sim-result-loading">
+            <div class="sim-result-loading-spinner"></div>
+            <div class="sim-result-loading-text">两种模式分别推理中…（串行，请稍候）</div>
+        </div>
+    `);
+    document.getElementById('simulate-status').innerHTML = '';
+
+    const startTime = Date.now();
+    try {
+        const base = { content, sender_name: senderName, enable_stream: false };
+        const standard = await api.post('/api/simulate/message',
+            { ...base, rag_strict: false }, { timeoutMs: 120000 });
+        const strict = await api.post('/api/simulate/message',
+            { ...base, rag_strict: true }, { timeoutMs: 120000 });
+
+        if (timingEl) timingEl.textContent = ((Date.now() - startTime) / 1000).toFixed(2) + 's';
+        _setResultStatus('success');
+        _setSimulateBanner(_buildModeCompareHtml(standard || {}, strict || {}));
+        _resetSimulateCards();
+    } catch (e) {
+        if (timingEl) timingEl.textContent = ((Date.now() - startTime) / 1000).toFixed(2) + 's';
+        _setResultStatus('error');
+        _showResultSlot(_idleEmptyHtml('对比失败', e.message || String(e),
+            'fa-triangle-exclamation', 'var(--brand-danger)'));
+        _resetSimulateCards();
+    } finally {
+        window.__simSending = false;
+    }
+}
+
+function _modeBubbleHtml(res, emptyText) {
+    const text = (res.text || '').trim();
+    return text
+        ? `<div class="sim-chat-bubble md-content">${renderMarkdown(text)}</div>`
+        : `<div class="sim-chat-bubble sim-chat-empty"><div class="sim-chat-empty-text">${emptyText}</div></div>`;
+}
+
+function _buildModeCompareHtml(standard, strict) {
+    const strictMiss = strict.no_hit_short_circuit === true;
+    return `
+        <div class="sim-card sim-card-reply">
+            <div class="sim-card-header">
+                <div class="sim-card-icon sim-icon-robot"><i class="fa-solid fa-code-compare"></i></div>
+                <div class="sim-card-title">两种问答模式对比</div>
+                <span class="sim-rag-tag"><i class="fa-solid fa-comments"></i>同一输入 · 各跑一次</span>
+            </div>
+            <div class="sim-card-body">
+                <div class="sim-mode-compare">
+                    <div class="sim-mode-col">
+                        <div class="sim-mode-col-head">
+                            <i class="fa-solid fa-toggle-off"></i> 标准模式
+                            <span class="sim-mode-col-sub">通用知识 + 全部工具</span>
+                        </div>
+                        ${_modeBubbleHtml(standard, 'AI 未返回文本内容')}
+                        <div class="sim-mode-col-foot">${_modeFootNote(standard)}</div>
+                    </div>
+                    <div class="sim-mode-col">
+                        <div class="sim-mode-col-head is-strict">
+                            <i class="fa-solid fa-toggle-on"></i> 严格问答
+                            <span class="sim-mode-col-sub">仅依据知识库</span>
+                        </div>
+                        ${_modeBubbleHtml(strict, 'AI 未返回文本内容')}
+                        <div class="sim-mode-col-foot">${_modeFootNote(strict)}</div>
+                    </div>
+                </div>
+                ${strictMiss ? `
+                <div class="sim-alert sim-alert-info" style="margin-top:0.75rem">
+                    <div class="sim-alert-icon"><i class="fa-solid fa-circle-info"></i></div>
+                    <div class="sim-alert-text">严格模式知识库未命中：已直接短路返回未收录文案，<b>未调用大模型</b>，因此不存在编造空间。</div>
+                </div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function _modeFootNote(res) {
+    if (res.rag_strict === true) {
+        return res.kb_hit
+            ? '<i class="fa-solid fa-circle-check"></i> 知识库已命中，答案只来自检索片段'
+            : '<i class="fa-solid fa-circle-xmark"></i> 知识库未命中，直接返回未收录文案';
+    }
+    if (res.routed_tools && res.routed_tools.length) {
+        return '<i class="fa-solid fa-screwdriver-wrench"></i> 可用工具：' + escapeHtml(res.routed_tools.join('、'));
+    }
+    return '<i class="fa-solid fa-circle-info"></i> 未限定信息源';
 }
 
 function _confidenceClass(val) {

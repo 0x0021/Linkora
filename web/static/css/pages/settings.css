@@ -283,3 +283,103 @@
         grid-column: 1 / -1;
     }
 }
+
+/* ===== RAG 严格问答模式：当前状态条 + 两种模式差异对照 ===== */
+.rag-mode-state {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+    font-size: 0.8rem;
+}
+.rag-mode-state-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gray-400);
+    flex: none;
+}
+.rag-mode-state-text {
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+.rag-mode-state-hint {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+.rag-mode-state.is-strict {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary-light);
+}
+.rag-mode-state.is-strict .rag-mode-state-dot {
+    background: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-glow);
+}
+.rag-mode-state.is-strict .rag-mode-state-text { color: var(--brand-primary); }
+
+.rag-mode-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin: 0.75rem 0 0.25rem;
+}
+.rag-mode-col {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    overflow: hidden;
+}
+.rag-mode-col-head {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border-light);
+}
+.rag-mode-col-head.is-off {
+    color: var(--text-tertiary);
+    background: var(--bg-subtle);
+}
+.rag-mode-col-head.is-on {
+    color: var(--brand-primary);
+    background: var(--brand-primary-light);
+}
+.rag-mode-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0.75rem 0.625rem;
+}
+.rag-mode-list li {
+    position: relative;
+    padding-left: 0.9rem;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+.rag-mode-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--gray-300);
+}
+.rag-mode-list li b { color: var(--text-primary); }
+.rag-mode-list code {
+    padding: 0 0.25rem;
+    border-radius: 4px;
+    background: var(--bg-subtle);
+    font-size: 0.72rem;
+}
+@media (max-width: 860px) {
+    .rag-mode-compare { grid-template-columns: 1fr; }
+}

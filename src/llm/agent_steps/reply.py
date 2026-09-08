@@ -12,6 +12,7 @@ from src.constants import is_summary_noise_message
 from src.llm.agent_reply import AgentReply
 from src.llm.client import LLMResponse
 from src.llm.exceptions import LLMProcessingError, LLMRateLimitExhaustedError
+from src.llm.rag_strict import resolve_strict_mode
 from src.llm.reply import enforce_brevity, gate_reply, strip_internal_artifacts
 from src.llm.reply_helper import ensure_complete_reply
 from src.models import Message
@@ -113,10 +114,26 @@ def process_message(
     query_vec = agent._embed_message(message.content)
     messages = agent._build_user_message(message, history, query_embedding=query_vec)
 
-    apply_rag_empty_fallback(agent, message, messages, query_vec)
-    activated = activate_skills(agent, message, messages, query_vec)
+    # ★ RAG 严格问答模式（默认关）：开启后所有问答只走知识库，详见 src/llm/rag_strict.py。
+    strict = resolve_strict_mode(agent)
+
+    if strict.enabled:
+        # 跳过三级递进兜底：其「降阈值重搜 / 引导追问 / 强制兜底文案」会引入
+        # 非知识库表述（追问话术、通用兜底），与"仅依据 KB 作答"冲突。
+        logger.info("[RAG严格模式] 本轮走知识库问答：禁用技能与非 KB 工具")
+        activated = []
+    else:
+        apply_rag_empty_fallback(agent, message, messages, query_vec)
+        activated = activate_skills(agent, message, messages, query_vec)
 
     tools = agent._select_tools(message.content, query_embedding=query_vec)
+    if strict.enabled:
+        # 只保留 kb_search（仍属知识库内检索）；其余工具（联网搜索、发消息、
+        # 审批、天气…）会引入知识库之外的信息或产生副作用，严格模式下一律禁用。
+        tools = [
+            t for t in tools
+            if t.get("function", {}).get("name") == "kb_search"
+        ]
     routing_mode = agent._resolve_routing_mode()
     routed_tools = [t.get("function", {}).get("name") for t in tools]
 
@@ -145,6 +162,12 @@ def process_message(
 
     logger.info("LLM 代理正在处理来自 %s 的消息（轮次限制: %d，工具数: %d）",
                 message.sender_name, max_rounds, len(tools))
+
+    # ★ 严格问答模式未命中短路：知识库检索无结果时直接返回固定文案。
+    #   这是"不编造"的硬保证——LLM 根本不被调用，不存在自由发挥的空间。
+    if strict.enabled and not getattr(agent, "_last_kb_hit", False):
+        logger.info("[RAG严格模式] 知识库未命中，短路返回未收录文案（不调用 LLM）")
+        return _finalize(_mk_reply(strict.no_hit_reply))
 
     converge_threshold = agent.config.converge_after_tool_rounds
     converged = False

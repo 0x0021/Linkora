@@ -1194,3 +1194,111 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ===== 模拟测试：本次模式覆盖 + 结果模式标签 ===== */
+.sim-rag-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+.sim-rag-mode-row > label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.sim-rag-mode-row select.form-control {
+    width: auto;
+    min-width: 190px;
+    height: 30px;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+}
+.sim-rag-mode-row .sim-options-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* 状态栏问答模式 chip */
+#sim-rag-mode-chip.is-strict {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary-light);
+}
+#sim-rag-mode-chip.is-strict i,
+#sim-rag-mode-chip.is-strict .sim-status-chip-value {
+    color: var(--brand-primary);
+}
+
+/* 回复卡右上角的模式标签 */
+.sim-rag-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: auto;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+    color: var(--text-tertiary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+.sim-rag-tag.is-strict {
+    border-color: var(--brand-primary);
+    background: var(--brand-primary-light);
+    color: var(--brand-primary);
+}
+.sim-rag-tag.is-miss {
+    border-color: var(--brand-warning);
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--brand-warning);
+}
+
+/* ===== 两种模式并排对比 ===== */
+.sim-mode-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+.sim-mode-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.625rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+}
+.sim-mode-col-head {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+.sim-mode-col-head.is-strict { color: var(--brand-primary); }
+.sim-mode-col-sub {
+    margin-left: auto;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+.sim-mode-col-foot {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+.sim-mode-col .sim-chat-bubble {
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+.sim-compare-btn { white-space: nowrap; }
+@media (max-width: 900px) {
+    .sim-mode-compare { grid-template-columns: 1fr; }
+}

@@ -437,6 +437,15 @@ class LlmAdvancedConfig(BaseModel):
     rag_fallback_min_similarity: float = 0.20  # 第1级降级重搜的最低相似度阈值
     rag_fallback_max_results: int = 2  # 第1级降级重搜的最大结果数（不搜太多）
     rag_max_retry_rounds: int = 1  # 最多允许几轮引导追问（超过则强制走第3级兜底）
+    # ---------- RAG 严格问答模式（智能问答，默认关） ----------
+    # 开启后：所有问答请求强制先检索知识库，回答只允许来自检索到的知识库内容，
+    # 不使用通用大模型知识；知识库无相关内容时直接返回 rag_strict_no_hit_reply
+    #（不调用 LLM、不推理、不编造）。关闭时完全恢复原有问答逻辑。
+    # 详见 src/llm/rag_strict.py 与 docs/rag.md「严格问答模式」。
+    rag_strict_mode: bool = False  # 严格问答模式总开关
+    rag_strict_min_similarity: float = 0.50  # 严格模式召回相似度门槛（覆盖 rag_min_similarity）
+    rag_strict_max_results: int = 3  # 严格模式最多注入几条知识片段
+    rag_strict_no_hit_reply: str = "知识库中暂未收录相关内容，我无法凭已有信息作答。"  # 未命中时的固定回复
     # ---------- Prompt 长度控制 ----------
     max_input_tokens: int = 12000  # 单条请求最大输入 token（含 system + history + user）；超限则从最早历史开始截断
     # ---------- H5/H6 历史分级注入（注入 LLM 的近期完整条数） ----------

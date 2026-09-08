@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from src.llm.rag_strict import StrictModeConfig, build_strict_block
 from src.llm.style import _RAG_GROUND_SIMILARITY, _RE_HAS_TEXT, Citation
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ def inject_rag_knowledge(
     query_embedding=None,
     override_min_similarity: float | None = None,
     override_max_results: int | None = None,
+    strict: StrictModeConfig | None = None,
 ) -> tuple[str, RagInjectResult]:
     """「自动注入 RAG 知识」主逻辑（从 _build_user_message 抽离）。
 
@@ -65,7 +67,12 @@ def inject_rag_knowledge(
     三级递进支持：
     - override_min_similarity: 临时覆盖 agent._rag_min_similarity（降级重搜用）
     - override_max_results: 临时覆盖 agent._rag_max_results（降级重搜用）
+
+    严格问答模式（strict.enabled=True）：
+    - 强制检索：不因消息过短/纯表情而跳过（无实质文本自然检索不到 → 走未命中短路）
+    - 检索结果与「仅依据资料作答」的硬约束一起封装成严格模式 RAG 块
     """
+    strict_on = bool(strict is not None and strict.enabled)
     skipped_reason = ""
     if not rag_auto_inject:
         logger.debug("[RAG] 自动注入已关闭（rag_auto_inject=false），由 LLM 主动调 kb_search")
@@ -84,6 +91,11 @@ def inject_rag_knowledge(
         len(query) >= 5  # 至少5个字符
         and has_text is not None  # 包含至少3个连续中文字母
     )
+
+    if strict_on:
+        # 严格模式：任何消息都尝试检索（含表情/超短消息）；检索不到即未命中，
+        # 由 process_message 短路返回固定文案，不会退化成"用通用知识硬答"。
+        has_meaningful_text = True
 
     if not has_meaningful_text:
         logger.debug("[RAG] 跳过注入（无意义消息）: %s", query[:20])
@@ -147,9 +159,23 @@ def inject_rag_knowledge(
     _rag_block = ""  # v5：捕获完整 RAG 块，供 prompt_builder 提取为独立消息
     if kb_grounded:
         logger.info(
-            "[RAG] 注入成功: best_score=%.3f intent_ok=%s query=%.60s",
+            "[RAG] 注入成功%s: best_score=%.3f intent_ok=%s query=%.60s",
+            "（严格问答模式）" if strict_on else "",
             best_score or 0, intent_ok, query,
         )
+        if strict is not None and strict.enabled:
+            # 严格模式：只给「资料 + 仅依据资料作答」硬约束，不给降级兜底/调工具许可
+            _rag_block = build_strict_block(relevant_knowledge, strict.no_hit_reply)
+            new_system_content += _rag_block
+            return new_system_content, RagInjectResult(
+                injected=True,
+                relevant_knowledge=relevant_knowledge,
+                best_score=best_score,
+                intent_ok=intent_ok,
+                skipped_reason="",
+                citations=citations_raw,
+                rag_block=_rag_block,
+            )
         # v5：RAG 前置指令强化——更高权重措辞，明确覆盖所有「先调 kb_search」冲突指令
         _rag_preamble = (
             "\n【★RAG 知识库答案（最高优先级，直接使用）★】\n"

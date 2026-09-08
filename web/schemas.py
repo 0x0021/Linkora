@@ -139,6 +139,11 @@ class ConfigUpdate(BaseModel):
     rag_intent_only: bool | None = None
     rag_min_similarity: float | None = None
     rag_max_results: int | None = None
+    # RAG 严格问答模式（智能问答）
+    rag_strict_mode: bool | None = None
+    rag_strict_min_similarity: float | None = None
+    rag_strict_max_results: int | None = None
+    rag_strict_no_hit_reply: str | None = None
     # 工具路由与限频
     tool_routing_mode: str | None = None
     tools_semantic_routing: bool | None = None

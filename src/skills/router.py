@@ -455,10 +455,10 @@ class SkillRouter:
         工具名来自 SKILL.md frontmatter 的 allowed-tools 字段。
         智能引擎可据此决定本轮是否暴露这些工具给 LLM。
         """
-        if not self._tl.last_matches:
+        if not self.last_matches:
             return []
         out: list[str] = []
-        for m in self._tl.last_matches:
+        for m in self.last_matches:
             skill = self._manager.get(m.name)
             if skill:
                 out.extend(skill.allowed_tools)
@@ -468,18 +468,18 @@ class SkillRouter:
 
     def get_activated_skill_name(self) -> str | None:
         """返回主激活技能名（组合激活时为 score 最高的那个），未激活返回 None。"""
-        return self._tl.last_matches[0].name if self._tl.last_matches else None
+        return self.last_matches[0].name if self.last_matches else None
 
     def get_activated_skill_names(self) -> list[str]:
         """返回全部激活技能名（组合激活时为多个）。"""
-        return [m.name for m in self._tl.last_matches]
+        return [m.name for m in self.last_matches]
 
     def get_activated_fallback_tools(self) -> list[str]:
         """返回所有激活技能声明的 fallback_tools 并集（故障时回退的内置工具名）。"""
-        if not self._tl.last_matches:
+        if not self.last_matches:
             return []
         out: list[str] = []
-        for m in self._tl.last_matches:
+        for m in self.last_matches:
             skill = self._manager.get(m.name)
             if skill:
                 out.extend(skill.fallback_tools)

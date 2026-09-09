@@ -6,7 +6,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 
@@ -257,7 +257,9 @@ class EmbeddingClient:
             device = self._resolve_device(config)
             # MPS/CUDA 直接用 fp16 权重加载：避免先建 fp32 副本再 .half() 时两份
             # 权重同时驻留（CUDA 上可省约一半显存；MPS 驱动池大小不受影响）。
-            model_kwargs: dict[str, object] = {}
+            # 须为 dict[str, Any]：用 object 做 value 类型时，**kwargs 展开后 pyright
+            # 无法匹配 SentenceTransformer 的具体形参类型（CI 依赖版本下会报一堆 error）。
+            model_kwargs: dict[str, Any] = {}
             if device in ("mps", "cuda"):
                 import torch
 

@@ -595,13 +595,6 @@ async function init() {
         }
     }, 30000);
 
-    // 问答模式徽章（顶栏常驻：严格问答 / 标准问答）
-    try {
-        if (api.isAuthenticated()) await refreshRagModeBadge();
-    } catch (e) {
-        console.error('[rag-mode] 徽章初始化失败:', e);
-    }
-
     // Update sidebar status
     const statusIcon = document.getElementById('sidebar-status-icon');
     const statusText = document.getElementById('sidebar-status-text');
@@ -962,60 +955,3 @@ window.debouncedLoadDeadLettersPage = debounce(loadDeadLettersPage, 300);
     });
     modals.forEach(m => obs.observe(m, { attributes: true, attributeFilter: ['class'] }));
 })();
-
-
-
-// ============ 问答模式徽章（严格问答 / 标准问答） ============
-// 顶栏常驻：让「当前到底是哪套问答逻辑」在任意页面都一眼可见，
-// 而不是只在配置页里躺着一个复选框。
-
-/** 拉取配置并同步徽章状态。
- *  注意：/api/config 带 60s 前端缓存，保存配置后需先 api.clearCache() 再调本函数。 */
-async function refreshRagModeBadge() {
-    try {
-        const data = await api.getConfig();
-        syncRagModeBadge(data && data.llm && data.llm.advanced
-            ? data.llm.advanced.rag_strict_mode === true : false);
-    } catch (e) {
-        console.error('[rag-mode] 读取配置失败:', e);
-    }
-}
-
-/** 同步顶栏徽章的文案 / 配色 */
-function syncRagModeBadge(strictOn) {
-    const badge = document.getElementById('rag-mode-badge');
-    if (!badge) return;
-    const textEl = document.getElementById('rag-mode-badge-text');
-    const iconEl = document.getElementById('rag-mode-badge-icon');
-
-    window.__ragStrictOn = !!strictOn;
-    badge.classList.toggle('is-strict', !!strictOn);
-    if (textEl) textEl.textContent = strictOn ? '严格问答' : '标准问答';
-    if (iconEl) {
-        iconEl.className = strictOn ? 'fa-solid fa-book-open' : 'fa-solid fa-comments';
-    }
-    badge.title = strictOn
-        ? '严格问答模式：所有回答只依据知识库，未收录即直答未收录（点击前往设置）'
-        : '标准问答模式：可用通用知识与全部工具（点击前往设置）';
-}
-
-/** 徽章点击：跳到系统配置 → 严格问答模式区块 */
-function gotoRagStrictSetting() {
-    if (typeof switchPage === 'function') switchPage('config');
-    setTimeout(() => {
-        const target = document.getElementById('cfg-rag-strict-mode');
-        if (!target) return;
-        const panel = target.closest('.panel.config-section');
-        if (panel && panel.dataset.configSlug && typeof switchConfigPanel === 'function') {
-            switchConfigPanel(panel.dataset.configSlug);
-        }
-        const section = target.closest('.sub-section');
-        if (section && section.scrollIntoView) {
-            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    }, 200);
-}
-
-window.refreshRagModeBadge = refreshRagModeBadge;
-window.syncRagModeBadge = syncRagModeBadge;
-window.gotoRagStrictSetting = gotoRagStrictSetting;

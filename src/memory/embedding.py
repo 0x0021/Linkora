@@ -227,6 +227,22 @@ class EmbeddingClient:
         logger.info("未检测到加速设备，使用 CPU")
         return "cpu"
 
+    @staticmethod
+    def _resolve_device(config: object) -> str:
+        """解析本地推理设备：配置显式指定优先，``auto``/空值走自动推断。
+
+        背景（实测数据）：MPS 后端在首次分配时会向驱动申请约 1GB 显存池，
+        且 ``torch.mps.empty_cache()`` 无法将其归还系统（只有删除模型对象才释放），
+        精度改为 fp16 直接加载也一样——该池与模型大小无关。对 bge-small 这类
+        小模型属于纯浪费：CPU 推理单条短文本约 15ms、384 token 长文本约 20ms。
+        因此内存吃紧时可把 ``embedding.device`` 显式设为 ``cpu`` 关闭 MPS。
+        """
+        requested = str(getattr(config, "device", "auto") or "auto").strip().lower()
+        if requested in ("", "auto", "default"):
+            return EmbeddingClient._get_optimal_device()
+        logger.info("按配置指定向量模型推理设备: %s", requested)
+        return requested
+
     def _init_local(self, config: EmbeddingConfig, download_with_progress: bool = False) -> None:
         try:
             from sentence_transformers import SentenceTransformer
@@ -238,7 +254,15 @@ class EmbeddingClient:
             offline = bool(getattr(config, "offline", False))
             is_local = self._is_local_model_path(config.model)
 
-            device = self._get_optimal_device()
+            device = self._resolve_device(config)
+            # MPS/CUDA 直接用 fp16 权重加载：避免先建 fp32 副本再 .half() 时两份
+            # 权重同时驻留（CUDA 上可省约一半显存；MPS 驱动池大小不受影响）。
+            model_kwargs: dict[str, object] = {}
+            if device in ("mps", "cuda"):
+                import torch
+
+                model_kwargs["torch_dtype"] = torch.float16
+
             self._load_status["state"] = "loading"
             _persist_status(self)
 
@@ -247,7 +271,7 @@ class EmbeddingClient:
                 os.environ["HF_HUB_OFFLINE"] = "1"
                 logger.info("正在加载本地向量模型: %s（本地路径/离线模式）", config.model)
                 self._model = SentenceTransformer(
-                    config.model, local_files_only=True, device=device
+                    config.model, local_files_only=True, device=device, **model_kwargs
                 )
             elif download_with_progress:
                 # 在线：先带进度（tqdm_class 钩子）下载到 HF 缓存，再从本地加载
@@ -266,11 +290,11 @@ class EmbeddingClient:
                 self._load_status["state"] = "loading"
                 self._load_status["message"] = "模型文件下载完成，正在加载…"
                 _persist_status(self)
-                self._model = SentenceTransformer(local_path, device=device)
+                self._model = SentenceTransformer(local_path, device=device, **model_kwargs)
             else:
                 # 同步直载：保持 local_files_only=offline 以兼容既有行为/测试
                 self._model = SentenceTransformer(
-                    config.model, local_files_only=offline, device=device
+                    config.model, local_files_only=offline, device=device, **model_kwargs
                 )
 
             # MPS/CUDA 自动启用 FP16 加速推理

@@ -42,9 +42,17 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             c.execute("PRAGMA busy_timeout=5000")
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("PRAGMA synchronous=NORMAL")
-            # 页面缓存：默认 2MB 太小，提高到 ~64MB（-64000 页 × 1KB/页 = 64MB）
-            # 对知识库检索 / 对话历史查询等读密集型场景显著减少磁盘 IO
-            c.execute("PRAGMA cache_size=-64000")
+            # 页面缓存：默认 2MB 太小，这里设 ~8MB（-8000 页 × 1KB/页 ≈ 8MB）。
+            # 【内存】注意这是「每线程每连接」独立上限：worker 常驻 ~37 线程、
+            # 实测已开 9 主库 + 9 会话库连接，早前的 -64000（≈62.5MB/连接）会让
+            # 页缓存随查询量缓慢爬升到 GB 级，表现为「跑得越久内存越高」。
+            # 【实测依据】会话库 102MB / 11.1 万条消息，单连接三档对比：
+            #   62.5MB → 300 次按会话查最近 50 条 0.019s、全表扫描 0.150s、RSS 85MB
+            #   16MB   → 0.014s / 0.145s / 46MB
+            #   8MB    → 0.015s / 0.149s / 36MB
+            # 即：真实查询走索引、热数据仅几 MB；全表扫描的 102MB 主要由 macOS 统一
+            # 缓冲缓存（unified buffer cache）兜底，加大 SQLite 应用层缓存并无收益。
+            c.execute("PRAGMA cache_size=-8000")
             self._conns[tid] = c
             # 【HIGH-4】首次连接时主动执行 schema 迁移（CREATE TABLE + ALTER TABLE 补齐缺列），
             # 不依赖首次 SQL 触发时的隐式异常恢复。`init_db()` 内部幂等，重复调用安全。
@@ -145,7 +153,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             c.execute("PRAGMA busy_timeout=5000")
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("PRAGMA synchronous=NORMAL")
-            c.execute("PRAGMA cache_size=-64000")
+            c.execute("PRAGMA cache_size=-8000")  # 与主库一致（每连接上限，见上方实测依据）
             init_conv_schema(c, path)
             # 空/未知 platform 不触发迁移：避免盲拷主库全量数据进无前缀孤儿库
             need_migrate = bool(platform) and (not existed) and (path not in self._conv_migrated)

@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +131,9 @@ def get_reranker(model: str, offline: bool = False):
             device = _resolve_rerank_device()
             # device="auto" 时不传，保持 CrossEncoder 原有的自动选择行为；
             # 显式值（如 cpu）则强制指定，避免自动选到 MPS 吃掉约 1GB 常驻显存。
-            extra = {} if device == "auto" else {"device": device}
+            # 须为 dict[str, Any]：用具体 value 类型时，**extra 展开后 pyright 无法匹配
+            # CrossEncoder 的形参类型（CI 依赖版本下报一堆 error，本地不暴露）。
+            extra: dict[str, Any] = {} if device == "auto" else {"device": device}
             logger.info("重排模型推理设备: %s", device)
 
             is_local = _is_local_model_path(model)

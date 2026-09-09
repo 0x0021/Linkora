@@ -178,7 +178,6 @@ function renderSimStatus(data) {
     const modeVal = document.getElementById('sim-rag-mode');
     if (modeVal) modeVal.textContent = rag.strict_mode ? '严格（仅知识库）' : '标准';
     if (modeChip) modeChip.classList.toggle('is-strict', !!rag.strict_mode);
-    if (typeof syncRagModeBadge === 'function') syncRagModeBadge(!!rag.strict_mode);
     _syncSimRagModeHint();
 
     const llmStatusEl = document.getElementById('sim-llm-status');

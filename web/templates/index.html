@@ -202,12 +202,6 @@
                     <div class="platform-switcher" id="platform-switcher" role="group" aria-label="平台切换" data-page-node-id="cO1udejhEZMCqJlbNtCqvM"></div>
                 </div>
                 <div class="topbar-right" data-page-node-id="1idA7DouMB2QgjAhV06zny">
-                    <!-- 问答模式徽章：全局常驻，一眼看出当前是「严格（仅知识库）」还是「标准」 -->
-                    <button class="rag-mode-badge" id="rag-mode-badge" type="button"
-                            title="当前问答模式：点击前往设置" onclick="gotoRagStrictSetting()" data-page-node-id="rEgicdakx60zBSAfHtn41P">
-                        <i class="fa-solid fa-book-open" id="rag-mode-badge-icon" data-page-node-id="lor8Xx2pTsMY17gWpAD75E"></i>
-                        <span id="rag-mode-badge-text" data-page-node-id="19N4fJjjRMH35HnBp6gSV4">标准问答</span>
-                    </button>
                     <button class="theme-toggle" id="theme-toggle" type="button" title="主题：跟随系统" aria-label="切换主题" onclick="cycleTheme()" data-page-node-id="oS0q5lSAdw89YEyOfSpy3C">
                         <i class="fa-solid fa-circle-half-stroke" id="theme-toggle-icon" data-page-node-id="SmrS0EH9y9C2m2jZAlJCud"></i>
                     </button>
@@ -1607,50 +1601,16 @@
                                 </div>
 
                                 <div class="sub-section" data-page-node-id="yRxetM6FvuUyj0tafedTI5">
-                                    <h4 class="sub-title" data-page-node-id="iVLEVR36CdeXu6PZ2o4gTv">RAG 严格问答模式 <span class="sub-hint" data-page-node-id="jCW2pLeZYk1NdFliqUTanM">开启后所有问答只依据知识库，未收录即直答未收录</span></h4>
-
-                                    <!-- 当前生效状态：与顶栏徽章同步，保存后立即反映 -->
-                                    <div class="rag-mode-state" id="rag-strict-state" data-page-node-id="PmlAJDvggWmzKwUE6IklfH">
-                                        <span class="rag-mode-state-dot" data-page-node-id="WdFkhnodEoIz8PtkCkZ2mb"></span>
-                                        <span class="rag-mode-state-text" id="rag-strict-state-text" data-page-node-id="qHEDJrrziussz73WYtkCIm">当前：标准问答</span>
-                                        <span class="rag-mode-state-hint" id="rag-strict-state-hint" data-page-node-id="52GPckjuKjKMDGEq7OYK41">保存后立即生效，无需重启</span>
-                                    </div>
+                                    <h4 class="sub-title" data-page-node-id="iVLEVR36CdeXu6PZ2o4gTv">RAG 严格问答模式 <span class="sub-hint" data-page-node-id="jCW2pLeZYk1NdFliqUTanM">开启后所有问答只依据知识库，未收录即直答未收录；保存后立即生效</span></h4>
 
                                     <div class="form-row toggle-row-inline" data-page-node-id="oeVMjvoQ7z9q4e3Syy6ABA">
                                         <div class="toggle-item" data-page-node-id="WoXkBFzKQB0roigZ0nc2eH">
                                             <label data-page-node-id="sAUBLQCG6NFztGyLBoBC2I">严格问答模式</label>
-                                            <label class="toggle" data-page-node-id="KuxfzbWdWRmmN2m4LMNFiP"><input type="checkbox" id="cfg-rag-strict-mode" onchange="onRagStrictToggleChange()" data-page-node-id="fVx4POaZuRlwMbAWH3r2ix"><span class="toggle-slider" data-page-node-id="sf0vYCKhFBlklNVhtdg3y8"></span></label>
+                                            <label class="toggle" data-page-node-id="KuxfzbWdWRmmN2m4LMNFiP"><input type="checkbox" id="cfg-rag-strict-mode" data-page-node-id="fVx4POaZuRlwMbAWH3r2ix"><span class="toggle-slider" data-page-node-id="sf0vYCKhFBlklNVhtdg3y8"></span></label>
                                             <span class="toggle-label" data-page-node-id="pVK6yvL7i58aeo9fPKqjDn">仅用知识库内容作答，不使用通用大模型知识</span>
                                         </div>
                                     </div>
 
-                                    <!-- 两种模式差异对照：开关不是黑盒，改之前先看清楚区别 -->
-                                    <div class="rag-mode-compare" data-page-node-id="5ujcuBhJPBtfrqLjlKR3MQ">
-                                        <div class="rag-mode-col" data-page-node-id="3MNtVfaJT4X3e1JrjHDs5B">
-                                            <div class="rag-mode-col-head is-off" data-page-node-id="oEwyUoDFhuhVDmMIAIMyjU">
-                                                <i class="fa-solid fa-toggle-off" data-page-node-id="8OJDmyC1wAdUID65s2YYN4"></i> 标准问答（关闭时）
-                                            </div>
-                                            <ul class="rag-mode-list" data-page-node-id="rayL2ej7JEGfZrnDN7fFjU">
-                                                <li data-page-node-id="oEnERhFwkd7QfWWY96TcuR">知识库按<b data-page-node-id="bWbE9LpyJjcVsvXLj207Lt">意图门控</b>决定是否注入，闲聊不检索</li>
-                                                <li data-page-node-id="Z1jJIaiiYpXKpcCCHs44vw">可用通用大模型知识与常识补充</li>
-                                                <li data-page-node-id="Wzy5oVsykRchQLeoDxw5PT">可调用全部工具（联网、天气、审批、发消息…）与技能</li>
-                                                <li data-page-node-id="lCjNX1lc9GyiBbGPqlUFlj">知识库没命中时走<b data-page-node-id="No3gMhkhJBRg7lkeX2BHHV">三级递进兜底</b>（降阈值重搜 → 引导追问 → 兜底回复）</li>
-                                                <li data-page-node-id="92zxKFRaS2Kj85GtgEz3W3">适合：日常助理、需要联网/办事的场景</li>
-                                            </ul>
-                                        </div>
-                                        <div class="rag-mode-col" data-page-node-id="VsedefUMRjsijfQ1UHC8nJ">
-                                            <div class="rag-mode-col-head is-on" data-page-node-id="8bokiOsThYJ47X0Q7Ma75Y">
-                                                <i class="fa-solid fa-toggle-on" data-page-node-id="4XKeFdL843HJwEheC0kpZP"></i> 严格问答（开启时）
-                                            </div>
-                                            <ul class="rag-mode-list" data-page-node-id="dChC69cwFVJatzcE9Oumm6">
-                                                <li data-page-node-id="u5FIEuFjG8P9GxizCNMo0y"><b data-page-node-id="MH7nDZB3FfgUS1E6wudbJE">每条消息强制检索</b>知识库，跳过意图门控与短消息过滤</li>
-                                                <li data-page-node-id="lmONrUchvlMzyNxumU9yWP">回答<b data-page-node-id="htJJJprDVJYPjlj2ACjHqr">只来自检索到的资料</b>，禁用通用知识与推测</li>
-                                                <li data-page-node-id="ZF8zIBsPGpStp3xwTsFVQj">工具收敛到 <code data-page-node-id="gj7zKcONtb9DCWBQXIg6QC">kb_search</code>，禁用技能与有副作用的工具</li>
-                                                <li data-page-node-id="STeBFJ1EWZRYDEHPfm3js7">未命中<b data-page-node-id="u7pUaB130vO6mMOg34YQCY">直接短路返回固定文案</b>，不调大模型、不追问、不兜底</li>
-                                                <li data-page-node-id="L51zq24bmiabrdRido7D6N">适合：制度/产品问答等「不能编」的场景</li>
-                                            </ul>
-                                        </div>
-                                    </div>
                                     <div class="form-row" data-page-node-id="VNKb7EAmwNz2kmgPY1qSgJ">
                                         <div class="form-group" data-page-node-id="MttGYAvELTPNf3JPWzpi7r">
                                             <label data-page-node-id="GcaXPidS3XKqiAicCtT3bV">严格模式最低相似度</label>

@@ -700,6 +700,12 @@ class EmbeddingConfig(BaseModel):
     top_k: int = 5
     # 是否纯离线：True 时禁止联网下载，仅用本地缓存；False 时允许按需下载（带进度）
     offline: bool = False
+    # 本地推理设备：auto / cpu / mps / cuda。
+    #   auto（默认）：Apple Silicon→mps，有 CUDA→cuda，否则 cpu。
+    #   cpu：强制 CPU 推理。MPS 后端首次分配即常驻约 1GB 驱动显存且
+    #        torch.mps.empty_cache() 实测无法回收；bge-small 这类小模型在 CPU 上
+    #        单条仅约 20ms，内存吃紧时设 cpu 可省下约 2GB 常驻内存。
+    device: str = "auto"
     # 心跳保活间隔（秒）：模型就绪后周期性 dummy 推理，防止长时间闲置被卸载。
     # 下限 30s（start_heartbeat 内强制），0/负数视为使用默认 300s。
     heartbeat_interval: float = 300.0

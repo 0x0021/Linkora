@@ -79,6 +79,27 @@ def _is_local_model_path(model: str) -> bool:
     )
 
 
+def _resolve_rerank_device() -> str:
+    """重排模型的推理设备，跟随 ``embedding.device`` 配置。
+
+    背景：``CrossEncoder`` 不指定 device 时会**自动选到 MPS**（Apple Silicon），
+    而 MPS 后端首次分配即常驻约 1GB 驱动显存、``empty_cache()`` 回收不了——
+    实测开启 rerank 后 worker 进程显存直接涨到 2GB+（17:16 加载重排模型时暴涨）。
+    因此必须显式传 device，与向量模型共用同一套设备策略。
+
+    返回 ``auto`` 表示不指定、沿用 CrossEncoder 默认行为（历史行为）。
+    """
+    try:
+        from src.config import load_config
+
+        device = str(
+            getattr(load_config().embedding, "device", "auto") or "auto"
+        ).strip().lower()
+    except Exception:  # noqa: BLE001 - 配置不可用时按历史行为处理，绝不阻断重排
+        return "auto"
+    return device or "auto"
+
+
 def get_reranker(model: str, offline: bool = False):
     """lazy 加载并返回一个 CrossEncoder 实例（缓存复用）。
 
@@ -106,17 +127,23 @@ def get_reranker(model: str, offline: bool = False):
         try:
             from sentence_transformers import CrossEncoder
 
+            device = _resolve_rerank_device()
+            # device="auto" 时不传，保持 CrossEncoder 原有的自动选择行为；
+            # 显式值（如 cpu）则强制指定，避免自动选到 MPS 吃掉约 1GB 常驻显存。
+            extra = {} if device == "auto" else {"device": device}
+            logger.info("重排模型推理设备: %s", device)
+
             is_local = _is_local_model_path(model)
             if offline or is_local:
                 # 纯离线 / 本地路径：禁止联网，仅用本地缓存
                 import os
                 os.environ["HF_HUB_OFFLINE"] = "1"
                 logger.info("正在加载本地重排模型: %s（离线模式）", model)
-                state.reranker = CrossEncoder(model, local_files_only=True)
+                state.reranker = CrossEncoder(model, local_files_only=True, **extra)
             else:
                 # 在线：允许按需下载
                 logger.info("正在加载重排模型: %s", model)
-                state.reranker = CrossEncoder(model, local_files_only=False)
+                state.reranker = CrossEncoder(model, local_files_only=False, **extra)
 
             logger.info("重排模型加载完成: %s", model)
             return state.reranker

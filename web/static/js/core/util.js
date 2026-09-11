@@ -120,7 +120,36 @@
         return s || _emptyFallback(msgType);
     }
 
+    /**
+     * 剥离钉钉/飞书原始消息里的机器占位符，保留用户真实文字。
+     * 用于会话详情页富文本渲染前的预处理——与 cleanMsgPreview（紧凑列表用、会插入
+     * [图片]/[视频] 占位）不同，这里不插入占位，因为图片/视频由 image_path_map 单独渲染。
+     *
+     * 剥离对象：OCR 区块分隔行、[图片消息](mediaId=…)/[本地图片] <path> 等媒体原始标记、
+     * 裸 [图片识别中…]、钉钉 dws 下载提示。保留真实文字（如“可以了”“老徐…”）。
+     */
+    function cleanContentNoise(raw) {
+        if (!raw) return raw;
+        return String(raw)
+            // OCR 区块分隔行（———— 图片识别内容 ———— / —— 图片识别内容结束 ——）
+            .replace(/————\s*图片识别内容(开始|结束)?\s*————/g, '')
+            // 媒体原始占位符（整行移除；图片/语音/视频由媒体渲染器单独处理）
+            .replace(/\[图片消息\]\(\s*mediaId=[^)]*\)/g, '')
+            .replace(/\[语音消息\]\(\s*mediaId=[^)]*\)/g, '')
+            .replace(/\[视频消息\][^\n]*/g, '')
+            .replace(/\[本地图片\][^\n]*/g, '')
+            .replace(/\[本地文件\][^\n]*/g, '')
+            // 裸 [图片识别中…]（区别于 <[图片识别中]> 占位，后者交给 renderMsgContent）
+            .replace(/(?<!<)\[图片识别中[^\]]*\]/g, '')
+            // 钉钉 dws 下载提示（语音/视频/文件尾部）
+            .replace(/\s*注意：如需下载使用[^\n]*/g, '')
+            // 折叠多余空行
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/^\n+|\n+$/g, '');
+    }
+
     global.cleanMsgPreview = cleanMsgPreview;
+    global.cleanContentNoise = cleanContentNoise;
     global.msgTypeLabel = msgTypeLabel;
 
     // ============ Chart.js 按需懒加载（F-H7） ============

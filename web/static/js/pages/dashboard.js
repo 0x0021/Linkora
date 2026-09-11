@@ -721,7 +721,10 @@ async function loadRecentMessages() {
 }
 
 function renderLogItem(m) {
-    const content = m.content || '';
+    // 清洗原始 content：去掉 mediaId 占位符、本地缓存路径、OCR 区块标记等噪声
+    const content = typeof cleanMsgPreview === 'function'
+        ? cleanMsgPreview(m.content, m.msg_type)
+        : (m.content || '');
     const contentPreview = content.length > 60 ? content.slice(0, 60) + '...' : content;
     const isBot = !!(m.is_bot);
     const isSelf = m.role === 'assistant';
@@ -734,7 +737,7 @@ function renderLogItem(m) {
             <span class="log-sender" title="${escapeHtml(m.sender_name || '-')}">${aitag}${escapeHtml(m.sender_name || '-')}</span>
             <span class="log-receiver" title="${escapeHtml(m.receiver_name || m.chat_name || '-')}">${escapeHtml(m.receiver_name || m.chat_name || '-')}</span>
             <span class="log-item-text" data-full="${escapeHtml(content)}">${escapeHtml(contentPreview)}</span>
-            <span class="log-type">${escapeHtml(m.msg_type || 'text')}</span>
+            <span class="log-type">${escapeHtml(typeof msgTypeLabel === 'function' ? msgTypeLabel(m.msg_type) : (m.msg_type || 'text'))}</span>
         </div>
     `;
 }

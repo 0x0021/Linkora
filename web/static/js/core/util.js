@@ -21,6 +21,108 @@
     global.escapeHtml = escapeHtml;
     global.setText = setText;
 
+    // ============ 消息内容纯文本清洗（仪表盘紧凑列表预览） ============
+    // 钉钉/飞书落库的原始 content 混着大量机器占位符：mediaId、本地缓存路径、
+    // OCR 区块标记、dws 下载提示、卡片/文件标签、app 裸 JSON……消息页用富文本
+    // renderMsgContent 渲染（产 HTML 卡片），但仪表盘「最近消息」「决策追踪」
+    // 是紧凑单行列表，需先清洗为纯文本再截断展示，避免 mediaId 这类噪声刷屏。
+
+    const _MSG_TYPE_LABELS = {
+        text: '文本', image: '图片', mixed: '图文', voice: '语音', video: '视频',
+        file: '文件', link: '链接', app: '应用', call: '通话', recall: '撤回',
+        system: '系统', interactive: '卡片', post: '动态', location: '位置'
+    };
+
+    // 内容被清洗为空时，按消息类型给一个最小可读标签兜底
+    const _EMPTY_FALLBACK = {
+        image: '[图片]', mixed: '[图片]', video: '[视频]', voice: '[语音]',
+        file: '[文件]', app: '[应用消息]', call: '[通话]', link: '[链接]',
+        interactive: '[卡片]'
+    };
+
+    /** 消息类型英文枚举 → 中文标签（未知值原样返回，空值按文本处理） */
+    function msgTypeLabel(t) {
+        const k = String(t === null || t === undefined ? '' : t).toLowerCase();
+        if (!k) return '文本';
+        return Object.prototype.hasOwnProperty.call(_MSG_TYPE_LABELS, k) ? _MSG_TYPE_LABELS[k] : k;
+    }
+
+    function _emptyFallback(msgType) {
+        const k = String(msgType === null || msgType === undefined ? '' : msgType).toLowerCase();
+        return _EMPTY_FALLBACK[k] || '';
+    }
+
+    /**
+     * 把原始消息内容清洗为人类可读的纯文本预览。
+     * 处理：app 裸 JSON、本地缓存路径、mediaId 占位符、dws 下载提示、
+     *      OCR 区块标记、<card>/<file> 标签、连续空白。
+     * @param {string} raw 原始内容
+     * @param {string} [msgType] 清洗后为空时的兜底类型
+     * @returns {string} 清洗后的纯文本（可能为空串）
+     */
+    function cleanMsgPreview(raw, msgType) {
+        if (raw === null || raw === undefined) return _emptyFallback(msgType);
+        let s = String(raw);
+        if (!s.trim()) return _emptyFallback(msgType);
+
+        // 0) app 类型裸 JSON：{"textContent":{"text":"..."},"contentType":N}
+        s = s.replace(
+            /\{\s*"textContent"\s*:\s*\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"[\s\S]*?"contentType"\s*:\s*\d+\s*\}/g,
+            function (m, txt) {
+                return txt ? txt.replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+            }
+        );
+
+        // 1) 本地缓存路径标记：[本地图片] <path> / [本地文件] <path>
+        s = s.replace(/\[本地(?:图片|文件)\]\s*\S+/g, '');
+
+        // 2) 媒体占位符（带 mediaId）→ 中文标签
+        s = s.replace(/\[图片消息\]\(\s*mediaId=[^)]*\)/g, '[图片]');
+        s = s.replace(/\[视频消息\]\(\s*mediaId=[^)]*\)(?:\s*fileName=[^\s]*)?(?:\s*url:\s*\S*)?/g, '[视频]');
+        s = s.replace(/\[语音消息\]\(\s*mediaId=[^)]*\)/g, '[语音]');
+        s = s.replace(/\[文件\]\(\s*mediaId=[^)]*\)/g, '[文件]');
+        // 裸标记（历史数据可能无 mediaId）兜底
+        s = s.replace(/\[图片消息\]/g, '[图片]');
+        s = s.replace(/\[视频消息\]/g, '[视频]');
+        s = s.replace(/\[语音消息\]/g, '[语音]');
+        s = s.replace(/\[文件消息\]/g, '[文件]');
+
+        // 3) dws 下载提示尾巴
+        s = s.replace(/注意：如需下载使用\s*dws\s+chat\s+message\s+download-media\s*命令下载/g, '');
+
+        // 4) OCR 区块标记与占位
+        s = s.replace(/————\s*图片识别内容\s*————/g, '');
+        s = s.replace(/————\s*图片识别内容结束\s*————/g, '');
+        s = s.replace(/\[图片识别中[^\]]*\]/g, '');
+        s = s.replace(/\[图片识别内容\]/g, '');
+        s = s.replace(/【图片内容】/g, '');
+        s = s.replace(/<\[图片(?:识别中)?[^\]]*\]>/g, '[图片]');
+
+        // 5) 卡片标签：<card title="X">…</card> → [卡片] X
+        s = s.replace(/<card\s+title="([^"]*)"[^>]*>/g, function (m, t) {
+            return t ? '[卡片] ' + t + '\n' : '';
+        });
+        s = s.replace(/<\/card>/g, '');
+
+        // 6) <file key="..." name="X"/> → [文件] X
+        s = s.replace(/<file\b[^>]*?name="([^"]*)"[^>]*\/>/g, function (m, n) {
+            return n ? '[文件] ' + n : '[文件]';
+        });
+        s = s.replace(/<file\b[^>]*\/>/g, '[文件]');
+
+        // 7) 折叠空白 + 合并相邻重复的媒体标签
+        s = s.replace(/[ \t]+/g, ' ');
+        s = s.replace(/[ \t]*\n[ \t]*/g, '\n');
+        s = s.replace(/\n{2,}/g, '\n');
+        s = s.replace(/(\[(?:图片|视频|语音|文件)\])(?:\s*\1)+/g, '$1');
+        s = s.trim();
+
+        return s || _emptyFallback(msgType);
+    }
+
+    global.cleanMsgPreview = cleanMsgPreview;
+    global.msgTypeLabel = msgTypeLabel;
+
     // ============ Chart.js 按需懒加载（F-H7） ============
     // 生产态原先在 index.html 用 <script defer> 直接拉 chart.umd.min.js（~205KB），
     // 每页首屏都下载。改为「用到才加载」：首次进入含图表的页才动态注入脚本，

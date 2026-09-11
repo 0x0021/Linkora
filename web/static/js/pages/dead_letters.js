@@ -95,7 +95,10 @@ async function loadDeadLettersPage() {
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
             var ts = (item.created_at || '').replace('T', ' ').slice(0, 19);
-            var content = item.content || '';
+            // 清洗原始 content（mediaId 占位符/本地缓存路径等噪声）后再截断，与仪表盘展示口径一致
+            var content = (typeof cleanMsgPreview === 'function')
+                ? cleanMsgPreview(item.content, item.msg_type)
+                : (item.content || '');
             // 长文本固定字符数截断（50 字），短文本保持原长
             var preview = content.length > 50 ? content.slice(0, 50) + '\u2026' : content;
             var errMsg = item.error || '';

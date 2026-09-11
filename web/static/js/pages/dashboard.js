@@ -166,7 +166,7 @@ function renderMsgTypeChart(msgTypes) {
         const grad = `linear-gradient(135deg, ${pal.light}, ${pal.base})`;
         return `<div class="mt-row" data-idx="${i}" style="animation-delay:${(i * 0.06).toFixed(2)}s">
             <span class="mt-dot" style="background:${grad}"></span>
-            <span class="mt-name">${escapeHtml(d.msg_type)}</span>
+            <span class="mt-name" title="${escapeHtml(d.msg_type)}">${escapeHtml(typeof msgTypeLabel === 'function' ? msgTypeLabel(d.msg_type) : d.msg_type)}</span>
             <span class="mt-pct">${w.toFixed(1)}%</span>
             <div class="mt-bar"><i style="width:${w}%;background:${grad}"></i></div>
             <span class="mt-cnt">${(d.cnt || 0).toLocaleString('zh-CN')}</span>

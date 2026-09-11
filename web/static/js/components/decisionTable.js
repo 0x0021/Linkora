@@ -40,6 +40,10 @@
   // 单行决策 HTML（dashboard lite 与 intent full 共用同一结构）
   function renderDecisionRow(d) {
     const ts = fmtTs(d.ts);
+    // 清洗原始 content：去掉 mediaId/本地缓存路径/OCR 区块标记等噪声，只展示可读文本
+    const content = typeof cleanMsgPreview === 'function'
+      ? cleanMsgPreview(d.content, d.msg_type)
+      : (d.content || '');
     const intentPill = d.intent ? `<span class="pill pill-intent">${escapeHtml(d.intent)}</span>` : '';
     const modePill = d.routing_mode ? `<span class="pill pill-mode">${escapeHtml(d.routing_mode)}</span>` : '';
     const skillLabel = d.skill_name ? `${escapeHtml(d.skill_name)}${d.skill_source ? ' · ' + skillSourceLabel(d.skill_source) : ''}` : '';
@@ -56,7 +60,7 @@
                     <span class="dec-sender">${escapeHtml(d.sender || '—')}</span>
                     <span class="dec-chat">@ ${escapeHtml(d.chat || '')}</span>
                 </div>
-                <div class="dec-content">${escapeHtml(d.content || '')}</div>
+                <div class="dec-content">${escapeHtml(content)}</div>
                 ${toolsHtml}${reply}
             </div>
         </div>`;

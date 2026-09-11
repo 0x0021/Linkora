@@ -128,8 +128,39 @@
      * 剥离对象：OCR 区块分隔行、[图片消息](mediaId=…)/[本地图片] <path> 等媒体原始标记、
      * 裸 [图片识别中…]、钉钉 dws 下载提示。保留真实文字（如“可以了”“老徐…”）。
      */
+    // app 类消息常整段是 JSON 外壳（如钉钉 {"textContent":{"text":"..."},"contentType":1}），
+    // 剥壳保留用户真实文字；无文字时兜底 [应用消息]
+    function _unwrapAppJson(raw) {
+        const s = (raw == null ? '' : String(raw)).trim();
+        if (!s.startsWith('{')) return null;
+        // 必须是 app 类外壳（含 textContent/text 字段），避免误伤普通以 { 开头的文本
+        if (!/"(?:textContent|text)"\s*:/.test(s)) return null;
+        let obj = null;
+        try {
+            obj = JSON.parse(s);
+        } catch (e) {
+            // 残缺 JSON：退化宽松抠 text 字段
+            const m = s.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+            if (m) {
+                const t = m[1].replace(/\\"/g, '"').trim();
+                if (t) return t;
+            }
+            return '[应用消息]';
+        }
+        if (obj && typeof obj === 'object') {
+            const t1 = (obj.textContent && typeof obj.textContent.text === 'string') ? obj.textContent.text.trim() : '';
+            if (t1) return t1;
+            const t2 = (typeof obj.text === 'string') ? obj.text.trim() : '';
+            if (t2) return t2;
+            return '[应用消息]';
+        }
+        return '[应用消息]';
+    }
+
     function cleanContentNoise(raw) {
         if (!raw) return raw;
+        const unApp = _unwrapAppJson(raw);
+        if (unApp !== null) return unApp;
         return String(raw)
             // OCR 区块分隔行（———— 图片识别内容 ———— / —— 图片识别内容结束 ——）
             .replace(/————\s*图片识别内容(开始|结束)?\s*————/g, '')

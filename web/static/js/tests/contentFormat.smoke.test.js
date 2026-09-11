@@ -138,6 +138,26 @@ describe('core/util.js · cleanContentNoise（会话详情页）', () => {
     expect(out).not.toContain('mediaId');
   });
 
+  it('app：含 textContent.text 时剥壳提取真实文字', () => {
+    expect(window.cleanContentNoise('{"textContent":{"text":"7月工时还没填的请尽快补一下"},"contentType":1}'))
+      .toBe('7月工时还没填的请尽快补一下');
+    expect(window.cleanContentNoise('{"textContent":{"text":"[日程][日程] 工匠方案汇报交流"},"contentType":2900}'))
+      .not.toContain('{');
+  });
+
+  it('app：空壳 JSON 兜底为 [应用消息]', () => {
+    expect(window.cleanContentNoise('{"textContent":{"text":""},"contentType":1101}')).toBe('[应用消息]');
+    expect(window.cleanContentNoise('{"textContent":{},"contentType":2}')).toBe('[应用消息]');
+  });
+
+  it('app：顶层 text 字段也能提取', () => {
+    expect(window.cleanContentNoise('{ "text" : "宽松抠字样本" }')).toBe('宽松抠字样本');
+  });
+
+  it('app：JSON 残缺但含 text 字段时退化抠出文字', () => {
+    expect(window.cleanContentNoise('{ "textContent": {"text": "残缺样本"')).toBe('残缺样本');
+  });
+
   it('纯文本原样保留', () => {
     expect(window.cleanContentNoise('我再试一下')).toBe('我再试一下');
   });

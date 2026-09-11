@@ -87,3 +87,69 @@ describe('core/util.js 消息内容清洗', () => {
     expect(window.msgTypeLabel('unknown_type')).toBe('unknown_type');
   });
 });
+
+// cleanContentNoise：会话详情页富文本渲染前预处理（区别于 cleanMsgPreview 的紧凑列表占位）
+describe('core/util.js · cleanContentNoise（会话详情页）', () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    await import('../core/util.js');
+  });
+
+  it('暴露 cleanContentNoise', () => {
+    expect(typeof window.cleanContentNoise).toBe('function');
+  });
+
+  it('mixed：OCR 区块标记剥离，保留尾部真实文字', () => {
+    const raw =
+      '———— 图片识别内容 ————\n' +
+      '[图片消息](mediaId=$iwEcAqNwbmcDAQTRBjsF0QHqBrAlH0uHL1uefwp1bHH25kcAB9IJFUOkCAAJomltCgAL0gADwPU)\n' +
+      '[图片识别中...]\n' +
+      '———— 图片识别内容结束 ————\n' +
+      '可以了';
+    const out = window.cleanContentNoise(raw);
+    expect(out).toBe('可以了');
+    expect(out).not.toContain('mediaId');
+    expect(out).not.toContain('图片识别内容');
+    expect(out).not.toContain('图片识别中');
+  });
+
+  it('voice：保留语音转文字，去掉 mediaId 与 dws 下载提示', () => {
+    const raw =
+      '老徐，你和师傅说一下，就这些东西\n' +
+      '[语音消息](mediaId=@lR_PJw1Ez5NamV8AALAgx4w9F9kJnAakTYkNbXgA) 注意：如需下载使用dws chat message download-media命令下载';
+    const out = window.cleanContentNoise(raw);
+    expect(out).toContain('老徐，你和师傅说一下，就这些东西');
+    expect(out).not.toContain('mediaId');
+    expect(out).not.toContain('download-media');
+  });
+
+  it('image-only：占位符全清后返回空串（图片由媒体渲染器单独渲染）', () => {
+    const raw =
+      '[图片消息](mediaId=$iwEcAqNwbmcDAQTRBtgF0QLGBrA_f9VuwflDXwp1bDKjjMYAB9IAssT5CAAJomltCgAL0gAEDQs)' +
+      '\n[本地图片] data/tmp_images/dingtalk/ding9888/cid/ocr__x.png';
+    expect(window.cleanContentNoise(raw)).toBe('');
+  });
+
+  it('video：整行媒体占位符移除', () => {
+    const raw =
+      '[视频消息](mediaId=@lQbPKHamnKNBPhsAALCTpktEcHivBApeC42MY9kA) fileName=video url: @lQbPKHamnKNBPhsAALCTpktEcHivBApeC42MY9kA 注意：如需下载使用dws chat message download-media命令下载';
+    const out = window.cleanContentNoise(raw);
+    expect(out).toBe('');
+    expect(out).not.toContain('mediaId');
+  });
+
+  it('纯文本原样保留', () => {
+    expect(window.cleanContentNoise('我再试一下')).toBe('我再试一下');
+  });
+
+  it('不破坏 <card> 卡片与 <[图片识别中]> 占位（交给 renderMsgContent 处理）', () => {
+    expect(window.cleanContentNoise('<card title="应用审批通过">\n你的应用已发布成功\n</card>'))
+      .toContain('应用审批通过');
+    expect(window.cleanContentNoise('<[图片识别中...]>')).toContain('<[图片识别中');
+  });
+
+  it('null/空值安全返回', () => {
+    expect(window.cleanContentNoise(null)).toBe(null);
+    expect(window.cleanContentNoise('')).toBe('');
+  });
+});

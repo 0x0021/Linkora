@@ -20,7 +20,7 @@ let _msgSelected = {};
  *        真图 <img>，未命中才降级为带说明的占位符。
  */
 function renderMsgContent(raw, imagePathMap) {
-    const s = (raw || '').trim();
+    const s = cleanContentNoise((raw || '').trim());
     if (!s) return '';
 
     // 0) 兼容历史 OCR 格式：「【图片内容】\n{ocr_text}」（旧版后端未用 <card> 包裹）。

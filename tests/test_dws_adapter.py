@@ -100,6 +100,52 @@ class TestErrorClassification:
         assert classify_dws_error("business error: success=false") is DwsError
 
 
+# ============ _is_benign_error 与重试的优先级 ============
+
+class TestBenignErrorDoesNotDefeatRetry:
+    """回归 2026-09-15：瞬态可重试错误不得被 benign 闸门拦下而跳过重试。
+
+    线上表现为零星「列出 X 的消息失败」告警：server_error_code=TIMEOUT_ERROR
+    且 retryable=true，却因响应外壳带通用 reason=business_error 被判「良性」，
+    导致 base.run() 的 ``except _retryable_error_class`` 分支直接 raise、
+    retries 配置形同虚设。
+    """
+
+    def _msg(self, server_error_code: str, reason: str = "business_error") -> str:
+        """复刻 base.run() 给 _is_benign_error 传入的「可分类诊断串」形态。"""
+        return (f"dws error: business error: success=false | reason={reason} | "
+                f"server_error_code={server_error_code} | category=api")
+
+    def test_timeout_with_business_error_shell_is_not_benign(self):
+        """TIMEOUT_ERROR + business_error 外壳 → 必须可重试（不算良性）。"""
+        adapter = DwsAdapter(dry_run=True)
+        msg = self._msg("TIMEOUT_ERROR")
+        assert classify_dws_error(msg) is DwsRetryableError
+        assert adapter._is_benign_error(msg) is False
+
+    def test_permanent_business_error_still_benign(self):
+        """无瞬态线索的永久业务错误仍降级为良性（不刷 ERROR、不重试）。"""
+        adapter = DwsAdapter(dry_run=True)
+        msg = self._msg("UNCLASSIFIED")
+        assert classify_dws_error(msg) is not DwsRetryableError
+        assert adapter._is_benign_error(msg) is True
+
+    def test_confidential_and_param_errors_still_benign(self):
+        """保密群 / openCid 参数错误等既有良性判定保持不变。"""
+        adapter = DwsAdapter(dry_run=True)
+        assert adapter._is_benign_error("保密群 无权限访问") is True
+        assert adapter._is_benign_error("openCid or cid is required") is True
+
+    def test_connection_closed_not_benign(self):
+        """连接层瞬时错误（COMM_ERROR / connection closed）也不得判良性。"""
+        adapter = DwsAdapter(dry_run=True)
+        msg = ("dws error: business error: success=false | "
+               "technical_detail=iPaaS 调用失败: COMM_ERROR "
+               "connection has been closed suddenly | reason=invalid_request")
+        assert classify_dws_error(msg) is DwsRetryableError
+        assert adapter._is_benign_error(msg) is False
+
+
 # ============ AI 标记（--ai-tag）开关测试 ============
 
 class TestAiTagFlag:

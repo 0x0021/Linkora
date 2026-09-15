@@ -65,7 +65,17 @@ class DwsAdapterBaseMixin(DwsAdapterBase):
 
         上游调用方（如 poller_strategy 的已读不回闸门）已在 catch 块里做了
         优雅降级（关闭闸门 + WARNING 日志），此处仅需避免底层重复打 ERROR 噪音。
+
+        ⚠️ 判定顺序不可调换：必须先排除「瞬态可重试错误」（超时 / 限流 / 连接
+        抖动）。DWS 任何 ``success=false`` 的响应外壳都带通用的
+        ``reason=business_error``，而可重试的瞬态错误同样带这个外壳；若被下面的
+        ``business_error`` 关键字拦下判为「良性」，就会**跳过重试**，令 ``retries``
+        配置形同虚设。（2026-09-15 事故：``server_error_code=TIMEOUT_ERROR`` 且
+        ``retryable=true`` 的群消息拉取失败被误判良性、永不重试，线上表现为零星
+        「列出 X 的消息失败」告警。）
         """
+        if classify_dws_error(error_msg) is DwsRetryableError:
+            return False  # 瞬态错误必须走重试，不算良性
         return any(
             kw in error_msg
             for kw in (

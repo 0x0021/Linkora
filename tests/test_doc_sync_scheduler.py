@@ -256,12 +256,26 @@ class TestSyncSingleDoc:
         result = s._sync_single_doc("DOC_REIDX")
         assert result["changed"] is True
 
-        # 旧 KB 文档应已删除
+        # 重索引后：同一 source_id 不应产生重复文档（supersede，复用同一 doc_id），
+        # 且分块已更新为最新版（旧版本被原地替换，不再物理删除旧行）。
+        # 注：kb_documents 仅存元数据，正文在 kb_chunks，故内容更新以分块验证。
         store = SQLiteStore(str(tmp_db_path))
         store.init_db()
         cur = store.conn.cursor()
-        cur.execute("SELECT id FROM kb_documents WHERE id = ?", (kb_id,))
-        assert cur.fetchone() is None
+        cur.execute(
+            "SELECT id FROM kb_documents WHERE source_id = ? AND status != 'superseded' ORDER BY id",
+            ("DOC_REIDX",),
+        )
+        rows = cur.fetchall()
+        assert len(rows) == 1, f"重索引后不应产生重复文档，实际 {len(rows)} 条"
+        assert rows[0]["id"] == kb_id, "应复用同一 doc_id 原地更新（supersede）"
+        cur.execute(
+            "SELECT content FROM kb_chunks WHERE doc_id = ? AND status != 'superseded'",
+            (kb_id,),
+        )
+        chunk_rows = cur.fetchall()
+        assert len(chunk_rows) == 1, "旧分块应被替换、只保留 1 个新分块"
+        assert content in chunk_rows[0]["content"]
         store.close()
 
     # --- lastModified / modified_at 字段 fallback ---

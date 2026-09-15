@@ -160,19 +160,28 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                                  open_dingtalk_id: str = "",
                                  time_str: str = "",
                                  limit: int = 50) -> list[dict]:
-        """拉取单聊消息。forward=false 表示按时间正序返回（老→新）。
+        """拉取单聊消息：**从 ``time_str`` 向现在方向**（``--direction newer``）取一页。
 
-        ⚠️ ``list-direct``（dws v1.0.62-beta.8）**没有** ``--page-all``，也**不支持**
-        ``--cursor``，故无法在适配器内自动翻页补齐——它只回一页 ``--limit`` 条。
-        这意味着「单聊一次积压 > limit 条」时本方法拿不全，必须由调用方保证不漏：
-        轮询游标只按秒级回退重叠（不 +1s 越秒前进），使下一轮从同一秒重新拉取，
-        再靠 msg_id 去重跳过已处理消息（见 poller_strategy._update_poll_time_and_db）。
-        返回体带 ``hasMore`` 时打 WARNING，便于发现积压异常。
+        ⚠️ 方向语义（曾长期用错，务必看清）：``--direction`` 才是文档化参数，
+        ``newer``=从给定时间往现在拉、``older``=从给定时间往以前拉（``--forward`` 是它的
+        兼容别名，``--forward=true``≡newer、``false``≡older）。**注意 ``--forward`` 不是
+        「排序方向」**——旧实现写 ``--forward=false``（=older）并注释为「按时间正序返回」，
+        实际是在**向历史方向**拉取：每轮都取到早于游标的老消息、``hasMore`` 恒为 true，
+        并按这批老消息的最大时间戳回写游标，使游标在历史里**逐轮后退**（实测同一会话
+        16:48→09-14→09-11），新消息只能靠 event 流兜住。现改为 ``--direction newer``。
+
+        ⚠️ ``list-direct``（实测 v1.0.61 / v1.0.62-beta.8 均如此）**没有** ``--page-all``，
+        也**不支持** ``--cursor``，故无法在适配器内自动翻页补齐——它只回一页 ``--limit`` 条
+        （升序：本页最旧→最新）。这意味着「单聊一次积压 > limit 条」时本方法拿不全，
+        必须由调用方保证不漏：游标按页内最大时间戳推进（**不 +1s 越秒前进**），
+        未取到的消息都比游标新，下一轮从同一时间点重新拉取即可覆盖，再靠 msg_id 去重
+        跳过已处理消息（见 poller_strategy._update_poll_time_and_db）。
+        返回体带 ``hasMore``（真积压，还有比本页更新的消息）时打 WARNING 便于发现异常。
         """
         args = ["chat", "message", "list-direct",
                 "--time", time_str,
                 "--limit", str(limit),
-                "--forward=false"]
+                "--direction", "newer"]
         if open_dingtalk_id:
             args.extend(["--open-dingtalk-id", open_dingtalk_id])
         elif user_id:
@@ -186,7 +195,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         if result.get("hasMore"):
             logger.warning(
                 "[DWS] 单聊消息单页已满（time=%s, limit=%d）：该命令不支持自动翻页，"
-                "剩余消息依赖下一轮从同一秒重拉（去重跳过已处理）",
+                "仍有比本页更新的消息，依赖下一轮从本页最大时间戳重拉（去重跳过已处理）",
                 time_str, limit,
             )
         return result.get("messages", [])

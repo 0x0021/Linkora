@@ -461,6 +461,23 @@ class PollerStrategyMixin(PollerMixinBase):
             except (sqlite3.Error, ValueError):
                 # DB 读取失败或 ISO 时间戳解析失败 → 容错返回默认值
                 logger.debug("[轮询器] 数据库 last_message_time 解析失败")
+
+            # 钳制陈旧游标（防历史重放）：DB 的 last_message_time 可能极旧——实测本账号
+            # 1044 个单聊会话里 964 个早于 7 天，最早为 2024 年。而拉取一律是「从游标
+            # 向现在」的**正向**拉取（群 --direction newer、单聊同样），若起点是几个月前，
+            # 轮询会从那里逐页向前走；first_run_ignore_older_than_minutes 只作用于**第一轮**，
+            # 第二轮起这批陈年消息就会被当新消息交给 LLM —— 等于让分身批量回复几个月前的
+            # 旧消息。把起点抬进「老消息忽略窗口」内即可：比该窗口更旧的本来就要被忽略，
+            # 抬上去不丢任何真会被处理的消息，却杜绝了整段历史的重放。
+            ignore_minutes = getattr(self.config, "first_run_ignore_older_than_minutes", 0) or 0
+            if ignore_minutes > 0:
+                floor = now - timedelta(minutes=ignore_minutes)
+                if last_poll < floor:
+                    logger.debug(
+                        "[轮询器] %s 游标陈旧（%s），钳制到 %s 以避免历史重放",
+                        open_id[:30], last_poll, floor,
+                    )
+                    last_poll = floor
         return last_poll, is_first_poll
 
     def _store_self_message_if_new(self, msg) -> None:

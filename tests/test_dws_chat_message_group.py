@@ -132,3 +132,21 @@ def test_direct_message_has_more_logs_warning(caplog):
     cmd = a._calls[0]
     assert "--page-all" not in cmd
     assert "--cursor" not in cmd
+
+
+def test_direct_message_pulls_forward_not_backward():
+    """单聊拉取必须是「从 time_str 向现在」的正向拉取。
+
+    回归背景：旧实现传 ``--forward=false`` 并注释为「按时间正序返回（老→新）」，
+    但 ``--forward`` 只是 ``--direction`` 的兼容别名（true≡newer / false≡older），
+    **不是排序方向**。于是单聊每轮都在向**历史**方向拉取：取到的是早于游标的老消息、
+    ``hasMore`` 恒为 true，并按这批老消息的最大时间戳回写游标 —— 游标在历史里逐轮
+    后退（实测同一会话 16:48 → 09-14 → 09-11），新消息只能靠 event 流兜住。
+    """
+    a = _FakeDws()
+    a.chat_message_list_direct(user_id="u1", time_str="2026-01-01 00:00:00", limit=20)
+    cmd = a._calls[0]
+    assert "--direction" in cmd, "应使用文档化参数 --direction"
+    assert cmd[cmd.index("--direction") + 1] == "newer", "必须是向现在方向拉取"
+    # --forward 语义易被误读为排序方向，不再使用
+    assert not any(str(x).startswith("--forward") for x in cmd)

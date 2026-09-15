@@ -1130,3 +1130,38 @@ class TestPollCursorSecondPrecision:
         ts = datetime(2026, 9, 15, 10, 0, 0, 800000)
         assert ts.strftime("%Y-%m-%d %H:%M:%S") == "2026-09-15 10:00:00"
         assert (ts + timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S") == "2026-09-15 10:00:01"
+
+
+# ── 陈旧游标钳制（防历史重放）──
+
+
+class TestStaleCursorClamp:
+    """DB 里的 last_message_time 可能极旧，正向拉取会从那里逐页向前走。
+
+    实测本账号 1044 个单聊会话里 964 个游标早于 7 天（最早 2024 年）。若不做钳制，
+    第一轮被 first_run_ignore_older_than_minutes 挡住的陈年消息，在第二轮就会解除
+    保护被交给 LLM —— 等于让分身批量回复几个月前的旧消息。
+    """
+
+    def test_stale_db_cursor_clamped_into_ignore_window(self, poller_factory):
+        p, store = poller_factory()
+        store._conversation_repo.upsert_conversation(
+            "cid_stale", "老会话", "single",
+            last_message_time="2024-09-09T10:46:33",
+        )
+        last_poll, is_first = p._compute_last_poll_time("cid_stale")
+        assert is_first is True
+        floor = datetime.now() - timedelta(minutes=p.config.first_run_ignore_older_than_minutes)
+        assert last_poll >= floor - timedelta(seconds=5), "陈旧游标必须被抬进忽略窗口"
+        assert last_poll > datetime(2024, 9, 9), "绝不能仍从 2024 年起拉"
+
+    def test_fresh_db_cursor_untouched(self, poller_factory):
+        """游标本来就新鲜时不得改动（避免误伤正常的续拉）。"""
+        p, store = poller_factory()
+        recent = (datetime.now() - timedelta(seconds=30)).isoformat()
+        store._conversation_repo.upsert_conversation(
+            "cid_fresh", "热会话", "single", last_message_time=recent,
+        )
+        last_poll, _ = p._compute_last_poll_time("cid_fresh")
+        assert abs((last_poll - datetime.fromisoformat(recent)).total_seconds()) < 1
+

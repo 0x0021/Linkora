@@ -128,6 +128,86 @@ class TestDiscover:
             assert any("data/skills/dup" in d for d in dirs)
 
 
+# ── 工具链产物目录必须被排除 ─────────────────────────────────
+
+class TestArtifactDirsExcluded:
+    """Python 执行会生成 __pycache__；它不得被当成技能目录扫描。
+
+    回归来源：线上出现 `技能目录 .../src/skills/__pycache__ 缺少 SKILL.md` 告警刷屏。
+    """
+
+    def test_dunder_pycache_not_discovered(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as td:
+            _patch_skill_dirs(monkeypatch, td)
+            _write_skill(Path(td), "weather", "name: weather\ndescription: 天气")
+            # 模拟 Python 执行后生成的字节码缓存
+            (Path(td) / "data" / "skills" / "__pycache__").mkdir(parents=True)
+            loader = SkillLoader(td)
+            dirs = loader.discover()
+            assert len(dirs) == 1
+            assert dirs[0].endswith("weather")
+
+    def test_hidden_and_toolchain_dirs_not_discovered(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as td:
+            _patch_skill_dirs(monkeypatch, td)
+            base = Path(td) / "data" / "skills"
+            for name in ("__pycache__", "node_modules", ".venv", ".pytest_cache",
+                         "build", "dist", "foo.egg-info"):
+                (base / name).mkdir(parents=True)
+            loader = SkillLoader(td)
+            assert loader.discover() == []
+
+    def test_load_artifact_dir_logs_debug_not_warning(self, monkeypatch, caplog):
+        """直接 load 产物目录时降级为 debug，不再刷 WARNING。"""
+        import logging
+
+        with tempfile.TemporaryDirectory() as td:
+            _patch_skill_dirs(monkeypatch, td)
+            d = Path(td) / "data" / "skills" / "__pycache__"
+            d.mkdir(parents=True)
+            loader = SkillLoader(td)
+            with caplog.at_level(logging.DEBUG):
+                assert loader.load(str(d)) is None
+            assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_load_real_missing_skill_md_still_warns(self, caplog):
+        """正常命名的技能目录缺 SKILL.md 仍须告警（别把真实异常一起静音）。"""
+        import logging
+
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td) / "data" / "skills" / "installed-but-broken"
+            d.mkdir(parents=True)
+            loader = SkillLoader(td)
+            with caplog.at_level(logging.WARNING):
+                assert loader.load(str(d)) is None
+            assert any("缺少 SKILL.md" in r.message for r in caplog.records)
+
+    def test_iter_skill_files_skips_nested_pycache(self, monkeypatch):
+        """指纹遍历须跳过技能内嵌脚本产生的 __pycache__。"""
+        from src.skills.loader import iter_skill_files
+
+        with tempfile.TemporaryDirectory() as td:
+            d = _write_skill(Path(td), "weather", "name: weather\ndescription: 天气")
+            scripts = d / "scripts"
+            scripts.mkdir()
+            (scripts / "run.py").write_text("print(1)", encoding="utf-8")
+            cache = scripts / "__pycache__"
+            cache.mkdir()
+            (cache / "run.cpython-314.pyc").write_bytes(b"\x00")
+            names = {f.name for f in iter_skill_files(d)}
+            assert "SKILL.md" in names
+            assert "run.py" in names
+            assert "run.cpython-314.pyc" not in names
+
+    def test_is_skill_dir_candidate(self):
+        from src.skills.loader import is_skill_dir_candidate
+
+        assert is_skill_dir_candidate("weather") is True
+        assert is_skill_dir_candidate("contract-review") is True
+        for bad in ("__pycache__", "node_modules", ".git", ".DS_Store", "", "x.egg-info"):
+            assert is_skill_dir_candidate(bad) is False
+
+
 # ── SkillLoader.load ────────────────────────────────────────
 
 class TestLoad:

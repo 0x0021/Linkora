@@ -17,11 +17,15 @@
     1. {project_root}/data/skills/{name}/SKILL.md  （主路径，用户可写，Web 安装/克隆落这里）
     2. {project_root}/.agents/skills/{name}/SKILL.md（兼容旧路径）
     3. {project_root}/src/skills/{name}/SKILL.md  （仓库内置技能，随源码分发，clone 即自带）
+
+各目录下只认「正常命名的子目录」为技能目录：隐藏目录与工具链产物目录
+（``__pycache__``、``node_modules``、``.venv`` 等）一律跳过，见 is_skill_dir_candidate。
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -43,6 +47,42 @@ _SKILL_DIRS = [
     str(get_app_root() / "src" / "skills"),
 ]
 _SKILL_FILE = "SKILL.md"
+
+# ── 技能目录过滤 ──────────────────────────────────────────────
+# 技能目录由人/安装器创建，只可能以「正常命名的目录」出现；下列名称是工具链
+# 自动生成的产物目录，绝不可能承载 SKILL.md。若不排除，Python 执行后产生的
+# __pycache__ 会被当成技能目录扫描，刷出「缺少 SKILL.md」告警，并在 Web 技能
+# 列表里显示成一条「未加载技能」。
+_SKIP_DIR_NAMES = frozenset({
+    "__pycache__",           # Python 字节码缓存（执行后自动生成）
+    "node_modules",          # 前端依赖
+    "site-packages",         # Python 依赖
+    "dist", "build",         # 构建产物
+    "venv", "env", "wheelhouse", "htmlcov",
+})
+
+
+def is_skill_dir_candidate(name: str) -> bool:
+    """判断目录名是否可能是技能目录（排除隐藏目录与工具链产物）。"""
+    if not name or name.startswith("."):   # .git/.DS_Store/.pytest_cache/.venv/.workbuddy
+        return False
+    if name in _SKIP_DIR_NAMES:
+        return False
+    return not name.endswith((".egg-info", ".dist-info"))
+
+
+def iter_skill_files(skill_dir: str | Path) -> Iterator[Path]:
+    """遍历技能目录下的有效文件（跳过隐藏项与工具链产物子目录）。
+
+    用于计算技能目录的变更指纹：技能自带的脚本执行后会生成 ``__pycache__``，
+    若把它算进指纹，热加载会因「技能自己跑了一下」而反复触发无意义的 reload。
+    """
+    root = Path(skill_dir)
+    for dirpath, dirnames, filenames in root.walk():
+        dirnames[:] = [d for d in dirnames if is_skill_dir_candidate(d)]
+        for fn in filenames:
+            if not fn.startswith("."):
+                yield dirpath / fn
 
 
 @dataclass
@@ -104,7 +144,11 @@ class SkillLoader:
         self._root = Path(project_root).resolve()
 
     def discover(self) -> list[str]:
-        """返回所有技能目录的绝对路径列表（去重）。"""
+        """返回所有技能目录的绝对路径列表（去重）。
+
+        只返回「可能是技能目录」的条目：隐藏目录与工具链产物目录（``__pycache__``、
+        ``node_modules``、``.venv`` 等）一律跳过，避免它们被当成技能扫描。
+        """
         seen: set[str] = set()
         dirs: list[str] = []
 
@@ -113,11 +157,14 @@ class SkillLoader:
             if not base.is_dir():
                 continue
             for entry in base.iterdir():
-                if entry.is_dir() or entry.is_symlink():
-                    resolved = str(entry.resolve())
-                    if resolved not in seen:
-                        seen.add(resolved)
-                        dirs.append(resolved)
+                if not (entry.is_dir() or entry.is_symlink()):
+                    continue
+                if not is_skill_dir_candidate(entry.name):
+                    continue
+                resolved = str(entry.resolve())
+                if resolved not in seen:
+                    seen.add(resolved)
+                    dirs.append(resolved)
         return dirs
 
     def load(self, skill_dir: str) -> Skill | None:
@@ -127,7 +174,12 @@ class SkillLoader:
         """
         skill_md = Path(skill_dir) / _SKILL_FILE
         if not skill_md.is_file():
-            logger.warning("技能目录 %s 缺少 SKILL.md", skill_dir)
+            # 工具链产物目录（__pycache__ 等）本就不该有 SKILL.md，降级为 debug
+            # 免刷屏；只有「看似技能目录却没 SKILL.md」才是需要提醒的真实异常。
+            if is_skill_dir_candidate(Path(skill_dir).name):
+                logger.warning("技能目录 %s 缺少 SKILL.md", skill_dir)
+            else:
+                logger.debug("跳过非技能目录（无 SKILL.md）: %s", skill_dir)
             return None
 
         try:

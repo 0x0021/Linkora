@@ -9,7 +9,7 @@ import logging
 import threading
 from pathlib import Path
 
-from src.skills.loader import Skill, SkillLoader
+from src.skills.loader import Skill, SkillLoader, iter_skill_files
 
 logger = logging.getLogger(__name__)
 
@@ -107,36 +107,35 @@ class SkillManager:
             self._watcher_thread.join(timeout=5)
         logger.info("[SkillWatcher] 热加载已停止")
 
+    @staticmethod
+    def _dir_latest_mtime(path: Path) -> float:
+        """目录内最新文件的 mtime（跳过隐藏项与 __pycache__ 等产物）。
+
+        技能自带的脚本执行后会生成 ``__pycache__``，若把它算进指纹，热加载会因
+        「技能自己跑了一下」而反复触发无意义的 reload —— 这正是本方法要用
+        ``iter_skill_files`` 而非 ``rglob("*")`` 的原因。
+        目录内无有效文件时回退目录自身 mtime；读取失败返回 0.0。
+        """
+        try:
+            return max(
+                (f.stat().st_mtime for f in iter_skill_files(path)),
+                default=path.stat().st_mtime,
+            )
+        except OSError as _exc:
+            logger.debug(f"_dir_latest_mtime: swallowed exception: {_exc}")
+            return 0.0
+
     def _update_fingerprint(self) -> None:
         """更新各技能目录的 mtime 指纹。"""
         self._last_fingerprint.clear()
         for skill_dir in self.discover():
-            try:
-                # 用目录内最新文件的 max mtime 作为指纹
-                p = Path(skill_dir)
-                latest = max(
-                    (f.stat().st_mtime for f in p.rglob("*") if f.is_file()),
-                    default=p.stat().st_mtime,
-                )
-                self._last_fingerprint[skill_dir] = latest
-            except OSError as _exc:
-                logger.debug(f"_update_fingerprint: swallowed exception: {_exc}")
-                pass
+            self._last_fingerprint[skill_dir] = self._dir_latest_mtime(Path(skill_dir))
 
     def _has_changes(self) -> bool:
         """检查 skills 目录是否有变更（与上次 fingerprint 比较）。"""
         current: dict[str, float] = {}
         for skill_dir in self.discover():
-            try:
-                p = Path(skill_dir)
-                latest = max(
-                    (f.stat().st_mtime for f in p.rglob("*") if f.is_file()),
-                    default=p.stat().st_mtime,
-                )
-                current[skill_dir] = latest
-            except OSError as _exc:
-                logger.debug(f"_has_changes: swallowed exception: {_exc}")
-                current[skill_dir] = 0.0
+            current[skill_dir] = self._dir_latest_mtime(Path(skill_dir))
 
         # 目录集合变化或任一目录 mtime 变化
         if set(current.keys()) != set(self._last_fingerprint.keys()):

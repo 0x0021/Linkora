@@ -113,6 +113,36 @@ class TestHotReloadEdge:
                 # 新目录集与指纹不同 → 有变化
                 assert result is True
 
+    def test_same_name_keeps_higher_priority_dir(self, monkeypatch):
+        """同名技能按 _SKILL_DIRS 顺序取先出现者：data/skills 覆盖 src/skills。
+
+        回归来源：原实现「后加载覆盖先加载」，而 src/skills 排在 _SKILL_DIRS 末位
+        → 用户放进 data/skills 的自定义副本被静默忽略，与 loader 文档声明的
+        「data/skills 优先级最高」正好相反。
+        """
+        import src.skills.loader as loader_mod
+
+        with tempfile.TemporaryDirectory() as td:
+            monkeypatch.setattr(
+                loader_mod, "_SKILL_DIRS",
+                [td + "/data/skills", td + "/src/skills"],
+            )
+            user_dir = _write_skill(Path(td), "dup", "name: dup\ndescription: 用户自定义")
+            builtin_dir = Path(td) / "src" / "skills" / "dup"
+            builtin_dir.mkdir(parents=True)
+            (builtin_dir / "SKILL.md").write_text(
+                "---\nname: dup\ndescription: 仓库内置\n---\n", encoding="utf-8"
+            )
+
+            mgr = SkillManager(td)
+            assert mgr.reload() == 1          # 同名去重后仍是 1 个技能
+            loaded = mgr.get("dup")
+            assert loaded is not None
+            assert loaded.description == "用户自定义"
+            # discover 会对目录做 resolve（macOS 上 /var -> /private/var），故按 realpath 比
+            assert loaded.source_path == str((user_dir / "SKILL.md").resolve())
+            assert "src/skills" not in loaded.source_path
+
     def test_has_changes_same_fingerprint(self):
         """指纹无变化时返回 False。"""
         with tempfile.TemporaryDirectory() as td:

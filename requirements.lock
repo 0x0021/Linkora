@@ -47,7 +47,7 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   pytest
     #   tqdm
     #   typer
-coverage==7.16.0
+coverage==7.16.1
     # via pytest-cov
 cryptography==50.0.1
     # via pdfminer-six
@@ -89,7 +89,7 @@ httpx==0.28.1
     # via
     #   huggingface-hub
     #   openai
-huggingface-hub==1.30.0
+huggingface-hub==1.31.0
     # via
     #   -r requirements.txt
     #   sentence-transformers
@@ -108,7 +108,7 @@ jinja2==3.1.6
     # via
     #   -r requirements.txt
     #   torch
-jiter==0.16.0
+jiter==0.17.0
     # via openai
 joblib==1.6.0
     # via scikit-learn
@@ -128,7 +128,7 @@ narwhals==2.26.0
     # via scikit-learn
 networkx==3.6.1
     # via torch
-numpy==2.5.2
+numpy==2.5.3
     # via
     #   -r requirements.txt
     #   faiss-cpu
@@ -210,7 +210,7 @@ pillow==12.3.0
     #   pytesseract
     #   python-pptx
     #   rapidocr-onnxruntime
-platformdirs==4.11.7
+platformdirs==4.11.8
     # via -r requirements.txt
 pluggy==1.6.0
     # via
@@ -268,7 +268,7 @@ pyyaml==6.0.3
     #   transformers
 rapidocr-onnxruntime==1.2.3
     # via -r requirements.txt
-regex==2026.9.3
+regex==2026.9.10
     # via
     #   -r requirements.txt
     #   transformers

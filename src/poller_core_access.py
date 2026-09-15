@@ -11,6 +11,26 @@ from src.poller_mixins_base import PollerMixinBase
 
 logger = logging.getLogger(__name__)
 
+# 这些 reason / source 表示「会员身份或访问权限已永久丧失」，对该 cid 永远不可恢复
+# （重新加入/重新加好友会生成新的 cid），因此一旦拉黑即永久，且对账自愈永不解除：
+#   - confidential       : 保密群，成员身份不授予读权限（永远）
+#   - not_in_conversation: 已退群 / 被移出 / 删好友 / 对方已不在会话（130003 / not in conversation）
+#   - no_permission      : 离开组织或群、AUTH_PERMISSION_DENIED（会员身份已丢失）
+#   - feishu_permission  : 飞书 chat_message_list_all 返回的 blocked_chats，注释明确为
+#                          「跨租户 / 已退群 / 跨 app 等在当前账号下永远不可能成功」的永久权限错误
+# 与之相对，org_cli_disabled（跨组织未开启 CLI，切组织/开启后可恢复）与
+# permission_denied（兜底，可能含全局瞬时鉴权抖动）保持「临时冷却 + 可被对账恢复」，
+# 避免把全局 token 抖动误杀成永久黑名单。
+PERMANENT_BLOCK_REASONS = frozenset(
+    {"confidential", "not_in_conversation", "no_permission"}
+)
+PERMANENT_BLOCK_SOURCES = frozenset({"feishu_permission"})
+
+
+def _is_permanent_block_candidate(reason: str, source: str) -> bool:
+    """判断某条黑名单是否应作为永久黑名单（不可恢复、对账不解除）。"""
+    return reason in PERMANENT_BLOCK_REASONS or source in PERMANENT_BLOCK_SOURCES
+
 
 class AccessControlMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。"""
@@ -91,6 +111,11 @@ class AccessControlMixin(PollerMixinBase):
                 reason=reason_code,
                 source=source,
                 last_error=str(error),
+                # 会员身份/访问权已永久丧失的会话（保密群、已退群、被移出、删好友、
+                # 离开组织，以及飞书 list_all 返回的永久权限错误）→ 直接永久黑名单，
+                # 避免 1h 冷却到期后被反复重新拉黑，或被 _reconcile_blocklist 自愈又放开。
+                # 详见模块级 PERMANENT_BLOCK_REASONS / PERMANENT_BLOCK_SOURCES 说明。
+                permanent=_is_permanent_block_candidate(reason_code, source),
             )
         except sqlite3.Error as e:
             logger.warning("[轮询器] 写入黑名单失败（不影响内存跳过）: %s", e)
@@ -217,9 +242,39 @@ class AccessControlMixin(PollerMixinBase):
         unblocked = 0
         remaining = []
         skipped_irrecoverable = 0
+        skipped_permanent = 0
+        upgraded_permanent = 0
         for b in blocked:
             cid = b.get("chat_id", "")
             name = (b.get("chat_name") or cid)[:24]
+            reason = b.get("reason") or ""
+            source = b.get("source") or ""
+            # 两类条目永不自愈解除：
+            #   a) 已是永久黑名单（cooldown_until IS NULL）——所有永久黑名单均不可解除，
+            #      含 tools/chat.py 写入的「飞书永久黑名单」等自定义 reason 条目；
+            #   b) 「会员身份/访问权已永久丧失」的会话（保密群 / 已退群 / 被移出 / 删好友 /
+            #      离开组织 / 飞书永久权限错误）——其访问永远不可恢复，一旦解除会立刻在
+            #      下一轮轮询重新撞权限错误、被再次拉黑，形成"反复加黑名单又放开"。
+            # 只能通过 clear_cross_org_skips 手动清空。
+            already_permanent = b.get("cooldown_until") is None
+            is_irrecoverable = _is_permanent_block_candidate(reason, source)
+            if already_permanent or is_irrecoverable:
+                if not already_permanent:
+                    # 历史遗留：本应永久却仍停留在 1h 临时冷却的条目，立即升级为永久，
+                    # 避免冷却到期后又被反复重新拉黑（无需等下一轮撞错才转永久）。
+                    if self.store._blacklist_repo.force_permanent_preserve_reason(cid):
+                        upgraded_permanent += 1
+                        logger.info(
+                            "[轮询器] 黑名单对账将历史临时条目升级为永久（不再反复）：%s (%s)",
+                            name, reason,
+                        )
+                else:
+                    skipped_permanent += 1
+                    logger.debug(
+                        "[轮询器] 黑名单对账跳过永久黑名单（不自愈）：%s (%s)",
+                        name, reason,
+                    )
+                continue
             if cid in accessible_ids:
                 self.store._blacklist_repo.remove_blocked_conversation(cid)
                 self._inaccessible_conversations.discard(cid)
@@ -236,6 +291,13 @@ class AccessControlMixin(PollerMixinBase):
             remaining.append((cid, name))
         if skipped_irrecoverable:
             logger.debug("[轮询器] 黑名单对账跳过 %d 个不可恢复会话", skipped_irrecoverable)
+        if skipped_permanent:
+            logger.debug("[轮询器] 黑名单对账跳过 %d 个永久黑名单（保密群等，不自愈）", skipped_permanent)
+        if upgraded_permanent:
+            logger.info(
+                "[轮询器] 黑名单对账将 %d 个历史临时条目升级为永久黑名单（不再反复）",
+                upgraded_permanent,
+            )
         # 2) 直接探测分批轮转：每轮只探测最多 batch_size 个，跨轮覆盖全部
         #    （自愈是恢复机制，不要求即时；避免黑名单较多时一次性打爆 DWS 接口）
         #    改用 chat_conversation_info 轻量探测：原 chat_message_list(cid, "2020-01-01", 1)

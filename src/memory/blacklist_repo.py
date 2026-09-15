@@ -87,6 +87,7 @@ class BlacklistRepo:
                                  chat_type: str = "", reason: str = "",
                                  source: str = "", last_error: str = "",
                                  cooldown_until: str | None = None,
+                                 permanent: bool = False,
                                  failure_count: int | None = None) -> None:
         """将某个会话加入不遍历黑名单。
 
@@ -107,16 +108,20 @@ class BlacklistRepo:
             cur.execute("SELECT failure_count FROM blocked_conversations WHERE chat_id = ?", (chat_id,))
             row = cur.fetchone()
             failure_count = (int(row["failure_count"]) + 1) if row and row["failure_count"] is not None else 1
-        # cooldown_until 默认走「1h 冷却」（不传则自动设）。只有显式传空字符串
-        # 才表示永久黑名单。ON CONFLICT 保留旧 cooldown_until 不被覆盖—— chat.py 会
+        # cooldown_until 默认走「1h 冷却」（不传则自动设）。只有 permanent=True
+        # 才表示永久黑名单（cooldown_until=NULL），优先于 1h 默认。保密群等
+        # 永远不可恢复的会话必须走永久，否则 1h 冷却到期后又会被反复重新拉黑。
+        # ON CONFLICT 保留旧 cooldown_until 不被覆盖—— chat.py 会
         # 读出后 UPDATE 设正确时间，以避免被刚 INSERT 的 NULL 擦掉。
-        if cooldown_until is None:
+        if cooldown_until is None and not permanent:
             cur.execute("SELECT cooldown_until FROM blocked_conversations WHERE chat_id = ?", (chat_id,))
             existing = cur.fetchone()
             if existing is None:
                 cooldown_until = (datetime.now() + timedelta(hours=self.DEFAULT_COOLDOWN_HOURS)).isoformat()
             else:
                 cooldown_until = existing["cooldown_until"]  # 保留旧值
+        if permanent:
+            cooldown_until = None  # 永久黑名单（NULL）
         cur.execute(
             """INSERT INTO blocked_conversations
                (chat_id, chat_name, chat_type, reason, detected_at, source, last_error,
@@ -149,6 +154,29 @@ class BlacklistRepo:
             "UPDATE blocked_conversations SET cooldown_until=NULL, "
             "reason=COALESCE(reason, '') || ' [升级永久黑名单]' "
             "WHERE chat_id = ?",
+            (chat_id,),
+        )
+        self._cc().commit()
+        updated = cur.rowcount > 0
+        if updated:
+            self._update_cache(chat_id, None)  # 永久黑名单
+        return updated
+
+    def force_permanent_preserve_reason(self, chat_id: str) -> bool:
+        """把临时冷却升级为永久黑名单（cooldown_until=NULL），但**保留原 reason**。
+
+        用于黑名单对账：对已判定为「永久不可恢复」（保密群 / 已退群 / 被移出 /
+        删好友 / 离开组织 / 飞书永久权限错误）但历史仍停留在 1h 临时冷却的条目，
+        将其立即转为永久，避免冷却到期后又被反复重新拉黑。保留 reason 以便后续
+        仍能按 reason 分类统计，不被 ' [升级永久黑名单]' 后缀干扰匹配。
+        """
+        chat_id = str(chat_id or "").rstrip("=")
+        if not chat_id:
+            return False
+        cur = self._cc().cursor()
+        cur.execute(
+            "UPDATE blocked_conversations SET cooldown_until=NULL "
+            "WHERE chat_id = ? AND cooldown_until IS NOT NULL",
             (chat_id,),
         )
         self._cc().commit()

@@ -371,19 +371,25 @@ class TestRecallMemoryLimit:
 
 
 class TestCheckMemoryDuplicateLimit:
-    def test_semantic_sql_has_recency_limit(self):
+    def test_check_duplicate_exact_match_only(self):
+        """check_memory_duplicate 只做逐字匹配：语义相近但表述不同不判重复，
+        交由 save_memory 写入时把旧版标 superseded（最新优先）。这避免了
+        「新结论被语义去重拦截、旧结论被保留」的反直觉行为。"""
         store = MagicMock()
         cur = MagicMock()
         store.conn.cursor.return_value = cur
-        cur.fetchone.return_value = None  # 无完全匹配
-        cur.fetchall.return_value = [{"embedding": json.dumps([1.0, 0, 0, 0])}]
+        cur.fetchone.return_value = None  # 无逐字完全匹配
         repo = MemoryRepo(store)
         emb = MagicMock()
         emb.enabled = True
         emb.embed.return_value = [1.0, 0, 0, 0]
+        # 语义相近（cosine=1.0）但表述不同 → 不判重复，交由 save_memory 作废旧版
         dup = repo.check_memory_duplicate(
             "new content", embedding_client=emb, similarity_threshold=0.85,
             sender_id="s1", scope="public")
-        assert dup is True  # cosine=1.0 >= 0.85
-        sqls = [c.args[0] for c in cur.execute.call_args_list]
-        assert any("ORDER BY created_at DESC LIMIT ?" in s for s in sqls)
+        assert dup is False
+        # 逐字相同 → 判重复
+        cur.fetchone.return_value = {"id": 1}
+        dup2 = repo.check_memory_duplicate(
+            "exact same", embedding_client=emb, scope="public")
+        assert dup2 is True

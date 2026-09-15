@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>让 RAG 记忆学会「忘掉过期的自己」· Linkora 工程复盘</title>
+<meta name="description" content="Linkora v0.5.2 记忆治理工程复盘：RAG 记忆为什么满是「死」结论，以及用时效加权 + 写入 supersede + 智能 GC 三层方案把陈旧信息压下去的全过程。" />
+<meta name="theme-color" content="#05070d" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#fbfcff" media="(prefers-color-scheme: light)" />
+<meta property="og:title" content="让 RAG 记忆学会「忘掉过期的自己」· Linkora 工程复盘" />
+<meta property="og:description" content="RAG 记忆过期治理：时效加权 + 写入 supersede + 智能 GC，把陈旧信息压下去。" />
+<meta property="og:type" content="article" />
+<link rel="canonical" href="https://0x0021.github.io/Linkora/memory-staleness.html" />
+
+<!-- 首帧前定主题，避免深色模式白屏闪烁 -->
+<script>
+  (function () {
+    var p = null;
+    try { p = localStorage.getItem("linkora-theme"); } catch (e) {}
+    if (p !== "light" && p !== "dark" && p !== "system") p = "dark";
+    var dark = p === "dark" ||
+      (p === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var r = document.documentElement;
+    r.setAttribute("data-theme", dark ? "dark" : "light");
+    r.setAttribute("data-pref", p);
+  })();
+</script>
+
+<link rel="stylesheet" href="./assets/site.css" />
+<style>
+  /* 文章页作用域样式（复用站点 site.css 的品牌色与字体基座） */
+  .article {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 6rem 1.25rem 4rem;
+    line-height: 1.85;
+    font-size: 1.02rem;
+  }
+  .article__back {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    color: var(--accent, #22D3EE);
+    text-decoration: none;
+    font-size: .92rem;
+    margin-bottom: 1.5rem;
+  }
+  .article__back:hover { text-decoration: underline; }
+  .article__meta {
+    color: var(--muted, #8b93a7);
+    font-size: .9rem;
+    letter-spacing: .02em;
+    margin-bottom: .6rem;
+  }
+  .article h1 {
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+    line-height: 1.25;
+    margin: 0 0 1.2rem;
+  }
+  .article h2 {
+    font-size: 1.35rem;
+    margin: 2.6rem 0 1rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,.1));
+  }
+  .article h3 {
+    font-size: 1.08rem;
+    margin: 1.8rem 0 .6rem;
+    color: var(--accent, #22D3EE);
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0 1.6rem; }
+  .tag {
+    font-size: .78rem; padding: .25rem .7rem; border-radius: 999px;
+    background: rgba(34,211,238,.12); color: var(--accent, #22D3EE);
+    border: 1px solid rgba(34,211,238,.25);
+  }
+  .article p { margin: 1rem 0; color: var(--text, #d7dce8); }
+  .article ul, .article ol { margin: 1rem 0; padding-left: 1.4rem; color: var(--text, #d7dce8); }
+  .article li { margin: .5rem 0; }
+  .article code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .88em; padding: .12rem .4rem; border-radius: 5px;
+    background: rgba(127,127,127,.18); color: var(--accent, #22D3EE);
+  }
+  .article blockquote {
+    margin: 1.6rem 0; padding: .9rem 1.2rem; border-left: 3px solid var(--accent, #22D3EE);
+    background: rgba(34,211,238,.07); border-radius: 0 8px 8px 0; color: var(--text, #d7dce8);
+  }
+  .article a { color: var(--accent, #22D3EE); }
+  .article table {
+    width: 100%; border-collapse: collapse; margin: 1.4rem 0; font-size: .92rem;
+    border: 1px solid var(--border, rgba(255,255,255,.12)); border-radius: 10px; overflow: hidden;
+  }
+  .article th, .article td { padding: .7rem .85rem; text-align: left; border-bottom: 1px solid var(--border, rgba(255,255,255,.1)); }
+  .article th { background: rgba(127,127,127,.14); font-weight: 600; }
+  .article tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body id="top">
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="nav__brand" href="./">灵桥 Linkora</a>
+    <div class="nav__links">
+      <a href="./">首页</a>
+      <a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main class="article">
+  <a class="article__back" href="./">← 返回首页</a>
+  <div class="article__meta">2026-09-15 · 工程复盘 · v0.5.2</div>
+  <h1>让 RAG 记忆学会「忘掉过期的自己」</h1>
+  <div class="tags">
+    <span class="tag">AI Agent</span>
+    <span class="tag">v0.5.2</span>
+    <span class="tag">RAG</span>
+    <span class="tag">记忆架构</span>
+  </div>
+
+  <p>用户的抱怨很朴素：「分身记住的很多都是死的——同一件事聊了好几次，每次结论都不一样，它怎么还拿最早那个旧的来答？」这不是模型笨，是<strong>存储和检索的设计里压根没有「时间」和「作废」这两个概念</strong>。本文复盘 v0.5.2 是怎么把陈旧信息压下去的。</p>
+
+  <h2>根因：检索打平，存储无状态</h2>
+  <p>顺着调用链一路读下来，问题出在三个地方：</p>
+  <ol>
+    <li><strong>检索只看相似度。</strong>记忆召回和知识库检索最终都按余弦相似度排序，时间从不进打分函数。同一主题的新旧结论，相似度差不多，就被一视同仁地喂给大模型。</li>
+    <li><strong>存储没有「作废 / 版本 / 主题」字段。</strong>记忆表和分块表只有 <code>created_at</code>，没有 <code>updated_at / status / superseded_by</code>。写入就是一条 <code>INSERT</code>——同主题不会被更新或作废，只会多插一行。</li>
+    <li><strong>旧的去重逻辑反而「留旧丢新」。</strong>原 <code>check_memory_duplicate</code> 会按语义相似度跳过保存：新结论和旧结论语义相近 → 判为重复 → 不保存新结论。结果旧结论被留着，新结论被拦在门外。</li>
+  </ol>
+  <p>三条叠在一起，就是用户看到的「死记忆」：旧结论既没被覆盖、也没被遗忘，还和新结论抢召回。</p>
+
+  <h2>方案：三层，从只读路径到写入路径</h2>
+
+  <h3>① 检索时效加权（最先落地，零风险）</h3>
+  <p>在记忆召回与 KB 检索里把时间纳入打分：最终得分 = 相似度 + 时效权重（越新权重越高），<code>status='active'</code> 才参与召回。纯只读改动，立刻让最新结论优先、过期信息自然沉底。这一层不动写入，先止血。</p>
+
+  <h3>② 写入最新优先 / 作废旧版</h3>
+  <p>这是根治「留旧丢新」的关键。给记忆加上 <code>topic_key / superseded_by / status</code>：写入新结论后，把同主题旧的 <code>active</code> 行置为 <code>superseded</code>（软删除，保留历史可审计）。同时把 <code>check_memory_duplicate</code> 改为<strong>只做逐字匹配</strong>——语义相近但表述不同的新结论不再被拦，交由写入环节去标记旧版作废。这样召回永远只拿回最新那一条。</p>
+
+  <h3>③ 智能过期 GC</h3>
+  <p>原本的清理是「按年龄硬删」：超过 N 天就删，既不理解「这条已被新结论取代」，也可能误删仍相关的内容。改为两层：先删所有 <code>superseded</code> 行，再按主题分组保留最新 N 条、删其余超龄的。知识库侧同步清理作废分块并重建索引。过期信息被真正「忘记」，而不是被粗暴砍掉。</p>
+
+  <h2>一张对照表</h2>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>改之前</th><th>改之后</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>检索排序</td><td>纯相似度，新旧打平</td><td>相似度 + 时效权重，最新优先</td></tr>
+      <tr><td>同主题新结论</td><td>被语义去重拦掉，旧结论保留</td><td>写入即作废旧版，召回只返回最新</td></tr>
+      <tr><td>文档重投</td><td>可能新建重复文档 / 残留僵尸分块</td><td>同 doc 原地替换分块 + 版本号 +1</td></tr>
+      <tr><td>过期清理</td><td>按年龄硬删，可能误删</td><td>先删作废、再删超龄，按主题留最新</td></tr>
+    </tbody>
+  </table>
+
+  <h2>验证</h2>
+  <p>Schema 迁移全部走已有的 <code>_ensure_column</code> 模式，对旧库向后兼容。改动经 ruff、pyright（0 error）、类型基线、依赖检查和受影响单测全绿；并补了回归测试：写入语义相近新结论后，旧版应被标 <code>superseded</code>、召回只返回最新。对外接口与配置项不变，升级无感。</p>
+
+  <blockquote>一句话总结：让记忆有「时间感」和「作废权」，它就从「越记越乱」变成了「越记越准」。</blockquote>
+
+  <p>发布说明见 <a href="https://0x0021.github.io/posts/linkora-v052-release.html" target="_blank" rel="noopener">Linkora v0.5.2 发布记录</a>，完整变更见 <a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>。</p>
+</main>
+</body>
+</html>

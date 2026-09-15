@@ -417,12 +417,12 @@ class DiscoveryMixin(PollerMixinBase):
         # 否则全部已处理时 latest_timestamp=None，_last_list_all_time 被重置为 now，下一轮又拉同一批
         if conv_latest_time:
             max_ts = max(conv_latest_time.values())
-            # 飞书时间戳精度为分钟级（create_time 无秒），直接使用 max_ts 而非 +1s，
-            # 避免漏掉同分钟内其他消息。去重机制（is_message_processed）会处理重复。
-            if is_feishu:
-                self._last_list_all_time = max_ts
-            else:
-                self._last_list_all_time = max_ts + timedelta(seconds=1)
+            # 一律直接用 max_ts，**不 +1s**（含钉钉）。start/end 只接受秒级格式
+            # （strftime "%Y-%m-%d %H:%M:%S"），游标因此 floor 到「最后一条消息所在秒」，
+            # 下一轮从该秒重拉会重叠上一轮末尾，靠 msg_id 去重跳过已处理消息。
+            # +1s 会把游标推过该秒，使该秒内尚未取到的消息被永久跳过（飞书早已因
+            # 分钟级精度改用 max_ts，钉钉的秒级 --time 同理）。
+            self._last_list_all_time = max_ts
             logger.debug("[轮询器] list-all 下次起点: %s", self._last_list_all_time)
         else:
             # 这批会话里一条消息都没有，往前推配置的时间避免空转
@@ -430,10 +430,8 @@ class DiscoveryMixin(PollerMixinBase):
 
         # 同步更新 _last_poll_time，避免单聊轮询再拉同一批消息
         for conv_id, ts in conv_latest_time.items():
-            if is_feishu:
-                self._last_poll_time[conv_id] = ts
-            else:
-                self._last_poll_time[conv_id] = ts + timedelta(seconds=1)
+            # 同上：与 per-conversation 路径保持一致的「不越秒」游标语义
+            self._last_poll_time[conv_id] = ts
             logger.debug("[轮询器] list-all 同步更新 %s 的轮询时间点", conv_id[:30])
 
         # 合并连续消息

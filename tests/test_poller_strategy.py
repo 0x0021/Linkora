@@ -1084,3 +1084,49 @@ class TestMessageAgeGate:
         # history_days=0 不拦截，但可能被其他过滤器（如 first_run_ignore）拦住；
         # 关键是不因年龄门槛抛异常
         assert isinstance(out, list)  # 不崩溃即可
+
+
+# ── 轮询游标精度（防漏消息）──
+# 拉取侧的 --time 只接受秒级格式（调用方 strftime "%Y-%m-%d %H:%M:%S"，毫秒被截断），
+# 因此游标天然 floor 到「最后一条消息所在的那一秒」。若游标 +1s 越过该秒，则该秒内
+# 尚未取到的消息（同秒多条 / 被单页 limit 截断的后续消息）会被永久跳过。
+# 实测漏消息实例：`chat message list --limit 5` 只回 5 条且 hasMore=true，
+# 而同一时间窗口实际有 6 条。
+
+
+class TestPollCursorSecondPrecision:
+    def test_dingtalk_cursor_keeps_max_ts_without_plus_one(self, poller_factory):
+        """钉钉游标 == 最大时间戳（不 +1s），下一轮从同一秒重叠重拉。"""
+        p, _ = poller_factory()
+        ts = datetime(2026, 9, 15, 10, 0, 0, 800000)
+        p._update_poll_time_and_db("cid_a", "群A", "group", [ts], [])
+        assert p._last_poll_time["cid_a"] == ts
+        # 格式化后落在同一秒 → 下一轮 --time 与该秒对齐（重叠），而不是跳到下一秒
+        assert p._last_poll_time["cid_a"].strftime("%Y-%m-%d %H:%M:%S") == "2026-09-15 10:00:00"
+
+    def test_feishu_cursor_keeps_max_ts(self, poller_factory):
+        """飞书原本就不 +1s（分钟级精度），统一后行为不变。"""
+        p, _ = poller_factory(dws=FeishuCliAdapter())
+        ts = datetime(2026, 9, 15, 10, 0, 0)
+        p._update_poll_time_and_db("cid_b", "群B", "group", [ts], [])
+        assert p._last_poll_time["cid_b"] == ts
+
+    def test_empty_batch_rewinds_cursor_for_retry(self, poller_factory):
+        """空批次按既有设计回退 empty_poll_protection_minutes（不是推进到当前时刻）。
+
+        回退而非前进：下一轮会重拉这段窗口，既避免空转打接口，又不会跳过错过的消息
+        （重复拉到已处理消息由 msg_id 去重跳过）。
+        """
+        p, _ = poller_factory()
+        p._last_poll_time["cid_c"] = datetime(2026, 9, 15, 9, 0, 0)
+        p._update_poll_time_and_db("cid_c", "群C", "group", [], [])
+        rewind = p._last_poll_time["cid_c"]
+        expected = datetime.now() - timedelta(minutes=p.config.empty_poll_protection_minutes)
+        assert abs((rewind - expected).total_seconds()) < 5
+        assert rewind < datetime.now()
+
+    def test_plus_one_second_would_skip_same_second_messages(self):
+        """固化缺陷特征：+1s 会把游标推过该秒（防止退回旧行为）。"""
+        ts = datetime(2026, 9, 15, 10, 0, 0, 800000)
+        assert ts.strftime("%Y-%m-%d %H:%M:%S") == "2026-09-15 10:00:00"
+        assert (ts + timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S") == "2026-09-15 10:00:01"

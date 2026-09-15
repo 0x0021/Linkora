@@ -122,7 +122,9 @@ class TestDwsAdapterTableConversion:
         if method == "send":
             adapter.chat_message_send(user="u", text=text)
         else:
-            adapter.chat_message_update(message_id="m1", text=text)
+            # dws chat message edit 只支持按 --conversation-id 定位（无 --user），
+            # 故必须传 group；生产调用点 stream_helper 亦传 message.chat_id
+            adapter.chat_message_update(message_id="m1", text=text, group="cid_test")
         return captured.get("text", "")
 
     def test_send_converts_table(self):

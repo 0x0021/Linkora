@@ -73,3 +73,62 @@ def test_empty_result_returns_empty_list():
 
     a = _Empty()
     assert a.chat_message_list_group("cidZ", "2026-01-01 00:00:00", 5) == []
+
+
+# ── 分页完整性（防静默丢消息）──
+# 实测 dws v1.0.62-beta.8：`chat message list --limit 5` 只回 5 条且 hasMore=true，
+# 而同一窗口实际有 6 条；加 --page-all 后回完整 6 条（complete=true）。
+# 旧实现忽略 hasMore/nextCursor，超出一页的消息被永久丢弃。
+
+
+def test_group_message_requests_page_all_to_avoid_silent_loss():
+    """必须显式请求自动翻页，且页数/总量上限与 limit 挂钩。"""
+    a = _FakeDws()
+    a.chat_message_list_group("cidX", "2026-01-01 00:00:00", 5)
+
+    cmd = a._calls[0]
+    assert "--page-all" in cmd, "不带 --page-all 会只取第一页并静默丢弃其余消息"
+    pages = DwsAdapter._MESSAGE_LIST_MAX_PAGES
+    assert cmd[cmd.index("--page-limit") + 1] == str(pages)
+    # 总量上限 = 每页 limit × 最大页数，保证「单次积压 > 一页」也能分批追赶
+    assert cmd[cmd.index("--max-items") + 1] == str(5 * pages)
+
+
+def test_truncated_paging_logs_warning(caplog):
+    """翻页被页数/总量上限截断时必须告警——不能静默返回部分结果。"""
+
+    class _Truncated(_FakeDws):
+        def run(self, args, *a, **k):
+            self._calls.append(list(args))
+            return {"success": True, "result": {
+                "partial": True, "truncated": True, "stopReason": "page_limit",
+                "pagesFetched": 10, "hasMore": True,
+                "messages": [{"content": "x"}],
+            }}
+
+    a = _Truncated()
+    with caplog.at_level("WARNING"):
+        msgs = a.chat_message_list_group("cidQ", "2026-01-01 00:00:00", 5)
+    assert len(msgs) == 1
+    assert any("翻页被截断" in r.message for r in caplog.records)
+
+
+def test_direct_message_has_more_logs_warning(caplog):
+    """list-direct 没有 --page-all，单页满载时必须告警提醒依赖下轮补拉。"""
+
+    class _DirectFull(_FakeDws):
+        def run(self, args, *a, **k):
+            self._calls.append(list(args))
+            return {"success": True, "result": {
+                "hasMore": True, "messages": [{"content": "hi"}],
+            }}
+
+    a = _DirectFull()
+    with caplog.at_level("WARNING"):
+        msgs = a.chat_message_list_direct(user_id="u1", time_str="2026-01-01 00:00:00", limit=20)
+    assert len(msgs) == 1
+    assert any("单聊消息单页已满" in r.message for r in caplog.records)
+    # list-direct 不得被塞入它不支持的翻页参数
+    cmd = a._calls[0]
+    assert "--page-all" not in cmd
+    assert "--cursor" not in cmd

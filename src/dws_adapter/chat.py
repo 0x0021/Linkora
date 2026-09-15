@@ -18,6 +18,14 @@ class DwsAdapterChatMixin(DwsAdapterBase):
     # 用类级而非实例级，避免多实例/多线程场景下 5 分钟冷却失效导致刷屏。
     _list_all_cap_warn_at: dict[str, float] = {}
 
+    # ``chat message list`` 自动翻页上限（页数；每页 ``--limit`` 条，故总量上限为
+    # limit × 本值，默认 20 × 10 = 200 条）。见 chat_message_list_group 的分页说明。
+    _MESSAGE_LIST_MAX_PAGES = 10
+
+    # ``chat list-top-conversations`` 翻页上限（页数，每页默认 1000 条）。
+    # 置顶会话正常远少于一页，本值只作死循环兜底。
+    _TOP_CONVERSATIONS_MAX_PAGES = 5
+
     def contact_user_get_self(self, timeout: int | None = None) -> dict:
         try:
             data = self.run(["contact", "user", "get-self"],
@@ -43,16 +51,45 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             return result.get("conversations", [])
         return []
 
-    def chat_list_top_conversations(self, limit: int = 50) -> list[dict]:
-        """获取最近会话列表（含单聊/群聊，不依赖未读标记）。"""
-        data = self.run([
-            "chat", "list-top-conversations",
-            "--limit", str(limit)
-        ], operation="chat_list_top_conversations", force_no_dry_run=True)
-        result = self._get_result(data)
-        if isinstance(result, dict):
-            return result.get("conversations", [])
-        return []
+    def chat_list_top_conversations(self, limit: int = 1000) -> list[dict]:
+        """获取**置顶会话**列表（含单聊/群聊，不依赖未读标记）。
+
+        ⚠️ 语义是「置顶会话」（dws 原话：拉取当前用户的置顶会话列表），**不是**最近
+        会话列表——旧 docstring 描述为「最近会话」有歧义，已更正。
+
+        ⚠️ 必须翻页：dws ``--limit`` 默认 1000 且支持 ``--cursor`` / ``nextCursor``。
+        旧实现硬编码单页 ``--limit 100`` 且忽略 ``hasMore``，置顶会话超过 100 个时
+        会**漏掉会话**（进而漏轮询），并让黑名单对账（_reconcile_blocklist）据此
+        误判可访问性。这里按 ``hasMore`` / ``nextCursor`` 翻页并去重合并。
+        """
+        merged: list[dict] = []
+        seen: set[str] = set()
+        cursor = ""
+        for _ in range(self._TOP_CONVERSATIONS_MAX_PAGES):
+            args = ["chat", "list-top-conversations", "--limit", str(limit)]
+            if cursor:
+                args += ["--cursor", str(cursor)]
+            data = self.run(args, operation="chat_list_top_conversations",
+                            force_no_dry_run=True)
+            result = self._get_result(data)
+            if not isinstance(result, dict):
+                break
+            for c in result.get("conversations", []) or []:
+                cid = c.get("openConversationId", "")
+                # 仅在能取到 id 时去重；取不到 id 的条目按旧行为保留（不过度丢弃）
+                if cid:
+                    if cid in seen:
+                        continue
+                    seen.add(cid)
+                merged.append(c)
+            if not result.get("hasMore"):
+                break
+            next_cursor = str(result.get("nextCursor", "") or "")
+            # 游标停滞保护：缺失或与上一页相同即停止，避免死循环重复打接口
+            if not next_cursor or next_cursor == str(cursor):
+                break
+            cursor = next_cursor
+        return merged
 
     def chat_list_groups_joined(self, limit: int = 200) -> list[dict]:
         """分页拉取「我加入的所有群」（dws chat +chat-list-all）。
@@ -64,20 +101,37 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         """
         return self._chat_list_groups(["chat", "+chat-list-all"], limit)
 
-    def chat_list_groups_mine(self, limit: int = 200) -> list[dict]:
-        """分页拉取「我创建/管理的群」（dws chat +chat-list-mine）。"""
-        return self._chat_list_groups(["chat", "+chat-list-mine"], limit)
+    def chat_list_groups_mine(self, limit: int = 0) -> list[dict]:
+        """拉取「我创建/管理的群」（dws chat +chat-list-mine）。
 
-    def _chat_list_groups(self, base_args: list[str], limit: int) -> list[dict]:
-        """通用群列表分页拉取，合并去重返回 [{openConversationId, name}]。"""
+        ⚠️ 该 shortcut **不支持 --cursor**：dws v1.0.62-beta.8 实测传 --cursor 会直接
+        返回 unknown flag 错误（合法 flag 仅 limit / exclude-muted / role）。但其
+        ``--limit`` **不传即返回全部**（实测一次返回全部自建群）。故这里 limit 默认 0
+        （不传 --limit）、单次拉取不翻页。
+
+        旧实现复用通用分页函数会拼 --cursor，第 2 页在真实 dws 上必然失败——虽被
+        except 吞掉不致崩，但每次都产生一次无效调用 + 告警日志，且只能拿到第一页。
+        """
+        return self._chat_list_groups(["chat", "+chat-list-mine"], limit,
+                                      supports_cursor=False)
+
+    def _chat_list_groups(self, base_args: list[str], limit: int,
+                          *, supports_cursor: bool = True) -> list[dict]:
+        """通用群列表分页拉取，合并去重返回 [{openConversationId, name}]。
+
+        ``supports_cursor=False``：不拼 --cursor 且只请求一次（用于 +chat-list-mine）；
+        此时 ``limit=0`` 表示不传 --limit —— dws 语义为「返回全部」。
+        """
         merged: list[dict] = []
         seen: set[str] = set()
         cursor = ""
         pages = 0
         while True:
             pages += 1
-            args = list(base_args) + ["--limit", str(limit)]
-            if cursor:
+            args = list(base_args)
+            if limit:
+                args += ["--limit", str(limit)]
+            if supports_cursor and cursor:
                 args += ["--cursor", str(cursor)]
             try:
                 data = self.run(args, operation="chat_list_groups", force_no_dry_run=True)
@@ -93,6 +147,8 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                     continue
                 seen.add(cid)
                 merged.append({"openConversationId": cid, "name": g.get("name", "")})
+            if not supports_cursor:
+                break  # 不支持游标分页：单次请求即为全量
             if result.get("complete") or not result.get("nextCursor") or pages >= 10:
                 break
             cursor = result.get("nextCursor", "") or ""
@@ -104,7 +160,15 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                                  open_dingtalk_id: str = "",
                                  time_str: str = "",
                                  limit: int = 50) -> list[dict]:
-        """拉取单聊消息。forward=false 表示按时间正序返回（老→新）。"""
+        """拉取单聊消息。forward=false 表示按时间正序返回（老→新）。
+
+        ⚠️ ``list-direct``（dws v1.0.62-beta.8）**没有** ``--page-all``，也**不支持**
+        ``--cursor``，故无法在适配器内自动翻页补齐——它只回一页 ``--limit`` 条。
+        这意味着「单聊一次积压 > limit 条」时本方法拿不全，必须由调用方保证不漏：
+        轮询游标只按秒级回退重叠（不 +1s 越秒前进），使下一轮从同一秒重新拉取，
+        再靠 msg_id 去重跳过已处理消息（见 poller_strategy._update_poll_time_and_db）。
+        返回体带 ``hasMore`` 时打 WARNING，便于发现积压异常。
+        """
         args = ["chat", "message", "list-direct",
                 "--time", time_str,
                 "--limit", str(limit),
@@ -117,9 +181,15 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             raise ValueError("Either user_id or open_dingtalk_id is required")
         data = self.run(args, operation="chat_message_list_direct", force_no_dry_run=True)
         result = self._get_result(data)
-        if isinstance(result, dict):
-            return result.get("messages", [])
-        return []
+        if not isinstance(result, dict):
+            return []
+        if result.get("hasMore"):
+            logger.warning(
+                "[DWS] 单聊消息单页已满（time=%s, limit=%d）：该命令不支持自动翻页，"
+                "剩余消息依赖下一轮从同一秒重拉（去重跳过已处理）",
+                time_str, limit,
+            )
+        return result.get("messages", [])
 
     def chat_message_list_group(self, group_id: str, time_str: str,
                                  limit: int = 50,
@@ -133,18 +203,40 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         ⚠️ 为什么不用 list-all（search_messages_by_time_range）：该接口依赖「消息搜索权益」，
         而该权益默认**不覆盖群聊**，对群调用会返回业务错误（PREPARE_CALL_TOOL_ERROR），
         导致群消息长期拉不到。逐群接口不受此限制，是群消息的正确拉取通道。
+
+        ⚠️ 必须带 ``--page-all``：单页只返回 ``--limit`` 条并带 ``hasMore`` / ``nextCursor``，
+        旧实现忽略分页标志只取第一页，超出一页的消息被**静默丢弃**（实测 limit=5 只回 5 条
+        且 hasMore=true，同一窗口实际有 6 条）。交由 dws 按服务端**毫秒级** nextCursor
+        自动翻页并按 messageId 去重后聚合，才能覆盖「同一秒内多条消息 / 一次积压超过
+        一页」这两种真实场景——它们只靠调用方按**秒级** ``--time`` 前进是无法补齐的。
+        仍被 ``--page-limit`` / ``--max-items`` 截断时打 WARNING，便于发现异常积压。
         """
+        page_limit = self._MESSAGE_LIST_MAX_PAGES
+        max_items = max(limit, 1) * page_limit
         data = self.run([
             "chat", "message", "list",
             "--group", group_id,
             "--time", time_str,
             "--direction", "newer",
             "--limit", str(limit),
+            "--page-all",
+            "--page-limit", str(page_limit),
+            "--max-items", str(max_items),
         ], operation="chat_message_list_group", force_no_dry_run=True,
            timeout=timeout or self.timeout)
         result = self._get_result(data)
         if not isinstance(result, dict):
             return []
+        # partial / truncated 表示翻页被页数或总量上限截断，本窗口仍有消息未取到。
+        # 不静默吞掉：调用方据此可判断「本轮游标推进后需继续追赶」。
+        if result.get("partial") or result.get("truncated"):
+            logger.warning(
+                "[DWS] 群消息翻页被截断（group=%s, time=%s, limit=%d, 上限=%d 条）："
+                "stopReason=%s, pagesFetched=%s, 已取 %d 条，剩余消息将在下轮继续拉取",
+                group_id[:24], time_str, limit, max_items,
+                result.get("stopReason"), result.get("pagesFetched"),
+                len(result.get("messages", []) or []),
+            )
         return result.get("messages", []) or []
 
     def chat_message_list(self, group: str, time_str: str,
@@ -369,11 +461,18 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         #  的是「是否按平台能力做 markdown 归一化」与可观测日志，详见 message_format.py）
         mt = (msg_type or "auto").lower()
         if mt == "image":
-            if not media_id and file_path:
-                media_id = self.media_upload(file_path, media_type="image")
-            if not media_id:
-                raise ValueError("msg_type=image 需要 media_id（或先上传取得）")
-            args.extend(["--msg-type", "image", "--media-id", media_id])
+            if media_id:
+                # 已有 mediaId（复用上游上传结果）→ 原生 image 消息
+                args.extend(["--msg-type", "image", "--media-id", media_id])
+            elif file_path:
+                # ⚠️ dws 已下线「本地文件 → mediaId」的通用上传能力：``chat media upload``
+                # 现在直接返回 validation error（"已下线，当前 CLI 不提供通用的本地文件
+                # 到 mediaId 的上传能力"）。官方指引：本地图片/文件改用
+                # ``chat message send --msg-type file --file <本地路径>`` 直接发送。
+                # 故此处降级为 file 消息，避免整条发图链路失败。
+                args.extend(["--msg-type", "file", "--file", file_path])
+            else:
+                raise ValueError("msg_type=image 需要 media_id 或 file_path")
             if text:
                 if classify_message_format(text) == "markdown" and not self.supports_markdown_tables:
                     text = normalize_markdown_for_platform(text, supports_tables=False)
@@ -419,11 +518,28 @@ class DwsAdapterChatMixin(DwsAdapterBase):
     def chat_message_update(self, *, message_id: str, text: str = "",
                            title: str = "", group: str | None = None,
                            user: str | None = None) -> dict:
-        """更新已发送的消息内容（用于流式输出：先占位再逐步 patch）。
+        """编辑已发送的消息内容（用于流式输出：先占位再逐步 patch）。
 
-        封装 `dws chat message update --msg-id xxx --text xxx`。
+        封装 ``dws chat message edit --conversation-id <cid> --message-id <mid> --text <t>``。
+
+        ⚠️ dws 已移除 ``chat message update``（核实 v1.0.61 与 v1.0.62-beta.8 均无此
+        子命令，仅剩 ``edit``），且 ``--msg-id`` 更名为 ``--message-id``、
+        ``--conversation-id`` 为必填。旧实现三处皆错，导致钉钉流式输出每一轮更新都
+        失败——占位消息永远停在 "..."（2026-09-15 核对 dws 新版本时发现）。
+
+        ``edit`` 只能按 openConversationId 定位会话，**不支持按 user 定位**；单聊同样
+        以 openConversationId 表达（Linkora 的 ``message.chat_id`` 即该值）。故 ``user``
+        参数仅为签名兼容而保留，不参与命令拼装。
         """
-        args = ["chat", "message", "update", "--msg-id", message_id]
+        conversation_id = group or ""
+        if not conversation_id:
+            raise ValueError(
+                "chat_message_update 需要 group（openConversationId）："
+                "dws chat message edit 只支持按会话定位，无 --user 参数"
+            )
+        args = ["chat", "message", "edit",
+                "--conversation-id", conversation_id,
+                "--message-id", message_id]
         if text:
             # 钉钉不渲染 markdown 表格：仅 markdown 格式发送前转换（流式更新同理）
             if classify_message_format(text) == "markdown" and not self.supports_markdown_tables:
@@ -431,11 +547,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             args.extend(["--text", text])
         if title:
             args.extend(["--title", title])
-        if group:
-            args.extend(["--group", group])
-        if user:
-            args.extend(["--user", user])
-        logger.debug("[DWS] 更新消息: dws %s", " ".join(args))
+        logger.debug("[DWS] 编辑消息: dws %s", " ".join(args))
         return self.run(args)
 
     def chat_message_reply(self, *, message_id: str | None = None, text: str = "",

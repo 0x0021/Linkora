@@ -31,6 +31,8 @@ class SQLiteStoreBase(LinkoraComponentBase):
     _MIGRATE_PLATFORM_PREFIXES: dict[str, list[str] | None]
     _checked_db_paths: ClassVar[set[str]]
     _cleaned_orphan_paths: ClassVar[set[str]]
+    _schema_init_lock: ClassVar[Any]
+    _schema_initialized_paths: ClassVar[set[str]]
     # 标成 Any/object 会丢掉 kb_repo 里 vi.remove/.save/.count/.search 的成员检查
     _vector_index: VectorIndex | None
 

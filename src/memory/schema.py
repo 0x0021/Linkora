@@ -16,6 +16,11 @@ def _ensure_column(cursor: sqlite3.Cursor, table: str, column: str, col_def: str
 
     使用 PRAGMA table_info 前置检查列是否存在，替代 try/except 的粗糙幂等。
     若整个表不存在则直接跳过，避免 "no such table" 导致整个 init 失败。
+
+    【HIGH-5 并发安全】同一 db 文件可能被多个 store 实例并发初始化，存在
+    "PRAGMA 检查列不存在 → 另一连接抢先 ADD → 本连接 ADD 撞 duplicate column name"
+    的竞态窗口。因此对 ALTER 的 "duplicate column"/"already exists" 类错误做幂等兜底：
+    捕获后二次核对该列确已存在即视为成功（数据零风险），其它错误照常上抛。
     """
     cursor.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
@@ -26,8 +31,19 @@ def _ensure_column(cursor: sqlite3.Cursor, table: str, column: str, col_def: str
     # 用 row[1]（PRAGMA 第二列即列名）而非 row["name"]，避免依赖 row_factory=sqlite3.Row
     # （生产路径 sqlite_store_conn 设了 Row，但 init_conv_schema 直接接裸连接时不应强依赖）。
     existing = {row[1] for row in cursor.fetchall()}
-    if column not in existing:
+    if column in existing:
+        return
+    try:
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+    except sqlite3.OperationalError as e:
+        msg = str(e).lower()
+        if "duplicate column" in msg or "already exists" in msg:
+            # 并发迁移竞态：另一连接已抢先加好该列，二次核验后安全跳过。
+            cursor.execute(f"PRAGMA table_info({table})")
+            if column in {row[1] for row in cursor.fetchall()}:
+                logger.debug("列 %s.%s 已由并发迁移添加，幂等跳过", table, column)
+                return
+        raise
 
 
 def init_schema(conn: sqlite3.Connection, db_path: str) -> None:

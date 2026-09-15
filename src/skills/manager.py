@@ -49,6 +49,11 @@ class SkillManager:
     def reload(self) -> int:
         """重新扫描并加载全部技能。返回成功加载的技能数（去重后）。线程安全。
 
+        同名技能按 `_SKILL_DIRS` 的顺序取**先出现者**（= 优先级高者）：用户可写的
+        `data/skills` 因此能覆盖仓库内置的 `src/skills`，与 loader 文档声明的优先级
+        一致。反过来「后加载覆盖先加载」会让用户放进 data/skills 的自定义副本被
+        静默忽略（只剩一条看不出方向的 WARNING）。
+
         同时更新变更检测指纹，供热加载轮询使用。
         """
         with self._lock:
@@ -58,11 +63,13 @@ class SkillManager:
                 skill = self._loader.load(skill_dir)
                 if skill is None:
                     continue
-                if skill.name in self._skills:
+                existing = self._skills.get(skill.name)
+                if existing is not None:
                     logger.warning(
-                        "技能名冲突 %s: %s 被 %s 覆盖",
-                        skill.name, self._skills[skill.name].source_path, skill.source_path,
+                        "技能名冲突 %s: 保留高优先级 %s，忽略 %s",
+                        skill.name, existing.source_path, skill.source_path,
                     )
+                    continue
                 self._skills[skill.name] = skill
                 logger.info("已加载技能: %s (%s)", skill.name, skill.description[:50])
 

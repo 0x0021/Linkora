@@ -60,7 +60,20 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             # 若 sqlite3.connect / PRAGMA integrity_check 因文件锁阻塞，Worker 线程将永远持有
             # _conns_lock，主线程后续访问 self.conn 时永久死锁。现改为锁内原子设置标志位、
             # 锁外执行 init_db，失败时回退标志位以便下一个线程重试。
-            need_init = not self._schema_initialized
+            # 【P0-race-fix】schema 初始化改为【类级、按 db_path 串行去重】：Web 会为同一
+            # linkora.db 创建多个 store 实例，原实例级 _schema_initialized 无法阻止跨实例
+            # 并发 init_schema，导致多连接同时 ALTER 同列撞 "duplicate column name"（HIGH-5
+            # 新增的 status/superseded_by 等列尤甚）。现用类级锁 + 已初始化路径集合，保证
+            # 同一物理文件全局只真正初始化一次，彻底消除 DDL 竞态。
+            _cls = type(self)
+            if not hasattr(_cls, "_schema_init_lock"):
+                _cls._schema_init_lock = threading.Lock()
+            if not hasattr(_cls, "_schema_initialized_paths"):
+                _cls._schema_initialized_paths = set()
+            with _cls._schema_init_lock:
+                need_init = self.db_path not in _cls._schema_initialized_paths
+                if need_init:
+                    _cls._schema_initialized_paths.add(self.db_path)
             if need_init:
                 self._schema_initialized = True
             # 连接回收：per-thread 连接长期不关闭，若线程数动态增长（如 Web 框架
@@ -86,6 +99,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             except sqlite3.Error as e:
                 # 失败时回退标志位，下一个线程访问 conn 时会重新尝试 init_db
                 self._schema_initialized = False
+                type(self)._schema_initialized_paths.discard(self.db_path)
                 logger.error("SQLiteStore schema 初始化失败 %s: %s", self.db_path, e)
                 raise
         return c

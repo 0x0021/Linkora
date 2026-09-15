@@ -21,6 +21,7 @@ from web.dependencies import logger
 from web.errors import SAFE_OPERATION_FAILED
 from src.shared_state import get_config as _get_shared_config
 from src.paths import data_path
+from src.skills.loader import is_skill_dir_candidate
 
 
 def _project_root() -> Path:
@@ -76,7 +77,7 @@ async def list_skills(platform: str = ""):
         loaded_names = {s["name"] for s in skills}
         if data_skills_dir.is_dir():
             for entry in data_skills_dir.iterdir():
-                if entry.is_dir() and not entry.name.startswith("."):
+                if entry.is_dir() and is_skill_dir_candidate(entry.name):
                     if entry.name not in loaded_names:
                         skills.append({
                             "name": entry.name,
@@ -312,7 +313,8 @@ async def install_skill(req: SkillInstallRequest):
             install_msg = f"npx skills add 成功: {proc.stdout.strip()[:200]}"
             # 尝试从安装输出中提取技能名
             for entry in sorted(data_skills.iterdir(), key=lambda e: e.stat().st_mtime, reverse=True):
-                if entry.is_dir() and not entry.name.startswith(".") and (entry / "SKILL.md").exists():
+                if (entry.is_dir() and is_skill_dir_candidate(entry.name)
+                        and (entry / "SKILL.md").exists()):
                     installed_name = entry.name
                     break
 

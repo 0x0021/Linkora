@@ -25,6 +25,7 @@ from web.dependencies import (
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from src.paths import data_path
+from src.skills.loader import is_skill_dir_candidate
 
 router = APIRouter()
 
@@ -185,7 +186,7 @@ async def migrate_skill_icons():
     installed_slugs = set()
     if skills_dir.is_dir():
         for entry in skills_dir.iterdir():
-            if entry.is_dir() and not entry.name.startswith("."):
+            if entry.is_dir() and is_skill_dir_candidate(entry.name):
                 installed_slugs.add(entry.name)
 
     if not installed_slugs:

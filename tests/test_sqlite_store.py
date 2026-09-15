@@ -473,11 +473,29 @@ class TestMemoryFaissIsolation:
             "跟 KB 像但跟记忆不像",
             embedding_client=self._FakeEmb(self._vx()),
         ) is False
-        # 新记忆与已有记忆同向 → 应判重复
+        # 新记忆与已有记忆仅"语义相近"但措辞不同 → check_memory_duplicate 现仅做逐字匹配，
+        # 不再按语义拦截；"同主题旧结论作废"职责已移至 save_memory 写入时标记 superseded
+        # （见 test_save_supersedes_similar_memory）。此处只验证它不会因为 KB 与旧记忆而误判重复。
         assert store._memory_repo.check_memory_duplicate(
             "跟老记忆像",
             embedding_client=self._FakeEmb(self._vy()),
-        ) is True
+        ) is False
+
+    def test_save_supersedes_similar_memory(self, tmp_db_path):
+        """写入语义相近的新结论时，应把旧结论标 superseded，召回只返回最新版。"""
+        store = _make_store(tmp_db_path)
+        # 先存一条旧结论（public，指向 y）
+        store._memory_repo.save_memory(key="old", content="旧结论", source="auto",
+                                       embedding=self._vy(), scope="public")
+        # 再存一条语义相近的新结论（不同措辞，指向同一向量）→ 写入时应把旧版标 superseded
+        store._memory_repo.save_memory(key="new", content="新结论", source="auto",
+                                       embedding=self._vy(), scope="public")
+        cur = store.conn.cursor()
+        cur.execute("SELECT status FROM memories WHERE key='old'")
+        assert cur.fetchone()["status"] == "superseded"
+        # 召回只应返回新结论（旧版已被过滤，避免"死的记忆"干扰）
+        results = store._memory_repo.recall_memory(self._vy(), top_k=10, min_similarity=0.0)
+        assert [r["content"] for r in results] == ["新结论"]
 
 
 class TestMemoryFilter:

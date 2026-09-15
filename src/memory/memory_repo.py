@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
@@ -22,6 +23,28 @@ logger = logging.getLogger(__name__)
 # 避免记忆量很大时全表 fetchall + 逐行 cosine 拖慢热路径。记忆表通常很小，cap 内行为不变；
 # 超大表退化为"近期优先"（符合个人记忆场景）。idx_memories_created 已覆盖 ORDER BY。
 _MEMORY_CANDIDATE_CAP = 500
+
+# 同主题"最新优先"：写入时把语义相近的旧 active 记忆标为 superseded 的相似度阈值。
+# 仅当新记忆与旧记忆余弦相似度 ≥ 此值（BGE 下≈同结论的不同表述）才作废旧版。
+_MEMORY_SUPERSEDE_THRESHOLD = 0.85
+# 召回排序的时效权重：给较新记忆一个微弱加成，打破相近相似度时的平局。
+# 仅影响排序，不改变返回给下游的 similarity（阈值语义不变）。
+_MEMORY_RECENCY_HALF_LIFE_DAYS = 60.0
+_MEMORY_RECENCY_BONUS = 0.08
+
+
+def _recency_weight(created_at_iso: Optional[str]) -> float:
+    """时效权重 ∈ (0, 1]，越新越接近 1。无法解析时回落 0.5。"""
+    if not created_at_iso:
+        return 0.5
+    try:
+        dt = datetime.fromisoformat(created_at_iso)
+    except (ValueError, TypeError):
+        return 0.5
+    age_days = (datetime.now() - dt).total_seconds() / 86400.0
+    if age_days < 0:
+        age_days = 0.0
+    return float(math.exp(-age_days / _MEMORY_RECENCY_HALF_LIFE_DAYS))
 
 
 class MemoryRepo:
@@ -41,9 +64,11 @@ class MemoryRepo:
             # 严格点对点：仅返回「公共记忆」+「该 sender_id 本人的个人记忆」。
             # 第三方（sender_id 不匹配）的个人记忆绝不被召回 ——
             # 满足「个人记忆是我和对方私有的，绝不能出现在第三方」。
+            # 仅召回 status='active'（被更新的结论标为 superseded 后不再出现）。
             cur.execute(
                 "SELECT id, content, source, chat_id, sender_id, sender_name, embedding, created_at, scope "
-                "FROM memories WHERE (scope = 'public') OR (sender_id = ? AND (scope = 'personal' OR scope IS NULL)) "
+                "FROM memories WHERE ((scope = 'public') OR (sender_id = ? AND (scope = 'personal' OR scope IS NULL))) "
+                "AND (status = 'active' OR status IS NULL) "
                 "ORDER BY created_at DESC LIMIT ?",
                 (sender_id, _MEMORY_CANDIDATE_CAP),
             )
@@ -53,7 +78,7 @@ class MemoryRepo:
             # 误召回他人私聊记忆，造成隐私泄露。chat_id 不足以解锁个人记忆。
             cur.execute(
                 "SELECT id, content, source, chat_id, sender_id, sender_name, embedding, created_at, scope "
-                "FROM memories WHERE scope = 'public' "
+                "FROM memories WHERE scope = 'public' AND (status = 'active' OR status IS NULL) "
                 "ORDER BY created_at DESC LIMIT ?",
                 (_MEMORY_CANDIDATE_CAP,),
             )
@@ -66,6 +91,8 @@ class MemoryRepo:
                 embedding = json.loads(emb_str)
                 if embedding:
                     sim = cosine_similarity(query_embedding, embedding)
+                    # 时效加权仅影响排序（_rank）：越新的记忆在相近相似度时越靠前，
+                    # 但返回的 similarity 保持原始余弦，下游阈值语义不变。
                     results.append({
                         "id": row["id"],
                         "content": row["content"],
@@ -74,13 +101,14 @@ class MemoryRepo:
                         "scope": row["scope"] or "personal",
                         "similarity": sim,
                         "created_at": row["created_at"],
+                        "_rank": sim + _MEMORY_RECENCY_BONUS * _recency_weight(row["created_at"]),
                     })
             except Exception as e:
                 logger.debug("向量搜索单条记录处理失败: %s", e)
                 continue
 
-        # 先按向量相似度粗排，取 top_k * 2
-        results.sort(key=lambda x: x["similarity"], reverse=True)
+        # 先按（相似度 + 时效）粗排，取 top_k * 2
+        results.sort(key=lambda x: x["_rank"], reverse=True)
         # 过滤掉相似度低于 min_similarity 的结果（在截取 top_k 之前）
         if min_similarity > 0:
             results = [r for r in results if r["similarity"] >= min_similarity]
@@ -98,6 +126,8 @@ class MemoryRepo:
         else:
             candidates = candidates[:top_k]
 
+        for c in candidates:
+            c.pop("_rank", None)
         return candidates
 
     def get_all_memories(self, chat_id: str = "") -> list[dict]:
@@ -270,22 +300,21 @@ class MemoryRepo:
 
     def check_memory_duplicate(self, content: str, embedding_client=None, similarity_threshold: float = 0.85,
                                sender_id: str = "", scope: str = "personal") -> bool:
-        """检查是否已存在相同或高度相似的记忆（防止重复保存）。
+        """检查是否已存在「内容完全相同」的记忆（防止逐字重复保存）。
+
+        注意：语义相近但表述不同的记忆不再在此跳过——交由 ``save_memory`` 写入后
+        通过 ``_supersede_similar_memories`` 把旧版标为 superseded（最新优先），
+        避免「新结论被语义去重拦截、旧结论被保留」的反直觉行为。
 
         去重范围按 scope 区分：
-        - public（公共记忆）：全局唯一，跨所有人比对，避免重复的公共知识入库；
+        - public（公共记忆）：全局唯一，跨所有人比对；
         - personal（个人记忆）：在同一发送者范围内比对，同时若已存在相同内容的
-          公共记忆也判为重复（不重复保存已共享的事实）。
+          公共记忆也判为重复。
 
-        检查策略：
-        1. 内容完全相同 → 直接判定重复
-        2. 有 embedding 时，计算语义相似度 → 超过阈值判定重复
-
-        异常处理：embedding 查询失败时保守判定为重复（返回 True），
-        避免因检查失败导致重复入库。
+        异常处理：查询失败时保守判定为重复（返回 True），避免因检查失败导致重复入库。
         """
         cur = self.store.conn.cursor()
-        # 1. 完全匹配
+        # 1. 完全匹配（逐字相同）
         if scope == "public":
             cur.execute("SELECT id FROM memories WHERE content = ? AND scope = 'public' LIMIT 1", (content,))
         else:
@@ -296,39 +325,6 @@ class MemoryRepo:
             )
         if cur.fetchone():
             return True
-
-        # 2. 语义相似度匹配（需要 embedding）
-        # 不走共享的 faiss 索引（那是 KB 专用，id 空间与 memories 碰撞会误判），
-        # 改为对 memories 表全扫描计算 cosine，与 recall_memory 保持一致。
-        if embedding_client and embedding_client.enabled:
-            try:
-                query_emb = embedding_client.embed(content)
-                if query_emb:
-                    if scope == "public":
-                        cur.execute(
-                            "SELECT embedding FROM memories WHERE scope = 'public' AND embedding IS NOT NULL AND embedding != '' "
-                            "ORDER BY created_at DESC LIMIT ?",
-                            (_MEMORY_CANDIDATE_CAP,),
-                        )
-                    else:
-                        cur.execute(
-                            "SELECT embedding FROM memories WHERE "
-                            "((sender_id = ? AND (scope = 'personal' OR scope IS NULL)) OR scope = 'public') "
-                            "AND embedding IS NOT NULL AND embedding != '' "
-                            "ORDER BY created_at DESC LIMIT ?",
-                            (sender_id, _MEMORY_CANDIDATE_CAP),
-                        )
-                    for row in cur.fetchall():
-                        try:
-                            emb = json.loads(row["embedding"])
-                        except (ValueError, TypeError) as e:
-                            logger.debug("embedding JSON 解析失败: %s", e)
-                            continue
-                        if emb and cosine_similarity(query_emb, emb) >= similarity_threshold:
-                            return True
-            except Exception as e:
-                logger.warning("记忆去重检查失败，降级为允许保存（宁可偶尔重复也不丢数据）: %s", e)
-                return False
         return False
 
     def save_memory(
@@ -366,8 +362,61 @@ class MemoryRepo:
         # 记忆检索(recall_memory)走全表扫描 + 内存 cosine + rerank，不依赖 faiss。
         # emb_str 已随行持久化，召回时即时计算相似度。
 
+        # 同主题"最新优先"：把语义相近的旧 active 记忆标为 superseded，
+        # 使召回只返回最新结论（解决多次会话对同一事得出不同结论时旧结论残留问题）。
+        if embedding:
+            self._supersede_similar_memories(
+                new_id=memory_id, embedding=embedding, scope=scope, sender_id=sender_id or "",
+            )
+
         logger.info("Saved memory #%d: %s", memory_id, key)
         return memory_id
+
+    def _supersede_similar_memories(self, new_id: int, embedding: list[float],
+                                    scope: str, sender_id: str) -> int:
+        """将语义相近的旧 active 记忆标为 superseded（指向 new_id）。
+
+        作用域隔离：
+        - public 新记忆只作废旧的 public 记忆（全局共享事实的最新版唯一）；
+        - personal 新记忆只作废同 sender_id 的旧 personal 记忆（不波及他人）。
+
+        Returns: 被作废的记忆数量
+        """
+        cur = self.store.conn.cursor()
+        if scope == "public":
+            cur.execute(
+                "SELECT id, embedding FROM memories "
+                "WHERE scope = 'public' AND (status = 'active' OR status IS NULL) "
+                "AND id != ? AND embedding IS NOT NULL AND embedding != '' "
+                "ORDER BY created_at DESC LIMIT ?",
+                (new_id, _MEMORY_CANDIDATE_CAP),
+            )
+        else:
+            cur.execute(
+                "SELECT id, embedding FROM memories "
+                "WHERE sender_id = ? AND (scope = 'personal' OR scope IS NULL) "
+                "AND (status = 'active' OR status IS NULL) "
+                "AND id != ? AND embedding IS NOT NULL AND embedding != '' "
+                "ORDER BY created_at DESC LIMIT ?",
+                (sender_id, new_id, _MEMORY_CANDIDATE_CAP),
+            )
+        superseded: list[int] = []
+        for row in cur.fetchall():
+            try:
+                emb = json.loads(row["embedding"])
+            except (ValueError, TypeError):
+                continue
+            if emb and cosine_similarity(embedding, emb) >= _MEMORY_SUPERSEDE_THRESHOLD:
+                superseded.append(row["id"])
+        if superseded:
+            with self.store._lock:
+                cur.executemany(
+                    "UPDATE memories SET status = 'superseded', superseded_by = ? WHERE id = ?",
+                    [(new_id, mid) for mid in superseded],
+                )
+                self.store.conn.commit()
+            logger.info("记忆 #%d 作废了 %d 条语义相近旧记忆", new_id, len(superseded))
+        return len(superseded)
 
     # ============ 风格 / 人设画像（Feature B） ============
 
@@ -375,16 +424,21 @@ class MemoryRepo:
         self,
         max_age_days: int = 90,
         min_similarity_threshold: float = 0.3,
+        gc_superseded: bool = True,
     ) -> int:
-        """清理过期记忆。
+        """智能清理过期/已作废记忆。
 
-        简化实现：直接删除 created_at 早于 max_age_days 的记忆。
-        原实现的相似度判断逻辑与语义相反（"没有相似新版才删除" 实际保留了被替代的老记忆、
-        删除了独一无二的老记忆），按需求改为按时间直接清理，不再做相似度判断。
+        策略：
+        1. 已作废（status='superseded'，即被更新的结论替代）的记忆直接删除——
+           它们已无召回价值，是在写入时由 ``_supersede_similar_memories`` 标记的。
+        2. 仍 active 的记忆按年龄清理：created_at 早于 max_age_days 的删除。
+           配合"写入即作废旧版"机制，active 集中每条都是某主题的最新结论，
+           超龄即视为真正过期，安全删除。
 
         Args:
-            max_age_days: 最大保留天数，超过此时间的记忆会被删除
-            min_similarity_threshold: 保留参数（简化实现不再使用，向后兼容）
+            max_age_days: 最大保留天数，超过此时间的 active 记忆会被删除
+            min_similarity_threshold: 保留参数（向后兼容，本实现不再使用）
+            gc_superseded: 是否回收已作废记忆（默认 True）
 
         Returns:
             删除的记忆数量
@@ -395,12 +449,19 @@ class MemoryRepo:
         # P0-1: 使用 store 级 RLock 保证清理操作原子性，避免多 daemon 线程竞态
         with self.store._lock:
             cur = self.store.conn.cursor()
-            cur.execute("DELETE FROM memories WHERE created_at < ?", (cutoff_iso,))
-            deleted_count = cur.rowcount
+            deleted_count = 0
+            if gc_superseded:
+                cur.execute("DELETE FROM memories WHERE status = 'superseded'")
+                deleted_count += cur.rowcount
+            cur.execute(
+                "DELETE FROM memories WHERE (status = 'active' OR status IS NULL) AND created_at < ?",
+                (cutoff_iso,),
+            )
+            deleted_count += cur.rowcount
             self.store.conn.commit()
 
         if deleted_count > 0:
-            logger.info("清理了 %d 个超过 %d 天的旧记忆", deleted_count, max_age_days)
+            logger.info("清理了 %d 个过期/已作废记忆（保留 %d 天）", deleted_count, max_age_days)
 
         return deleted_count
 

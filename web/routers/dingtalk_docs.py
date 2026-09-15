@@ -186,40 +186,23 @@ async def import_dingtalk_doc_to_kb(body: DingTalkDocImportKb):
             if not content:
                 raise HTTPException(status_code=400, detail="文档内容为空，无法导入")
 
-            # 查重检查
-            dup = store._kb_repo.check_duplicate_document(
-                title=title,
-                content=content,
-                source_id=body.doc_id,
-                url=doc.get("url", ""),
-            )
-            # check_duplicate_document 声明可返回 None（无命中分支）——按“未重复”处理。
-            if dup and dup.get("duplicate"):
-                return {
-                    "success": False,
-                    "duplicate": True,
-                    "reason": dup["reason"],
-                    "existing_doc": dup["doc"],
-                    "message": f"文档重复：{dup['reason']}，已有文档《{dup['doc'].get('title', '')}》",
-                }
-
-            kb_doc_id = store._kb_repo.add_kb_document(
-                title=title,
-                doc_type="dingtalk",
-                source="dingtalk",
-                source_id=body.doc_id,
-                url=doc.get("url", ""),
-                content=content,
-            )
-            # _get_cfg() 在配置文件缺失/解析失败时返回 None：
-            # 原代码连调三次且直接 .rag/.embedding 解引用，配置异常时会抛
-            # AttributeError 变成裸 500。改为取一次 + 显式兜底。
+            # 重投（upsert）：同一钉钉文档（body.doc_id 唯一）只保留一份最新分块，
+            # 重复导入即更新而非报错，确保"最新结论优先、旧结论自动沉底"。
+            # _get_cfg() 在配置文件缺失/解析失败时返回 None：显式兜底，避免裸 500。
             config = _api._get_cfg()
             if config is None:
                 raise HTTPException(status_code=503, detail="配置未就绪，无法导入知识库")
 
             chunks = split_text(content, max_len=config.rag.chunk_size, overlap=config.rag.chunk_overlap)
-            store._kb_repo.add_kb_chunks(kb_doc_id, chunks)
+            kb_doc_id = store._kb_repo.upsert_kb_document(
+                title=title,
+                doc_type="dingtalk",
+                source="dingtalk",
+                chunks=chunks,
+                source_id=body.doc_id,
+                url=doc.get("url", ""),
+                content=content,
+            )
 
             if config.embedding.enabled:
                 embed_client = _api._get_embedding_client(config.embedding)

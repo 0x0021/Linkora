@@ -190,12 +190,23 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     _ensure_column(cur, "memories", "sender_id", "TEXT")
     _ensure_column(cur, "memories", "sender_name", "TEXT")
     _ensure_column(cur, "memories", "scope", "TEXT DEFAULT 'personal'")
+    # 记忆作废/版本控制：superseded_by 指向更新的那条记忆，status='superseded' 的
+    # 行在召回时被过滤，实现「同主题只留最新结论、旧结论自动沉底」。
+    _ensure_column(cur, "memories", "status", "TEXT DEFAULT 'active'")
+    _ensure_column(cur, "memories", "superseded_by", "INTEGER")
     _ensure_column(cur, "kb_chunks", "retry_pending", "INTEGER DEFAULT 0")
+    # KB 分块作废/版本控制：与 memories 同构，支持重投文档时作废旧 chunk 而非累积。
+    _ensure_column(cur, "kb_chunks", "status", "TEXT DEFAULT 'active'")
+    _ensure_column(cur, "kb_chunks", "superseded_by", "INTEGER")
+    _ensure_column(cur, "kb_chunks", "updated_at", "TEXT")
+    _ensure_column(cur, "kb_documents", "version", "INTEGER DEFAULT 1")
     _ensure_column(cur, "conversations", "last_summary_at", "TEXT")
     _ensure_column(cur, "conversations", "last_replied_msg_id", "TEXT")
 
     # ── 补充索引 ───────────────────────────────────────────────────────
     _try_create_index(cur, "idx_memories_scope ON memories(scope)")
+    _try_create_index(cur, "idx_memories_status ON memories(status)")
+    _try_create_index(cur, "idx_kb_chunks_status ON kb_chunks(status)")
     _try_create_index(cur, "idx_ddoc_auto_sync ON dingtalk_docs(auto_sync)")
     _try_create_index(cur, "idx_messages_archived ON messages(chat_id, is_archived)")
     _try_create_index(cur, "idx_messages_chat_ts ON messages(chat_id, timestamp)")

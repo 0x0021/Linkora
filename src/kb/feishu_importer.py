@@ -109,13 +109,8 @@ def import_single_feishu_doc(
         title = doc_data.get("title", doc_token)
 
     source = "feishu://{}".format(doc_token)
-
-    doc_id = store._kb_repo.add_kb_document(
-        title=title,
-        doc_type=doc_type,
-        source=source,
-        content=content,
-    )
+    # 重投：同一飞书文档（doc_token 唯一）只保留一份最新分块，避免重复导入累积旧结论。
+    doc_id = None
 
     cleaned_content = content
     rag_cfg = getattr(config, "rag", None)
@@ -138,7 +133,10 @@ def import_single_feishu_doc(
         overlap=rag_config["chunk_overlap"],
         hard_max=chunk_hard_max,
     )
-    store._kb_repo.add_kb_chunks(doc_id, chunks)
+    doc_id = store._kb_repo.upsert_kb_document(
+        title=title, doc_type=doc_type, source=source, chunks=chunks,
+        source_id=doc_token, content=content,
+    )
 
     embed_failed = 0
     if config is not None:

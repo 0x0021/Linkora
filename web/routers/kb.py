@@ -87,30 +87,16 @@ async def create_kb_document(doc: KbDocumentCreate):
     try:
         def _work():
             store = _api.get_store()
-            # 查重检查
-            dup = store._kb_repo.check_duplicate_document(
-                title=doc.title,
-                content=doc.content,
-            )
-            if dup["duplicate"]:
-                return {
-                    "success": False,
-                    "duplicate": True,
-                    "reason": dup["reason"],
-                    "existing_doc": dup["doc"],
-                    "message": f"文档重复：{dup['reason']}，已有文档《{dup['doc'].get('title', '')}》",
-                }
-
-            doc_id = store._kb_repo.add_kb_document(
+            # 重投（upsert）：同名文档重复上传即更新而非报错，确保"最新内容优先、旧分块自动沉底"。
+            _rag = _api.get_rag_config()
+            chunks = split_text(doc.content, max_len=_rag["chunk_size"], overlap=_rag["chunk_overlap"])
+            doc_id = store._kb_repo.upsert_kb_document(
                 title=doc.title,
                 doc_type=doc.doc_type,
                 source=doc.source,
+                chunks=chunks,
                 content=doc.content,
             )
-
-            _rag = _api.get_rag_config()
-            chunks = split_text(doc.content, max_len=_rag["chunk_size"], overlap=_rag["chunk_overlap"])
-            store._kb_repo.add_kb_chunks(doc_id, chunks)
 
             config = _api._get_cfg()
             embed_failed = 0
@@ -358,32 +344,19 @@ def import_kb_from_url(body: dict | None = None):
         from src.tools.utils import split_text
 
         store = get_store()
-        # 查重
-        dup = store._kb_repo.check_duplicate_document(title=page_title, content=content)
-        assert dup is not None
-        if dup["duplicate"]:
-            return {
-                "success": False,
-                "duplicate": True,
-                "reason": dup["reason"],
-                "existing_doc": dup["doc"],
-                "message": f"文档重复：{dup['reason']}，已有文档《{dup['doc']['title']}》"
-            }
-
-        # 创建文档
+        # 重投（upsert）：同一网页重复导入即更新，确保最新正文优先、旧分块自动沉底。
         doc_type = body.get('doc_type', 'web')
         source = f'web:{url}'
-        doc_id = store._kb_repo.add_kb_document(
+        _rag = _api.get_rag_config()
+        chunks = split_text(content, max_len=_rag["chunk_size"], overlap=_rag["chunk_overlap"])
+        doc_id = store._kb_repo.upsert_kb_document(
             title=page_title,
             content=content,
             doc_type=doc_type,
             source=source,
+            url=url,
+            chunks=chunks,
         )
-
-        # 分块
-        _rag = _api.get_rag_config()
-        chunks = split_text(content, max_len=_rag["chunk_size"], overlap=_rag["chunk_overlap"])
-        store._kb_repo.add_kb_chunks(doc_id, chunks)
 
         # Embedding
         # 注：此处原写作未定义的 `_cfg`，embedding 启用时 URL 导入必抛 NameError；

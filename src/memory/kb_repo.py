@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import sqlite3
 from datetime import datetime
@@ -20,6 +21,24 @@ if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
+
+# KB 检索时效权重：两次相关性打平（或极接近）时，较新的 chunk 优先。
+# 仅作为次要排序键，不改变 similarity 阈值语义（下游展示/接地阈值仍用原始 similarity）。
+_KB_RECENCY_HALF_LIFE_DAYS = 60.0
+
+
+def _kb_recency_weight(created_at_iso) -> float:
+    """时效权重 ∈ (0, 1]，越新越接近 1；无法解析时回落 0.5。"""
+    if not created_at_iso:
+        return 0.5
+    try:
+        dt = datetime.fromisoformat(created_at_iso)
+    except (ValueError, TypeError):
+        return 0.5
+    age_days = (datetime.now() - dt).total_seconds() / 86400.0
+    if age_days < 0:
+        age_days = 0.0
+    return float(math.exp(-age_days / _KB_RECENCY_HALF_LIFE_DAYS))
 
 
 class KbRepo:
@@ -267,9 +286,9 @@ class KbRepo:
         try:
             for i, content in enumerate(chunks):
                 cur.execute(
-                    """INSERT INTO kb_chunks (doc_id, chunk_index, content, embedding, created_at)
-                       VALUES (?, ?, ?, '', ?)""",
-                    (doc_id, i, content, now),
+                    """INSERT INTO kb_chunks (doc_id, chunk_index, content, embedding, created_at, updated_at, status)
+                       VALUES (?, ?, ?, '', ?, ?, 'active')""",
+                    (doc_id, i, content, now, now),
                 )
             cur.execute(
                 "UPDATE kb_documents SET chunk_count = ?, status = 'indexed', updated_at = ? WHERE id = ?",
@@ -282,6 +301,125 @@ class KbRepo:
             # 中途 DB 异常时回滚，避免残留部分 chunk 与 doc 状态不一致（F6）
             self.store.conn.rollback()
             raise
+
+    def find_existing_kb_document(self, title: str, source_id: str = "", url: str = "",
+                                  source: str = "") -> int | None:
+        """按 (source_id → url → title → source) 顺序查找已存在的活跃知识库文档 id。
+
+        用于重投（upsert）：命中即在同一 doc 上更新分块，而不是新建重复文档。
+        source 作为最后兜底，专门用于老文档未写 source_id、但 source 串本身唯一
+        （如 feishu://{token}、web:{url}）的导入路径。
+        返回 doc id；无命中返回 None。
+        """
+        cur = self.store.conn.cursor()
+        if source_id:
+            cur.execute(
+                "SELECT id FROM kb_documents WHERE source_id = ? AND status != 'superseded' LIMIT 1",
+                (source_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        if url:
+            cur.execute(
+                "SELECT id FROM kb_documents WHERE url = ? AND status != 'superseded' LIMIT 1",
+                (url,),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        if title:
+            cur.execute(
+                "SELECT id FROM kb_documents WHERE title = ? AND status != 'superseded' LIMIT 1",
+                (title,),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        if source:
+            cur.execute(
+                "SELECT id FROM kb_documents WHERE source = ? AND status != 'superseded' LIMIT 1",
+                (source,),
+            )
+            row = cur.fetchone()
+            if row:
+                return row["id"]
+        return None
+
+    def upsert_kb_document(self, title: str, doc_type: str, source: str,
+                          chunks: list[str], source_id: str = "", url: str = "",
+                          metadata: dict | None = None, content: str = "") -> int:
+        """新增或更新知识库文档（重投时同一文档只保留一份最新分块）。
+
+        命中已有文档（按 source_id/url/title 判定）时：
+        1. 先插入新分块（确保新内容落库，避免插入失败导致旧内容丢失——对应 H11 先加后删）；
+        2. 再删除该文档的旧分块（DB + FAISS 同步 + 版本号自增）；
+        3. 刷新文档 updated_at、version+1、chunk_count、status='indexed'。
+
+        未命中则等价于 add_kb_document + add_kb_chunks。
+
+        Returns: 文档 id
+        """
+        existing_id = self.find_existing_kb_document(title, source_id, url, source)
+        if existing_id is None:
+            doc_id = self.add_kb_document(
+                title=title, doc_type=doc_type, source=source,
+                source_id=source_id, url=url, metadata=metadata, content=content,
+            )
+            self.add_kb_chunks(doc_id, chunks)
+            return doc_id
+
+        # 已存在 → 更新（同 doc_id 保留最新分块）
+        cur = self.store.conn.cursor()
+        cur.execute("SELECT id FROM kb_chunks WHERE doc_id = ?", (existing_id,))
+        old_chunk_ids = [row["id"] for row in cur.fetchall()]
+
+        # 1) 先插入新分块（空 embedding，由调用方随后回填）
+        self.add_kb_chunks(existing_id, chunks)
+
+        # 2) 删除旧分块（DB + FAISS 同步 + 版本号自增）
+        for cid in old_chunk_ids:
+            try:
+                self.delete_kb_chunk(cid)
+            except sqlite3.Error as e:  # 单条删除失败不影响其余，记录后继续
+                logger.warning("[RAG] upsert 删除旧 chunk %d 失败: %s", cid, e)
+
+        # 3) 刷新文档元数据
+        now = datetime.now().isoformat()
+        meta = metadata or {}
+        if content:
+            import hashlib
+            meta["content_hash"] = hashlib.sha256(content.encode('utf-8')).hexdigest()[:32]
+        meta_str = json.dumps(meta, ensure_ascii=False) if meta else ""
+        cur.execute(
+            "UPDATE kb_documents SET updated_at = ?, chunk_count = ?, status = 'indexed', "
+            "metadata = ?, version = COALESCE(version, 0) + 1 WHERE id = ?",
+            (now, len(chunks), meta_str, existing_id),
+        )
+        self.store.conn.commit()
+        self.store.bump_kb_revision()
+        logger.info("[RAG] 知识库文档 %d 已更新（%d 旧分块替换为 %d 新分块）",
+                    existing_id, len(old_chunk_ids), len(chunks))
+        return existing_id
+
+    def gc_superseded_kb_chunks(self) -> int:
+        """回收 status='superseded' 的 KB 分块（DB + FAISS 同步）。
+
+        正常 upsert 路径会直接硬删旧分块，本方法作为兜底清理任何被软标记为
+        superseded 的残留行。返回删除数量。
+        """
+        cur = self.store.conn.cursor()
+        cur.execute("SELECT id FROM kb_chunks WHERE status = 'superseded'")
+        ids = [row["id"] for row in cur.fetchall()]
+        if not ids:
+            return 0
+        for cid in ids:
+            try:
+                self.delete_kb_chunk(cid)
+            except sqlite3.Error as e:
+                logger.warning("[RAG] GC 删除 superseded chunk %d 失败: %s", cid, e)
+        logger.info("[RAG] GC 回收了 %d 个已作废 KB 分块", len(ids))
+        return len(ids)
 
     def mark_chunk_retry_pending(self, chunk_id: int) -> None:
         """标记 chunk 的 embedding 需要重试。"""
@@ -369,11 +507,11 @@ class KbRepo:
                     placeholders = ",".join(["?"] * len(chunk_ids))
                     cur = self.store.conn.cursor()
                     query = f"""
-                        SELECT c.id, c.doc_id, c.chunk_index, c.content,
+                        SELECT c.id, c.doc_id, c.chunk_index, c.content, c.created_at,
                                d.title, d.doc_type, d.source, d.url
                         FROM kb_chunks c
                         JOIN kb_documents d ON c.doc_id = d.id
-                        WHERE c.id IN ({placeholders})
+                        WHERE c.id IN ({placeholders}) AND (c.status = 'active' OR c.status IS NULL)
                     """
                     cur.execute(query, chunk_ids)
                     rows = {row["id"]: dict(row) for row in cur.fetchall()}
@@ -394,6 +532,7 @@ class KbRepo:
                                 "source": row["source"],
                                 "url": row["url"],
                                 "similarity": sim,
+                                "created_at": row["created_at"],
                             })
                     if min_similarity > 0:
                         # 在重排/截断前先按原始相似度过滤，避免高相似度结果被关键词分
@@ -406,6 +545,14 @@ class KbRepo:
                                                             top_k=max(top_k, len(output)))
                         except (ValueError, TypeError):  # rerank 模型加载失败 / 输入格式错误
                             logger.debug("[RAG] rerank 失败，跳过")
+                    # 时效次排序：相关性（final_score 或 similarity）为主键，时效为次键，
+                    # 越新的 chunk 在打平时优先（不改变原始 similarity 阈值语义）。
+                    for _r in output:
+                        _r["_recency"] = _kb_recency_weight(_r.get("created_at"))
+                    output.sort(
+                        key=lambda r: (r.get("final_score", r.get("similarity", 0.0)), r.get("_recency", 0.0)),
+                        reverse=True,
+                    )
                     return output[:top_k]
             except (ValueError, TypeError):  # FAISS 搜索失败（维度错配 / 索引已损坏）
                 # 用 %r：faiss 维度断言是裸 AssertionError，str(e) 为空字符串，
@@ -419,11 +566,11 @@ class KbRepo:
         # 兜底：全表扫描
         cur = self.store.conn.cursor()
         query = """
-            SELECT c.id, c.doc_id, c.chunk_index, c.content, c.embedding,
+            SELECT c.id, c.doc_id, c.chunk_index, c.content, c.embedding, c.created_at,
                    d.title, d.doc_type, d.source, d.url
             FROM kb_chunks c
             JOIN kb_documents d ON c.doc_id = d.id
-            WHERE c.embedding != ''
+            WHERE c.embedding != '' AND (c.status = 'active' OR c.status IS NULL)
         """
         params = []
         if doc_type:
@@ -448,6 +595,7 @@ class KbRepo:
                         "source": row["source"],
                         "url": row["url"],
                         "similarity": sim,
+                        "created_at": row["created_at"],
                     })
             except (ValueError, TypeError):  # 相似度计算 / 记录结构不匹配
                 logger.debug("知识库搜索单条记录处理失败")
@@ -462,6 +610,13 @@ class KbRepo:
                 logger.debug("[RAG] rerank 失败，跳过")
         if min_similarity > 0:
             results = [r for r in results if r["similarity"] >= min_similarity]
+        # 时效次排序：相关性为主键，时效为次键（越新越优先），不改变 similarity 阈值语义。
+        for _r in results:
+            _r["_recency"] = _kb_recency_weight(_r.get("created_at"))
+        results.sort(
+            key=lambda r: (r.get("final_score", r.get("similarity", 0.0)), r.get("_recency", 0.0)),
+            reverse=True,
+        )
         return results[:top_k]
 
     def kb_stats(self) -> dict:
@@ -538,11 +693,11 @@ class KbRepo:
         sql_limit = top_k * 5
 
         query_sql = f"""
-            SELECT c.id, c.doc_id, c.chunk_index, c.content,
+            SELECT c.id, c.doc_id, c.chunk_index, c.content, c.created_at,
                    d.title, d.doc_type, d.source, d.url
             FROM kb_chunks c
             JOIN kb_documents d ON c.doc_id = d.id
-            WHERE {where_clause}
+            WHERE ({where_clause}) AND (c.status = 'active' OR c.status IS NULL)
             LIMIT ?
         """
 
@@ -583,10 +738,16 @@ class KbRepo:
                     "source": row["source"],
                     "url": row["url"],
                     "score": round(score / max_possible, 4) if max_possible else 0.0,
+                    "created_at": row["created_at"],
                 })
 
-            # 按评分降序排列，截取 top_k
-            results.sort(key=lambda x: x["score"], reverse=True)
+            # 评分为主键、时效为次键（越新越优先），再截取 top_k
+            for _r in results:
+                _r["_recency"] = _kb_recency_weight(_r.get("created_at"))
+            results.sort(
+                key=lambda r: (r.get("score", 0.0), r.get("_recency", 0.0)),
+                reverse=True,
+            )
             results = results[:top_k]
             logger.info("[RAG] 全文检索返回 %d 条结果", len(results))
             return results

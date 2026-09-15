@@ -121,23 +121,8 @@ class DocSyncScheduler:
                 last_modified=remote_modified,
             )
 
-            # 检查知识库中是否已有此文档
-            cur = store.conn.cursor()
-            cur.execute("SELECT id FROM kb_documents WHERE source_id = ?", (doc_id,))
-            row = cur.fetchone()
-            old_kb_doc_id = row["id"] if row else None
-
-            # 【H11修复】先加后删：先创建新的知识库文档，成功后再删除旧的，
-            # 避免先删后加时新文档创建失败导致数据丢失。
-            # 重新添加到知识库
-            kb_doc_id = store._kb_repo.add_kb_document(
-                title=title,
-                doc_type="dingtalk",
-                source="dingtalk",
-                source_id=doc_id,
-                url=remote.get("url", ""),
-                content=remote_content,
-            )
+            # 重投（upsert）：同一钉钉文档（source_id 唯一）只保留一份最新分块，
+            # 旧分块由 upsert 内部"先加新、再删旧"安全替换，等价原 H11 先加后删、且不残留旧结论。
             chunks = split_text(
                 self._clean_document_for_rag(remote_content),
                 hard_max=(
@@ -145,12 +130,15 @@ class DocSyncScheduler:
                     if self.config is not None else None
                 ),
             )
-            store._kb_repo.add_kb_chunks(kb_doc_id, chunks)
-
-            # 新文档创建成功后，再删除旧文档
-            if old_kb_doc_id is not None:
-                store._kb_repo.delete_kb_document(old_kb_doc_id)
-                logger.info("已移除 %s 的旧知识库文档 %d", doc_id, old_kb_doc_id)
+            kb_doc_id = store._kb_repo.upsert_kb_document(
+                title=title,
+                doc_type="dingtalk",
+                source="dingtalk",
+                chunks=chunks,
+                source_id=doc_id,
+                url=remote.get("url", ""),
+                content=remote_content,
+            )
 
             # 生成 embedding（带重试，覆盖冷启动/抖动导致的瞬时失败）
             if self.embedding_client and self.embedding_client.is_enabled:

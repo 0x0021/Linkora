@@ -234,6 +234,17 @@ class LifecycleMixin(EngineMixinBase):
                     logger.warning("关闭平台 %s 存储出错（可忽略）: %s", getattr(ctx, "id", "?"), e)
             logger.info("灵桥(Linkora)已停止 [模式=%s]", mode)
 
+def _dev_change_settled(sig_first: float, sig_after_debounce: float) -> bool:
+    """dev 热重启的合抖判定：等待窗口内签名不再变化，才算变更已落定。
+
+    ⚠️ 比较对象必须是「首次检测到的签名」而不是「上一轮的基线 last」：
+    发生变更时 last 与当前签名**必然不同**，拿 last 比会让判断恒为「仍在变化」，
+    重启分支永远不可达 —— 热重启会静默变成空转（线上表现为日志里 0 次
+    「检测到文件变更」，改完代码毫无反应）。
+    """
+    return sig_after_debounce == sig_first
+
+
 def _start_dev_watcher(pid_file: str) -> None:
     """启动文件变更监听线程，检测到代码文件变更时自动重启进程。
 
@@ -289,8 +300,8 @@ def _start_dev_watcher(pid_file: str) -> None:
                 except OSError:
                     logger.warning("[resilience] silent exception in _loop", exc_info=True)
                     cur2 = cur
-                if cur2 != last:
-                    last = cur2  # 3s 内又有新变更，再等下一轮
+                if not _dev_change_settled(cur, cur2):
+                    # 3s 内仍在继续变化：不消费本次变更，下一轮重新判定
                     continue
                 last = cur2 or cur
                 logger.info("[DEV] 检测到文件变更，热重启进程...")

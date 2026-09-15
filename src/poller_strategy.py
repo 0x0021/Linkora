@@ -844,16 +844,24 @@ class PollerStrategyMixin(PollerMixinBase):
 
     def _update_poll_time_and_db(self, open_id: str, title: str, chat_type: str,
                                   all_timestamps: list, conv_messages: list) -> None:
-        """更新 _last_poll_time（基于所有消息的最大时间戳）及 DB。"""
+        """更新 _last_poll_time（基于所有消息的最大时间戳）及 DB。
+
+        ⚠️ 一律直接使用 ``max_ts``，**不 +1s**（含钉钉）。拉取侧的 ``--time`` 只接受
+        秒级格式（调用方 strftime("%Y-%m-%d %H:%M:%S")，毫秒被截断），所以游标天然
+        floor 到「最后一条消息所在的那一秒」；下一轮从该秒重新拉取会**重叠**上一轮末尾，
+        由 msg_id 全局去重（内存 LRU + DB 持久化）跳过已处理消息——去重位于
+        _process_conv_messages 的最前段，不会重复触发图片下载/OCR。
+
+        旧实现钉钉走 ``max_ts + 1s``：游标被推到「最后一条消息所在秒的下一秒」，
+        使该秒内尚未取到的消息（同秒多条、或被单页 limit 截断的后续消息）被**永久跳过**。
+        实测 `chat message list --limit 5` 只回 5 条且 hasMore=true（同窗口共 6 条），
+        因此该越秒前进必然丢消息。飞书分支早已因同样的精度理由直接用 max_ts，
+        这里统一为相同行为。
+        """
         if all_timestamps:
             max_ts = max(all_timestamps)
-            # 飞书时间戳精度为分钟级，直接使用 max_ts 而非 +1s
-            if type(self.dws).__name__ == 'FeishuCliAdapter':
-                with self._poll_shared_lock:
-                    self._last_poll_time[open_id] = max_ts
-            else:
-                with self._poll_shared_lock:
-                    self._last_poll_time[open_id] = max_ts + timedelta(seconds=1)
+            with self._poll_shared_lock:
+                self._last_poll_time[open_id] = max_ts
             # 同步更新数据库
             if conv_messages:
                 try:

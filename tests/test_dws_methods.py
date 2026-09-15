@@ -488,6 +488,74 @@ class TestConvenienceReadMethods:
             r = adapter.chat_list_top_conversations()
         assert len(r) == 2
 
+    def test_chat_list_top_conversations_paginates(self, adapter):
+        """置顶会话超过一页时必须翻页合并——只取第一页会漏会话（进而漏轮询）。"""
+        pages = [
+            {"result": {"conversations": [{"openConversationId": "c1"}],
+                        "hasMore": True, "nextCursor": 100}},
+            {"result": {"conversations": [{"openConversationId": "c2"}],
+                        "hasMore": False, "nextCursor": 0}},
+        ]
+        with patch.object(adapter, "run", side_effect=pages) as m:
+            r = adapter.chat_list_top_conversations()
+        assert [c["openConversationId"] for c in r] == ["c1", "c2"]
+        assert m.call_count == 2
+        # 第二页必须带上第一页的 nextCursor
+        second = m.call_args_list[1].args[0]
+        assert second[second.index("--cursor") + 1] == "100"
+
+    def test_chat_list_top_conversations_stops_on_stalled_cursor(self, adapter):
+        """游标停滞（nextCursor 与上一页相同）时必须停止，避免死循环打接口。"""
+        page = {"result": {"conversations": [{"openConversationId": "c1"}],
+                           "hasMore": True, "nextCursor": 100}}
+        with patch.object(adapter, "run", return_value=page) as m:
+            r = adapter.chat_list_top_conversations()
+        assert len(r) == 1
+        assert m.call_count == 2  # 第 2 页发现停滞即停，不继续
+
+
+class TestDocSearchMigration:
+    """dws doc search 在 v1.0.62-beta.8 已 deprecated（文档能力迁往 dws drive）。
+
+    回归点：优先走 drive +search-docs，并把新返回结构（data.docs[] + type/url）
+    归一化成旧契约（documents[] + nodeType/docUrl），调用方无需感知；
+    旧版 dws 不认识新命令时才回退已废弃命令；真实失败不得被回退掩盖。
+    """
+
+    def test_prefers_drive_search_docs_and_normalizes(self, adapter):
+        with patch.object(adapter, "run") as m:
+            m.return_value = {"ok": True, "outcome": "success", "data": {
+                "count": 1,
+                "docs": [{"name": "周报", "nodeId": "n1", "type": "file",
+                          "url": "https://alidocs.dingtalk.com/i/nodes/n1"}],
+            }}
+            r = adapter.doc_search("周报")
+        cmd = m.call_args_list[0].args[0]
+        assert cmd[:2] == ["drive", "+search-docs"], "应优先使用未废弃的新命令"
+        assert r[0]["nodeType"] == "file", "type 必须映射为旧契约 nodeType"
+        assert r[0]["docUrl"] == "https://alidocs.dingtalk.com/i/nodes/n1"
+        assert r[0]["nodeId"] == "n1"
+
+    def test_falls_back_to_deprecated_command_when_unavailable(self, adapter):
+        legacy = {"documents": [{"name": "旧文档", "nodeId": "n2",
+                                 "nodeType": "folder", "docUrl": "u2"}]}
+        with patch.object(adapter, "run", side_effect=[
+                DwsError('unknown command "+search-docs" for "dws drive"'),
+                legacy]) as m:
+            r = adapter.doc_search("旧文档")
+        assert m.call_count == 2
+        assert m.call_args_list[1].args[0][:2] == ["doc", "search"]
+        assert r[0]["nodeType"] == "folder"
+        assert r[0]["docUrl"] == "u2"
+
+    def test_real_failure_is_not_masked_by_fallback(self, adapter):
+        """权限/网络类真实失败必须原样抛出，不能回退成「搜不到文档」。"""
+        with patch.object(adapter, "run",
+                          side_effect=DwsError("AUTH_PERMISSION_DENIED no access")) as m:
+            with pytest.raises(DwsError):
+                adapter.doc_search("x")
+        assert m.call_count == 1
+
 
 class TestAuthMethods:
     def test_auth_status_success(self, adapter):

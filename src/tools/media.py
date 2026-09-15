@@ -42,19 +42,20 @@ def is_allowed_local_path(file_path: str) -> bool:
 class ImageUploadTool(BaseTool):
     name = "upload_image"
     display_name = "上传媒体"
-    short_description = "上传本地图片/语音/视频/文件到钉钉，返回 media_id 供发送富媒体消息使用"
+    short_description = "已不可用（dws 下线该能力）：发本地图片/文件请直接用 send_message 传 file_path"
     description = (
-        "上传本地媒体文件（图片/语音/视频/文件）到钉钉，返回 media_id，"
-        "随后可用 send_message（msg_type=image 等）携带该 media_id 发送。\n"
-        "何时用：\n"
-        "• 你手头只有本地文件路径（如刚生成的图表、截图、二维码、附件），需要先把文件上传到钉钉拿到 media_id。\n"
-        "• 需要复用同一个 media_id（例如发给多个会话、或先上传后由程序拼装消息）。\n"
-        "• 注意：send_message 在 msg_type=image 且只传 file_path 时也会自动上传，"
-        "  因此本工具主要用于「需要显式拿到 media_id」的场景。\n"
-        "参数：\n"
+        "⚠️ 本工具的底层能力已被 dws 下线，**请改用 send_message**。\n"
+        "dws 已移除 `chat media upload`：不再提供「本地文件 → mediaId」的通用上传能力，"
+        "调用只会返回 validation error。\n"
+        "替代路径（直接调 send_message）：\n"
+        "• 发本地图片/文件：send_message 传 file_path（msg_type=image 或 file），"
+        "适配器会直接以 file 消息发送，无需先拿 media_id。\n"
+        "• 若已有 media_id：send_message 传 msg_type=image + media_id。\n"
+        "何时用：仅当你确实需要「先上传拿 media_id 再复用」时——该场景当前已无可用底层命令，"
+        "调用会明确报错并给出替代指引。\n"
+        "参数（保留兼容）：\n"
         "• file_path（必填）：本地文件路径，仅允许项目 data/ 与 /tmp 下（安全限制，防越权读取敏感文件）。\n"
-        "• media_type（可选）：image（默认）/ voice / video / file。\n"
-        "底层封装 dws `chat media upload --file <path> --type <type>`，需要真实应用凭证。"
+        "• media_type（可选）：image（默认）/ voice / video / file。"
     )
     # 场景关键词统一维护在 IntentRegistry 的 domain.media（单一真源）
     intent_categories = ["domain.media"]

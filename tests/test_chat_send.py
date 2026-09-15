@@ -95,6 +95,48 @@ def test_file_requires_file_path():
         assert "file_path" in str(e)
 
 
+def test_image_with_file_path_degrades_to_file_message():
+    """dws 下线 chat media upload 后，image + file_path 应降级为 file 消息直发。
+
+    回归锁：旧实现在此路径调用 self.media_upload()（底层 `chat media upload` 已下线，
+    必抛错），导致整条发图链路失败。
+    """
+    dws = _adapter()
+    dws.media_upload = MagicMock(return_value="MID")
+    dws.chat_message_send(group="G", msg_type="image", file_path="/tmp/p.png")
+    a = _sent_args(dws)
+    assert a[a.index("--msg-type") + 1] == "file"
+    assert a[a.index("--file") + 1] == "/tmp/p.png"
+    # 不得再走已下线的上传路径
+    dws.media_upload.assert_not_called()
+
+
+def test_update_uses_edit_command():
+    """dws 已移除 `chat message update` → 必须改用 `chat message edit --message-id`。
+
+    回归锁：旧实现发的是 `chat message update --msg-id`，命令不存在且 flag 名也错，
+    导致钉钉流式输出每轮更新都失败（占位消息停在 "..."）。
+    """
+    dws = _adapter()
+    dws.chat_message_update(message_id="M1", text="更新内容", group="CID")
+    a = _sent_args(dws)
+    assert a[:3] == ["chat", "message", "edit"]
+    assert a[a.index("--conversation-id") + 1] == "CID"
+    assert a[a.index("--message-id") + 1] == "M1"
+    assert a[a.index("--text") + 1] == "更新内容"
+    assert "--msg-id" not in a
+
+
+def test_update_requires_conversation_id():
+    """edit 只支持按会话定位（无 --user）：缺 group 时应明确报错而非发出无效命令。"""
+    dws = _adapter()
+    try:
+        dws.chat_message_update(message_id="M1", text="x", user="U1")
+        raise AssertionError("应抛 ValueError")
+    except ValueError as e:
+        assert "conversation" in str(e).lower() or "group" in str(e)
+
+
 # ---------- 工具层：校验 + 单聊目标解析 + 透传 ----------
 
 def _make_tool(chat_type="group", peer_oid="", peer_user_id=""):

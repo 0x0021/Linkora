@@ -48,18 +48,23 @@ def test_int_cursor_is_strified_in_args():
     assert isinstance(second_call[ci + 1], str), "nextCursor 必须转 str 后拼入命令"
 
 
-def test_mine_groups_int_cursor_too():
+def test_mine_groups_no_cursor_pagination():
+    """``+chat-list-mine`` 不支持 --cursor，且不传 --limit 即返回全部 → 只请求一次。
+
+    防回归：旧实现复用通用分页函数会给它拼 --cursor，而 dws v1.0.62-beta.8 实测对
+    该 shortcut 传 --cursor 会返回 unknown flag 错误，第 2 页必然失败（被 except 吞掉），
+    结果只能拿到第一页。旧测试用 mock 伪造了「支持 cursor」的响应，因此长期误绿。
+    """
     class _Mine(_FakeDws):
         def run(self, args, *a, **k):
             self._calls.append(list(args))
-            if "--cursor" not in args:
-                return {"complete": False, "nextCursor": 999,
-                        "groups": [{"openConversationId": "cidM1", "name": "我建的群"}]}
             return {"complete": True, "nextCursor": "",
-                    "groups": [{"openConversationId": "cidM2", "name": "我建的群2"}]}
+                    "groups": [{"openConversationId": "cidM1", "name": "我建的群"},
+                               {"openConversationId": "cidM2", "name": "我建的群2"}]}
 
     a = _Mine()
     groups = a.chat_list_groups_mine()
     assert {g["openConversationId"] for g in groups} == {"cidM1", "cidM2"}
-    ci = a._calls[1].index("--cursor")
-    assert isinstance(a._calls[1][ci + 1], str)
+    assert len(a._calls) == 1, "不支持游标分页的命令应只请求一次"
+    assert "--cursor" not in a._calls[0], "+chat-list-mine 传 --cursor 会被 dws 拒绝"
+    assert "--limit" not in a._calls[0], "不传 --limit 才返回全部自建群"

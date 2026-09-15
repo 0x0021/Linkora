@@ -17,6 +17,15 @@ class DwsAdapterMediaMixin(DwsAdapterBase):
         该命令需要真实应用凭证（DWS_CLIENT_ID / DWS_CLIENT_SECRET），不支持
         --dry-run 预览，故强制 force_no_dry_run=True 走真实调用。
 
+        ⚠️ 版本提示（2026-09-15 核实 v1.0.61 与 v1.0.62-beta.8）：dws 已**下线**
+        ``chat media upload``——它现在只返回 validation error（"已下线，当前 CLI 不提供
+        通用的本地文件到 mediaId 的上传能力"）。官方替代路径：
+          • 本地图片/文件 → ``chat message send --msg-type file --file <本地路径>``
+            （Linkora 的 ``chat_message_send(msg_type="image", file_path=...)``
+             已自动降级走此路径，无需经过本方法）
+          • 已有 mediaId → ``chat message send --msg-type image --media-id <mediaId>``
+        本方法仍保留真实调用（而非硬编码抛错）：若 dws 日后恢复该能力，功能自动回归。
+
         media_type: image（默认）/ voice / video / file。
         返回从响应 JSON 中提取的 mediaId；若命令形态变化或鉴权失败会抛出清晰错误。
         """
@@ -35,6 +44,12 @@ class DwsAdapterMediaMixin(DwsAdapterBase):
         if isinstance(data, dict) and data.get("error"):
             err = data["error"]
             msg = err.get("message") if isinstance(err, dict) else str(err)
+            if "已下线" in str(msg) or "deprecated" in str(msg).lower():
+                raise RuntimeError(
+                    "dws 已下线 chat media upload（不再支持「本地文件 → mediaId」的通用上传）。"
+                    "替代：直接用 send_message 传 file_path（msg_type=image 时会自动降级为"
+                    "文件消息发送），或对已有 mediaId 用 msg_type=image + media_id。"
+                )
             raise RuntimeError(f"媒体上传被拒绝: {msg}")
         mid = self._extract_media_id(data)
         if not mid:

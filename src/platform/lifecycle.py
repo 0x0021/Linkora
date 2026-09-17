@@ -261,7 +261,7 @@ def _start_dev_watcher(pid_file: str) -> None:
             if os.path.isdir(p):
                 for root, dirs, files in os.walk(p):
                     dirs[:] = [d for d in dirs
-                               if d not in ("__pycache__", ".git", "node_modules", "data", "logs", ".trash")]
+                               if d not in ("__pycache__", ".git", "node_modules", "data", "logs", ".trash", "dist", "vendor")]
                     for f in files:
                         ext = os.path.splitext(f)[1]
                         if ext in (".py", ".yaml", ".yml", ".js", ".css", ".html"):

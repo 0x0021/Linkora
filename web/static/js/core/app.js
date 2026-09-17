@@ -666,14 +666,20 @@ if (document.readyState === 'loading') {
 
 // ============ Web Auth ============
 function showLoginOverlay() {
+    const overlay = document.getElementById('login-overlay');
+    const alreadyShown = overlay && overlay.style.display === 'flex';
     // 保存当前页面，登录后恢复（避免登录后跳到仪表盘）
     window._preLoginPage = currentPage;
     // 停止所有轮询，防止 401 风暴
     stopDashboardLivePolling();
-    document.getElementById('login-overlay').style.display = 'flex';
+    overlay.style.display = 'flex';
     document.getElementById('login-error').textContent = '';
-    document.getElementById('login-username').value = '';
-    document.getElementById('login-password').value = '';
+    // 仅在「首次弹出」时清空输入框：避免 401 等事件反复触发 showLoginOverlay 时
+    // 把用户刚输入到一半的用户名/密码冲掉（表现为“登录页自动刷新、内容丢失”）。
+    if (!alreadyShown) {
+        document.getElementById('login-username').value = '';
+        document.getElementById('login-password').value = '';
+    }
     setTimeout(() => document.getElementById('login-username').focus(), 100);
 }
 
@@ -809,6 +815,10 @@ async function checkWebAuth() {
 
 // 监听 401 事件
 window.addEventListener('web-auth-required', () => {
+    // 与 checkWebAuth 一致：登录框已显示则不再重复弹出/清空，
+    // 避免反复 401 把用户正在输入的用户名/密码冲掉。
+    const overlay = document.getElementById('login-overlay');
+    if (overlay && overlay.style.display === 'flex') return;
     showLoginOverlay();
 });
 

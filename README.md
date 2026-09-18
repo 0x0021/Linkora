@@ -348,7 +348,7 @@ Linkora 站在一堆优秀的开源项目肩上。完整的第三方组件清单
 | LLM 接入 | openai（OpenAI 兼容协议客户端） | Apache-2.0 |
 | 文档解析 | pdfplumber、python-docx、python-pptx、openpyxl、beautifulsoup4 | MIT |
 | OCR | RapidOCR（rapidocr-onnxruntime）、onnxruntime、pytesseract、Pillow | Apache-2.0 / MIT / MIT-CMU |
-| PDF 渲染 | PyMuPDF | ⚠️ **AGPL-3.0 或 商业许可** |
+| PDF 渲染 | pypdfium2（含捆绑的 PDFium） | Apache-2.0 / BSD-3-Clause |
 | 前端 | Bootstrap 5.3.3、Chart.js 4.4.1、Font Awesome Free 7.3.1 | MIT / CC BY 4.0 + OFL-1.1 |
 | 工具链 | ruff、pyright、pytest、esbuild、vitest、uv、gitleaks | MIT / Apache-2.0 |
 | AI 模型权重 | BAAI bge 系列（MIT）、Qwen3-Embedding（Apache-2.0） | 运行时下载，不随仓库分发 |
@@ -359,10 +359,10 @@ Linkora 站在一堆优秀的开源项目肩上。完整的第三方组件清单
 > 依 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 授权使用。
 > 字体依 [SIL OFL 1.1](https://openfontlicense.org/) 授权，代码依 MIT 授权。
 
-**合规提示**：本项目依赖的 `PyMuPDF` 采用 **AGPL-3.0 / 商业** 双许可。以 Linkora 对外提供
-**网络服务**的部署方，按 AGPL §13 须向使用者提供完整源码（GPL-3.0 本身已要求开源，通常可自然满足）。
-若无法接受 AGPL，可购买 PyMuPDF 商业许可或替换 PDF 解析实现。详见
-[第三方组件声明 · 许可证合规要点](THIRD_PARTY_NOTICES.md#7-许可证合规要点)。
+**合规提示**：**本项目当前不含任何 AGPL 组件**，因此不触发 AGPL §13 的「网络服务须提供源码」义务。
+早期版本曾依赖 `PyMuPDF`（AGPL-3.0 / 商业双许可）做 PDF 页面渲染，现已替换为 `pypdfium2`
+（Apache-2.0 / BSD-3-Clause）——它原本就是 `pdfplumber` 的传递依赖，替换未引入任何新增依赖。
+详见 [第三方组件声明 · 替换记录](THIRD_PARTY_NOTICES.md#72-已移除的-agpl-组件pymupdf--pypdfium2-替换记录)。
 
 **外部工具**：钉钉 `dws`、飞书 `lark-cli`、企业微信 `wecom-cli` 及 Tesseract OCR
 均由使用者自行安装，**不随本仓库分发**，其许可与使用条款以各自官方发布为准。

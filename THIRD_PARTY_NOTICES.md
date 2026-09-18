@@ -47,7 +47,7 @@
 | [rapidocr-onnxruntime](https://pypi.org/project/rapidocr-onnxruntime/) | 1.2.3 | Apache-2.0 | 本地 OCR（图片 / 扫描件） | https://github.com/RapidAI/RapidOCR |
 | [beautifulsoup4](https://pypi.org/project/beautifulsoup4/) | 4.15.0 | MIT | HTML 正文抽取 | https://www.crummy.com/software/BeautifulSoup/ |
 | [pdfplumber](https://pypi.org/project/pdfplumber/) | 0.11.10 | MIT | PDF 文本与表格抽取 | https://github.com/jsvine/pdfplumber |
-| [PyMuPDF](https://pypi.org/project/PyMuPDF/) | 1.28.2 | **AGPL-3.0 或 商业许可**（双许可）⚠️ | PDF 解析 / 页面渲染 | https://github.com/pymupdf/PyMuPDF |
+| [pypdfium2](https://pypi.org/project/pypdfium2/) | 5.13.0 | Apache-2.0 OR BSD-3-Clause（捆绑的 PDFium 及各静态库另有许可，随包分发） | PDF 页面渲染（扫描版 PDF → 图片 → OCR） | https://github.com/pypdfium2-team/pypdfium2 |
 | [python-pptx](https://pypi.org/project/python-pptx/) | 1.0.2 | MIT | PPTX 解析 | https://github.com/scanny/python-pptx |
 | [python-docx](https://pypi.org/project/python-docx/) | 1.2.0 | MIT | DOCX 解析 | https://github.com/python-openxml/python-docx |
 | [pytesseract](https://pypi.org/project/pytesseract/) | 0.3.13 | Apache-2.0 | Tesseract OCR 的 Python 封装 | https://github.com/madmaze/pytesseract |
@@ -56,8 +56,9 @@
 | [rich](https://pypi.org/project/rich/) | 15.0.0 | MIT | 终端富文本输出 | https://github.com/Textualize/rich |
 | [psutil](https://pypi.org/project/psutil/) | 7.2.2 | BSD-3-Clause | 进程 / 资源监控 | https://github.com/giampaolo/psutil |
 
-> ⚠️ **PyMuPDF 是本项目唯一的 AGPL 组件**，请务必阅读 [第 7 节](#7-许可证合规要点)。
-> 如无法接受 AGPL 条款，可向 Artifex 购买商业许可，或在 `src/tools` 中替换 PDF 解析实现。
+> ℹ️ **本项目当前不含 AGPL 组件。** 早期版本曾使用 `PyMuPDF`（AGPL-3.0 / 商业双许可），
+> 已替换为 `pypdfium2`（Apache-2.0 / BSD-3-Clause）以消除 AGPL 第 13 条的网络分发义务，
+> 详见 [7.2 节](#72-已移除的-agpl-组件pymupdf--pypdfium2-替换记录)。
 
 ## 2. 前端第三方资源（随仓库分发）
 
@@ -171,7 +172,7 @@ CI 与 Docker 均安装该锁文件，因此它们同样会被分发进镜像与
 | hf-xet | 1.6.0 | Apache-2.0 |
 | httpcore | 1.0.9 | BSD-3-Clause |
 | httpx | 0.28.1 | BSD-3-Clause |
-| idna | 3.19 | BSD-3-Clause |
+| idna | 3.20 | BSD-3-Clause |
 | iniconfig | 2.3.0 | MIT |
 | jiter | 0.17.0 | MIT |
 | joblib | 1.6.0 | BSD-3-Clause |
@@ -187,12 +188,12 @@ CI 与 Docker 均安装该锁文件，因此它们同样会被分发进镜像与
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | pdfminer.six | 20260107 | MIT |
 | pluggy | 1.6.0 | MIT |
-| protobuf | 7.36.1 | BSD-3-Clause |
+| protobuf | 7.36.2 | BSD-3-Clause |
 | pyclipper | 1.4.0 | MIT |
 | pycparser | 3.0 | BSD-3-Clause |
 | pydantic-core | 2.46.5 | MIT |
 | Pygments | 2.21.0 | BSD-2-Clause |
-| pypdfium2 | 5.13.0 | BSD-3-Clause / Apache-2.0 |
+| pypdfium2 | 5.13.0 | Apache-2.0 OR BSD-3-Clause（已提升为直接依赖，见第 1 节） |
 | safetensors | 0.8.0 | Apache-2.0 |
 | scikit-learn | 1.9.1 | BSD-3-Clause |
 | scipy | 1.18.1 | BSD-3-Clause |
@@ -204,7 +205,7 @@ CI 与 Docker 均安装该锁文件，因此它们同样会被分发进镜像与
 | soupsieve | 2.9.2 | MIT |
 | starlette | 1.6.0 | BSD-3-Clause |
 | sympy | 1.14.0 | BSD-3-Clause |
-| threadpoolctl | 3.6.0 | BSD-3-Clause |
+| threadpoolctl | 3.7.0 | BSD-3-Clause |
 | torch | 2.14.0 | BSD-3-Clause 为主（另含 Apache-2.0 / MIT / BSL-1.0 等子组件） |
 | tqdm | 4.69.0 | MPL-2.0 AND MIT |
 | transformers | 5.17.0 | Apache-2.0 |
@@ -212,14 +213,14 @@ CI 与 Docker 均安装该锁文件，因此它们同样会被分发进镜像与
 | typer | 0.27.2 | MIT |
 | typing-extensions | 4.16.0 | PSF-2.0 |
 | typing-inspection | 0.4.4 | MIT |
-| urllib3 | 2.7.0 | MIT |
+| urllib3 | 2.8.0 | MIT |
 | xlsxwriter | 3.2.9 | BSD-2-Clause |
 
 **需单独注意的许可**
 
 | 组件 | 版本 | 许可证 | 说明 |
 | --- | --- | --- | --- |
-| pymupdf | 1.28.2 | AGPL-3.0 / 商业双许可 | 见第 7 节 |
+| pypdfium2（含捆绑的 PDFium 二进制与各静态库） | 5.13.0 | Apache-2.0 OR BSD-3-Clause；捆绑静态库（freetype / libpng / libjpeg-turbo / libopenjpeg / libtiff / lcms / ICU / simdutf 等）为各自主许可证 | 再分发时须随附 wheel 内 `licenses/` 目录的全部许可文本。该目录由上游随包分发（`*.dist-info/licenses/`），无需人工维护；**PDFium 在 macOS/Linux 会随包携带约 3–4 MB 原生库** |
 | certifi | 2026.7.22 | MPL-2.0 | 文件级 copyleft：修改其文件须公开该文件源码；仅使用无需开源本项目 |
 | tqdm | 4.69.0 | MPL-2.0 AND MIT | 同上，文件级 copyleft |
 | cuda-bindings / cuda-toolkit / nvidia-*（cublas、cudnn、nccl、cusolver 等，共 20 个包） | 见锁文件 | NVIDIA 官方发行包：Apache-2.0 或 NVIDIA 专有 EULA（视具体包） | **仅 Linux 平台安装**（torch 的 CUDA 运行时）；macOS 上不会拉取 |
@@ -236,20 +237,34 @@ Linkora 以 **GPL-3.0-or-later** 发布，与下表所有第三方许可证均**
 | Apache-2.0 | ✅ 兼容 | 保留 NOTICE 与许可证；若修改其文件需标注 |
 | MPL-2.0（certifi、tqdm） | ✅ 兼容（文件级 copyleft） | 修改这些组件自身文件时须公开该文件源码 |
 | PSF-2.0 / Unlicense | ✅ 兼容 | 保留版权声明 |
-| **AGPL-3.0（PyMuPDF）** | ✅ 兼容（AGPL §13 允许与 GPLv3 组合作品） | **见 7.2，义务更重** |
 
-### 7.2 ⚠️ PyMuPDF 的 AGPL 影响（务必知悉）
+### 7.2 已移除的 AGPL 组件：PyMuPDF → pypdfium2 替换记录
 
-`pymupdf` 采用 **AGPL-3.0 或 Artifex 商业许可**双许可模式。对本项目的影响：
+**结论：本项目当前不含任何 AGPL / 强网络 copyleft 组件，无需履行 AGPL 第 13 条的源码提供义务。**
+
+早期版本（≤ 1.28.2 依赖期）的 PDF 页面渲染使用 `PyMuPDF`，其为 **AGPL-3.0 或 Artifex 商业许可**
+双许可模式。对本项目的影响曾是：
 
 1. **分发二进制 / 镜像时**：AGPL 要求向接收者提供完整对应源码。Linkora 本身即以 GPL-3.0 开源，
-   此项自然满足——但请确保分发时**一并附上本仓库源码与 LICENSE**。
+   此项可自然满足。
 2. **作为网络服务提供时（SaaS / 内部部署 ≠ 分发）**：AGPL §13 的关键条款是
-   **「通过网络交互使用的用户，有权获得源码」**。GPL 不会因「仅提供服务不分发」而触发，
-   **AGPL 会**。因此以 Linkora 对外提供服务的部署方，须向使用者提供（或明示获取方式）完整源码。
-3. **若贵司无法接受 AGPL**：可选方案为
-   ① 向 [Artifex](https://artifex.com/licensing/) 购买 PyMuPDF 商业许可；
-   ② 替换 PDF 解析实现（如 `pypdfium2` / `pdfplumber`，均为宽松许可）后移除该依赖。
+   **「通过网络交互使用的用户，有权获得源码」**。GPL 不因「仅提供服务、不分发」而触发，**AGPL 会**。
+   即：以 Linkora 对外提供服务的部署方必须向使用者提供完整源码。
+3. 若无法接受上述条款：① 向 [Artifex](https://artifex.com/licensing/) 购买商业许可；② 替换实现。
+
+**本项目选择了方案 ②，已完成替换：**
+
+| 项目 | 替换前 | 替换后 |
+| --- | --- | --- |
+| 组件 | PyMuPDF 1.28.2 | pypdfium2 5.13.0 |
+| 许可证 | AGPL-3.0 / 商业双许可 ⚠️ | Apache-2.0 OR BSD-3-Clause ✅ |
+| 用途 | PDF 页面渲染为位图（扫描件 OCR） | 同左 |
+| 渲染等价性 | `get_pixmap(dpi=300)` | `page.render(scale=300/72)` —— 同为 72 DPI 基准，输出尺寸一致 |
+| 新增依赖 | — | **无**（pypdfium2 本就是 `pdfplumber` 的传递依赖，本次仅提升为显式直接依赖） |
+| 代码位置 | `src/tools/parse_document.py::_parse_pdf_ocr` | 同左（`_render_pdf_page_png`） |
+
+> 替换后**净减少一个直接依赖**（29 → 28 个直接依赖，新增的 pypdfium2 原本已作为传递依赖存在），
+> 且不再有任何 AGPL 传染风险。若后续需要在「文本型 PDF」上扩展能力，优先使用已有的 `pdfplumber`（MIT）。
 
 ### 7.3 CC BY 4.0 署名（Font Awesome）
 
@@ -270,7 +285,6 @@ Font Awesome Free 的**图标**采用 CC BY 4.0，署名是**硬性要求**（�
 | 许可证 | 全文地址 |
 | --- | --- |
 | GPL-3.0 | https://www.gnu.org/licenses/gpl-3.0.txt （亦见本仓库 [LICENSE](LICENSE)） |
-| AGPL-3.0 | https://www.gnu.org/licenses/agpl-3.0.txt |
 | Apache-2.0 | https://www.apache.org/licenses/LICENSE-2.0 |
 | MIT | https://opensource.org/license/mit |
 | BSD-2-Clause | https://opensource.org/license/bsd-2-clause |

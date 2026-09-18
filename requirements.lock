@@ -51,9 +51,9 @@ coverage==7.16.1
     # via pytest-cov
 cryptography==50.0.1
     # via pdfminer-six
-cuda-bindings==13.4.1 ; python_full_version < '3.15' and sys_platform == 'linux'
+cuda-bindings==13.4.2 ; python_full_version < '3.15' and sys_platform == 'linux'
     # via torch
-cuda-pathfinder==1.8.1 ; python_full_version < '3.15' and sys_platform == 'linux'
+cuda-pathfinder==1.8.2 ; python_full_version < '3.15' and sys_platform == 'linux'
     # via cuda-bindings
 cuda-toolkit==13.0.3.0 ; sys_platform == 'linux'
     # via torch
@@ -95,7 +95,7 @@ huggingface-hub==1.31.0
     #   sentence-transformers
     #   tokenizers
     #   transformers
-idna==3.19
+idna==3.20
     # via
     #   anyio
     #   httpx
@@ -171,7 +171,7 @@ nvidia-cusparselt-cu13==0.8.1 ; sys_platform == 'linux'
     # via torch
 nvidia-nccl-cu13==2.30.7 ; sys_platform == 'linux'
     # via torch
-nvidia-nvjitlink==13.4.52 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+nvidia-nvjitlink==13.4.92 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
     # via
     #   cuda-toolkit
     #   nvidia-cufft
@@ -216,7 +216,7 @@ pluggy==1.6.0
     # via
     #   pytest
     #   pytest-cov
-protobuf==7.36.1
+protobuf==7.36.2
     # via onnxruntime
 psutil==7.2.2
     # via -r requirements.txt
@@ -237,10 +237,10 @@ pygments==2.21.0
     #   rich
 pyjwt==2.13.0
     # via -r requirements.txt
-pymupdf==1.28.2
-    # via -r requirements.txt
 pypdfium2==5.13.0
-    # via pdfplumber
+    # via
+    #   -r requirements.txt
+    #   pdfplumber
 pytesseract==0.3.13
     # via -r requirements.txt
 pytest==9.1.1
@@ -304,7 +304,7 @@ starlette==1.6.0
     # via fastapi
 sympy==1.14.0
     # via torch
-threadpoolctl==3.6.0
+threadpoolctl==3.7.0
     # via scikit-learn
 tokenizers==0.23.2
     # via
@@ -344,7 +344,7 @@ typing-inspection==0.4.4
     # via
     #   fastapi
     #   pydantic
-urllib3==2.7.0
+urllib3==2.8.0
     # via requests
 uvicorn==0.52.4
     # via -r requirements.txt

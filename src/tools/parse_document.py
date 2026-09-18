@@ -427,6 +427,33 @@ class DocumentParser:
             logger.error("[解析器] PDF 解析失败: %s", e, exc_info=True)
             return ""
 
+    # PDF 页面渲染 DPI。pypdfium2 的 render(scale=) 以 72 DPI 为基准，
+    # 故 scale = dpi / 72。300 DPI 与原 PyMuPDF 的 get_pixmap(dpi=300) 等价。
+    _PDF_RENDER_DPI = 300
+
+    @classmethod
+    def _render_pdf_page_png(cls, page) -> bytes:
+        """将单个 PDF 页面渲染为 PNG 字节（供 OCR 读取）。
+
+        使用 pypdfium2（Apache-2.0 / PDFium BSD-3-Clause）替代原 PyMuPDF
+        （AGPL-3.0），避免 AGPL 的网络分发条款传染。
+
+        Args:
+            page: pypdfium2 的 PdfPage 对象
+
+        Returns:
+            PNG 编码的图像字节
+        """
+        import io
+
+        bitmap = page.render(scale=cls._PDF_RENDER_DPI / 72)
+        buf = io.BytesIO()
+        try:
+            bitmap.to_pil().save(buf, format="PNG")
+        finally:
+            bitmap.close()
+        return buf.getvalue()
+
     def _parse_pdf_ocr(self, file_path: str) -> str:
         """使用 OCR 解析 PDF（适用于扫描版 PDF）。"""
         if not self._ocr_available or self._ocr_engine is None:
@@ -434,17 +461,21 @@ class DocumentParser:
             return ""
 
         try:
-            import fitz  # PyMuPDF
+            import os
             import tempfile
 
-            doc = fitz.open(file_path)
+            import pypdfium2 as pdfium
+
+            pdf = pdfium.PdfDocument(file_path)
             try:
                 text_parts = []
 
-                for page_num in range(len(doc)):
-                    page = doc.load_page(page_num)
-                    pix = page.get_pixmap(dpi=300)
-                    img_data = pix.tobytes("png")
+                for page_num in range(len(pdf)):
+                    page = pdf[page_num]
+                    try:
+                        img_data = self._render_pdf_page_png(page)
+                    finally:
+                        page.close()
                     # 写入临时文件供 RapidOCR 读取
                     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                         tmp.write(img_data)
@@ -457,14 +488,13 @@ class DocumentParser:
                             if page_text.strip():
                                 text_parts.append(f"[第 {page_num + 1} 页]\n{page_text.strip()}")
                     finally:
-                        import os
                         try:
                             os.unlink(tmp_path)
                         except Exception as e:
                             logger.debug("unlink %s failed: %s", tmp_path, e)
 
             finally:
-                doc.close()
+                pdf.close()
             result = '\n\n'.join(text_parts)
 
             if result.strip():
@@ -475,7 +505,7 @@ class DocumentParser:
                 logger.warning("[解析器] PDF OCR 未识别到有效内容")
                 return ""
         except ImportError:
-            logger.warning("[解析器] PDF OCR 依赖缺失（缺少 PyMuPDF），无法解析扫描版 PDF")
+            logger.warning("[解析器] PDF OCR 依赖缺失（缺少 pypdfium2），无法解析扫描版 PDF")
             return ""
         except Exception as e:
             logger.error("[解析器] PDF OCR 解析失败: %s", e, exc_info=True)

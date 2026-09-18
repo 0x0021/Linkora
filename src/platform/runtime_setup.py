@@ -285,6 +285,33 @@ class SetupMixin(EngineMixinBase):
         else:
             logger.info("[动态摘要] 动态摘要调度器未启用（memory.conversation_summary.dynamic.enabled=false）")
 
+        # 展示用全量摘要调度器（与 H2-A/动态摘要解耦，专供 Web「对话摘要」页）。
+        # 收集近期全量消息生成覆盖整段对话的展示摘要，写入 conversation_display_summaries，
+        # 避免卡片只显示 older 段导致的「摘要只取了一部分聊天记录」问题。
+        from src.llm.display_summary_scheduler import DisplaySummaryScheduler
+        # 防御式读取配置：最小/测试配置可能没有 memory 段（缺省视为启用 + 全默认值）
+        _mem = getattr(self.config, "memory", None)
+        _cs = getattr(_mem, "conversation_summary", None) if _mem is not None else None
+        display_cfg = _cs.get("display", {}) if isinstance(_cs, dict) else {}
+        display_enabled = display_cfg.get("enabled", True)
+        if display_enabled:
+            display_scheduler = DisplaySummaryScheduler(
+                agent=self.platforms["dingtalk"].llm_agent,
+                store=self.store,
+                platform="dingtalk",
+                check_interval_seconds=display_cfg.get("check_interval_seconds", 120),
+                min_messages=display_cfg.get("min_messages", 4),
+                display_limit=display_cfg.get("display_limit", 40),
+                interval_hours=display_cfg.get("interval_hours", 2),
+                freshness_seconds=display_cfg.get("freshness_seconds", 1800),
+                scan_days=display_cfg.get("scan_days", 7),
+            )
+            display_scheduler.start()
+            self.platforms["dingtalk"].display_summary_scheduler = display_scheduler
+            logger.info("[展示摘要] 主平台 dingtalk 展示用全量摘要调度器已启动")
+        else:
+            logger.info("[展示摘要] 展示摘要调度器未启用（memory.conversation_summary.display.enabled=false）")
+
         # P4-13：主平台(dingtalk)接线每日主动摘要推送（默认关闭，enabled 才启动）。
         from src.llm.proactive_digest import ProactiveDigestScheduler
         proactive_scheduler = ProactiveDigestScheduler(

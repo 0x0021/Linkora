@@ -416,6 +416,32 @@ class PrimaryMixin(EngineMixinBase):
         llm_agent._summary_scheduler = summary_scheduler
         summary_scheduler.start()
         logger.info("[H2-A] 平台 %s 后台异步摘要调度器已启动", pcfg.id)
+
+        # 展示用全量摘要调度器（与 H2-A 解耦，专供 Web「对话摘要」页）。
+        from src.llm.display_summary_scheduler import DisplaySummaryScheduler
+        # 防御式读取配置：最小/测试配置可能没有 memory 段（缺省视为启用 + 全默认值）
+        _mem = getattr(self.config, "memory", None)
+        _cs = getattr(_mem, "conversation_summary", None) if _mem is not None else None
+        display_cfg = _cs.get("display", {}) if isinstance(_cs, dict) else {}
+        display_enabled = display_cfg.get("enabled", True)
+        display_scheduler = None
+        if display_enabled:
+            display_scheduler = DisplaySummaryScheduler(
+                agent=llm_agent,
+                store=store,
+                platform=pcfg.id,
+                check_interval_seconds=display_cfg.get("check_interval_seconds", 120),
+                min_messages=display_cfg.get("min_messages", 4),
+                display_limit=display_cfg.get("display_limit", 40),
+                interval_hours=display_cfg.get("interval_hours", 2),
+                freshness_seconds=display_cfg.get("freshness_seconds", 1800),
+                scan_days=display_cfg.get("scan_days", 7),
+            )
+            display_scheduler.start()
+            logger.info("[展示摘要] 平台 %s 展示用全量摘要调度器已启动", pcfg.id)
+        else:
+            logger.info("[展示摘要] 平台 %s 展示摘要调度器未启用", pcfg.id)
+
         return PlatformContext(
             id=pcfg.id,
             display_name=pcfg.display_name,
@@ -430,6 +456,7 @@ class PrimaryMixin(EngineMixinBase):
                 max(1, getattr(poller_cfg, 'max_concurrent_replies', self.config.poller.max_concurrent_replies)),
             ),
             summary_scheduler=summary_scheduler,
+            display_summary_scheduler=display_scheduler,
         )
 
     def _build_adapter(self, pcfg) -> "BaseIMAdapter":

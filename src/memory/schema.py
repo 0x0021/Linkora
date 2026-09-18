@@ -481,6 +481,44 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cs_updated ON conversation_summaries(updated_at)")
 
+    # ── 展示用全量会话摘要表（与 H2-A/动态摘要解耦，专供 Web「对话摘要」页）──
+    # 覆盖整段近期对话（非仅 older 段），避免卡片只显示部分聊天记录。
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_display_summaries (
+            chat_id                 TEXT PRIMARY KEY,
+            summary_text           TEXT NOT NULL,
+            boundary_msg_id        TEXT NOT NULL,
+            covered_count          INTEGER NOT NULL,
+            generation             INTEGER NOT NULL DEFAULT 0,
+            created_at             TEXT NOT NULL,
+            updated_at             TEXT NOT NULL,
+            boundary_ts            TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cds_updated ON conversation_display_summaries(updated_at)"
+    )
+    # 注意：boundary_ts 索引必须在 _ensure_column 补齐列之后创建。
+    # 旧库的 conversation_display_summaries 无 boundary_ts（CREATE TABLE IF NOT EXISTS
+    # 是空操作），提前建索引会 "no such column: boundary_ts" 致 init_schema 整体失败，
+    # 进而让所有 Web 请求 500。
+    _ensure_column(cur, "conversation_display_summaries", "boundary_ts", "TEXT DEFAULT ''")
+    # 回填：已有展示摘要的 boundary_ts 取该会话最新消息时间，窗口过滤依赖它；
+    # 否则用 updated_at（=摘要生成时间）会让「今天/昨日」筛选器失准（全部命中）。
+    try:
+        cur.execute(
+            "UPDATE conversation_display_summaries "
+            "SET boundary_ts = COALESCE("
+            "   (SELECT MAX(timestamp) FROM messages m WHERE m.chat_id = conversation_display_summaries.chat_id),"
+            "   updated_at) "
+            "WHERE boundary_ts IS NULL OR boundary_ts = ''"
+        )
+    except sqlite3.OperationalError:
+        logger.debug("backfill boundary_ts 跳过（messages 表缺失或无需回填）")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cds_boundary ON conversation_display_summaries(boundary_ts)"
+    )
+
     # ── 全链路追踪字段迁移 ─────────────────────────────────────────────
     _ensure_column(cur, "routing_quality", "intent_disposition", "TEXT DEFAULT ''")
     _ensure_column(cur, "routing_quality", "intent_action", "TEXT DEFAULT ''")
@@ -623,6 +661,21 @@ def init_conv_schema(conn: sqlite3.Connection, db_path: str) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_cs_updated ON conversation_summaries(updated_at);
 
+        CREATE TABLE IF NOT EXISTS conversation_display_summaries (
+            chat_id                 TEXT PRIMARY KEY,
+            summary_text           TEXT NOT NULL,
+            boundary_msg_id        TEXT NOT NULL,
+            covered_count          INTEGER NOT NULL,
+            generation             INTEGER NOT NULL DEFAULT 0,
+            created_at             TEXT NOT NULL,
+            updated_at             TEXT NOT NULL,
+            boundary_ts            TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_cds_updated ON conversation_display_summaries(updated_at);
+        -- idx_cds_boundary 不能放这里：旧库无 boundary_ts 列（CREATE TABLE IF NOT EXISTS
+        -- 是空操作），会 "no such column" 让整个 executescript 失败。留待 _ensure_column
+        -- 补列后再建索引（见下方 Python 迁移）。
+
         CREATE TABLE IF NOT EXISTS external_friends (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -647,6 +700,26 @@ def init_conv_schema(conn: sqlite3.Connection, db_path: str) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_blocked_source ON blocked_conversations(source);
     """)
+    conn.commit()
+    # 会话展示摘要表：补充 boundary_ts（会话最新消息时间），供「今日/昨日」窗口过滤。
+    # 必须在 executescript 之外以 Python 执行——_ensure_column 是 Python API，不能进 SQL 脚本。
+    _ensure_column(cur, "conversation_display_summaries", "boundary_ts", "TEXT DEFAULT ''")
+    try:
+        cur.execute(
+            "UPDATE conversation_display_summaries "
+            "SET boundary_ts = COALESCE("
+            "   (SELECT MAX(timestamp) FROM messages m WHERE m.chat_id = conversation_display_summaries.chat_id),"
+            "   updated_at) "
+            "WHERE boundary_ts IS NULL OR boundary_ts = ''"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        logger.debug("backfill boundary_ts 跳过（messages 表缺失或无需回填）")
+    # 列已确保存在，此处建索引才安全（旧库在 executescript 阶段没有该列）。
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cds_boundary "
+        "ON conversation_display_summaries(boundary_ts)"
+    )
     conn.commit()
     # ── 列迁移：兼容「建库早于本列新增」的存量分库 ─────────────────────
     # 上面的 CREATE TABLE IF NOT EXISTS 只对新建分库生效；已存在的分库表

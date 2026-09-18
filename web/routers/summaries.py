@@ -45,20 +45,33 @@ async def get_summaries(
     pf = platform or get_current_platform()
     try:
         since = await run_sync(_since_iso, window)
-        rows = await run_sync(
+        # 展示用全量摘要（conversation_display_summaries）优先；缺失时回退到 H2-A/动态摘要
+        # （conversation_summaries），保证页面在任何情况下都有内容，且新调度器上线后逐步替换。
+        display_rows = await run_sync(
+            store._conversation_repo.list_recent_display_summaries, limit, pf, since,
+        )
+        fallback_rows = await run_sync(
             store._conversation_repo.list_recent_summaries, limit, pf, since,
         )
-        items = [
-            {
-                "chat_id": r["chat_id"],
-                "chat_name": r.get("chat_name") or "",
-                "summary": r["summary_text"] or "",
-                "covered_count": int(r.get("covered_count") or 0),
-                "updated_at": r.get("updated_at") or "",
-                "platform": r.get("platform") or "",
-            }
-            for r in rows
-        ]
+        # 展示用全量摘要优先；缺失的会话回退到 H2-A/动态摘要（可能仅覆盖 older 段），
+        # 并标注 source 以便前端在需要时区分「全量摘要」与「上下文摘要」。
+        items = []
+        seen = set()
+        for source, rows in (("display", display_rows), ("context", fallback_rows)):
+            for r in rows:
+                cid = r["chat_id"]
+                if cid in seen:
+                    continue
+                seen.add(cid)
+                items.append({
+                    "chat_id": cid,
+                    "chat_name": r.get("chat_name") or "",
+                    "summary": r["summary_text"] or "",
+                    "covered_count": int(r.get("covered_count") or 0),
+                    "updated_at": r.get("updated_at") or "",
+                    "platform": r.get("platform") or "",
+                    "source": source,
+                })
         digest = build_digest(items, max_summary_chars=max_chars)
         return {
             "ok": True,

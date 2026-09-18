@@ -208,6 +208,9 @@ class ConversationRepo:
         cur.execute(
             f"DELETE FROM conversation_summaries WHERE chat_id IN ({placeholders})", chat_ids
         )
+        cur.execute(
+            f"DELETE FROM conversation_display_summaries WHERE chat_id IN ({placeholders})", chat_ids
+        )
         cur.execute(f"DELETE FROM dedup_messages WHERE chat_id IN ({placeholders})", chat_ids)
         cur.execute(f"DELETE FROM conversations WHERE chat_id IN ({placeholders})", chat_ids)
         deleted = cur.rowcount
@@ -342,6 +345,7 @@ class ConversationRepo:
             generation=int(row["generation"] or 0),
             created_at=row["created_at"] or "",
             updated_at=row["updated_at"] or "",
+            boundary_ts="",
         )
 
     def list_recent_summaries(self, limit: int = 20, platform: str = "",
@@ -492,6 +496,131 @@ class ConversationRepo:
         except Exception as e:  # noqa: BLE001
             logger.debug("[摘要补跑] 更新 updated_at 失败 chat_id=%s: %s", chat_id, e)
             return False
+
+    # ---- 展示用全量会话摘要（与 H2-A/动态摘要解耦，专供 Web「对话摘要」页） ----
+    def get_display_summary(self, chat_id: str, platform: str = "") -> "ConversationSummaryRow | None":
+        """读展示用全量摘要缓存（快读，无 LLM）。"""
+        if not chat_id:
+            return None
+        # 必须显式 close()：调度器线程的连接是长生命周期复用的，未关闭的游标会一直
+        # 持有 WAL 读锁；该连接随后写库时报 "database is locked"（SQLITE_BUSY_SNAPSHOT，
+        # busy_timeout / rollback 均无效，实测 100% 复现）。详见 test_display_summary_* 回归。
+        try:
+            cur = self._cc(platform).cursor()
+            try:
+                cur.execute(
+                    """SELECT chat_id, summary_text, boundary_msg_id AS older_boundary_msg_id,
+                              covered_count, generation, created_at, updated_at, boundary_ts
+                       FROM conversation_display_summaries WHERE chat_id = ?""",
+                    (str(chat_id),),
+                )
+                row = cur.fetchone()
+            finally:
+                cur.close()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[resilience] 读取展示摘要缓存失败 chat_id=%s: %s", chat_id, e)
+            return None
+        if row is None:
+            return None
+        return ConversationSummaryRow(
+            chat_id=row["chat_id"],
+            summary_text=row["summary_text"] or "",
+            older_boundary_msg_id=row["older_boundary_msg_id"] or "",
+            covered_count=int(row["covered_count"] or 0),
+            generation=int(row["generation"] or 0),
+            created_at=row["created_at"] or "",
+            updated_at=row["updated_at"] or "",
+            boundary_ts=row["boundary_ts"] or "",
+        )
+
+    def list_recent_display_summaries(self, limit: int = 30, platform: str = "",
+                                      since: str | None = None) -> list[dict]:
+        """近期展示用全量摘要列表（JOIN conversations 取 chat_name）。
+
+        窗口过滤命中的是**会话最新活动时间**（boundary_ts = 该会话最近一条消息时间），
+        而非摘要生成时间（updated_at）——后者会因展示调度器批量刷新而全部变成当天，
+        导致「今日/昨日」筛选器形同虚设。boundary_ts 为空时回退到 updated_at 以兼容旧行。
+        """
+        cur = self._cc(platform).cursor()
+        sql = """SELECT s.chat_id, s.summary_text, s.covered_count, s.updated_at,
+                        s.boundary_ts,
+                        COALESCE(c.chat_name, '') AS chat_name
+                 FROM conversation_display_summaries s
+                 LEFT JOIN conversations c ON c.chat_id = s.chat_id"""
+        params: list = []
+        if since:
+            sql += " WHERE COALESCE(s.boundary_ts, s.updated_at) >= ?"
+            params.append(since)
+        sql += " ORDER BY COALESCE(s.boundary_ts, s.updated_at) DESC LIMIT ?"
+        params.append(int(limit))
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        cur.close()
+        return [
+            {
+                "chat_id": r["chat_id"],
+                "summary_text": r["summary_text"] or "",
+                "covered_count": int(r["covered_count"] or 0),
+                "updated_at": r["updated_at"] or "",
+                "boundary_ts": r["boundary_ts"] or "",
+                "chat_name": r["chat_name"] or "",
+            }
+            for r in rows
+        ]
+
+    def upsert_display_summary(
+        self,
+        chat_id: str,
+        summary: str,
+        boundary_msg_id: str,
+        covered_count: int,
+        expected_generation: int = 0,
+        platform: str = "",
+        boundary_ts: str = "",
+    ) -> bool:
+        """CAS 写回展示用全量摘要（state machine 边界，与 H2-A 摘要互不干扰）。
+
+        ``boundary_ts`` 记为该会话最近一条被覆盖消息的时间（会话最新活动时间），
+        供 Web「对话摘要」页的「今日/昨日」窗口过滤，避免被 updated_at（摘要生成时间）污染。
+        """
+        if not chat_id or not summary:
+            return False
+        # 游标必须显式 close()：本方法运行在调度器长生命周期线程的连接上，未关闭的游标
+        # 会残留 WAL 读锁，导致后续写库 SQLITE_BUSY_SNAPSHOT（"database is locked"）。
+        cur = self._cc(platform).cursor()
+        try:
+            now = datetime.now().isoformat()
+            new_gen = expected_generation + 1
+            cur.execute(
+                """UPDATE conversation_display_summaries
+                   SET summary_text = ?, boundary_msg_id = ?, covered_count = ?,
+                       generation = ?, updated_at = ?, boundary_ts = ?
+                   WHERE chat_id = ? AND generation = ?""",
+                (summary, boundary_msg_id, int(covered_count), new_gen, now,
+                 str(boundary_ts), str(chat_id), int(expected_generation)),
+            )
+            if cur.rowcount > 0:
+                self._cc(platform).commit()
+                return True
+            cur.execute(
+                "SELECT 1 FROM conversation_display_summaries WHERE chat_id = ?",
+                (str(chat_id),),
+            )
+            if cur.fetchone() is None:
+                cur.execute(
+                    """INSERT INTO conversation_display_summaries
+                           (chat_id, summary_text, boundary_msg_id, covered_count,
+                            generation, created_at, updated_at, boundary_ts)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (str(chat_id), summary, boundary_msg_id, int(covered_count),
+                     new_gen, now, now, str(boundary_ts)),
+                )
+                self._cc(platform).commit()
+                return True
+            self._cc(platform).commit()
+            return False
+        finally:
+            cur.close()
 
     def get_chat_type(self, chat_id: str = "", platform: str = "") -> str:
         """查询会话类型（single/group/...），供范围分类使用；查不到返回空串。"""

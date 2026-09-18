@@ -26,6 +26,7 @@ from src.config import load_config, DEFAULT_STORAGE_PATH
 from src.db_backup import DatabaseBackup, DatabaseBackupCoordinator
 from src.llm.summary_scheduler import SummaryScheduler
 from src.llm.dynamic_summary_scheduler import DynamicSummaryScheduler
+from src.llm.display_summary_scheduler import DisplaySummaryScheduler
 from src.doc_sync_scheduler import DocSyncScheduler
 # 注意：本模块被 runtime_*.py 以 `from .base import *` 星号转导入，DwsAdapter 由
 # runtime_lifecycle._build_dws() 在运行时实际构造使用（本文件内不再直接引用，但
@@ -87,6 +88,7 @@ class PlatformContext:
     reply_semaphore: "threading.Semaphore | None" = None  # 平台级回复并发控制
     summary_scheduler: "SummaryScheduler | None" = None  # H2-A 后台异步摘要调度器
     dynamic_summary_scheduler: "DynamicSummaryScheduler | None" = None  # 动态（信号驱动）摘要调度器
+    display_summary_scheduler: "DisplaySummaryScheduler | None" = None  # 展示用全量摘要调度器（供 Web 摘要页）
 
 
 

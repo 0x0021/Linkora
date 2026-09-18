@@ -555,15 +555,18 @@ class MessageRepo:
         （原实现 message_count 不减，导致永续心跳式轰炸免费 LLM 接口）。
         """
         cur = self._cc().cursor()
-        cur.execute(
-            "SELECT chat_id, chat_name, chat_type, message_count FROM conversations "
-            "WHERE message_count >= ? "
-            "AND (last_summary_at IS NULL "
-            "     OR last_summary_at < datetime('now', ?)) "
-            "ORDER BY message_count DESC",
-            (max_messages, f"-{summary_interval_hours} hours"),
-        )
-        return [dict(row) for row in cur.fetchall()]
+        try:
+            cur.execute(
+                "SELECT chat_id, chat_name, chat_type, message_count FROM conversations "
+                "WHERE message_count >= ? "
+                "AND (last_summary_at IS NULL "
+                "     OR last_summary_at < datetime('now', ?)) "
+                "ORDER BY message_count DESC",
+                (max_messages, f"-{summary_interval_hours} hours"),
+            )
+            return [dict(row) for row in cur.fetchall()]
+        finally:
+            cur.close()
 
     def get_recent_unarchived_messages(self, chat_id: str, limit: int = 40) -> list[Message]:
         """获取会话最近的非归档消息（按时间正序），用于增量摘要。
@@ -575,13 +578,18 @@ class MessageRepo:
         若不排除，历史摘要与 digest 回灌会把其他会话的内容混进本会话摘要。
         """
         cur = self._cc().cursor()
-        cur.execute(
-            "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 "
-            + _SUMMARY_NOISE_SQL
-            + " ORDER BY timestamp DESC LIMIT ?",
-            (str(chat_id), limit),
-        )
-        rows = list(cur.fetchall())
+        try:
+            cur.execute(
+                "SELECT * FROM messages WHERE chat_id = ? AND is_archived = 0 "
+                + _SUMMARY_NOISE_SQL
+                + " ORDER BY timestamp DESC LIMIT ?",
+                (str(chat_id), limit),
+            )
+            rows = list(cur.fetchall())
+        finally:
+            # 显式关闭：本方法被摘要调度器在长生命周期连接上反复调用，残留游标会持 WAL
+            # 读锁，导致该连接后续写库报 "database is locked"（SQLITE_BUSY_SNAPSHOT）。
+            cur.close()
         rows.reverse()  # 转为时间正序，便于拼接对话
         messages = []
         for row in rows:

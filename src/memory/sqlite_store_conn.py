@@ -168,7 +168,28 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("PRAGMA synchronous=NORMAL")
             c.execute("PRAGMA cache_size=-8000")  # 与主库一致（每连接上限，见上方实测依据）
-            init_conv_schema(c, path)
+            # 【P0-锁竞争】会话库 schema 与主库同样「每个物理文件、每进程只初始化一次」。
+            # 此前每次新建连接都跑 init_conv_schema —— 其中含 CREATE TABLE/CREATE INDEX 等
+            # DDL 与 boundary_ts 回填 UPDATE，每次都要取写锁；轮询器（线程池并发抓取）与
+            # 摘要调度器各自新建连接时反复取锁、互相挤锁，实测导致 poller 的
+            # upsert_conversation 报 "database is locked"（单会话抓取被跳过）。
+            _ccls = type(self)
+            if not hasattr(_ccls, "_conv_schema_init_lock"):
+                _ccls._conv_schema_init_lock = threading.Lock()
+            if not hasattr(_ccls, "_conv_schema_initialized_paths"):
+                _ccls._conv_schema_initialized_paths = set()
+            with _ccls._conv_schema_init_lock:
+                need_conv_init = path not in _ccls._conv_schema_initialized_paths
+                if need_conv_init:
+                    _ccls._conv_schema_initialized_paths.add(path)
+            if need_conv_init:
+                try:
+                    init_conv_schema(c, path)
+                except sqlite3.Error as e:
+                    # 回退标志：下一个线程新建连接时会重试初始化
+                    _ccls._conv_schema_initialized_paths.discard(path)
+                    logger.error("会话库 schema 初始化失败 %s: %s", path, e)
+                    raise
             # 空/未知 platform 不触发迁移：避免盲拷主库全量数据进无前缀孤儿库
             need_migrate = bool(platform) and (not existed) and (path not in self._conv_migrated)
             if need_migrate:
@@ -194,6 +215,25 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             except sqlite3.Error as e:  # noqa: BLE001
                 logger.warning("[账号隔离] 主库→会话库迁移失败（不影响新库使用）: %s", e)
         return c
+
+    def discard_conv_conn(self, platform: str = "") -> None:
+        """丢弃【当前线程】缓存的会话库连接（下次 ``conv_conn`` 会新建一个）。
+
+        【为什么需要】长生命周期线程（如摘要调度器 worker）复用同一连接；若连接上
+        残留未关闭游标，就会持有陈旧的 WAL 读快照，此后该连接写库稳定报
+        "database is locked"（SQLITE_BUSY_SNAPSHOT；busy_timeout 不生效、rollback()
+        /commit() 也清不掉——已实测 100% 复现）。此时「关掉并重建连接」是唯一可靠的
+        恢复手段，故供调用方在写失败时自愈。仅影响当前线程，不干扰其他线程连接。
+        """
+        platform = (platform or "").lower()
+        tid = threading.get_ident()
+        with self._conv_conns_lock:
+            entry = self._conv_conns.pop((tid, platform), None)
+        if entry is not None:
+            try:
+                entry[1].close()
+            except sqlite3.Error as e:
+                logger.debug("丢弃会话连接失败（可忽略）: %s", e)
 
     def _migrate_main_to_conv(self, conv: sqlite3.Connection, platform: str) -> None:
         """把主库既有会话数据拷贝进当前账号的会话库（一次性引导迁移）。

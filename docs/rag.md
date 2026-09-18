@@ -4,8 +4,8 @@
 
 | 格式 | 解析方式 | 备注 |
 |---|---|---|
-| PDF（文本） | `pdfplumber` + `pymupdf` | 优先前者，失败回退 |
-| PDF（扫描版） | `pymupdf` 渲染 + `pytesseract` OCR | 需要安装 tesseract |
+| PDF（文本） | `pdfplumber` | 文本与表格抽取（pypdfium2 提供底层渲染） |
+| PDF（扫描版） | `pypdfium2` 渲染 300 DPI + RapidOCR | 文本过少时自动回退 OCR |
 | Word | `python-docx` | |
 | PPT | `python-pptx` | |
 | 图片 | `pytesseract` OCR | jpg/png 等 |

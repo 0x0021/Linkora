@@ -27,7 +27,7 @@
 | 向量检索 | FAISS (CPU) |
 | Embedding | BGE 中文向量模型（sentence-transformers） |
 | 文本分类 | jieba 分词 + 正则匹配 |
-| OCR | RapidOCR / pytesseract / pymupdf |
+| OCR | RapidOCR / pytesseract（PDF 页面渲染由 pypdfium2 承担） |
 | 文档解析 | pdfplumber / python-docx / python-pptx / openpyxl |
 | LLM 客户端 | OpenAI 兼容接口（多服务商主备切换） |
 | 配置管理 | PyYAML + Pydantic 模型校验 + 热重载 |

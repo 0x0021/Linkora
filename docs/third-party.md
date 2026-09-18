@@ -17,7 +17,7 @@
 | LLM 接入 | openai（OpenAI 兼容协议客户端） | Apache-2.0 |
 | 文档解析 | pdfplumber、pdfminer.six、python-docx、python-pptx、openpyxl、beautifulsoup4、lxml | MIT / BSD-3-Clause |
 | OCR | rapidocr-onnxruntime、onnxruntime、opencv-python、pytesseract、Pillow、pyclipper、shapely | Apache-2.0 / MIT / MIT-CMU / BSD-3-Clause |
-| PDF 渲染 | PyMuPDF | ⚠️ **AGPL-3.0 或 商业许可**（双许可） |
+| PDF 渲染 | pypdfium2（含捆绑的 PDFium） | Apache-2.0 / BSD-3-Clause |
 | 前端 | Bootstrap 5.3.3、Chart.js 4.4.1、Font Awesome Free 7.3.1 | MIT / CC BY 4.0 + SIL OFL 1.1 |
 | 开发与 CI | ruff、pyright、pytest、pip-audit、uv、gitleaks、esbuild、vitest、jsdom | MIT / Apache-2.0 |
 | AI 模型权重 | BAAI bge 系列（MIT）、Qwen3-Embedding（Apache-2.0） | 运行时下载，不随仓库分发 |
@@ -78,7 +78,7 @@ LLM / Embedding 服务（云端 API 或本地 Ollama、LM Studio、vLLM 等）�
 
 | 组件 | 许可证 | 说明 |
 | --- | --- | --- |
-| pymupdf | AGPL-3.0 / 商业双许可 | 见下方合规要点 |
+| pypdfium2（含捆绑 PDFium 与各静态库） | Apache-2.0 / BSD-3-Clause | 再分发须随附 wheel 内 `licenses/` 目录的全部许可文本 |
 | certifi、tqdm | MPL-2.0 | 文件级 copyleft：修改其自身文件时须公开该文件源码 |
 | cuda-bindings、cuda-toolkit、nvidia-*（20 个包） | NVIDIA 官方发行包（Apache-2.0 或 NVIDIA 专有 EULA） | 仅 Linux 安装（torch 的 CUDA 运行时） |
 
@@ -88,19 +88,23 @@ LLM / Embedding 服务（云端 API 或本地 Ollama、LM Studio、vLLM 等）�
 
 Linkora 以 **GPL-3.0-or-later** 发布，与以下第三方许可证均兼容：
 MIT、BSD-2-Clause、BSD-3-Clause、ISC、MIT-0、Apache-2.0、MPL-2.0（文件级 copyleft）、
-PSF-2.0、Unlicense、CCO、以及 **AGPL-3.0**（AGPL 第 13 条允许与 GPLv3 组合作品）。
+PSF-2.0、Unlicense、CC0。**本项目当前不含 AGPL 组件**（历史上的 PyMuPDF 依赖已移除）。
 
-### ⚠️ PyMuPDF 的 AGPL 影响
+### 已移除的 AGPL 组件（PyMuPDF → pypdfium2）
 
-`pymupdf` 采用 **AGPL-3.0 或 Artifex 商业许可**双许可。影响如下：
+**结论：本项目当前不含任何 AGPL 组件，无需履行 AGPL 第 13 条的源码提供义务。**
 
-1. **分发二进制 / 镜像时**：AGPL 要求向接收者提供完整对应源码。Linkora 本身即以 GPL-3.0
-   开源，此项自然满足——请确保分发时一并附上仓库源码与 LICENSE。
-2. **作为网络服务提供时**：AGPL 第 13 条要求**通过网络交互使用的用户有权获得源码**。
-   GPL 不因「只提供服务、不分发」而触发，**AGPL 会**。因此以 Linkora 对外提供服务的部署方，
-   须向使用者提供（或明示获取方式）完整源码。
-3. **若无法接受 AGPL**：可向 [Artifex](https://artifex.com/licensing/) 购买 PyMuPDF 商业许可，
-   或替换 PDF 解析实现（`pypdfium2` / `pdfplumber`，均为宽松许可）后移除该依赖。
+早期版本的 PDF 页面渲染依赖 `PyMuPDF`（AGPL-3.0 或 Artifex 商业双许可）。AGPL §13 的关键
+影响在于：**以网络服务形式提供时，AGPL 要求向使用者提供源码**（GPL 不会因「只提供服务、
+不分发」而触发，AGPL 会）。
+
+本项目已将其替换为 [`pypdfium2`](https://github.com/pypdfium2-team/pypdfium2)
+（Apache-2.0 / BSD-3-Clause）：渲染语义等价（`page.render(scale=300/72)` 与
+`get_pixmap(dpi=300)` 同为 72 DPI 基准），且 `pypdfium2` 原本已是 `pdfplumber` 的传递依赖，
+**替换未引入任何新增依赖**，反而净减少一个直接依赖。
+
+> 逐条清单与版本对照见仓库
+> [THIRD_PARTY_NOTICES.md 第 7.2 节](https://github.com/0x0021/Linkora/blob/main/THIRD_PARTY_NOTICES.md#72-已移除的-agpl-组件pymupdf--pypdfium2-替换记录)。
 
 ### CC BY 4.0 署名（Font Awesome）
 
@@ -117,7 +121,6 @@ Font Awesome Free 的**图标**采用 CC BY 4.0，署名是硬性要求。任何
 | 许可证 | 全文地址 |
 | --- | --- |
 | GPL-3.0 | https://www.gnu.org/licenses/gpl-3.0.txt |
-| AGPL-3.0 | https://www.gnu.org/licenses/agpl-3.0.txt |
 | Apache-2.0 | https://www.apache.org/licenses/LICENSE-2.0 |
 | MIT | https://opensource.org/license/mit |
 | BSD-2-Clause | https://opensource.org/license/bsd-2-clause |

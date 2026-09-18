@@ -35,7 +35,10 @@ rapidocr-onnxruntime==1.2.3
 # 缺失会让「从 URL 导入知识库」直接 500。
 beautifulsoup4==4.15.0
 pdfplumber==0.11.10
-pymupdf==1.28.2
+# pypdfium2：扫描版 PDF 的页面渲染（→ RapidOCR）。替代原 PyMuPDF（AGPL-3.0，
+# 对外提供网络服务会触发第 13 条源码提供义务）。它同时是 pdfplumber 的传递
+# 依赖，此处显式钉版，避免上游更换渲染引擎后 src/tools/parse_document.py 静默失效。
+pypdfium2==5.13.0
 python-pptx==1.0.2
 python-docx==1.2.0
 pytesseract==0.3.13

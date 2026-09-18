@@ -16,6 +16,39 @@ from src.tools.parse_document import (
 )
 
 
+def _make_minimal_pdf(path: str, text: str = "Hello OCR 12345") -> None:
+    """生成一个最小合法单页 PDF（含正确 xref），供 PDF 解析测试使用。
+
+    刻意不依赖任何 PDF 生成库（此前用 PyMuPDF，已因 AGPL 许可替换为
+    pypdfium2 渲染路径）。PDF 结构为手写字节串，仅依赖 PDF 规范本身。
+    """
+    content = f"BT /F1 24 Tf 20 100 Td ({text}) Tj ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n"
+        + content + b"\nendstream",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for idx, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{idx} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref_offset = len(out)
+    size = len(objects) + 1
+    out += f"xref\n0 {size}\n".encode() + b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += (
+        f"trailer\n<< /Size {size} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    ).encode()
+    Path(path).write_bytes(bytes(out))
+
+
 # ============================================================================
 # _is_noise_line
 # ============================================================================
@@ -507,11 +540,7 @@ class TestParseImage:
             assert result == "OCR result"
 
     def test_parse_pdf_ocr_handles_engine_error(self, parser):
-        """OCR 引擎在页面处理中抛异常时应优雅降级返回空，且 doc 被关闭（P2-13 try/finally）。"""
-        try:
-            import fitz as _fitz
-        except ImportError:
-            pytest.skip("PyMuPDF 不可用")
+        """OCR 引擎在页面处理中抛异常时应优雅降级返回空，且文档被关闭（P2-13 try/finally）。"""
         parser._ocr_available = True
         parser._ocr_engine = MagicMock()
         import tempfile as _tf
@@ -519,10 +548,7 @@ class TestParseImage:
         tmp = _tf.NamedTemporaryFile(suffix=".pdf", delete=False)
         tmp_path = tmp.name
         tmp.close()
-        doc = _fitz.open()
-        doc.new_page()
-        doc.save(tmp_path)
-        doc.close()
+        _make_minimal_pdf(tmp_path)
         try:
             with patch.object(parser, "_ocr_engine", side_effect=RuntimeError("ocr boom")):
                 result = parser._parse_pdf_ocr(tmp_path)
@@ -532,3 +558,73 @@ class TestParseImage:
                 _os.unlink(tmp_path)
             except OSError as _e:
                 _ = _e  # 测试清理：忽略删除临时文件异常
+
+    def test_render_pdf_page_png_yields_png_at_300dpi(self):
+        """渲染出的字节应为 PNG；300 DPI 下 300x200pt 页面约 1250x834 px。
+
+        回归点：此前用 PyMuPDF（AGPL），现用 pypdfium2，渲染语义必须等价。
+        """
+        import tempfile as _tf
+        import os as _os
+
+        pypdfium2 = pytest.importorskip("pypdfium2")
+        tmp = _tf.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+        _make_minimal_pdf(tmp_path)
+        try:
+            pdf = pypdfium2.PdfDocument(tmp_path)
+            try:
+                page = pdf[0]
+                try:
+                    data = DocumentParser._render_pdf_page_png(page)
+                finally:
+                    page.close()
+            finally:
+                pdf.close()
+            assert data[:8] == b"\x89PNG\r\n\x1a\n", "应为合法 PNG 字节流"
+            from PIL import Image
+            import io
+
+            img = Image.open(io.BytesIO(data))
+            # scale = 300/72 ≈ 4.1667 → 300pt*4.1667=1250, 200pt*4.1667≈833.3
+            assert img.width == 1250
+            assert img.height in (833, 834)
+        finally:
+            try:
+                _os.unlink(tmp_path)
+            except OSError as _e:
+                _ = _e
+
+    def test_parse_pdf_ocr_feeds_png_to_engine(self, parser):
+        """_parse_pdf_ocr 应把渲染出的 PNG 交给 OCR 引擎，并带页码前缀返回文本。"""
+        import tempfile as _tf
+        import os as _os
+
+        pytest.importorskip("pypdfium2")
+        parser._ocr_available = True
+        seen = {}
+
+        def fake_engine(img_path):
+            seen["path"] = img_path
+            with open(img_path, "rb") as fh:
+                seen["magic"] = fh.read(8)
+            return ([[None, "识别到的文字"]], None)
+
+        parser._ocr_engine = fake_engine
+        tmp = _tf.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+        _make_minimal_pdf(tmp_path)
+        try:
+            result = parser._parse_pdf_ocr(tmp_path)
+            assert "[第 1 页]" in result
+            assert "识别到的文字" in result
+            assert seen["magic"] == b"\x89PNG\r\n\x1a\n"
+            # 临时图片应在处理后清理
+            assert not _os.path.exists(seen["path"])
+        finally:
+            try:
+                _os.unlink(tmp_path)
+            except OSError as _e:
+                _ = _e

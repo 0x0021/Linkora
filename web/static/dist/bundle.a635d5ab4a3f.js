@@ -1001,12 +1001,13 @@
             <i class="fa-regular fa-folder-open"></i>
             ${WINDOW_LABELS[currentWindow]||"\u4ECA\u65E5"}\u6682\u65E0\u5BF9\u8BDD\u6458\u8981<br>
             <span style="font-size:0.8rem;opacity:0.7">\u5BF9\u8BDD\u6458\u8981\u8C03\u5EA6\u5668\u751F\u6210\u6458\u8981\u540E\u5C06\u5728\u6B64\u5B9E\u65F6\u663E\u793A</span>
-        </div>`:`<div class="summary-list-compact">${e.map((t,s)=>{const n=escapeHtml(t.chat_name||t.chat_id||"\u672A\u77E5\u5BF9\u8BDD"),a=t.updated_at?formatTsLocal(t.updated_at,!1):"\u2014",i=t.covered_count!=null?t.covered_count:0,o=t.platform||"",l=PLATFORM_LABEL[o]||"",r=(t.summary||"").replace(/^【对话摘要】\s*/,"").trim().slice(0,60);return`
+        </div>`:`<div class="summary-list-compact">${e.map((t,s)=>{const n=escapeHtml(t.chat_name||t.chat_id||"\u672A\u77E5\u5BF9\u8BDD"),a=t.updated_at?formatTsLocal(t.updated_at,!1):"\u2014",i=t.covered_count!=null?t.covered_count:0,o=t.platform||"",l=PLATFORM_LABEL[o]||"",r=t.source==="display"?"\u5168\u91CF":t.source==="context"?"\u4E0A\u4E0B\u6587":"",c=(t.summary||"").replace(/^【对话摘要】\s*/,"").trim().slice(0,60);return`
         <div class="summary-item-compact">
             <span class="summary-item-name">${n}</span>
             ${l?`<span class="summary-tag summary-tag-platform">${l}</span>`:""}
             ${i?`<span class="summary-tag summary-tag-count">${i} \u6761</span>`:""}
-            <span class="summary-item-body">${escapeHtml(r)}${r.length>=60?"\u2026":""}</span>
+            ${r?`<span class="summary-tag summary-tag-source src-${t.source}">${r}</span>`:""}
+            <span class="summary-item-body">${escapeHtml(c)}${c.length>=60?"\u2026":""}</span>
             <span class="summary-time">${a}</span>
         </div>`}).join("")}</div>`}async function loadSummariesPage(){const e=document.getElementById("summaries-body");if(e)try{const t=await api.fetch(`/api/summaries?limit=30&window=${currentWindow}&max_chars=2000`);if(!t||t.error){e.innerHTML.indexOf("summaries-error")===-1&&(e.innerHTML=`<div class="summaries-error">
                     <i class="fa-solid fa-triangle-exclamation"></i>

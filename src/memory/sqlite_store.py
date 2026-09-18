@@ -39,6 +39,7 @@ class ConversationSummaryRow:
     generation: int
     created_at: str
     updated_at: str
+    boundary_ts: str = ""
 
 
 _with_index_lock = with_index_lock  # 兼容别名

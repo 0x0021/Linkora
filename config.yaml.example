@@ -459,6 +459,14 @@ memory:
       max_messages_per_chat: 100                   # 未摘要消息数达上限 → 立即摘要（防无限增长）
       max_age_hours: 24                            # 距上次摘要超过该时长且有新内容 → 刷新
       scan_days: 7                                 # 扫描最近 N 天内有更新的会话
+    display:                                         # 展示用全量摘要：专供 Web「对话摘要」页（与 H2-A/动态摘要解耦）
+      enabled: true                                  # 是否启用；关闭则页面回退读 H2-A/动态摘要表
+      check_interval_seconds: 120                    # 轻量评估心跳（秒），仅做 DB 查询、不调 LLM
+      min_messages: 4                                # 会话消息数下限（不足则不生成展示摘要）
+      display_limit: 40                              # 收集「近期全量消息」的窗口上限（覆盖整段对话，而非仅 older 段）
+      interval_hours: 2                              # 同一会话两次展示摘要的最小间隔（小时）
+      freshness_seconds: 1800                        # 已有覆盖充分的展示摘要在此时长内视为新鲜、跳过重摘要
+      scan_days: 7                                   # 扫描最近 N 天内有更新的会话
 
   # 向量索引（F18 RAG 检索规模化）：类型与幽灵向量自动清理
   vector_index_type: flat                           # flat=精确暴力检索(默认)；hnsw=近似检索，规模增长时提速显著

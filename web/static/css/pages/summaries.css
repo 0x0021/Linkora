@@ -624,8 +624,20 @@
     color: #059669;
     border-color: rgba(16, 185, 129, 0.2);
 }
+.summary-tag-source {
+    background: rgba(34, 211, 238, 0.1);
+    color: #0e7490;
+    border-color: rgba(34, 211, 238, 0.25);
+}
+.summary-tag-source.src-context {
+    background: rgba(245, 158, 11, 0.1);
+    color: #b45309;
+    border-color: rgba(245, 158, 11, 0.25);
+}
 [data-theme="dark"] .summary-tag-platform { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.3); }
 [data-theme="dark"] .summary-tag-count    { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3); }
+[data-theme="dark"] .summary-tag-source      { background: rgba(34, 211, 238, 0.18); color: #67e8f9; border-color: rgba(34, 211, 238, 0.3); }
+[data-theme="dark"] .summary-tag-source.src-context { background: rgba(245, 158, 11, 0.18); color: #fcd34d; border-color: rgba(245, 158, 11, 0.3); }
 .summary-tag i { font-size: 0.6rem; }
 
 .summary-text {

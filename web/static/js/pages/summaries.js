@@ -196,12 +196,15 @@ function renderSummaryList(items) {
         const cnt = it.covered_count != null ? it.covered_count : 0;
         const platform = it.platform || '';
         const platformLabel = PLATFORM_LABEL[platform] || '';
+        // source=display 表示覆盖整段近期对话的「全量摘要」；context 表示仅 older 段的上下文摘要
+        const sourceLabel = it.source === 'display' ? '全量' : (it.source === 'context' ? '上下文' : '');
         const summaryText = (it.summary || '').replace(/^【对话摘要】\s*/, '').trim().slice(0, 60);
         return `
         <div class="summary-item-compact">
             <span class="summary-item-name">${name}</span>
             ${platformLabel ? `<span class="summary-tag summary-tag-platform">${platformLabel}</span>` : ''}
             ${cnt ? `<span class="summary-tag summary-tag-count">${cnt} 条</span>` : ''}
+            ${sourceLabel ? `<span class="summary-tag summary-tag-source src-${it.source}">${sourceLabel}</span>` : ''}
             <span class="summary-item-body">${escapeHtml(summaryText)}${summaryText.length >= 60 ? '…' : ''}</span>
             <span class="summary-time">${time}</span>
         </div>`;

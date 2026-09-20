@@ -194,3 +194,24 @@ def resolve_account_id(platform: str, fallback_corp_id: Optional[str] = None) ->
 def invalidate_cache() -> None:
     """清空缓存（re-login / 配置变更后调用，强制下次重新探测）。"""
     _CACHE.clear()
+
+
+def identity_is_confident(account_id: str) -> bool:
+    """身份键是否携带**真实账号成分**（区别于兜底键）。
+
+    本函数服务于「破坏性操作前的 fail-closed 判断」：启动期孤儿会话库扫描会按
+    ``conv_db_path()`` 推导活跃库路径并回收"孤儿图片"，一旦身份解析退化成兜底键，
+    推导出的路径与磁盘上的真实分库名不匹配 → 全部活跃库被判成孤儿 → 活跃账号图片
+    被误删（2026-09-01 事故的第二种形态）。因此调用方在身份不确定时必须**停手**。
+
+    判定规则：
+      - 空串 → 不确定；
+      - ``<platform>:unknown``（feishu / dingtalk 探测失败兜底）→ 不确定；
+      - 裸平台名（wecom 找不到配置文件的兜底 ``"wecom"``）→ 不确定（无账号成分）；
+      - 其余 ``<platform>:<账号成分>`` → 确定。
+    """
+    if not account_id:
+        return False
+    if account_id.endswith(":unknown"):
+        return False
+    return ":" in account_id

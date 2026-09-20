@@ -450,17 +450,24 @@ class MemoryMixin(EngineMixinBase):
         清理链路（按 ``ctx.store``）扫不到 → 图片永久累积。
 
         逻辑（实现见 ``src.platform.orphan_cleanup``）：
-        1) 列目录，剔除活跃平台库（``self.platforms`` 的 ``store.db_path``）与备份类文件；
+        1) 列目录，剔除活跃平台库（``self.platforms`` 的 ``store.conv_db_path``）与备份类文件；
         2) 对每个孤儿库只读打开，按真实 ``tmp_images`` 根回收其引用的孤儿图片；
         3) 记 INFO 汇总（孤儿库名 + 回收图片数），**不删除孤儿库本身**（保留决策空间）。
 
-        活跃集为空时跳过回收（安全起见，避免误删活跃账号图片）。
+        两层 fail-closed 护栏（破坏性操作，宁可漏收不可误删）：
+        - **活跃集为空**时跳过回收（避免把全部库当孤儿）；
+        - **身份不确定**时跳过回收：任一模活跃平台解析出兜底身份键
+          （``<platform>:unknown`` / 裸平台名，``account_identity.identity_is_confident``
+          为假）→ 推导出的活跃库路径与磁盘真实分库名不匹配 → 全部活跃库会被误判为
+          孤儿并删图（2026-09-01 事故的第二种形态）。此时整轮停手，仅告警。
         """
+        from src.memory import account_identity
         from src.paths import data_path
         from src.platform.orphan_cleanup import scan_and_reclaim_orphan_tmp_images
 
         conv_dir = data_path("conversations")
         active_paths: set[str] = set()
+        uncertain: list[str] = []
         for pid, ctx in self.platforms.items():
             store = getattr(ctx, "store", None)
             # 必须用会话分库真实路径（conv_db_path），而非全局主库 db_path；
@@ -471,8 +478,26 @@ class MemoryMixin(EngineMixinBase):
                     active_paths.add(store.conv_db_path(pid))
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("[孤儿库扫描] 计算平台 %s 活跃会话库路径失败（跳过该平台）: %s", pid, exc)
+                    continue
+                # 身份可信度：与 conv_db_path 内部同一解析入口（均不带 fallback_corp_id），
+                # 保证「用于推导路径的身份」与「此处判定的身份」完全一致。
+                try:
+                    aid = account_identity.resolve_account_id(pid)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[孤儿库扫描] 解析平台 %s 账号身份失败: %s", pid, exc)
+                    uncertain.append(f"{pid}=<解析异常>")
+                    continue
+                if not account_identity.identity_is_confident(aid):
+                    uncertain.append(f"{pid}={aid}")
         if not active_paths:
             logger.info("[孤儿库扫描] 活跃平台集为空，跳过 tmp_images 回收（安全起见）")
+            return
+        if uncertain:
+            logger.warning(
+                "[孤儿库扫描] 平台身份未确定（%s），跳过 tmp_images 回收"
+                "（fail-closed：避免把活跃库误判为孤儿后删图）",
+                ", ".join(uncertain),
+            )
             return
 
         orphan_names, reclaimed = scan_and_reclaim_orphan_tmp_images(

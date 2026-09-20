@@ -937,6 +937,23 @@ function applyRealtimeLogs(data) {
     lastLogId = logs[logs.length - 1].id;
 }
 
+// ============ Phase 2 质量护栏：暴露确定性渲染函数到 window.Linkora ============
+// 这些函数都是「数据 → DOM」的纯渲染逻辑（不含 api 取数 / canvas / 多服务依赖），
+// 是回归风险最高、也最适合真实 DOM 测试的部分。经典 <script> 环境下它们本就是全局函数，
+// app.js 直接按名调用；此桥接仅为单元测试真实 DOM 断言与未来 ESM 化做准备，
+// 对线上运行行为零影响。loadDashboardData / renderMessageTrendChart 含 canvas+多依赖，不在此暴露。
+if (typeof window !== 'undefined') {
+    window.Linkora = window.Linkora || {};
+    Object.assign(window.Linkora, {
+        renderMsgTypeChart,
+        renderHeroSparkline,
+        renderTopSenders,
+        renderWordCloud,
+        renderLogItem,
+        renderLogLine,
+    });
+}
+
 
 
 

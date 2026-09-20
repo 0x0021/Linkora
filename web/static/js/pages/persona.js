@@ -1041,6 +1041,12 @@ if (sample) {
 
   window.loadPersonaPage = loadPersonaPage;
 
+  // 暴露确定性渲染函数到命名空间，便于单元测试（延续 Phase 2 护栏；不改运行行为）
+  window.Linkora = window.Linkora || {};
+  window.Linkora.renderStatus = renderStatus;
+  window.Linkora.renderQuality = renderQuality;
+  window.Linkora.renderSource = renderSource;
+
   // 订阅全局平台变化（initPlatformSwitcher 切换时触发），保证 persona 页跟着隔离刷新
   if (window.store && typeof window.store.subscribe === 'function') {
     window.store.subscribe('platform', _onPlatformChange);

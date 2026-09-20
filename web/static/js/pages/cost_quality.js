@@ -254,3 +254,8 @@ async function exportCostQualityCSV() {
         showToast('导出失败：' + (e && e.message ? e.message : e), 'error');
     }
 }
+
+// 暴露纯格式化函数到命名空间，便于单元测试（延续 Phase 2 护栏；不改运行行为）
+window.Linkora = window.Linkora || {};
+window.Linkora.cqFmtPct = cqFmtPct;
+window.Linkora.cqFmtCostCny = cqFmtCostCny;

@@ -6,10 +6,14 @@
 
 本模块在启动期一次性扫描并回收这部分孤儿图片：
 - 跳过活跃平台库（``db_path`` ∈ ``active_db_paths``）与备份类文件；
+- **保护集**：活跃库引用的图片即便同时被孤儿库引用也不回收（跨库共享路径）；
 - 对每个孤儿库只读打开，取 ``messages.image_path`` 引用的本地图片，按真实
   ``tmp_images`` 根回收；
 - **不删除孤儿库本身**（保留设计决策，待显式处理）；
 - 单库异常不影响其余库。
+
+调用方（``MemoryMixin._scan_orphan_conversation_dbs``）另有一层 fail-closed 护栏：
+任一模活跃平台账号身份解析不确定时整轮跳过回收（详见该方法 docstring）。
 """
 from __future__ import annotations
 
@@ -55,6 +59,25 @@ def collect_orphan_image_paths(db_path: Path) -> list[str]:
     return sorted(rels)
 
 
+def collect_active_image_paths(active_db_paths: set[str]) -> set[str]:
+    """收集 **活跃库** 引用的全部 ``messages.image_path``（跨库保护集）。
+
+    同一张图片可能同时被活跃库与孤儿库引用（账号迁移 / 复制库残留）。若仅按孤儿库
+    的引用来删，会把活跃账号仍在用的图片一并删掉——这正是 2026-09-01 事故的第二种
+    形态（除"活跃集算错"外的残留风险）。因此回收前先算出活跃库的保护集，命中即跳过。
+    """
+    protected: set[str] = set()
+    for db_path in active_db_paths:
+        p = Path(db_path)
+        if not p.is_file():
+            continue
+        try:
+            protected.update(collect_orphan_image_paths(p))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("读取活跃库图片引用失败（保护集可能不完整）: %s | %s", p.name, e)
+    return protected
+
+
 def scan_and_reclaim_orphan_tmp_images(
     conversations_dir: str | Path,
     active_db_paths: set[str],
@@ -67,6 +90,7 @@ def scan_and_reclaim_orphan_tmp_images(
     - 活跃库（``db_path`` ∈ ``active_db_paths``，比较时均 resolve）跳过；
     - 备份类文件名跳过；
     - 每个孤儿库只读收集 ``messages.image_path``，按 ``tmp_images_root`` 回收；
+    - **跨库保护集**：活跃库引用的图片一律不回收（即使孤儿库也引用它）；
     - 不删除孤儿库本体。单库异常仅告警并跳过。
     """
     from src.memory.image_cleanup import purge_orphan_images
@@ -75,6 +99,8 @@ def scan_and_reclaim_orphan_tmp_images(
     if not conv_dir.exists():
         return [], 0
     active = {Path(p).resolve() for p in active_db_paths}
+    # 先算保护集：活跃库引用的图片在本轮回收中一律跳过。
+    protected = collect_active_image_paths(active_db_paths)
     orphan_names: list[str] = []
     reclaimed = 0
     tmp_root = str(tmp_images_root)
@@ -87,7 +113,7 @@ def scan_and_reclaim_orphan_tmp_images(
             if _is_backup_name(db_file.name):
                 continue
             orphan_names.append(db_file.name)
-            rels = collect_orphan_image_paths(rp)
+            rels = [r for r in collect_orphan_image_paths(rp) if r not in protected]
             if rels:
                 reclaimed += purge_orphan_images(str(rp), rels, base_dir=tmp_root)
         except Exception as e:  # noqa: BLE001

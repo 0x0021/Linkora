@@ -30,6 +30,8 @@
  *          D6 防内联回流：模板内联 onclick 仅允许 1 处已知（灯箱背景关闭）
  *          D7 triggerClick 通用动作 + role=button 元素的 Enter/Space 键盘可达性
  *          D8 <a href="#"> 的默认 # 跳转被阻止（等价旧内联的 return false）
+ *          D9 图片 404 降级：/api/image/* 破图替换为 .img-unavailable 占位（幂等、
+ *             连 .chat-image-wrap 一并替换），外链图片与灯箱共享节点不得被改写
  *
  * jsdom 已知限制（已在下方 stub 掉，不算产品缺陷）：
  *   - 不执行 <script type="module">（drafts.js 是 module，故预置 no-op loadDraftsPage
@@ -582,6 +584,71 @@ try {
       '<a href="#"> 的默认 # 跳转被阻止（等价旧内联的 return false）',
       [hit === 1 ? '' : `action 未分发（hit=${hit}）`,
         defaultPrevented === true ? '' : `defaultPrevented=${defaultPrevented}`].filter(Boolean).join('；'));
+  }
+
+  // D9. 图片加载失败降级（app.js 捕获阶段 error 监听）：
+  //     本站图片接口（/api/image/*）破图须替换为 .img-unavailable 占位；
+  //     非本站图片（外链）不得被改写；灯箱共享节点不得被替换（否则灯箱链路崩）。
+  //     用例各自独立容器，避免一条失败污染其他断言的可读性。
+  {
+    const stage = w.document.createElement('div');
+    w.document.body.appendChild(stage);
+    const pane = () => {
+      const d = w.document.createElement('div');
+      stage.appendChild(d);
+      return d;
+    };
+    const mkImg = (src, parent) => {
+      const img = w.document.createElement('img');
+      img.setAttribute('src', src);
+      parent.appendChild(img);
+      return img;
+    };
+    // 真实浏览器里 404 由网络层触发 error；jsdom 不加载图片，故手动派发同型事件。
+    const fire = (el) => el.dispatchEvent(new w.Event('error'));
+    const countPh = (el) => el.querySelectorAll('.img-unavailable').length;
+
+    // 1) 本站 API 图片：应被降级为占位（img 本体被移除）
+    const p1 = pane();
+    const broken = mkImg('/api/image/dingtalk/ding9888ef577f7811cb/a/b/ocr_x.png?w=320&fmt=webp', p1);
+    fire(broken);
+    const degraded = countPh(p1) === 1 && !broken.isConnected;
+    fire(broken);  // 2) 幂等：重复 error 不应产生第二个占位
+    const idempotent = countPh(p1) === 1;
+
+    // 3) 外链图片：不属本站图片接口 → 不得改写
+    const p3 = pane();
+    const ext = mkImg('https://example.com/x.png', p3);
+    fire(ext);
+    const extUntouched = ext.isConnected && countPh(p3) === 0;
+
+    // 4) 对话图包裹层：img 被 .chat-image-wrap 包着时应连包裹层一起替换，不留空边框盒子
+    const p4 = pane();
+    const wrap = w.document.createElement('div');
+    wrap.className = 'chat-image-wrap';
+    p4.appendChild(wrap);
+    const wrapped = mkImg('/api/image/dingtalk/a/b/c/ocr_y.png', wrap);
+    fire(wrapped);
+    const wrapOk = countPh(p4) === 1 && !wrap.isConnected;
+
+    // 5) 灯箱共享节点：即便 src 命中图片接口也不得替换（openImageLightbox 依赖它）
+    const lb = w.document.getElementById('image-lightbox-img');
+    let lbOk = true;
+    if (lb) {
+      lb.setAttribute('src', '/api/image/dingtalk/smoke/none/ocr_z.png');
+      fire(lb);
+      lbOk = w.document.getElementById('image-lightbox-img') === lb;
+      lb.removeAttribute('src');
+    }
+
+    stage.remove();
+    const bad = [];
+    if (!degraded) bad.push('本站破图未降级');
+    if (!idempotent) bad.push('未幂等（重复 error 产生多个占位）');
+    if (!extUntouched) bad.push('外链图片被误改写');
+    if (!wrapOk) bad.push('对话图包裹层未一并替换');
+    if (!lbOk) bad.push('灯箱共享节点被替换');
+    check(bad.length === 0, '图片 404 降级为占位（本站图片降级 / 外链不动 / 灯箱保护）', bad.join('；'));
   }
 } catch (e) {
   failures.push('交互冒烟异常: ' + (e && e.message ? e.message : e));

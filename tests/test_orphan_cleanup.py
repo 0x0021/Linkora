@@ -11,6 +11,7 @@ from pathlib import Path
 
 from src.platform.orphan_cleanup import (
     _is_backup_name,
+    collect_active_image_paths,
     collect_orphan_image_paths,
     scan_and_reclaim_orphan_tmp_images,
 )
@@ -146,6 +147,11 @@ def test_scan_orphan_method_excludes_active_conv_db(tmp_path, monkeypatch):
     import src.paths as paths_mod
 
     monkeypatch.setattr(paths_mod, "data_path", lambda name: tmp_path / name)
+    # 身份可信度护栏会解析账号身份；CI 无 dws/lark-cli 时返回兜底键 → 整轮停手，
+    # 本用例要验证的是「活跃库排除」，故显式给出可信身份。
+    import src.memory.account_identity as ai_mod
+
+    monkeypatch.setattr(ai_mod, "resolve_account_id", lambda platform, fallback_corp_id=None: f"{platform}:confident")
 
     conv = tmp_path / "conversations"
     conv.mkdir(parents=True, exist_ok=True)
@@ -179,3 +185,102 @@ def test_scan_orphan_method_excludes_active_conv_db(tmp_path, monkeypatch):
     assert active_img.exists() and active_img2.exists()  # 活跃账号图片保留（回归点）
     assert not orphan_img.exists()  # 孤儿图片回收
     assert orphan_db.exists()  # 孤儿库本体不删
+
+
+# ── 跨库保护集 ────────────────────────────────────────────────────────────────
+
+def test_collect_active_image_paths_union(tmp_path):
+    a = tmp_path / "conversations" / "a.db"
+    b = tmp_path / "conversations" / "b.db"
+    _make_db(a, ["dingtalk/x/ocr_1.png", "dingtalk/x/ocr_2.png"])
+    _make_db(b, ["feishu/y/card_1.png"])
+    got = collect_active_image_paths({str(a), str(b), str(tmp_path / "missing.db")})
+    assert got == {
+        "dingtalk/x/ocr_1.png",
+        "dingtalk/x/ocr_2.png",
+        "feishu/y/card_1.png",
+    }
+
+
+def test_scan_protects_images_shared_with_active_db(tmp_path):
+    """回归：同一张图同时被活跃库与孤儿库引用时，**不得**因孤儿库的引用而删除。
+
+    这是 2026-09-01 事故「活跃集算错」之外的第二种形态：即便活跃集完全正确，只要
+    跨库存在共享 image_path（账号迁移 / 复制库残留就会产生），按孤儿库引用删仍会
+    打穿活跃账号的图。回收前必须先减去活跃库保护集。
+    """
+    conv = tmp_path / "conversations"
+    tmp_root = tmp_path / "tmp_images"
+    active_db = conv / "dingtalk__active.db"
+    orphan_db = conv / "dingtalk__orphan.db"
+    shared = "dingtalk/acct/chat/ocr_shared.png"
+    only_orphan = "dingtalk/acct/chat/ocr_orphan_only.png"
+
+    _make_db(active_db, [shared])
+    _make_db(orphan_db, [shared, only_orphan])
+
+    shared_img = _make_img(tmp_root, shared)
+    only_img = _make_img(tmp_root, only_orphan)
+
+    orphan_names, reclaimed = scan_and_reclaim_orphan_tmp_images(conv, {str(active_db)}, tmp_root)
+
+    assert orphan_names == ["dingtalk__orphan.db"]
+    assert shared_img.exists()  # 活跃库仍在引用 → 保护集命中，不删
+    assert not only_img.exists()  # 仅孤儿库引用 → 回收
+    assert reclaimed == 1
+
+
+# ── 身份不确定时停手（fail-closed）────────────────────────────────────────────
+
+def test_identity_is_confident_contract():
+    from src.memory.account_identity import identity_is_confident
+
+    assert identity_is_confident("dingtalk:ding9888ef577f7811cb")
+    assert identity_is_confident("feishu:cli_a1b2c3")
+    assert identity_is_confident("wecom:7f67711665a9a12f")
+    # 兜底键：不含真实账号成分
+    assert not identity_is_confident("dingtalk:unknown")
+    assert not identity_is_confident("feishu:unknown")
+    assert not identity_is_confident("wecom")  # 裸平台名兜底（未找到企微配置）
+    assert not identity_is_confident("")
+    assert not identity_is_confident(None)  # type: ignore[arg-type]
+
+
+def test_scan_method_skips_reclaim_when_identity_unknown(tmp_path, monkeypatch):
+    """身份解析退化成兜底键时必须整轮停手：此时推导的活跃库路径与磁盘真实分库名
+    不匹配，继续回收会把活跃账号图片全部删掉（2026-09-01 事故的成因路径）。"""
+    import src.memory.account_identity as ai_mod
+    import src.paths as paths_mod
+
+    monkeypatch.setattr(paths_mod, "data_path", lambda name: tmp_path / name)
+    monkeypatch.setattr(
+        ai_mod, "resolve_account_id",
+        lambda platform, fallback_corp_id=None: f"{platform}:unknown",
+    )
+
+    conv = tmp_path / "conversations"
+    conv.mkdir(parents=True, exist_ok=True)
+    tmp_root = tmp_path / "tmp_images"
+
+    # 身份不可信时 conv_db_path 会推导出一个磁盘上**不存在**的路径（公式用的是
+    # "<platform>:unknown" 的哈希），于是活跃集与真实分库名对不上。
+    class FakeStore:
+        db_path = str(tmp_path / "linkora.db")
+
+        def conv_db_path(self, platform, fallback_corp_id=None):
+            return str(conv / "dingtalk__unknown00000000.db")  # 故意不存在
+
+    active_img = _make_img(tmp_root, "dingtalk/acct/chat/active_ocr.png")
+    # 磁盘上的真实分库（名字与不可信身份推导出的路径不一致）
+    _make_db(conv / "dingtalk__realaccount11.db", ["dingtalk/acct/chat/active_ocr.png"])
+
+    from types import SimpleNamespace
+
+    from src.platform.memory import MemoryMixin
+
+    host = MemoryMixin()
+    host.platforms = {"dingtalk": SimpleNamespace(store=FakeStore())}
+
+    host._scan_orphan_conversation_dbs()
+
+    assert active_img.exists()  # 关键回归点：身份不可信 → 一张图都不许删

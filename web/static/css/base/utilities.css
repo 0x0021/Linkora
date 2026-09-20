@@ -146,3 +146,21 @@
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
+/* 图片加载失败降级占位（app.js 捕获 /api/image/ 的 img error 事件后替换）
+   —— 图片可能已被回收 / 磁盘缺失，避免整片"破图"图标；颜色随主题翻转。 */
+.img-unavailable {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 96px;
+    min-height: 64px;
+    padding: 8px 12px;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+    color: var(--text-tertiary);
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+    user-select: none;
+}

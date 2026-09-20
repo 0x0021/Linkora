@@ -950,6 +950,36 @@ function _lightboxEscHandler(e) {
 window.openImageLightbox = openImageLightbox;
 window.closeImageLightbox = closeImageLightbox;
 
+// ===== 图片加载失败降级：/api/image/ 破图替换为占位 =====
+// 背景：图片可能因历史回收事故 / 磁盘缺失而 404（本地图片已不在 tmp_images）。
+// 后端 404 是正确行为（不伪造图片），但前端仍会渲染出破图图标，一片狼藉。
+// 这里在捕获阶段监听全站 img 的 error，仅针对本站图片接口 src 做降级，
+// 避免影响任意第三方图片（外链挂了不该被我们改名）。
+(function () {
+    const FALLBACK_TEXT = '图片已不可用';
+    // 灯箱图（image-lightbox-img）不降级：它是共享节点，降级会破坏 openImageLightbox。
+    const SKIP_IDS = { 'image-lightbox-img': 1 };
+
+    document.addEventListener('error', function (e) {
+        const img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        if (img.dataset && img.dataset.imgDegraded === '1') return;  // 幂等
+        if (SKIP_IDS[img.id]) return;
+        const src = img.getAttribute('src') || '';
+        if (src.indexOf('/api/image/') === -1) return;
+        if (img.dataset) img.dataset.imgDegraded = '1';
+        const ph = document.createElement('span');
+        ph.className = 'img-unavailable';
+        ph.textContent = FALLBACK_TEXT;
+        if (img.getAttribute('alt')) ph.title = img.getAttribute('alt');
+        // 对话图的 img 被 .chat-image-wrap（带边框 + max-width）包着，只换 img 会
+        // 留下一个空边框盒子；此时连包裹层一起换掉。
+        const p = img.parentNode;
+        const target = (p && p.classList && p.classList.contains('chat-image-wrap')) ? p : img;
+        if (target.parentNode) target.parentNode.replaceChild(ph, target);
+    }, true);
+})();
+
 // ===== 工具：防抖（搜索框复用，减少请求与免费 LLM 限流风险）=====
 function debounce(fn, wait = 300) {
     let t;

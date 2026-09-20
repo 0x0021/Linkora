@@ -24,6 +24,11 @@ const api = window.api || new ApiClient();
     // 事件目标可能是文本节点外的元素；closest 仅在 Element 上可用
     const el = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
     if (!el) return;
+    // <a href="#"> 阻止默认的 # 跳转（URL 追加 #、可能滚回顶部）。
+    // 与旧内联 `onclick="switchPage('deadletters');return false;"` 的 return false
+    // 以及下方 a[data-page] 绑定的 e.preventDefault() 语义一致；
+    // 只对锚点生效，不触碰复选框等表单控件的原生切换逻辑。
+    if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
     const action = el.dataset.action;
     let args = [];
     if (el.dataset.args) {
@@ -38,13 +43,30 @@ const api = window.api || new ApiClient();
     }
     // 注意：此处不调用 e.preventDefault()。原内联 onclick 从不阻止默认行为，
     // 保留等价语义：复选框等表单控件仍按原生逻辑切换（否则 preventDefault 会让
-    // toggleAllKwSelect 读到未翻转的 checked）；<a href="#"> 的 # 跳转为历史既有行为，
-    // 后续可单独对锚点做 preventDefault 优化（需先验证无副作用）。
+    // toggleAllKwSelect 读到未翻转的 checked）。
     try { fn.apply(el, args); } catch (err) { console.error('[Linkora] action 执行失败:', action, err); }
   }
   document.addEventListener('click', dispatch, false);
 
+  // 键盘可达性：非原生按钮元素（<div role="button"> 等）以 Enter / Space 等价一次点击。
+  // 替代模板里散落的内联 onkeydown（如上传区 upload-area）——对所有同类元素通用。
+  // 原生 <button>/<a> 已自带 Enter/Space 激活，跳过以免重复触发。
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    const el = e.target && e.target.closest ? e.target.closest('[role="button"][data-action]') : null;
+    if (!el || el.tagName === 'BUTTON' || el.tagName === 'A') return;
+    e.preventDefault();
+    el.click();
+  }, false);
+
   L.register = function (name, fn) { L.actions[name] = fn; return fn; };
+
+  // 通用动作：触发同页某元素的 click（替代内联 document.getElementById('x').click()，
+  // 例如上传区/拖拽提示触发隐藏的 file input）
+  L.register('triggerClick', function (id) {
+    const t = document.getElementById(id);
+    if (t) t.click();
+  });
 
   // 聚合常用入口（保留 window.X 全部向后兼容）
   L.api = api;
@@ -588,7 +610,8 @@ async function init() {
     });
 
     // Bind any [data-page] link (e.g. in-page quick jump to a sidebar page)
-    document.querySelectorAll('a[data-page], .link-to-config[data-page]').forEach(item => {
+    // 注：原先还选择 `.link-to-config[data-page]`，但模板中该类名为 0 处（死代码，已收敛）。
+    document.querySelectorAll('a[data-page]').forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const page = item.dataset.page;

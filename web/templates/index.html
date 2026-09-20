@@ -1805,7 +1805,7 @@
                                     <label class="toggle" data-page-node-id="a3Xr1W0J8KoW3xq5ACm1MZ"><input type="checkbox" id="cfg-dlq-enabled" data-page-node-id="ONhbJeYElqxr6LcpJCea52"><span class="toggle-slider" data-page-node-id="qrLEI5u94PlOCm2HdDbB9F"></span></label>
                                     <span class="toggle-label" data-page-node-id="COnrtVStTep2Egx86m7SBp">失败消息落库而非丢弃</span>
                                 </div>
-                                <a href="#" onclick="switchPage('deadletters');return false;" style="font-size:13px;color:var(--brand-primary);text-decoration:none;font-weight:500;" data-page-node-id="hSQPrF7it7iJFm2ZEkbxxW">
+                                <a href="#" data-action="switchPage" data-args='["deadletters"]' style="font-size:13px;color:var(--brand-primary);text-decoration:none;font-weight:500;" data-page-node-id="hSQPrF7it7iJFm2ZEkbxxW">
                                     <i class="fa-solid fa-inbox" data-page-node-id="Tc5hI3MGU8a52b6CeDfOxM"></i> 管理死信
                                 </a>
                             </div>
@@ -3142,7 +3142,7 @@
                 <button class="modal-close" data-action="closeImportModal" data-args='[""]' data-page-node-id="JJEcNSCQt63eEwOp3NfrbA"><i class="fa-solid fa-xmark" data-page-node-id="zJ3DoBBX1HgRStR888QoB5"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="qn6e0xpxA01eV4XvSG32Iw">
-                <div class="upload-area" id="upload-area" role="button" tabindex="0" onclick="document.getElementById('import-file').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('import-file').click();}" data-page-node-id="qsxWsdzVXwdBAcbaAgSizE">
+                <div class="upload-area" id="upload-area" role="button" tabindex="0" data-action="triggerClick" data-args='["import-file"]' data-page-node-id="qsxWsdzVXwdBAcbaAgSizE">
                     <div class="upload-icon" data-page-node-id="3ygxIny9iaRYtWEbZqOC0Y"><i class="fa-solid fa-folder" data-page-node-id="olA1qj1oPHyIGbbxT832NW"></i></div>
                     <p data-page-node-id="gROPZE6eknBZVPsnKCo88V">点击或拖拽文件到此处上传</p>
                     <p class="hint" data-page-node-id="Ag4BuJrYRKpLoiz4GHEhFT">支持 JSON、CSV、TXT 格式</p>
@@ -3269,7 +3269,7 @@
                      ondragleave="handleDragLeave(event)"
                      ondrop="handleDrop(event)" data-page-node-id="fK68SHLpuGdJjHHDECjLqu">
                     <div class="upload-icon" data-page-node-id="QbDF7AJ6XoIhoQMiKsrcC9"><i class="fa-solid fa-folder-open" data-page-node-id="hvKyYDJI59w6u3eF0d5lSZ"></i></div>
-                    <p data-page-node-id="oyVacKCbourHxZTep492bK">拖拽文件到此处，或 <span class="link" onclick="document.getElementById('batch-file-input').click()" data-page-node-id="LwGDeFcC2bf53OtGC5i4Dv">点击选择</span></p>
+                    <p data-page-node-id="oyVacKCbourHxZTep492bK">拖拽文件到此处，或 <span class="link" data-action="triggerClick" data-args='["batch-file-input"]' data-page-node-id="LwGDeFcC2bf53OtGC5i4Dv">点击选择</span></p>
                     <p class="text-muted" data-page-node-id="VjY73aPRU6l8BFshWcepu9">支持 .txt, .md, .markdown, .pdf, .ppt, .pptx, .doc, .docx, .html, .htm, 图片(.png/.jpg)</p>
                     <input type="file" id="batch-file-input" multiple accept=".txt,.md,.markdown,.pdf,.ppt,.pptx,.doc,.docx,.html,.htm,.png,.jpg,.jpeg,.bmp" onchange="handleBatchFileSelect(event)" data-page-node-id="EUeUX6OXCPnLDbSFyjpEur">
                 </div>
@@ -3614,7 +3614,7 @@
         <div class="modal-content modal-lg" data-page-node-id="XkJlEL2dwAOy5KfWUn7YP4">
             <div class="modal-header" data-page-node-id="CryFZXmkzWhXuGg56Km860">
                 <h3 data-page-node-id="NvuqC2E3Hq6kOriYFtP17E"><i class="fa-solid fa-pen-to-square" data-page-node-id="TYXGOkguy3VkmqTh6B5n9i"></i> 编辑 AI 拟回复 — 草稿 <span id="draft-edit-id" data-page-node-id="pjOLyifCw57fYrLyFti8ea">#0</span></h3>
-                <button class="modal-close" data-action="_draftCloseEditModal" data-args='[""]' data-page-node-id="FHykxSgz3KhYlwd1K76NNr"><i class="fa-solid fa-xmark" data-page-node-id="YKU8VuzMyfSfENdmEnVBQD"></i></button>
+                <button class="modal-close" data-action="closeDraftEditModal" data-args='[]' data-page-node-id="FHykxSgz3KhYlwd1K76NNr"><i class="fa-solid fa-xmark" data-page-node-id="YKU8VuzMyfSfENdmEnVBQD"></i></button>
             </div>
             <div class="draft-edit-modal-body" data-page-node-id="w9KSPhFZJ9wVHb7QrvhooY">
                 <label data-page-node-id="jcZj8KSFpOTZGAOXclo3Cz">修改回复内容后发送：</label>
@@ -3624,7 +3624,7 @@
                 </p>
             </div>
             <div class="modal-footer" data-page-node-id="Cx7Jl7Zxql3bAasQnEBAOq">
-                <button class="btn btn-outline-secondary" data-action="_draftCloseEditModal" data-args='[""]' data-page-node-id="JTx6FwcbFAmhJFFrZHu4n8">取消</button>
+                <button class="btn btn-outline-secondary" data-action="closeDraftEditModal" data-args='[]' data-page-node-id="JTx6FwcbFAmhJFFrZHu4n8">取消</button>
                 <button class="btn btn-primary" id="draft-edit-submit-btn" data-action="_draftSubmitEdit" data-args='[""]' data-page-node-id="WD2VCYv8btgSxdFgn7EuF8">
                     <i class="fa-solid fa-paper-plane" data-page-node-id="cm4EXP5awykbILGAERWAKo"></i> 编辑并发送
                 </button>

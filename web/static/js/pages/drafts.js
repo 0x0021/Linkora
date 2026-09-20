@@ -128,7 +128,11 @@ function _draftShowEditModal(id) {
     }, 100);
 }
 
-function _draftCloseEditModal() {
+// 函数名必须以 close 开头：app.js 的全局模态框 a11y 层用
+// `[data-action^="close"]` 查找关闭按钮（挂 role/aria-modal、补 aria-label="关闭"、
+// Esc 与遮罩点击时点击它）。名字若不匹配，该弹窗会退化成「只被摘掉 .active 的
+// fallback 关闭」——不执行下面的 _draftEditId = null，留下编辑态残留。
+function closeDraftEditModal() {
     document.getElementById('draft-edit-modal').classList.remove('active');
     _draftEditId = null;
 }
@@ -146,7 +150,7 @@ async function _draftSubmitEdit() {
         const res = await api.fetch('/api/drafts/' + _draftEditId + '/edit', 'POST', { final_reply: text });
         if (res && res.success) {
             showToast('\u8349\u7a3f #' + _draftEditId + ' \u5df2\u7f16\u8f91\u5e76\u53d1\u9001', 'success');
-            _draftCloseEditModal();
+            closeDraftEditModal();
             loadDraftsPage();
         } else {
             showToast((res && res.detail) || (res && res.error) || '\u7f16\u8f91\u53d1\u9001\u5931\u8d25', 'error');
@@ -368,7 +372,7 @@ export function init() {
 
 export function cleanup() {
     _draftCollapseExpand();
-    _draftCloseEditModal();
+    closeDraftEditModal();
     _draftStatus = 'all';
     _draftPage = 1;
     _draftExpandedId = null;
@@ -385,7 +389,7 @@ window._draftToggleExpand = _draftToggleExpand;
 window._draftApprove = _draftApprove;
 window._draftDiscard = _draftDiscard;
 window._draftShowEditModal = _draftShowEditModal;
-window._draftCloseEditModal = _draftCloseEditModal;
+window.closeDraftEditModal = closeDraftEditModal; // 名字须以 close 开头，见函数上方注释
 window._draftSubmitEdit = _draftSubmitEdit;
 
 // ===================== 批量操作 =====================

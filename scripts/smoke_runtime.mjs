@@ -19,17 +19,21 @@
  *          init() 在赋值处中断 → 后续 window.loadDashboard/loadMessages 全部缺失，
  *          护栏退化成"在半个 app 上断言"）
  *   C. 页面遍历：17 个页面逐个切换，页容器须激活，且不得产生新的运行时错误
- *   D. 交互冒烟（真点 Phase 0 迁移后的控件）：
+ *   D. 交互冒烟（真点迁移后的控件）：
  *          D1 tab 按钮 data-args 与自身 data-tab 一致 + 点击后自激活（抓参数错配）
- *          D2 弹窗 a11y 契约：含关闭钮的弹窗其关闭钮必须带 aria-label
- *             （= [data-action^=close] 选择器迁移是否生效的精确探针）
+ *          D2 **全部**弹窗均须含 [data-action^="close"] 关闭钮且带 aria-label
+ *             （前一条是硬契约：名字不以 close 开头会退化成"只摘 .active 的 fallback 关闭"，
+ *              不执行弹窗自身的关闭逻辑；后一条是选择器迁移是否生效的精确探针）
  *          D3 同步中心「点入口打开 → Esc 关闭」真实往返 + 全站弹窗 Esc 关闭
  *          D4 全站弹窗关闭钮直点可关闭
  *          D5 全选复选框：@el 间接引用生效且未被 preventDefault 回滚
-
+ *          D6 防内联回流：模板内联 onclick 仅允许 1 处已知（灯箱背景关闭）
+ *          D7 triggerClick 通用动作 + role=button 元素的 Enter/Space 键盘可达性
+ *          D8 <a href="#"> 的默认 # 跳转被阻止（等价旧内联的 return false）
  *
  * jsdom 已知限制（已在下方 stub 掉，不算产品缺陷）：
- *   - 不执行 <script type="module">（drafts.js 用 module，故预置 no-op loadDraftsPage）
+ *   - 不执行 <script type="module">（drafts.js 是 module，故预置 no-op loadDraftsPage
+ *     与 closeDraftEditModal 替身）
  *   - 无 canvas 2D 实现（getContext 返回替身；Chart.js 亦替身，不测图表绘制）
  *
  * 退出码：0 通过；1 失败（CI 可当门禁）。
@@ -144,6 +148,16 @@ const dom = new JSDOM(html, {
     //    ReferenceError 并**中断整个 init()** → 其后半段的 window.loadDashboard /
     //    loadMessages / syncHistory 等全部不暴露，护栏就退化成"在半个 app 上断言"。
     w.loadDraftsPage = () => {};
+
+    // ①b 同上（drafts.js 提供的弹窗关闭动作）。按其真实实现（pages/drafts.js:closeDraftEditModal）
+    //    等价替代：摘掉 .active 并重置编辑态。若不预置，draft-edit-modal 的关闭钮会走到
+    //    委托的「未找到 action 处理器」分支 → 弹窗关不掉，D2/D3/D4 断言会（正确地）失败。
+    //    断言的链路（a11y 查 [data-action^=close] → 委托分发 → 弹窗关闭）全是真的，
+    //    只有最终关闭函数的实现体是替身——这是 jsdom 不执行 module 的既有妥协，非护栏放水。
+    w.closeDraftEditModal = () => {
+      const m = w.document.getElementById('draft-edit-modal');
+      if (m) m.classList.remove('active');
+    };
 
     // ② 浏览器能力替身
     w.matchMedia = w.matchMedia || (() => ({
@@ -368,26 +382,27 @@ try {
     `全部 ${tabCount} 个 tab 按钮：参数与自身 data-tab 一致且点击后自激活`,
     tabProblems.length ? tabProblems.slice(0, 3).join('；') : '');
 
-  // D2. 弹窗 a11y 契约：每个带关闭钮的弹窗，其关闭钮都必须带 aria-label。
-  //     这是「a11y 选择器由 [onclick^=close] 迁到 [data-action^=close] 是否生效」的精确探针——
-  //     选择器若退回旧写法，所有 aria-label 都会消失（旧属性已不存在）。
-  const MODALS_WITHOUT_CLOSE = new Set(['draft-edit-modal']); // 遗留命名 _draftCloseEditModal（不以 close 开头）
+  // D2. 弹窗 a11y 契约：**每个**弹窗都必须有 [data-action^="close"] 关闭钮，且该钮带 aria-label。
+  //     前一条是硬契约——app.js 的 a11y 层靠这个选择器挂 role/aria-modal、补 aria-label，
+  //     并在 Esc / 遮罩点击时点它。名字不以 close 开头（如历史遗留的 _draftCloseEditModal）
+  //     会让该弹窗退化成"只被摘掉 .active 的 fallback 关闭"，不执行自身的关闭逻辑。
+  //     后一条是「a11y 选择器由 [onclick^=close] 迁到 [data-action^=close] 是否生效」的精确探针。
   const modals = Array.from(w.document.querySelectorAll('.modal'));
-  let labelled = 0;
-  const unlabelled = [];
   const noClose = [];
+  const unlabelled = [];
   for (const m of modals) {
     const btn = m.querySelector('[data-action^="close"]');
-    if (!btn) { noClose.push(m.id); continue; }
-    if (btn.getAttribute('aria-label')) labelled++; else unlabelled.push(m.id);
+    const id = m.id || '(无 id)';
+    if (!btn) { noClose.push(id); continue; }
+    if (!btn.getAttribute('aria-label')) unlabelled.push(id);
   }
   check(modals.length >= 19, `.modal 数量符合预期（${modals.length}）`);
-  check(labelled >= 18 && unlabelled.length === 0,
-    '含关闭钮的弹窗均已获 aria-label（a11y 选择器迁移生效）',
-    unlabelled.length ? `未标注: ${unlabelled.join(',')}` : `${labelled} 个`);
-  const unexpectedNoClose = noClose.filter((id) => !MODALS_WITHOUT_CLOSE.has(id));
-  check(unexpectedNoClose.length === 0, '缺关闭钮的弹窗仅为已知遗留',
-    unexpectedNoClose.length ? `新增: ${unexpectedNoClose.join(',')}` : (noClose.join(',') || '无'));
+  check(noClose.length === 0,
+    `全部 ${modals.length} 个弹窗均含 [data-action^="close"] 关闭钮`,
+    noClose.length ? `缺: ${noClose.join(',')}` : '');
+  check(unlabelled.length === 0,
+    `全部 ${modals.length} 个弹窗关闭钮均带 aria-label（a11y 选择器迁移生效）`,
+    unlabelled.length ? `未标注: ${unlabelled.join(',')}` : '');
 
   // D3a. 真实往返：点「同步中心」入口打开 → Esc 关闭。
   //      走的是用户真实路径，并能抓住「弹窗用 style.display 而非 .active 驱动」这类缺陷
@@ -453,7 +468,8 @@ try {
     m.classList.remove('active');
     m.style.display = '';
   }
-  check(clickCount >= 18 && clickProblems.length === 0, `全部 ${clickCount} 个弹窗关闭钮可关闭`,
+  check(clickCount === modals.length && clickProblems.length === 0,
+    `全部 ${clickCount} 个弹窗关闭钮可关闭`,
     clickProblems.length ? clickProblems.slice(0, 3).join('；') : '');
 
   // D5. 全选复选框：验证 @el 间接引用（data-args:["@el"] → 被点元素）与「委托不 preventDefault」。
@@ -489,6 +505,83 @@ try {
     click(master);
     await sleep(20);
     host.remove();
+  }
+
+  // D6. 防内联事件回流：模板内联 onclick 已完成 4 → 1 的收口，不允许再长回来。
+  //     唯一保留的一处是图片灯箱的背景点击关闭——它需要比较 event.target === this，
+  //     而委托的调用约定是 fn.apply(el, args)（不传事件对象），无法通用化。
+  const INLINE_ONCLICK_ALLOWED = ['if(event.target===this)closeImageLightbox()'];
+  const tplHtml = fs.readFileSync(path.join(ROOT, 'web', 'templates', 'index.html'), 'utf8');
+  const inlineOnclicks = Array.from(tplHtml.matchAll(/onclick="([^"]*)"/g), (mm) => mm[1].trim());
+  const unexpectedInline = inlineOnclicks.filter((v) => !INLINE_ONCLICK_ALLOWED.includes(v));
+  check(unexpectedInline.length === 0,
+    `模板无新增内联 onclick（允许 ${INLINE_ONCLICK_ALLOWED.length} 处已知：灯箱背景关闭）`,
+    unexpectedInline.length
+      ? `新增 ${unexpectedInline.length} 处: ${unexpectedInline.slice(0, 2).join(' | ').slice(0, 120)}`
+      : `实际 ${inlineOnclicks.length} 处`);
+
+  // D7. 内联迁移的通用机制（本轮新增，替代原先散落在模板里的写法）：
+  //     ① triggerClick —— 替代内联 document.getElementById('x').click()（触发隐藏 file input）
+  //     ② 键盘可达性 —— role="button" + data-action 元素在 Enter / Space 时等价一次点击
+  //     上传区 upload-area 同时用到两者，是这条链路的真实样本。
+  const uploadArea = w.document.getElementById('upload-area');
+  const fileInput = w.document.getElementById('import-file');
+  if (!uploadArea || !fileInput) {
+    check(false, '上传区与隐藏 file input 存在（triggerClick 样本）',
+      [!uploadArea ? '缺 upload-area' : '', !fileInput ? '缺 import-file' : ''].filter(Boolean).join('；'));
+  } else {
+    let inputClicks = 0;
+    fileInput.click = function () { inputClicks++; }; // 拦截，避免 jsdom 触碰真实文件选择
+
+    // ① 点击上传区 → 应触发 file input 的 click
+    const beforeClick = allErrors().length;
+    click(uploadArea);
+    await sleep(20);
+    const errsClick = freshErrors(beforeClick);
+    check(inputClicks === 1 && errsClick.length === 0,
+      'triggerClick：点击上传区触发隐藏 file input',
+      [inputClicks === 1 ? '' : `input.click 被调用 ${inputClicks} 次（期望 1）`,
+        errsClick.length ? '错误:' + errsClick[0].split('\n')[0] : ''].filter(Boolean).join('；'));
+
+    // ② 键盘：Enter / Space 各触发一次点击（累计 3）
+    if (uploadArea.focus) { try { uploadArea.focus(); } catch { /* ignore */ } }
+    const beforeKeys = allErrors().length;
+    for (const key of ['Enter', ' ']) {
+      uploadArea.dispatchEvent(new w.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+    await sleep(20);
+    const errsKeys = freshErrors(beforeKeys);
+    check(inputClicks === 3 && errsKeys.length === 0,
+      '键盘可达性：role=button + data-action 元素 Enter/Space 等价一次点击',
+      [inputClicks === 3 ? '' : `累计触发 ${inputClicks} 次（期望 3 = 1 次点击 + Enter + Space）`,
+        errsKeys.length ? '错误:' + errsKeys[0].split('\n')[0] : ''].filter(Boolean).join('；'));
+  }
+
+  // D8. <a href="#"> 的默认 # 跳转被阻止（等价旧内联 `switchPage('deadletters');return false;`
+  //     的 return false；顺带修掉 doLogout 那处原本会留下 # 的锚点）。
+  //     用临时锚点探测，既验证委托分发成功（正面），又验证 defaultPrevented（防规则失效），
+  //     且不依赖真实模板元素、无副作用。同时 D5 已反证非锚点（复选框）未被误伤。
+  if (!w.Linkora || !w.Linkora.actions) {
+    check(false, '<a href="#"> 的默认 # 跳转被阻止', 'actions 缺失，跳过探测');
+  } else {
+    let hit = 0;
+    let defaultPrevented = null;
+    w.Linkora.actions.__smoke_anchor = () => { hit++; };
+    const a = w.document.createElement('a');
+    a.setAttribute('href', '#');
+    a.setAttribute('data-action', '__smoke_anchor');
+    a.setAttribute('data-args', '[]');
+    w.document.body.appendChild(a);
+    const capture = (e) => { setTimeout(() => { defaultPrevented = e.defaultPrevented; }, 0); };
+    w.document.addEventListener('click', capture, true);
+    click(a);
+    await sleep(30);
+    w.document.removeEventListener('click', capture, true);
+    a.remove();
+    check(hit === 1 && defaultPrevented === true,
+      '<a href="#"> 的默认 # 跳转被阻止（等价旧内联的 return false）',
+      [hit === 1 ? '' : `action 未分发（hit=${hit}）`,
+        defaultPrevented === true ? '' : `defaultPrevented=${defaultPrevented}`].filter(Boolean).join('；'));
   }
 } catch (e) {
   failures.push('交互冒烟异常: ' + (e && e.message ? e.message : e));

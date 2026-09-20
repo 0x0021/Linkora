@@ -2,6 +2,55 @@
 
 // 使用 api.js 中已创建的全局实例（避免重复创建）
 const api = window.api || new ApiClient();
+
+// ============ Linkora 统一命名空间 + 事件委托（Phase 0 解锁层）============
+// 渐进式收敛散落的 window.X 全局桥接与模板内联 onclick：
+//   模板按钮改用 data-action="fn" data-args='[...]'（见 scripts/migrate_inline_onclick.mjs），
+//   点击由下方 document 级委托分发到 window.Linkora.actions[fn] 或 window[fn]（兼容遗留全局）。
+//   data-args 中的 "@el" 表示“被点击元素本身”，等价旧 onclick 里的 this。
+//   委托仅做分发，不调用 preventDefault（保留与原内联 onclick 完全等价的行为，
+//   避免破坏复选框等表单控件原生逻辑；详见下方分发函数内的说明）。
+(function () {
+  const L = (window.Linkora = window.Linkora || { actions: {} });
+
+  function dispatch(e) {
+    // 事件目标可能是文本节点外的元素；closest 仅在 Element 上可用
+    const el = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+    if (!el) return;
+    const action = el.dataset.action;
+    let args = [];
+    if (el.dataset.args) {
+      try { args = JSON.parse(el.dataset.args); } catch (_) { args = []; }
+    }
+    if (!Array.isArray(args)) args = [];
+    args = args.map((a) => (a === '@el' ? el : a));
+    const fn = (L.actions && L.actions[action]) || window[action];
+    if (typeof fn !== 'function') {
+      console.warn('[Linkora] 未找到 action 处理器:', action);
+      return;
+    }
+    // 注意：此处不调用 e.preventDefault()。原内联 onclick 从不阻止默认行为，
+    // 保留等价语义：复选框等表单控件仍按原生逻辑切换（否则 preventDefault 会让
+    // toggleAllKwSelect 读到未翻转的 checked）；<a href="#"> 的 # 跳转为历史既有行为，
+    // 后续可单独对锚点做 preventDefault 优化（需先验证无副作用）。
+    try { fn.apply(el, args); } catch (err) { console.error('[Linkora] action 执行失败:', action, err); }
+  }
+  document.addEventListener('click', dispatch, false);
+
+  L.register = function (name, fn) { L.actions[name] = fn; return fn; };
+
+  // 聚合常用入口（保留 window.X 全部向后兼容）
+  L.api = api;
+  L.store = window.store;
+  L.switchPage = switchPage;
+  L.showToast = showToast;
+  L.debounce = debounce;
+  // 翻页：替代 renderPager 内联 onclick + window.__pagerCb 回调注册
+  L.register('pager-go', function () {
+    renderPager_go(this.dataset.pid, Number(this.dataset.page), Number(this.dataset.ps));
+  });
+})();
+
 let currentPage = 'dashboard';
 let selectedKeywordIds = new Set();
 
@@ -112,7 +161,8 @@ function renderPager(containerId, { total = 0, page = 1, pageSize = 20 } = {}, o
         container.innerHTML = '';
         return '';
     }
-    const go = (p) => `onclick="renderPager_go('${containerId}', ${p}, ${pageSize});"`;
+    // 改用 data-action（由 app.js 顶部事件委托分发），不再内联 onclick + window.__pagerCb
+    const go = (p) => `data-action="pager-go" data-pid="${containerId}" data-page="${p}" data-ps="${pageSize}"`;
     const delta = 2;
     const rangeStart = Math.max(1, page - delta);
     const rangeEnd = Math.min(totalPages, page + delta);
@@ -893,7 +943,7 @@ window.debouncedLoadDeadLettersPage = debounce(loadDeadLettersPage, 300);
     }
     function closeModal(m) {
         if (!m) return;
-        const btn = m.querySelector('[onclick^="close"]');
+        const btn = m.querySelector('[data-action^="close"]');
         if (btn) btn.click();
         else m.classList.remove('active');
         if (lastTrigger && document.contains(lastTrigger)) {
@@ -905,7 +955,7 @@ window.debouncedLoadDeadLettersPage = debounce(loadDeadLettersPage, 300);
     modals.forEach(m => {
         m.setAttribute('role', 'dialog');
         m.setAttribute('aria-modal', 'true');
-        const closeBtn = m.querySelector('[onclick^="close"]');
+        const closeBtn = m.querySelector('[data-action^="close"]');
         if (closeBtn && !closeBtn.getAttribute('aria-label')) {
             closeBtn.setAttribute('aria-label', '关闭');
         }

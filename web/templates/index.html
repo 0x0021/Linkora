@@ -212,7 +212,7 @@
                     <div class="platform-switcher" id="platform-switcher" role="group" aria-label="平台切换" data-page-node-id="cO1udejhEZMCqJlbNtCqvM"></div>
                 </div>
                 <div class="topbar-right" data-page-node-id="1idA7DouMB2QgjAhV06zny">
-                    <button class="theme-toggle" id="theme-toggle" type="button" title="主题：跟随系统" aria-label="切换主题" onclick="cycleTheme()" data-page-node-id="oS0q5lSAdw89YEyOfSpy3C">
+                    <button class="theme-toggle" id="theme-toggle" type="button" title="主题：跟随系统" aria-label="切换主题" data-action="cycleTheme" data-args='[""]' data-page-node-id="oS0q5lSAdw89YEyOfSpy3C">
                         <i class="fa-solid fa-circle-half-stroke" id="theme-toggle-icon" data-page-node-id="SmrS0EH9y9C2m2jZAlJCud"></i>
                     </button>
                     <div class="user-info-dropdown" id="web-user-info" style="display:none;" data-page-node-id="R26Xlfh9GiiX5bZAvfvEco">
@@ -224,7 +224,7 @@
                                 <i class="fa-solid fa-gear" data-page-node-id="s7Oh1QRMnlMWFJAzhsnzC0"></i> 系统配置
                             </a>
                             <div class="user-dropdown-divider" data-page-node-id="EwmGY3eXIpRVACYX5R79UD"></div>
-                            <a href="#" class="user-dropdown-item user-dropdown-item-danger" onclick="doLogout()" data-page-node-id="KVbnucHev4VXr7QHQl5FAi">
+                            <a href="#" class="user-dropdown-item user-dropdown-item-danger" data-action="doLogout" data-args='[""]' data-page-node-id="KVbnucHev4VXr7QHQl5FAi">
                                 <i class="fa-solid fa-right-from-bracket" data-page-node-id="vgIzWehGVOYVvUVyEC2sVf"></i> 退出登录
                             </a>
                         </div>
@@ -305,7 +305,7 @@
                                             <div class="stat-label" data-page-node-id="TMLh8gwKdEnn2aL7AUkOgL">知识库文档</div>
                                         </div>
                                     </div>
-                                    <div class="stat-card" id="stat-card-ddocs" role="button" tabindex="0" onclick="showDingtalkImportModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showDingtalkImportModal();}" style="cursor:pointer" data-page-node-id="JCxU5kObSXTfVyj1EZvgTh">
+                                    <div class="stat-card" id="stat-card-ddocs" role="button" tabindex="0" data-action="showDingtalkImportModal" data-args='[""]' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showDingtalkImportModal();}" style="cursor:pointer" data-page-node-id="JCxU5kObSXTfVyj1EZvgTh">
                                         <div class="stat-icon" data-page-node-id="0g9CByucbPuYDYjFmHBMZN"><i class="fa-solid fa-file-lines" data-page-node-id="mDOLbn4Id3NVFTsDfD0QAZ"></i></div>
                                         <div class="stat-info" data-page-node-id="6kAIJwDJQxai8znpBCJmE4">
                                             <div class="stat-value" id="stat-ddocs" data-page-node-id="tzUKTG4phexMOdMIQYbOlU"><span class="stat-skeleton skeleton skeleton-line tall" data-page-node-id="ueJusUoNt9cuHEtJeR2XZf"></span></div>
@@ -347,7 +347,7 @@
                                     <span class="live-indicator" id="recent-msg-live" data-page-node-id="n0NYX4zNiwAHEVjBv6kC7d">
                                         <span class="live-dot" data-page-node-id="wVQC0kKuna0jXkTQfHro27"></span>实时
                                     </span>
-                                    <button type="button" class="link-btn" onclick="switchPage('messages')" data-page-node-id="9wWTMvtoE6V0mDAGGAKMOW">查看全部 →</button>
+                                    <button type="button" class="link-btn" data-action="switchPage" data-args='["messages"]' data-page-node-id="9wWTMvtoE6V0mDAGGAKMOW">查看全部 →</button>
                                 </div>
                             </div>
                             <div class="panel-body dash-panel-body" data-page-node-id="LdqJaFwZ6p6PMzoruzRVzM">
@@ -409,10 +409,10 @@
                         </div>
                     </div>
                     <div class="section-tabs" data-page-node-id="rrFatuNNgjSrZuRWitsoUG">
-                        <button class="section-tab active" data-tab="rules" onclick="switchKwTab('rules')" data-page-node-id="52edJJwvJHMb4w0IsEI1Jg">
+                        <button class="section-tab active" data-tab="rules" data-action="switchKwTab" data-args='["rules"]' data-page-node-id="52edJJwvJHMb4w0IsEI1Jg">
                             <i class="fa-solid fa-list" data-page-node-id="GFXkBYKWgjADOh5iJNSHmy"></i> 规则列表
                         </button>
-                        <button class="section-tab" data-tab="test" onclick="switchKwTab('test')" data-page-node-id="rON49ACWKAM7oHs1Pp26kH">
+                        <button class="section-tab" data-tab="test" data-action="switchKwTab" data-args='["test"]' data-page-node-id="rON49ACWKAM7oHs1Pp26kH">
                             <i class="fa-solid fa-flask" data-page-node-id="vg2U52GipfQp13x2pCWGZb"></i> 匹配测试
                         </button>
                     </div>
@@ -478,15 +478,15 @@
                                         <option value="regex" data-page-node-id="GZQu4DQwPfqJyAHhRcWziT">正则匹配</option>
                                     </select>
                                     <div class="action-btns" data-page-node-id="ZcVPF1qPetaywyiCYC0ynr">
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="showImportModal()" data-page-node-id="AnUarUqHZQtRnXhN4mz0cB"><i class="fa-solid fa-upload" data-page-node-id="iVwa43b15IIbuNfnu1Sc2x"></i> 导入</button>
-                                        <button class="btn btn-sm btn-primary" onclick="showKeywordModal()" data-page-node-id="AcjhkR8YgtgNcVBD9RhuEA"><i class="fa-solid fa-plus" data-page-node-id="qX87EMeA6fTDFp05T3smbE"></i> 新建</button>
+                                        <button class="btn btn-sm btn-outline-secondary" data-action="showImportModal" data-args='[""]' data-page-node-id="AnUarUqHZQtRnXhN4mz0cB"><i class="fa-solid fa-upload" data-page-node-id="iVwa43b15IIbuNfnu1Sc2x"></i> 导入</button>
+                                        <button class="btn btn-sm btn-primary" data-action="showKeywordModal" data-args='[""]' data-page-node-id="AcjhkR8YgtgNcVBD9RhuEA"><i class="fa-solid fa-plus" data-page-node-id="qX87EMeA6fTDFp05T3smbE"></i> 新建</button>
                                     </div>
                                 </div>
                             </div>
                             <div class="bulk-actions" id="kw-bulk-actions" style="display:none;" data-page-node-id="Aygl9730Xt9Hu2rdGxAELp">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="batchEnable()" data-page-node-id="9XNzu1ZVIAcGTnNHki4jFU">启用</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="batchDisable()" data-page-node-id="B31mmTMlWmShrAHaJ1qYUP">禁用</button>
-                                <button class="btn btn-sm btn-danger" onclick="batchDelete()" data-page-node-id="g3cDxvCBJsgGIr0DDBaBe0">删除</button>
+                                <button class="btn btn-sm btn-outline-secondary" data-action="batchEnable" data-args='[""]' data-page-node-id="9XNzu1ZVIAcGTnNHki4jFU">启用</button>
+                                <button class="btn btn-sm btn-outline-secondary" data-action="batchDisable" data-args='[""]' data-page-node-id="B31mmTMlWmShrAHaJ1qYUP">禁用</button>
+                                <button class="btn btn-sm btn-danger" data-action="batchDelete" data-args='[""]' data-page-node-id="g3cDxvCBJsgGIr0DDBaBe0">删除</button>
                             </div>
                         </div>
                         <div class="main-panel-body" data-page-node-id="0l6hW5uTUcWWC9wnj6F2vw">
@@ -494,7 +494,7 @@
                                     <table class="kw-table" id="kw-table" data-page-node-id="3mSS9DB4pcOMqPHNIkt4bA">
                                         <thead data-page-node-id="rtLEOs022oZ1Arpf60eYce">
                                             <tr data-page-node-id="gf95bpjviY3fBoU0YtO1EP">
-                                                <th style="text-align: center;" data-page-node-id="zgjsPgwqoyMPVUryGp7C5R"><input type="checkbox" class="form-check-input" onclick="toggleAllKwSelect(this)" data-page-node-id="GSQRrY8yPEdXB8Ue3zyJbK"></th>
+                                                <th style="text-align: center;" data-page-node-id="zgjsPgwqoyMPVUryGp7C5R"><input type="checkbox" class="form-check-input" data-action="toggleAllKwSelect" data-args='["@el"]' data-page-node-id="GSQRrY8yPEdXB8Ue3zyJbK"></th>
                                                 <th data-page-node-id="27ft4Bvv2NXDGXo0n2vOgE">匹配模式</th>
                                                 <th data-page-node-id="BO6WQx44xx5N6wsXhOklvs">匹配条件</th>
                                                 <th data-page-node-id="bMSVc13CkCjv4H64Z8uEM7">回复内容</th>
@@ -529,10 +529,10 @@
                                                       rows="4" placeholder="输入一句话，测试哪条规则会命中..."></textarea>
                                         </div>
                                         <div data-page-node-id="3glFUbDPQnWTPCmVOaWAwz">
-                                            <button class="btn btn-primary" onclick="testMatch()" data-page-node-id="aJBj6NKL8kYj8fECUU1NoB">
+                                            <button class="btn btn-primary" data-action="testMatch" data-args='[""]' data-page-node-id="aJBj6NKL8kYj8fECUU1NoB">
                                                 <i class="fa-solid fa-microscope" data-page-node-id="26IkANgmufW4rGRc0Z0MrG"></i> 开始测试
                                             </button>
-                                            <button class="btn btn-outline-secondary" onclick="clearKwTest()" data-page-node-id="VG3F5z37pqUhVjJavd50N7">
+                                            <button class="btn btn-outline-secondary" data-action="clearKwTest" data-args='[""]' data-page-node-id="VG3F5z37pqUhVjJavd50N7">
                                                 <i class="fa-solid fa-eraser" data-page-node-id="dYzPR8GVI2lImzcp3d9SXF"></i> 清空
                                             </button>
                                         </div>
@@ -565,22 +565,22 @@
                         </div>
                     </div>
                     <div class="section-tabs" data-page-node-id="XkzG9iD2kR2m6ASk8zAhGw">
-                        <button class="section-tab active" data-tab="overview" onclick="switchRagTab('overview')" data-page-node-id="El0MEOW9EjzuApXGkYuiqq">
+                        <button class="section-tab active" data-tab="overview" data-action="switchRagTab" data-args='["overview"]' data-page-node-id="El0MEOW9EjzuApXGkYuiqq">
                             <i class="fa-solid fa-chart-bar" data-page-node-id="WiuRVYxUhjbG6FwJkmjJBt"></i> 概览
                         </button>
-                        <button class="section-tab" data-tab="documents" onclick="switchRagTab('documents')" data-page-node-id="ywxrJEhDoMLLM6AtDkxe6j">
+                        <button class="section-tab" data-tab="documents" data-action="switchRagTab" data-args='["documents"]' data-page-node-id="ywxrJEhDoMLLM6AtDkxe6j">
                             <i class="fa-solid fa-book" data-page-node-id="FT8qIgUvJF8ABwoL0NNo5w"></i> 文档管理
                         </button>
-                        <button class="section-tab" data-tab="chunks" onclick="switchRagTab('chunks')" data-page-node-id="VzGhPGkWTJjhd15SGA5B17">
+                        <button class="section-tab" data-tab="chunks" data-action="switchRagTab" data-args='["chunks"]' data-page-node-id="VzGhPGkWTJjhd15SGA5B17">
                             <i class="fa-solid fa-puzzle-piece" data-page-node-id="YX9zEvFMUK9NRJhmUejXLG"></i> 分块管理
                         </button>
-                        <button class="section-tab" data-tab="search" onclick="switchRagTab('search')" data-page-node-id="O8yjMUjCDFAGjnEplRsMyQ">
+                        <button class="section-tab" data-tab="search" data-action="switchRagTab" data-args='["search"]' data-page-node-id="O8yjMUjCDFAGjnEplRsMyQ">
                             <i class="fa-solid fa-search" data-page-node-id="kmTxDzdr30KubBGVX8GJ6e"></i> 检索测试
                         </button>
-                        <button class="section-tab" data-tab="chat" onclick="switchRagTab('chat')" data-page-node-id="pFalGpaNaYB7rDrRCLglED">
+                        <button class="section-tab" data-tab="chat" data-action="switchRagTab" data-args='["chat"]' data-page-node-id="pFalGpaNaYB7rDrRCLglED">
                             <i class="fa-solid fa-message" data-page-node-id="xwYDmx4GqDIxqFGwdZldgs"></i> 智能问答
                         </button>
-                        <button class="section-tab" data-tab="memory" onclick="switchRagTab('memory')" data-page-node-id="G7ylTHqjdv0SKePgC6sXeo">
+                        <button class="section-tab" data-tab="memory" data-action="switchRagTab" data-args='["memory"]' data-page-node-id="G7ylTHqjdv0SKePgC6sXeo">
                             <i class="fa-solid fa-brain" data-page-node-id="SiSyFibba6sTAf9BSbHj9Q"></i> 记忆
                         </button>
 
@@ -612,13 +612,13 @@
                                 </div>
                             </div>
                             <div class="rag-onboarding-cta" data-page-node-id="fhkVaAfMAOOw4auGdv2wJq">
-                                <button class="btn btn-primary btn-lg" onclick="switchRagTab('documents')" data-page-node-id="PFhKCpv46M3qFJJDrdSOxs">
+                                <button class="btn btn-primary btn-lg" data-action="switchRagTab" data-args='["documents"]' data-page-node-id="PFhKCpv46M3qFJJDrdSOxs">
                                     <i class="fa-solid fa-book" data-page-node-id="MTymutaDHh11Um5guBCjRe"></i> 开始添加文档
                                 </button>
-                                <button class="btn btn-outline-secondary" id="btn-dingtalk-import-ov" onclick="showDingtalkImportModal()" data-page-node-id="twsj5nH6RcXlDYDMWiYBm2">
+                                <button class="btn btn-outline-secondary" id="btn-dingtalk-import-ov" data-action="showDingtalkImportModal" data-args='[""]' data-page-node-id="twsj5nH6RcXlDYDMWiYBm2">
                                     <i class="fa-solid fa-file-lines" data-page-node-id="1ij8nXijGdyiSeEUF7GBMF"></i> 从钉钉导入
                                 </button>
-                                <button class="btn btn-outline-secondary" id="btn-feishu-import-ov" onclick="showFeishuImportModal()" data-page-node-id="e1PVNuBlQ0uvp8eLnbEygC">
+                                <button class="btn btn-outline-secondary" id="btn-feishu-import-ov" data-action="showFeishuImportModal" data-args='[""]' data-page-node-id="e1PVNuBlQ0uvp8eLnbEygC">
                                     <i class="fa-solid fa-cloud-arrow-up" data-page-node-id="Yj6ghFDy3PTS0bRtN6oqO2"></i> 从飞书导入
                                 </button>
                             </div>
@@ -704,7 +704,7 @@
                             <div class="panel" data-page-node-id="OK4MIfBw5qm4LzFXj6Tx87">
                                 <div class="panel-header" data-page-node-id="FwZTVVQ21mgUxUuPCP9vjV">
                                     <h3 data-page-node-id="hddtLKSIxPNSZhNZjGekEU">最新 10 条</h3>
-                                    <button type="button" class="link-btn" onclick="switchRagTab('documents')" data-page-node-id="gGpLw3a9gnxFALOKGjBCtT">查看全部 →</button>
+                                    <button type="button" class="link-btn" data-action="switchRagTab" data-args='["documents"]' data-page-node-id="gGpLw3a9gnxFALOKGjBCtT">查看全部 →</button>
                                 </div>
                                 <div class="panel-body" data-page-node-id="5AE5VzY60RWgxTyTczDGvr">
                                     <div class="table-wrap" data-page-node-id="sZ5HC6GyDUFil1NAcNFkij">
@@ -751,19 +751,19 @@
                                 </div>
                             </div>
                             <div class="action-group" data-page-node-id="Yn115ooI8VhgHElmfu3MHK">
-                                <button class="btn btn-outline-secondary" id="btn-dingtalk-import-doc" onclick="showDingtalkImportModal()" data-page-node-id="fqpxHT5nqH1V9n9bEIJLiS">
+                                <button class="btn btn-outline-secondary" id="btn-dingtalk-import-doc" data-action="showDingtalkImportModal" data-args='[""]' data-page-node-id="fqpxHT5nqH1V9n9bEIJLiS">
                                     <i class="fa-solid fa-file-lines" data-page-node-id="uWhnGMPe8CgfrfRvGtDuGg"></i> 从钉钉导入
                                 </button>
-                                <button class="btn btn-outline-secondary" id="btn-feishu-import-doc" onclick="showFeishuImportModal()" data-page-node-id="erCjTGBjps3isTG9DaVBxE">
+                                <button class="btn btn-outline-secondary" id="btn-feishu-import-doc" data-action="showFeishuImportModal" data-args='[""]' data-page-node-id="erCjTGBjps3isTG9DaVBxE">
                                     <i class="fa-solid fa-cloud-arrow-up" data-page-node-id="pYr7eJYWEJMGlYTFIa2H3b"></i> 从飞书导入
                                 </button>
-                                <button class="btn btn-outline-secondary" onclick="showImportUrlModal()" data-page-node-id="QADqdJtJSxLg5RlCHiWmZH">
+                                <button class="btn btn-outline-secondary" data-action="showImportUrlModal" data-args='[""]' data-page-node-id="QADqdJtJSxLg5RlCHiWmZH">
                                     <i class="fa-solid fa-link" data-page-node-id="tD4QgdbKTNuOoHILaCvS5M"></i> 从 URL 导入
                                 </button>
-                                <button class="btn btn-outline-secondary" onclick="showBatchUploadModal()" data-page-node-id="n9rpZe4fOrsBbyF6s1i8x8">
+                                <button class="btn btn-outline-secondary" data-action="showBatchUploadModal" data-args='[""]' data-page-node-id="n9rpZe4fOrsBbyF6s1i8x8">
                                     <i class="fa-solid fa-folder" data-page-node-id="RMeUmah2YofEeiquxtrS8M"></i> 批量上传
                                 </button>
-                                <button class="btn btn-primary" onclick="showKbModal()" data-page-node-id="CwjJQYzGkQ2tD0SHY0XCcc">
+                                <button class="btn btn-primary" data-action="showKbModal" data-args='[""]' data-page-node-id="CwjJQYzGkQ2tD0SHY0XCcc">
                                     <i class="fa-solid fa-plus" data-page-node-id="Z18QMXvLs7tF3ll3tFNiIS"></i> 添加文档
                                 </button>
                             </div>
@@ -871,10 +871,10 @@
                                             </div>
                                         </div>
                                         <div data-page-node-id="0SBDRZiZwB4d6BMlT9Lll1">
-                                            <button class="btn btn-primary" onclick="testRagSearch()" data-page-node-id="eWBHzZ0HhRw40JZXFBKERn">
+                                            <button class="btn btn-primary" data-action="testRagSearch" data-args='[""]' data-page-node-id="eWBHzZ0HhRw40JZXFBKERn">
                                                 <i class="fa-solid fa-microscope" data-page-node-id="Yc1KZkL6D8RNAK3ViAAGSF"></i> 开始检索
                                             </button>
-                                            <button class="btn btn-outline-secondary" onclick="clearRagSearch()" data-page-node-id="6TXl5CTBtYGD6h3rwEbG2S">
+                                            <button class="btn btn-outline-secondary" data-action="clearRagSearch" data-args='[""]' data-page-node-id="6TXl5CTBtYGD6h3rwEbG2S">
                                                 <i class="fa-solid fa-eraser" data-page-node-id="5hKwppNEW62j8ENnCpxvyR"></i> 清空
                                             </button>
                                         </div>
@@ -949,7 +949,7 @@
                                     <div class="chat-input-area" data-page-node-id="u3gSWdUYFub6CHvqQWC8ZF">
                                         <textarea id="rag-chat-input" placeholder="输入你的问题..." 
                                                   onkeydown="handleChatKeydown(event)"></textarea>
-                                        <button class="chat-send-btn btn btn-primary" onclick="sendRagChat()" data-page-node-id="BiuC5Cuiq7Dl9FuuBEiCpg">
+                                        <button class="chat-send-btn btn btn-primary" data-action="sendRagChat" data-args='[""]' data-page-node-id="BiuC5Cuiq7Dl9FuuBEiCpg">
                                             发送 <i class="fa-solid fa-arrow-right" data-page-node-id="rzpl5h3PMd2BZASBZ79qBU"></i>
                                         </button>
                                     </div>
@@ -964,10 +964,10 @@
                             <div class="panel-header" data-page-node-id="jhBZ3ePoCEmK8vUx03bE0A">
                                 <h3 data-page-node-id="x3DP0CUHMfoehqf2bI3Vee">AI 记忆管理</h3>
                                 <div class="panel-actions" data-page-node-id="QfYCpkif90Zlss5FCpb1zF">
-                                    <button class="btn btn-sm btn-primary" onclick="showMemoryModal()" data-page-node-id="AluUMakeH6ezDgAYaTC3Lc">
+                                    <button class="btn btn-sm btn-primary" data-action="showMemoryModal" data-args='[""]' data-page-node-id="AluUMakeH6ezDgAYaTC3Lc">
                                         <i class="fa-solid fa-plus" data-page-node-id="xo2XjAK3md8uNX6LDtDDtI"></i> 新增记忆
                                     </button>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="loadMemoryList()" data-page-node-id="DG6DYrb7RIqNcFvBF9pXGT">
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="loadMemoryList" data-args='[""]' data-page-node-id="DG6DYrb7RIqNcFvBF9pXGT">
                                         <i class="fa-solid fa-rotate-right" data-page-node-id="6zoG2QwuHMAldhkFBDOGIZ"></i> 刷新
                                     </button>
                                 </div>
@@ -1047,7 +1047,7 @@
                                         <i class="fa-solid fa-search" data-page-node-id="HF2i4j3CBEvs4DMIn9AY3Q"></i>
                                         <input type="text" class="form-control" id="msg-search" placeholder="搜索会话..." oninput="debouncedLoadMessages()" data-page-node-id="YHn9XrVkC9C3dCwdZBX5QK">
                                     </div>
-                                    <button class="btn btn-sm btn-outline" id="sync-center-entry-btn" onclick="openSyncCenter()" title="打开同步中心" data-page-node-id="yOJnGFeb96BDaFc8CiDKtk">
+                                    <button class="btn btn-sm btn-outline" id="sync-center-entry-btn" data-action="openSyncCenter" data-args='[""]' title="打开同步中心" data-page-node-id="yOJnGFeb96BDaFc8CiDKtk">
                                         <i class="fa-solid fa-sliders" data-page-node-id="gbhUYfPhuLiHigr8NM81Dl"></i> 同步中心
                                     </button>
                                 </div>
@@ -1067,20 +1067,20 @@
                                         <i class="fa-solid fa-search" data-page-node-id="B4UHccX8KETu5X0jCG2Y4z"></i>
                                         <input type="text" id="msg-thread-search" placeholder="在当前会话内搜索..." oninput="debouncedFilterThread()" data-page-node-id="QAwN49oH9OK37ICsHUBA0e">
                                     </div>
-                                    <button class="btn btn-sm btn-success" id="sync-history-btn" onclick="syncHistory()" data-page-node-id="ZyDCCEyzdiCauiroMw7DMa">
+                                    <button class="btn btn-sm btn-success" id="sync-history-btn" data-action="syncHistory" data-args='[""]' data-page-node-id="ZyDCCEyzdiCauiroMw7DMa">
                                         <i class="fa-solid fa-rotate-right" data-page-node-id="yuGjkNzhhGaerLxO8gzNK6"></i> 同步本会话
                                     </button>
-                                    <button class="btn btn-sm btn-outline" id="msg-export-btn" onclick="exportMessagesCSV()" title="导出当前会话消息为 CSV" data-page-node-id="Si9suBpdILYZtR2GfExMeH">
+                                    <button class="btn btn-sm btn-outline" id="msg-export-btn" data-action="exportMessagesCSV" data-args='[""]' title="导出当前会话消息为 CSV" data-page-node-id="Si9suBpdILYZtR2GfExMeH">
                                         <i class="fa-solid fa-file-csv" data-page-node-id="D6uC6hAp6RzxoxXTpWSWN7"></i> 导出 CSV
                                     </button>
-                                    <button class="btn btn-sm btn-outline" id="msg-batch-toggle" onclick="_msgToggleBatchMode()" title="批量选择消息" data-page-node-id="OAR3aalVdd7c0ihqVWEEtV">
+                                    <button class="btn btn-sm btn-outline" id="msg-batch-toggle" data-action="_msgToggleBatchMode" data-args='[""]' title="批量选择消息" data-page-node-id="OAR3aalVdd7c0ihqVWEEtV">
                                         <i class="fa-solid fa-list-check" data-page-node-id="5oFCqRqQ3yOn6VMNn4FDtB"></i> 批量
                                     </button>
                                     <div class="batch-action-bar" id="msg-batch-bar" style="display:none;" data-page-node-id="OItQDfzvf83iUNc1dufVLU">
                                         <span class="batch-count" id="msg-batch-count" data-page-node-id="AkQSGLq15cnvNETz3xuoCO">已选 0 项</span>
-                                        <button class="btn btn-sm btn-outline" onclick="_msgBatchExport()" data-page-node-id="WZAKlmwXIBrqcP9bD0RINx"><i class="fa-solid fa-file-csv" data-page-node-id="vAhxDrtLZFJ9gvYJ6V6tSM"></i> 导出所选</button>
-                                        <button class="btn btn-sm btn-outline btn-danger" onclick="_msgBatchDelete()" data-page-node-id="cLsHHrAi1uvg2Qv00Qpkyf"><i class="fa-solid fa-trash" data-page-node-id="OYZxnjtvBOY3tJfo3xNIpK"></i> 删除所选</button>
-                                        <button class="btn btn-sm btn-outline" onclick="_msgDeselectAll()" data-page-node-id="S8DOgeSTaVTiOzKMGHIMtn">取消</button>
+                                        <button class="btn btn-sm btn-outline" data-action="_msgBatchExport" data-args='[""]' data-page-node-id="WZAKlmwXIBrqcP9bD0RINx"><i class="fa-solid fa-file-csv" data-page-node-id="vAhxDrtLZFJ9gvYJ6V6tSM"></i> 导出所选</button>
+                                        <button class="btn btn-sm btn-outline btn-danger" data-action="_msgBatchDelete" data-args='[""]' data-page-node-id="cLsHHrAi1uvg2Qv00Qpkyf"><i class="fa-solid fa-trash" data-page-node-id="OYZxnjtvBOY3tJfo3xNIpK"></i> 删除所选</button>
+                                        <button class="btn btn-sm btn-outline" data-action="_msgDeselectAll" data-args='[""]' data-page-node-id="S8DOgeSTaVTiOzKMGHIMtn">取消</button>
                                     </div>
                                     <select id="msg-conv-filter" onchange="loadMessages()" style="display:none" data-page-node-id="RDFvLHgRqhiprwR5H04ikI">
                                         <option value="" data-page-node-id="XmwERlKR0RumMtnr8bEP0g">全部会话</option>
@@ -1095,7 +1095,7 @@
 
                     <!-- ↓ P5-C: 消息分析面板（折叠，点击展开） -->
                     <div class="metrics-section" data-page-node-id="wgop52D83TPz40HmpDZDYy">
-                        <button class="msg-stats-toggle" id="msg-stats-toggle" onclick="toggleMsgStats()" data-page-node-id="BL3sAjGAIR9sg6fqXZbaPo">
+                        <button class="msg-stats-toggle" id="msg-stats-toggle" data-action="toggleMsgStats" data-args='[""]' data-page-node-id="BL3sAjGAIR9sg6fqXZbaPo">
                             <i class="fa-solid fa-chart-line" data-page-node-id="6WdDxEMuXot85nc9HCzg5C"></i> 消息分析
                             <i class="fa-solid fa-chevron-down toggle-icon" data-page-node-id="NXDMXRGJzoHSG1aI9LBT6P"></i>
                         </button>
@@ -1164,9 +1164,9 @@
 
                     <!-- Tab navigation -->
                     <div class="intent-tabs" data-page-node-id="42sQ7pnXZAPqL3pfIhi2Bc">
-                        <button class="intent-tab-btn active" role="tab" aria-selected="true" data-tab="overview" onclick="switchIntentTab('overview')" data-page-node-id="WBHn8IcjvRMQiZh9uRF7sB">概览</button>
-                        <button class="intent-tab-btn" role="tab" aria-selected="false" data-tab="history" onclick="switchIntentTab('history')" data-page-node-id="USDfOqErQGvxTXtxRWfUPz">决策追踪</button>
-                        <button class="intent-tab-btn" role="tab" aria-selected="false" data-tab="routetrace" onclick="switchIntentTab('routetrace')" data-page-node-id="e6CUb6HkY7Y1RsGXFObhbE">路由追踪</button>
+                        <button class="intent-tab-btn active" role="tab" aria-selected="true" data-tab="overview" data-action="switchIntentTab" data-args='["overview"]' data-page-node-id="WBHn8IcjvRMQiZh9uRF7sB">概览</button>
+                        <button class="intent-tab-btn" role="tab" aria-selected="false" data-tab="history" data-action="switchIntentTab" data-args='["history"]' data-page-node-id="USDfOqErQGvxTXtxRWfUPz">决策追踪</button>
+                        <button class="intent-tab-btn" role="tab" aria-selected="false" data-tab="routetrace" data-action="switchIntentTab" data-args='["routetrace"]' data-page-node-id="e6CUb6HkY7Y1RsGXFObhbE">路由追踪</button>
                     </div>
 
                     <!-- Tab: 概览 -->
@@ -1287,10 +1287,10 @@
                                         <option value="today" data-page-node-id="JwDHSGPt8dr3rV8hR4VyGe">今天</option>
                                         <option value="month" data-page-node-id="emSgu60sH3qU6xFOK7mPuU">本月</option>
                                     </select>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="loadDecisionsHistory(1)" data-page-node-id="Mr1CJOTeTkKuAaCQ7r6jrh">
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="loadDecisionsHistory" data-args='[1]' data-page-node-id="Mr1CJOTeTkKuAaCQ7r6jrh">
                                         <i class="fa-solid fa-magnifying-glass" data-page-node-id="1a9CR3HelftNDTaXRLXMUf"></i> 查询
                                     </button>
-                                    <button class="btn btn-sm btn-outline" onclick="exportDecisionsCSV()" title="导出决策记录为 CSV" style="margin-left:4px;" data-page-node-id="OHxcdaNJnXHUqBTuDHJFX3">
+                                    <button class="btn btn-sm btn-outline" data-action="exportDecisionsCSV" data-args='[""]' title="导出决策记录为 CSV" style="margin-left:4px;" data-page-node-id="OHxcdaNJnXHUqBTuDHJFX3">
                                         <i class="fa-solid fa-file-csv" data-page-node-id="s6u5nzzhifrLNcyrEhZlAz"></i> 导出 CSV
                                     </button>
                                 </div>
@@ -1371,7 +1371,7 @@
                                         <option value="blocked" data-page-node-id="3OBBRBs4LZnmzECTnskoTi">有屏蔽</option>
                                         <option value="unblocked" data-page-node-id="lZMMspOzuhLMrnYLDtjgC2">无屏蔽</option>
                                     </select>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="loadRouteTrace(1)" data-page-node-id="JHn06l7VesP4uQvhyHYNLX">
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="loadRouteTrace" data-args='[1]' data-page-node-id="JHn06l7VesP4uQvhyHYNLX">
                                         <i class="fa-solid fa-magnifying-glass" data-page-node-id="BO0RzaWmssMlDo44HqWL9Y"></i> 查询
                                     </button>
                                 </div>
@@ -1404,10 +1404,10 @@
                         </div>
                         <div class="page-header-actions config-action-bar" data-page-node-id="KnfGHZYabmNlMUs4jIDRO1">
                             <div class="config-action-group" data-page-node-id="xpsDlYdEP1WTfR5qtyXfZf">
-                                <button class="btn btn-sm btn-outline-secondary" onclick="restoreDefaultConfig()" title="恢复为默认配置" data-page-node-id="awnnyrpLeQbGG8CUAnQHMt">
+                                <button class="btn btn-sm btn-outline-secondary" data-action="restoreDefaultConfig" data-args='[""]' title="恢复为默认配置" data-page-node-id="awnnyrpLeQbGG8CUAnQHMt">
                                     <i class="fa-solid fa-arrow-up" data-page-node-id="9AiBui6fGXytFz0zyT3yFO"></i> 恢复默认
                                 </button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="exportConfig()" title="导出当前配置为 YAML 文件" data-page-node-id="vabqU95ZBIPhtfk94XDxhP">
+                                <button class="btn btn-sm btn-outline-secondary" data-action="exportConfig" data-args='[""]' title="导出当前配置为 YAML 文件" data-page-node-id="vabqU95ZBIPhtfk94XDxhP">
                                     <i class="fa-solid fa-download" data-page-node-id="WXmHD3iQZxb0T8HcbKTjOw"></i> 导出
                                 </button>
                                 <label class="btn btn-sm btn-outline-secondary" title="从 YAML 文件导入配置" data-page-node-id="sMuVlKUDRA7uffO9PDSc3M">
@@ -1418,7 +1418,7 @@
                             <span class="config-action-divider" aria-hidden="true" data-page-node-id="foxXPUW6TdnaKOm76Hzvxj"></span>
                             <div class="config-action-group" data-page-node-id="ED5SxzalbHh0Cpj7Yxpq7p">
                                 <span class="save-status" id="save-status" data-page-node-id="naqeuKP0TsadNaE666xmSK"></span>
-                                <button class="btn btn-primary" id="btn-save-config" onclick="saveConfig()" data-page-node-id="0TuS4vYKDJcqkmIvIJ1ZDi">
+                                <button class="btn btn-primary" id="btn-save-config" data-action="saveConfig" data-args='[""]' data-page-node-id="0TuS4vYKDJcqkmIvIJ1ZDi">
                                     <i class="fa-solid fa-floppy-disk" data-page-node-id="52nLjWsZqrIQVGlvZCHwyz"></i> 保存配置
                                 </button>
                             </div>
@@ -1649,7 +1649,7 @@
                                 <div class="form-group" data-page-node-id="sT8DcGI3SuYNJW5AGNI6iZ">
                                     <label data-page-node-id="p76Xrs4LMS7EyHQwUFB0Rm">单价覆盖表 <span class="sub-hint" data-page-node-id="iEHCrME3HicCF2lCGvLxQT">每行一个模型：标识 / 输入单价 / 输出单价</span></label>
                                     <div id="cfg-model-pricing-list" class="model-pricing-list" data-page-node-id="XQB33qAClbSeDjVUtkmgwe"></div>
-                                    <button type="button" class="btn btn-sm btn-secondary" id="btn-add-model-price" onclick="addModelPriceRow()" data-page-node-id="TAE8aC8mEfC0jyteerpJNg">
+                                    <button type="button" class="btn btn-sm btn-secondary" id="btn-add-model-price" data-action="addModelPriceRow" data-args='[""]' data-page-node-id="TAE8aC8mEfC0jyteerpJNg">
                                         <i class="fa-solid fa-plus" data-page-node-id="p7hnkUMJUkmFiGlFsqXdNZ"></i> 添加模型单价
                                     </button>
                                 </div>
@@ -1681,7 +1681,7 @@
                                         <input type="number" class="form-control" id="cfg-embedding-topk" min="1" max="20" data-page-node-id="OH8dVAmS5uwK0hAz2B4Onv">
                                     </div>
                                     <div class="form-group" style="display:flex;align-items:flex-end;" data-page-node-id="1Ige1tZdsxR2l3wX91mHUd">
-                                        <button class="btn btn-warning btn-sm" id="rechunk-all-btn" onclick="rechunkAllDocs()" data-page-node-id="v1hRIGnagXSxBDT1P8CbBD">
+                                        <button class="btn btn-warning btn-sm" id="rechunk-all-btn" data-action="rechunkAllDocs" data-args='[""]' data-page-node-id="v1hRIGnagXSxBDT1P8CbBD">
                                             <i class="fa-solid fa-rotate-right" data-page-node-id="8EVpRFpE5f0POPhP7UQkVf"></i> 重建索引
                                         </button>
                                     </div>
@@ -1991,13 +1991,13 @@
                                 <input type="text" class="form-control" id="dlq-search" placeholder="搜索死信..." oninput="debouncedLoadDeadLettersPage()" data-page-node-id="oDCUiv5sZhWNyWfeH29XMJ">
                             </div>
                             <span id="dlq-stats" class="dlq-stats-badge" data-page-node-id="i1lA25DYGbrAG1dbRBBzz9"><i class="fa-solid fa-list-ul" style="font-size:11px;opacity:.5;" data-page-node-id="3eZEBzqkVGDx5E7Aar4ulo"></i> 共 <span class="count" data-page-node-id="VKT7KA6X0IzLvPpBMa5suK">0</span> 条</span>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadDeadLettersPage()" style="margin-left:8px;" data-page-node-id="bzIN2E2ycUGehBloYF0oOM">
+                            <button class="btn btn-sm btn-outline-secondary" data-action="loadDeadLettersPage" data-args='[""]' style="margin-left:8px;" data-page-node-id="bzIN2E2ycUGehBloYF0oOM">
                                 <i class="fa-solid fa-rotate" data-page-node-id="r3oT4XgUZSERwyrAs30F9F"></i> 刷新
                             </button>
-                            <button class="btn btn-sm btn-outline" onclick="_dlqBatchReplay()" title="一键重放全部待处理死信" style="margin-left:4px;color:var(--brand-primary);border-color:var(--brand-primary);" data-page-node-id="u6NsjIRPa1kd5SBfxYtkTV">
+                            <button class="btn btn-sm btn-outline" data-action="_dlqBatchReplay" data-args='[""]' title="一键重放全部待处理死信" style="margin-left:4px;color:var(--brand-primary);border-color:var(--brand-primary);" data-page-node-id="u6NsjIRPa1kd5SBfxYtkTV">
                                 <i class="fa-solid fa-forward-fast" data-page-node-id="1IJCTa0bzuLWIb1kn2DV4m"></i> 全部重放
                             </button>
-                            <button class="btn btn-sm btn-outline" onclick="exportDeadLettersCSV()" title="导出死信队列为 CSV" style="margin-left:4px;" data-page-node-id="9EOUWHCatRHNUHhrlHmgYJ">
+                            <button class="btn btn-sm btn-outline" data-action="exportDeadLettersCSV" data-args='[""]' title="导出死信队列为 CSV" style="margin-left:4px;" data-page-node-id="9EOUWHCatRHNUHhrlHmgYJ">
                                 <i class="fa-solid fa-file-csv" data-page-node-id="JTFQnyBoV2X59AJ01LBdTG"></i> 导出 CSV
                             </button>
                         </div>
@@ -2005,8 +2005,8 @@
                     <div id="deadletters-content" class="dlq-page-content" data-page-node-id="mhuDVCOWw7ZLTzijO6qsIg">
                         <div class="batch-action-bar" id="dlq-batch-bar" style="display:none;" data-page-node-id="bcRGyoBjTpW5ZUUHA5ExZF">
                             <span class="batch-count" id="dlq-batch-count" data-page-node-id="KUcCSSIqm27bORNOHzTQMM">已选 0 项</span>
-                            <button class="btn btn-sm btn-outline" onclick="_dlqBatchDiscard()" data-page-node-id="unGyF2dAQ6G2wnfQt9DjPZ"><i class="fa-solid fa-trash" data-page-node-id="46TEfv490rsfs3GGcxL3XF"></i> 批量丢弃</button>
-                            <button class="btn btn-sm btn-outline" onclick="_dlqDeselectAll()" data-page-node-id="CYJNb9QBODmfBRfLgy8Rg7">取消选择</button>
+                            <button class="btn btn-sm btn-outline" data-action="_dlqBatchDiscard" data-args='[""]' data-page-node-id="unGyF2dAQ6G2wnfQt9DjPZ"><i class="fa-solid fa-trash" data-page-node-id="46TEfv490rsfs3GGcxL3XF"></i> 批量丢弃</button>
+                            <button class="btn btn-sm btn-outline" data-action="_dlqDeselectAll" data-args='[""]' data-page-node-id="CYJNb9QBODmfBRfLgy8Rg7">取消选择</button>
                         </div>
                         <div class="empty-state" data-page-node-id="OcIn6kbePJcEMiWiAgBpXe"><i class="fa-solid fa-spinner fa-spin loading-icon" data-page-node-id="y7WzxE07OSDQ9uwD9gMSMs"></i><p class="loading-text" data-page-node-id="YpizhXvzhZelrkSNxRRD6s">加载中…</p></div>
                     </div>
@@ -2065,7 +2065,7 @@
                             </div>
                         </div>
                         <div class="page-header-actions" data-page-node-id="swp0Rick7VOto8k0lKdxN1">
-                            <button class="btn btn-sm btn-outline-secondary" onclick="loadDraftsPage()" style="margin-left:8px;" data-page-node-id="ky1uYhBwdvji9zJFoOdAke">
+                            <button class="btn btn-sm btn-outline-secondary" data-action="loadDraftsPage" data-args='[""]' style="margin-left:8px;" data-page-node-id="ky1uYhBwdvji9zJFoOdAke">
                                 <i class="fa-solid fa-rotate" data-page-node-id="lcCOHyZDg7vDNQ2TYRkSsw"></i> 刷新
                             </button>
                         </div>
@@ -2073,9 +2073,9 @@
                     <div class="drafts-page-content" data-page-node-id="JBQtIgqD00T6MkOauDeyVT">
                         <div class="batch-action-bar" id="draft-batch-bar" style="display:none;" data-page-node-id="tU8Wqt32Sn0eh0eyZpbz7d">
                             <span class="batch-count" id="draft-batch-count" data-page-node-id="1nCqBFJf9b6umA429fO8m3">已选 0 项</span>
-                            <button class="btn btn-sm btn-primary" onclick="_draftBatchApprove()" data-page-node-id="6BaryC1OtUZRTJRt0gm332"><i class="fa-solid fa-circle-check" data-page-node-id="gEk8EE0nvvDYGyPp97Vwm3"></i> 批量审批</button>
-                            <button class="btn btn-sm btn-outline" onclick="_draftBatchReject()" data-page-node-id="L89wAyfnGntalxC9CbrpwV"><i class="fa-solid fa-ban" data-page-node-id="D8HsZXydIrSy5wBCwm2LTz"></i> 批量拒绝</button>
-                            <button class="btn btn-sm btn-outline" onclick="_draftDeselectAll()" data-page-node-id="8f6fWWGfXbfMH47o5MefNu">取消选择</button>
+                            <button class="btn btn-sm btn-primary" data-action="_draftBatchApprove" data-args='[""]' data-page-node-id="6BaryC1OtUZRTJRt0gm332"><i class="fa-solid fa-circle-check" data-page-node-id="gEk8EE0nvvDYGyPp97Vwm3"></i> 批量审批</button>
+                            <button class="btn btn-sm btn-outline" data-action="_draftBatchReject" data-args='[""]' data-page-node-id="L89wAyfnGntalxC9CbrpwV"><i class="fa-solid fa-ban" data-page-node-id="D8HsZXydIrSy5wBCwm2LTz"></i> 批量拒绝</button>
+                            <button class="btn btn-sm btn-outline" data-action="_draftDeselectAll" data-args='[""]' data-page-node-id="8f6fWWGfXbfMH47o5MefNu">取消选择</button>
                         </div>
                         <div class="draft-stats-row" data-page-node-id="ywUR2y7E0O1RhISQB8IHQR">
                             <div class="draft-stat-card" data-page-node-id="nHOA2Z8QM78Bk0RvqZ9upS">
@@ -2107,7 +2107,7 @@
                                 <div class="search-box draft-search-box" data-page-node-id="XlsqjDyvAjPvSyaQHCcHKs">
                                     <input type="text" class="form-control" id="draft-search" placeholder="搜索草稿..." oninput="debouncedLoadDraftsPage()" data-page-node-id="80JzQ5McFeFJDWFDupwsTW">
                                 </div>
-                                <button class="btn btn-sm btn-primary draft-batch-read-btn" id="draft-batch-read-btn" style="display:none;" onclick="_draftBatchMarkRead()" data-page-node-id="DCUFcOUgInP9uSuKBXjUQr">
+                                <button class="btn btn-sm btn-primary draft-batch-read-btn" id="draft-batch-read-btn" style="display:none;" data-action="_draftBatchMarkRead" data-args='[""]' data-page-node-id="DCUFcOUgInP9uSuKBXjUQr">
                                     <i class="fa-solid fa-check-double" data-page-node-id="kGGkzvyNancfzu1C2GUcMq"></i> 批量标记已读
                                 </button>
                             </div>
@@ -2192,11 +2192,11 @@
                     <!-- 子页面切换：SkillHub 技能市场 / 已有技能管理 -->
                     <div class="skill-subnav" id="skill-subnav" role="tablist" aria-label="技能管理子页面" data-page-node-id="D1drGrah1qThvdu2BgxLln">
                         <button class="skill-subnav-btn active" data-sub="market" role="tab" aria-selected="true"
-                                onclick="switchSkillSubPage('market')" data-page-node-id="aItFHUX6rofvob3zrEIRnz">
+                                data-action="switchSkillSubPage" data-args='["market"]' data-page-node-id="aItFHUX6rofvob3zrEIRnz">
                             <i class="fa-solid fa-store" data-page-node-id="rWvfwHu9wFEmATRJ6M2XbM"></i><span data-page-node-id="FnNVKDyt4v5uCBWJT4FvMM">SkillHub 技能市场</span>
                         </button>
                         <button class="skill-subnav-btn" data-sub="installed" role="tab" aria-selected="false"
-                                onclick="switchSkillSubPage('installed')" data-page-node-id="BXyMGWTcwIphxO6KGxpqs9">
+                                data-action="switchSkillSubPage" data-args='["installed"]' data-page-node-id="BXyMGWTcwIphxO6KGxpqs9">
                             <i class="fa-solid fa-puzzle-piece" data-page-node-id="v3cbIbAEg6UdpkAVADMGGb"></i><span data-page-node-id="DX5oIBSrAzH56W95xFJYSz">已有技能管理</span>
                         </button>
                     </div>
@@ -2212,7 +2212,7 @@
                                         <div class="marketplace-title-sub" data-page-node-id="FNHACnPI4T6Eg36fyy2UyJ">专为中国用户优化的 Skills 社区 · 一键安装</div>
                                     </div>
                                 </div>
-                                <button class="btn btn-sm btn-outline-secondary" id="market-refresh-btn" onclick="loadMarketplace(true)" data-page-node-id="lNO0cWKEUKGoKFsDA8bEZh">
+                                <button class="btn btn-sm btn-outline-secondary" id="market-refresh-btn" data-action="loadMarketplace" data-args='[true]' data-page-node-id="lNO0cWKEUKGoKFsDA8bEZh">
                                     <i class="fa-solid fa-rotate" data-page-node-id="aNaTjWhCHbwrA6hSe8nww8"></i> 刷新
                                 </button>
                             </div>
@@ -2227,19 +2227,19 @@
                                                onkeydown="if(event.key==='Enter')onMarketSearchInput()" data-page-node-id="x0iKLimG6E51fA7dMdxRuU">
                                     </div>
                                     <div class="marketplace-tabs" id="marketplace-tabs" data-page-node-id="y6ljEOXli5xVgnB6p1KCgg">
-                                        <button class="market-tab active" data-tab="all" onclick="switchMarketTab('all')" data-page-node-id="7SEnh7MHzxlSIRoHg1eey3"><span data-page-node-id="GrE0TnGOmyJmYEjJwC1YxH">全部</span></button>
-                                        <button class="market-tab" data-tab="featured" onclick="switchMarketTab('featured')" data-page-node-id="9bo9R3UmNj3hlHCCR41s2B"><span data-page-node-id="KdvpVXXCNholEcHfCDgpfN">推荐精选</span></button>
-                                        <button class="market-tab" data-tab="trending" onclick="switchMarketTab('trending')" data-page-node-id="9ojZpl0Nl22LZj280YT7sl"><span data-page-node-id="3VLR53rEoQ86XDTj56DOn6">近期飙升</span></button>
-                                        <button class="market-tab" data-tab="hot" onclick="switchMarketTab('hot')" data-page-node-id="6YIFGU5ZV5hdeDXBwgLu6P"><span data-page-node-id="wplkJnLpAIhDg4Pwa293e5">下载量</span></button>
-                                        <button class="market-tab" data-tab="stars" onclick="switchMarketTab('stars')" data-page-node-id="KYMuAbJbGwmZFispGeTttM"><span data-page-node-id="PKrm8vXMuZPo61qt6HXTPM">收藏量</span></button>
-                                        <button class="market-tab" data-tab="newest" onclick="switchMarketTab('newest')" data-page-node-id="ZpFpT6xcvVScu5YC3GFoV7"><span data-page-node-id="4yKRYC7x1aGaavBnbHcN5M">最近上新</span></button>
+                                        <button class="market-tab active" data-tab="all" data-action="switchMarketTab" data-args='["all"]' data-page-node-id="7SEnh7MHzxlSIRoHg1eey3"><span data-page-node-id="GrE0TnGOmyJmYEjJwC1YxH">全部</span></button>
+                                        <button class="market-tab" data-tab="featured" data-action="switchMarketTab" data-args='["featured"]' data-page-node-id="9bo9R3UmNj3hlHCCR41s2B"><span data-page-node-id="KdvpVXXCNholEcHfCDgpfN">推荐精选</span></button>
+                                        <button class="market-tab" data-tab="trending" data-action="switchMarketTab" data-args='["trending"]' data-page-node-id="9ojZpl0Nl22LZj280YT7sl"><span data-page-node-id="3VLR53rEoQ86XDTj56DOn6">近期飙升</span></button>
+                                        <button class="market-tab" data-tab="hot" data-action="switchMarketTab" data-args='["hot"]' data-page-node-id="6YIFGU5ZV5hdeDXBwgLu6P"><span data-page-node-id="wplkJnLpAIhDg4Pwa293e5">下载量</span></button>
+                                        <button class="market-tab" data-tab="stars" data-action="switchMarketTab" data-args='["stars"]' data-page-node-id="KYMuAbJbGwmZFispGeTttM"><span data-page-node-id="PKrm8vXMuZPo61qt6HXTPM">收藏量</span></button>
+                                        <button class="market-tab" data-tab="newest" data-action="switchMarketTab" data-args='["newest"]' data-page-node-id="ZpFpT6xcvVScu5YC3GFoV7"><span data-page-node-id="4yKRYC7x1aGaavBnbHcN5M">最近上新</span></button>
                                         <span class="market-tab-indicator" id="market-tab-indicator" data-page-node-id="N2i2Qmgm0IpMe6nKWXyFrG"></span>
                                     </div>
                                     <div class="marketplace-apifilter" id="marketplace-apifilter" data-page-node-id="vsvlWJ2I6FK34RmB4AsdBa">
                                         <span class="mk-filter-label" data-page-node-id="MxeC1a4TyCfgPTDLn5THMj">API Key</span>
-                                        <button class="mk-filter-btn active" data-api="all" onclick="setMarketApiFilter('all')" data-page-node-id="LliOEmEH3lFFeHWk5MOdaA">全部</button>
-                                        <button class="mk-filter-btn" data-api="required" onclick="setMarketApiFilter('required')" data-page-node-id="p3EqRTAQRPvgSYgDghtuiu">需要 API Key</button>
-                                        <button class="mk-filter-btn" data-api="none" onclick="setMarketApiFilter('none')" data-page-node-id="QWmTgMwlO21WexDg9SBnW5">无需 API Key</button>
+                                        <button class="mk-filter-btn active" data-api="all" data-action="setMarketApiFilter" data-args='["all"]' data-page-node-id="LliOEmEH3lFFeHWk5MOdaA">全部</button>
+                                        <button class="mk-filter-btn" data-api="required" data-action="setMarketApiFilter" data-args='["required"]' data-page-node-id="p3EqRTAQRPvgSYgDghtuiu">需要 API Key</button>
+                                        <button class="mk-filter-btn" data-api="none" data-action="setMarketApiFilter" data-args='["none"]' data-page-node-id="QWmTgMwlO21WexDg9SBnW5">无需 API Key</button>
                                     </div>
                                 </div>
                                 <div class="marketplace-meta" id="marketplace-meta" data-page-node-id="s9aDUHnxyih9jFIG5Sy6d3"></div>
@@ -2270,7 +2270,7 @@
                                         <option value="feishu" data-page-node-id="1DamBMUQaQ1woNUCfyHkTL">飞书专属</option>
                                         <option value="wecom" data-page-node-id="uAUxj2AAbwYh4Hvcazp3Iu">企微专属</option>
                                     </select>
-                                    <button class="btn btn-primary" id="skill-install-btn" onclick="installSkill()" data-page-node-id="Md8QRgXwiKynTdjCBMl2cB">
+                                    <button class="btn btn-primary" id="skill-install-btn" data-action="installSkill" data-args='[""]' data-page-node-id="Md8QRgXwiKynTdjCBMl2cB">
                                         <i class="fa-solid fa-plus" data-page-node-id="RSLcuGgan62aA0zB9TE10L"></i> 安装
                                     </button>
                                 </div>
@@ -2311,7 +2311,7 @@
                         <div class="search-box" data-page-node-id="MD22DbKQH78G58ZK2F5IG8">
                             <input type="text" class="form-control" id="metrics-search" placeholder="搜索平台..." oninput="filterMetricsTable()" data-page-node-id="Dm7u8vXb1kk0YkkevCNbmU">
                         </div>
-                        <button class="btn btn-sm btn-outline" onclick="exportMetricsCSV()" title="导出路由质量数据为 CSV" style="margin-right:8px;" data-page-node-id="cAcGvREzvWYWzcblyTxjzD">
+                        <button class="btn btn-sm btn-outline" data-action="exportMetricsCSV" data-args='[""]' title="导出路由质量数据为 CSV" style="margin-right:8px;" data-page-node-id="cAcGvREzvWYWzcblyTxjzD">
                             <i class="fa-solid fa-file-csv" data-page-node-id="tRCGAO4MqphpCIUvThrVRQ"></i> 导出 CSV
                         </button>
                         <span class="metrics-refresh-hint" data-page-node-id="orD8Kyc3ruFiIDqyaDpArd"><i class="fa-solid fa-rotate" data-page-node-id="JkUyIo6LHwO19D8aazpBrG"></i> 每 30 秒自动刷新</span>
@@ -2483,7 +2483,7 @@
                         </div>
                     </div>
                     <div class="page-header-actions" data-page-node-id="02Z1FbqjfspDDydLV0K2NU">
-                        <button class="btn btn-sm btn-outline" onclick="exportCostQualityCSV()" title="导出成本质量数据为 CSV" style="margin-right:8px;" data-page-node-id="Rn9VeMZdmnQCANgDuGkHTp">
+                        <button class="btn btn-sm btn-outline" data-action="exportCostQualityCSV" data-args='[""]' title="导出成本质量数据为 CSV" style="margin-right:8px;" data-page-node-id="Rn9VeMZdmnQCANgDuGkHTp">
                             <i class="fa-solid fa-file-csv" data-page-node-id="C2AbcezwQgwa06lVf22xcu"></i> 导出 CSV
                         </button>
                         <span class="metrics-refresh-hint" data-page-node-id="ZuBEdNqeNa8EkwO70ueAMO"><i class="fa-solid fa-rotate" data-page-node-id="qML8hFvpD1QslgUSfqUdlX"></i> 每 30 秒自动刷新</span>
@@ -2545,7 +2545,7 @@
                         <span class="ps-platform-badge" id="ps-platform-badge" data-page-node-id="3zOaLZlqOInwQ5r3L3whHC"><span class="pf-dot" data-page-node-id="pf3P91KDkwoRkMDVQJ5roR"></span><span class="pf-label" data-page-node-id="9FjcoB1maNDHEAXqs0fnvX">—</span></span>
                         <span class="ps-status-badge" id="ps-auto-status" data-page-node-id="0yN53qqOmrFeKoRIteRvkH">自动画像 —</span>
                         <span class="ps-status-badge" id="ps-confidence" data-page-node-id="HyQIEgAtZHS3CGbhGpglRW">置信度 —</span>
-                        <button class="btn btn-outline btn-sm" id="ps-btn-reanalyze" onclick="reanalyzePersona()" data-page-node-id="7sI7BBSG3robFj0Co1zMIn">
+                        <button class="btn btn-outline btn-sm" id="ps-btn-reanalyze" data-action="reanalyzePersona" data-args='[""]' data-page-node-id="7sI7BBSG3robFj0Co1zMIn">
                             <i class="fa-solid fa-rotate" data-page-node-id="mSeKpIl4b8sfiOOyXSA8dd"></i> 重新分析
                             <span class="ps-btn-sub" data-page-node-id="CAprt7SltW8gO5zoiJJTBe">基于历史消息重新抽取</span>
                         </button>
@@ -2662,7 +2662,7 @@
                         <div class="panel-header" data-page-node-id="4A2sQF1hNvLdLjDM0X1rC5">
                             <h3 data-page-node-id="CujkqgoLq7FRHiblnZeUTu"><i class="fa-solid fa-chart-area" data-page-node-id="nhEw927yAA7DHBXe0Qk1l2"></i> 风格维度雷达</h3>
                             <div class="panel-actions" data-page-node-id="oZrHjIcmxZ4DsoFrqmDk4v">
-                                <button class="btn btn-outline btn-sm" onclick="openExplainDrawer()" data-page-node-id="mtHwUKemhCsW94pNI2fdD9"><i class="fa-solid fa-magnifying-glass-chart" data-page-node-id="tmCNJQCBcgHFvzZO95iWlJ"></i> 可解释画像</button>
+                                <button class="btn btn-outline btn-sm" data-action="openExplainDrawer" data-args='[""]' data-page-node-id="mtHwUKemhCsW94pNI2fdD9"><i class="fa-solid fa-magnifying-glass-chart" data-page-node-id="tmCNJQCBcgHFvzZO95iWlJ"></i> 可解释画像</button>
                             </div>
                         </div>
                         <div class="panel-body ps-radar-body" data-page-node-id="PHDQNZcw7MhWcLzQMb9nXs">
@@ -2690,8 +2690,8 @@
                     <div class="panel-header" data-page-node-id="YflYyNHGf8ECrVPVKxwXkd">
                         <h3 data-page-node-id="mywvOqrBRDNkClaw9Ednjx"><i class="fa-solid fa-file-lines" data-page-node-id="SfF9AL8Do31ScBYiUO2UmL"></i> 自动画像描述（AI 生成 / 注入 system prompt）</h3>
                         <div class="panel-actions" data-page-node-id="p2wSHzpJNs86HJjKtn3FZp">
-                            <button class="btn btn-outline btn-sm" onclick="runBacktest()" data-page-node-id="FqLwBBjiHthMnkTZKaRwFx"><i class="fa-solid fa-gauge-high" data-page-node-id="DMX4UqyTuMnKqj3tg2bLbo"></i> 还原度回测</button>
-                            <button class="btn btn-outline btn-sm" onclick="openVersionModal()" data-page-node-id="HWbw7qDnnF9E103G7kkEMr"><i class="fa-solid fa-clock-rotate-left" data-page-node-id="i4Dz8mjMQZGA47wqEJK44F"></i> 画像历史</button>
+                            <button class="btn btn-outline btn-sm" data-action="runBacktest" data-args='[""]' data-page-node-id="FqLwBBjiHthMnkTZKaRwFx"><i class="fa-solid fa-gauge-high" data-page-node-id="DMX4UqyTuMnKqj3tg2bLbo"></i> 还原度回测</button>
+                            <button class="btn btn-outline btn-sm" data-action="openVersionModal" data-args='[""]' data-page-node-id="HWbw7qDnnF9E103G7kkEMr"><i class="fa-solid fa-clock-rotate-left" data-page-node-id="i4Dz8mjMQZGA47wqEJK44F"></i> 画像历史</button>
                         </div>
                     </div>
                     <div class="panel-body ps-prompt-panel-body" data-page-node-id="ny3XDjlsMWcCIeXdvXo9Y0">
@@ -2740,8 +2740,8 @@
                             <textarea class="ps-textarea" id="ps-override-text" rows="5"
                                       placeholder="留空则使用自动画像。例：语气干练直接，技术问题用代码块，闲聊不超过30字..."></textarea>
                             <div class="ps-actions" data-page-node-id="4zBUOmJtp0Lgjh4rTTQxKj">
-                                <button class="btn btn-outline btn-sm" onclick="resetOverride()" data-page-node-id="1gWzQIdiQIKbB2FswkDrcs">重置为自动</button>
-                                <button class="btn btn-primary btn-sm" onclick="saveOverride()" data-page-node-id="7mMOqoBESclvPNMkioAiLO"><i class="fa-solid fa-floppy-disk" data-page-node-id="kgPJxRvgC7pQIaKR8pbK40"></i> 保存</button>
+                                <button class="btn btn-outline btn-sm" data-action="resetOverride" data-args='[""]' data-page-node-id="1gWzQIdiQIKbB2FswkDrcs">重置为自动</button>
+                                <button class="btn btn-primary btn-sm" data-action="saveOverride" data-args='[""]' data-page-node-id="7mMOqoBESclvPNMkioAiLO"><i class="fa-solid fa-floppy-disk" data-page-node-id="kgPJxRvgC7pQIaKR8pbK40"></i> 保存</button>
                             </div>
                         </div>
                     </div>
@@ -2749,13 +2749,13 @@
                         <div class="panel-header" data-page-node-id="EVorlECQETAAv7qQGIFPMB">
                             <h3 data-page-node-id="i0G8D0qbJ44heX2kJmyO4f"><i class="fa-solid fa-comments" data-page-node-id="kGmzfnT4BJs77tmoAHqdLC"></i> 语气样例（Few-shot）</h3>
                         <div class="panel-actions" data-page-node-id="vxZAmIsMJiGxxCA0V2p9im">
-                            <button class="btn btn-outline btn-sm" onclick="recommendFewShot()" data-page-node-id="hzHOlCZ0FlqKVrkMlnW0sW">
+                            <button class="btn btn-outline btn-sm" data-action="recommendFewShot" data-args='[""]' data-page-node-id="hzHOlCZ0FlqKVrkMlnW0sW">
                                 <i class="fa-solid fa-wand-magic-sparkles" data-page-node-id="r1G6D2F4y3xiLIlXlBnGs1"></i> 从我的历史推荐样例
                             </button>
-                            <button class="btn btn-outline btn-sm" onclick="addFewShot()" data-page-node-id="s9PK8jS5RJXeEgxu8hHZ3S">
+                            <button class="btn btn-outline btn-sm" data-action="addFewShot" data-args='[""]' data-page-node-id="s9PK8jS5RJXeEgxu8hHZ3S">
                                 <i class="fa-solid fa-plus" data-page-node-id="G9MERA0NW569h9rAv2AGqE"></i> 添加样例
                             </button>
-                                <button class="btn btn-primary btn-sm" onclick="saveFewShot()" data-page-node-id="342lnp7kogonOAYzEcexb4">
+                                <button class="btn btn-primary btn-sm" data-action="saveFewShot" data-args='[""]' data-page-node-id="342lnp7kogonOAYzEcexb4">
                                     <i class="fa-solid fa-floppy-disk" data-page-node-id="qImPgHqoQ5w5vEIo8MZdbf"></i> 保存
                                 </button>
                             </div>
@@ -2778,11 +2778,11 @@
             </div>
 
             <!-- 画像可解释抽屉 -->
-            <div class="ps-drawer-mask" id="ps-explain-mask" onclick="closeExplainDrawer()" data-page-node-id="43dJY0hspxn2MzGaAQSUXG"></div>
+            <div class="ps-drawer-mask" id="ps-explain-mask" data-action="closeExplainDrawer" data-args='[""]' data-page-node-id="43dJY0hspxn2MzGaAQSUXG"></div>
             <aside class="ps-explain-drawer" id="ps-explain-drawer" aria-hidden="true" data-page-node-id="qQFZPmZv108MHIFp1Fp5UO">
                 <div class="ps-drawer-header" data-page-node-id="IhRX7Y4eZ1oTOq27ApB0K8">
                     <h3 data-page-node-id="5NXUEH57AmNCgxJEBvygdw"><i class="fa-solid fa-magnifying-glass-chart" data-page-node-id="ArBLGNZuBPElXKCBJTOE1a"></i> 画像可解释面板</h3>
-                    <button class="ps-drawer-close" onclick="closeExplainDrawer()" title="关闭" data-page-node-id="xENNeoChLHAvxZF7xjBW5D"><i class="fa-solid fa-xmark" data-page-node-id="A5WQJw0iBAp0IriiOKV0r9"></i></button>
+                    <button class="ps-drawer-close" data-action="closeExplainDrawer" data-args='[""]' title="关闭" data-page-node-id="xENNeoChLHAvxZF7xjBW5D"><i class="fa-solid fa-xmark" data-page-node-id="A5WQJw0iBAp0IriiOKV0r9"></i></button>
                 </div>
                 <div class="ps-drawer-body" data-page-node-id="eWt15L2Mzsi4DMdVL8GWCf">
                     <div class="ps-drawer-section" data-page-node-id="RUQMaL27RcGtNtToqLsfqi">
@@ -2803,7 +2803,7 @@
                 <div class="modal-content modal-lg" data-page-node-id="KEQDrmx3GPJkAKrZJ7uDkU">
                     <div class="modal-header" data-page-node-id="kmbosxlJ53jsGyUoRemVLY">
                         <h3 data-page-node-id="V2jmO5m26iQuc5EFQCMpr9"><i class="fa-solid fa-gauge-high" data-page-node-id="uyQx71WSKFjilFtW0VjefO"></i> 还原度回测</h3>
-                        <button class="modal-close" onclick="closeBacktest()" data-page-node-id="eSlQEbGwAdJy6hwPH65qDb"><i class="fa-solid fa-xmark" data-page-node-id="5gHdERIgC3nczBlOQxy1iF"></i></button>
+                        <button class="modal-close" data-action="closeBacktest" data-args='[""]' data-page-node-id="eSlQEbGwAdJy6hwPH65qDb"><i class="fa-solid fa-xmark" data-page-node-id="5gHdERIgC3nczBlOQxy1iF"></i></button>
                     </div>
                     <div class="modal-body" id="ps-backtest-body" data-page-node-id="IWBVBR0j0vc8j1WLN5TiOc">
                         <div class="ps-backtest-summary" id="ps-backtest-summary" data-page-node-id="v7oJMO7pUk4z8qp0uQ2h6g">
@@ -2821,7 +2821,7 @@
                 <div class="modal-content modal-lg" data-page-node-id="VQ8Jc48cb7riJOa6oPylwC">
                     <div class="modal-header" data-page-node-id="AOlLrvMKl9esyWUHOGi5Ku">
                         <h3 data-page-node-id="ZEQzBZbEodcVCoGCoYBDcs"><i class="fa-solid fa-clock-rotate-left" data-page-node-id="W6iIL91UTMDXcGKvBJ1yP1"></i> 画像历史版本 <span id="ps-version-modal-no" data-page-node-id="VGSV4Aww9oZOsGy1voDb2k"></span></h3>
-                        <button class="modal-close" onclick="closeVersionModal()" data-page-node-id="aakoACG92IS6iA7Kzp7uAe"><i class="fa-solid fa-xmark" data-page-node-id="xEw0nQwBw9U3ZKosNkKPLX"></i></button>
+                        <button class="modal-close" data-action="closeVersionModal" data-args='[""]' data-page-node-id="aakoACG92IS6iA7Kzp7uAe"><i class="fa-solid fa-xmark" data-page-node-id="xEw0nQwBw9U3ZKosNkKPLX"></i></button>
                     </div>
                     <div class="modal-body" id="ps-version-body" data-page-node-id="0AF0cN13DdATfKb0bgkC4K"></div>
                 </div>
@@ -2905,14 +2905,14 @@
                                     </div>
                                     <div class="sim-samples" id="simulate-samples" data-page-node-id="pOrXSk196jKLiPFnbbE6f1"></div>
                                     <div class="sim-send-row" data-page-node-id="6ahk2YDwF2Wkxo8Z47Yq53">
-                                        <button class="btn btn-primary sim-send-btn" onclick="sendSimulatedMessage()" data-page-node-id="mH3cbbXvcQBqoGjHsRDmRX">
+                                        <button class="btn btn-primary sim-send-btn" data-action="sendSimulatedMessage" data-args='[""]' data-page-node-id="mH3cbbXvcQBqoGjHsRDmRX">
                                             <i class="fa-solid fa-paper-plane" data-page-node-id="YH1DLL2scHET3vdU8uoGeP"></i> 发送测试
                                         </button>
-                                        <button class="btn btn-outline-primary sim-compare-btn" id="sim-compare-btn" onclick="compareRagModes()"
+                                        <button class="btn btn-outline-primary sim-compare-btn" id="sim-compare-btn" data-action="compareRagModes" data-args='[""]'
                                                 title="同一句话分别用标准模式和严格问答模式各跑一次，并排对比" data-page-node-id="zfJImzdC12QZEGGYjXIBUv">
                                             <i class="fa-solid fa-code-compare" data-page-node-id="05RGdbdzTOJqmVqY4TigmY"></i> 对比两种模式
                                         </button>
-                                        <button class="btn btn-outline-secondary sim-clear-btn" onclick="clearSimulate()" title="清空" data-page-node-id="IOGdMAk5a2a6Glq3PqP0kB">
+                                        <button class="btn btn-outline-secondary sim-clear-btn" data-action="clearSimulate" data-args='[""]' title="清空" data-page-node-id="IOGdMAk5a2a6Glq3PqP0kB">
                                             <i class="fa-solid fa-eraser" data-page-node-id="L19Tfmp0BLyVfwzcDALXqz"></i>
                                         </button>
                                     </div>
@@ -2927,7 +2927,7 @@
                                         <div class="search-box sim-history-search" data-page-node-id="f5VL5aEWNykMUwhhwBq1fW">
                                             <input type="text" class="form-control" id="sim-search" placeholder="搜索历史..." oninput="renderSimHistory()" data-page-node-id="ZPoHi49rfu4Ydit9gFlMGe">
                                         </div>
-                                        <button class="btn btn-xs btn-outline-secondary" onclick="clearSimHistory()" title="清空历史" data-page-node-id="edMaZQtNYZWeo8ZiCFK6A1">
+                                        <button class="btn btn-xs btn-outline-secondary" data-action="clearSimHistory" data-args='[""]' title="清空历史" data-page-node-id="edMaZQtNYZWeo8ZiCFK6A1">
                                             <i class="fa-solid fa-trash" data-page-node-id="dvt06uSja5dC7T0nj2GJ1G"></i>
                                         </button>
                                     </div>
@@ -2949,7 +2949,7 @@
                             </div>
                             <div class="sim-result-header-right" data-page-node-id="raOETMXs9YDyoAfAdWvpBQ">
                                 <span class="sim-result-timing" id="sim-result-timing" style="display:none;" data-page-node-id="olQ1pSjyQv3Dm61HRDcXEq"></span>
-                                <button class="btn btn-xs btn-outline-secondary" onclick="refreshSimStatus()" title="刷新状态" data-page-node-id="RBFOtbLeFnQplfAeqYafpJ">
+                                <button class="btn btn-xs btn-outline-secondary" data-action="refreshSimStatus" data-args='[""]' title="刷新状态" data-page-node-id="RBFOtbLeFnQplfAeqYafpJ">
                                     <i class="fa-solid fa-arrows-rotate" data-page-node-id="BFlJ6DhPnTuDjzK5DH8ZMw"></i>
                                 </button>
                             </div>
@@ -3036,7 +3036,7 @@
         <div class="modal-content modal-lg" data-page-node-id="UlQnUpDqqPr4umfs87hR24">
             <div class="modal-header" data-page-node-id="FE8NaDvhog3XEehT1OKD5Y">
                 <h3 id="kw-modal-title" data-page-node-id="BovQKOnbLsnG6Ll7lHnrre">新建关键词规则</h3>
-                <button class="modal-close" onclick="closeKeywordModal()" data-page-node-id="OBySqA84Sj1r0QNHFnuE1q"><i class="fa-solid fa-xmark" data-page-node-id="a6b737kvheCrdqZjIyTeHn"></i></button>
+                <button class="modal-close" data-action="closeKeywordModal" data-args='[""]' data-page-node-id="OBySqA84Sj1r0QNHFnuE1q"><i class="fa-solid fa-xmark" data-page-node-id="a6b737kvheCrdqZjIyTeHn"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="mYYwKTwnFaKMXi4fWVjr9n">
                 <input type="hidden" id="kw-modal-id" data-page-node-id="6RvvVDOYVFG5a3GkwdFlbc">
@@ -3076,8 +3076,8 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="ZT3wttIAdr4sbEPWXJwDvW">
-                <button class="btn btn-outline-secondary" onclick="closeKeywordModal()" data-page-node-id="XG9jQaKSa9jNAheGFjWnKU">取消</button>
-                <button class="btn btn-primary" onclick="saveKeyword()" data-page-node-id="PMdJezA8SbqgolnZ2zSbCJ">保存</button>
+                <button class="btn btn-outline-secondary" data-action="closeKeywordModal" data-args='[""]' data-page-node-id="XG9jQaKSa9jNAheGFjWnKU">取消</button>
+                <button class="btn btn-primary" data-action="saveKeyword" data-args='[""]' data-page-node-id="PMdJezA8SbqgolnZ2zSbCJ">保存</button>
             </div>
         </div>
     </div>
@@ -3087,7 +3087,7 @@
         <div class="modal-content" data-page-node-id="IxBChrz1sy15yz7OtHp2oj">
             <div class="modal-header" data-page-node-id="odupvM2BKIDqFUIh8GGBhL">
                 <h3 data-page-node-id="h8ZDIFFT7dYRFoi21T1Sij">同步中心</h3>
-                <button class="modal-close" onclick="closeSyncCenter()" data-page-node-id="ElPCueI7R15YHG2lBalH7G"><i class="fa-solid fa-xmark" data-page-node-id="CwshDolc2fMKgbJ1rYN8NP"></i></button>
+                <button class="modal-close" data-action="closeSyncCenter" data-args='[""]' data-page-node-id="ElPCueI7R15YHG2lBalH7G"><i class="fa-solid fa-xmark" data-page-node-id="CwshDolc2fMKgbJ1rYN8NP"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="eW7B0cvGgMc9BIT00nVrMR">
                 <p class="text-muted" data-page-node-id="W4IDSzfIQM1sYi8fKKt2Vl">全局同步历史消息，可按时间范围与会话类型灵活筛选。当前会话的定向同步请用会话窗口右上角的「同步本会话」。</p>
@@ -3123,11 +3123,11 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="00EgKE5JEfSqdP5UUwSpYH">
-                <button class="btn btn-outline-secondary" onclick="closeSyncCenter()" data-page-node-id="NK06ggztQjWa5eNgfhGAro">关闭</button>
-                <button class="btn btn-warning" id="sync-cancel-btn" style="display:none;" onclick="cancelSyncJob()" data-page-node-id="yisGdNmsUJH06Zyqetl6xX">
+                <button class="btn btn-outline-secondary" data-action="closeSyncCenter" data-args='[""]' data-page-node-id="NK06ggztQjWa5eNgfhGAro">关闭</button>
+                <button class="btn btn-warning" id="sync-cancel-btn" style="display:none;" data-action="cancelSyncJob" data-args='[""]' data-page-node-id="yisGdNmsUJH06Zyqetl6xX">
                     <i class="fa-solid fa-stop" data-page-node-id="QSM8kLRKSd40F7Im0fzBQN"></i> 取消同步
                 </button>
-                <button class="btn btn-primary" id="sync-center-btn" onclick="submitSyncCenter()" data-page-node-id="CVhroVuCDvGqG47M2vOplp">
+                <button class="btn btn-primary" id="sync-center-btn" data-action="submitSyncCenter" data-args='[""]' data-page-node-id="CVhroVuCDvGqG47M2vOplp">
                     <i class="fa-solid fa-rotate-right" data-page-node-id="Zm5f2VYAtVhHtoiq2oY1ta"></i> 开始同步
                 </button>
             </div>
@@ -3139,7 +3139,7 @@
         <div class="modal-content" data-page-node-id="CnUOaBfTmEjQbAOQFT8lmK">
             <div class="modal-header" data-page-node-id="dQsYAHvKEOAJcrvJcWLKzz">
                 <h3 data-page-node-id="jzgrDfeQt4ywXtPo3xvgEy">导入关键词规则</h3>
-                <button class="modal-close" onclick="closeImportModal()" data-page-node-id="JJEcNSCQt63eEwOp3NfrbA"><i class="fa-solid fa-xmark" data-page-node-id="zJ3DoBBX1HgRStR888QoB5"></i></button>
+                <button class="modal-close" data-action="closeImportModal" data-args='[""]' data-page-node-id="JJEcNSCQt63eEwOp3NfrbA"><i class="fa-solid fa-xmark" data-page-node-id="zJ3DoBBX1HgRStR888QoB5"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="qn6e0xpxA01eV4XvSG32Iw">
                 <div class="upload-area" id="upload-area" role="button" tabindex="0" onclick="document.getElementById('import-file').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('import-file').click();}" data-page-node-id="qsxWsdzVXwdBAcbaAgSizE">
@@ -3159,8 +3159,8 @@
                         </div>
                     </div>
                     <div data-page-node-id="HqSaflS2JPHGYbJnXHp1M2">
-                        <button class="btn btn-outline-secondary" onclick="clearImportPreview()" data-page-node-id="yvNqx8E9NxeU6rpp0XEAf4">重新选择</button>
-                        <button class="btn btn-primary" onclick="confirmImport()" data-page-node-id="SRe548ZUv8mi85jBu1mbxw">确认导入</button>
+                        <button class="btn btn-outline-secondary" data-action="clearImportPreview" data-args='[""]' data-page-node-id="yvNqx8E9NxeU6rpp0XEAf4">重新选择</button>
+                        <button class="btn btn-primary" data-action="confirmImport" data-args='[""]' data-page-node-id="SRe548ZUv8mi85jBu1mbxw">确认导入</button>
                     </div>
                 </div>
                 <div id="import-result" data-page-node-id="pPyXjIkS64fu6g99w10IqF">
@@ -3176,7 +3176,7 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="hrqIEf1cA7PHyjPsTDD8Ty">
-                <button class="btn btn-outline-secondary" onclick="closeImportModal()" data-page-node-id="oghu61tOX7WRxmbHdogAZa">关闭</button>
+                <button class="btn btn-outline-secondary" data-action="closeImportModal" data-args='[""]' data-page-node-id="oghu61tOX7WRxmbHdogAZa">关闭</button>
             </div>
         </div>
     </div>
@@ -3186,7 +3186,7 @@
         <div class="modal-content modal-lg" data-page-node-id="nFhNQbaPZBmZk3mjlChf5M">
             <div class="modal-header" data-page-node-id="1EW5Zpr4bmuI2gmVmNPyNN">
                 <h3 data-page-node-id="ubt1Vvl4G2Z1TL5yFdtaV2">添加知识库文档</h3>
-                <button class="modal-close" onclick="closeKbModal()" data-page-node-id="XfpCl81rYsVc1PNGF7RMkm"><i class="fa-solid fa-xmark" data-page-node-id="D3hL6a5BsUsGOUd3wJ1dR2"></i></button>
+                <button class="modal-close" data-action="closeKbModal" data-args='[""]' data-page-node-id="XfpCl81rYsVc1PNGF7RMkm"><i class="fa-solid fa-xmark" data-page-node-id="D3hL6a5BsUsGOUd3wJ1dR2"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="YGoyKBrpXZABN1U2qhTzBn">
                 <div class="form-group" data-page-node-id="BMDQJeZzlQfrHCcswY9KkE">
@@ -3221,8 +3221,8 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="ZzhCFfCXv8GWIFKyJEF5lP">
-                <button class="btn btn-outline-secondary" onclick="closeKbModal()" data-page-node-id="n6Wrpgo2T14D1TEiB67Hg2">取消</button>
-                <button class="btn btn-primary" onclick="saveKbDocument()" data-page-node-id="srGliYYL69yRyzrgoNMuBp">添加并索引</button>
+                <button class="btn btn-outline-secondary" data-action="closeKbModal" data-args='[""]' data-page-node-id="n6Wrpgo2T14D1TEiB67Hg2">取消</button>
+                <button class="btn btn-primary" data-action="saveKbDocument" data-args='[""]' data-page-node-id="srGliYYL69yRyzrgoNMuBp">添加并索引</button>
             </div>
         </div>
     </div>
@@ -3232,7 +3232,7 @@
         <div class="modal-content" data-page-node-id="TcHQDQhpul9zdSw0AXd5BU">
             <div class="modal-header" data-page-node-id="M1Q9tQPDezGUcEynzwfHu6">
                 <h3 data-page-node-id="BdkQqjsPvAqZKHboY6KFAA"><i class="fa-solid fa-link" data-page-node-id="i7kQlcMGr56v56wFslJ661"></i> 从 URL 导入网页</h3>
-                <button class="modal-close" onclick="closeImportUrlModal()" data-page-node-id="syRysBUIm1vEjDbeIqBmiE"><i class="fa-solid fa-xmark" data-page-node-id="BIGt1uY7daA769QHfUMBfO"></i></button>
+                <button class="modal-close" data-action="closeImportUrlModal" data-args='[""]' data-page-node-id="syRysBUIm1vEjDbeIqBmiE"><i class="fa-solid fa-xmark" data-page-node-id="BIGt1uY7daA769QHfUMBfO"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="1BkksN8tP6KFvuiLFPX3ml">
                 <div class="form-group" data-page-node-id="YOAGTOAzRvcq32AACMFIKz">
@@ -3250,8 +3250,8 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="QB7VojsDGe2DAv6FRocoGY">
-                <button class="btn btn-outline-secondary" onclick="closeImportUrlModal()" data-page-node-id="JKl8OCHR4Fzcbw3ygB8wKL">取消</button>
-                <button class="btn btn-primary" id="import-url-btn" onclick="startImportUrl()" data-page-node-id="e0eHG4AEgAobtTsg4UX8jg">导入</button>
+                <button class="btn btn-outline-secondary" data-action="closeImportUrlModal" data-args='[""]' data-page-node-id="JKl8OCHR4Fzcbw3ygB8wKL">取消</button>
+                <button class="btn btn-primary" id="import-url-btn" data-action="startImportUrl" data-args='[""]' data-page-node-id="e0eHG4AEgAobtTsg4UX8jg">导入</button>
             </div>
         </div>
     </div>
@@ -3261,7 +3261,7 @@
         <div class="modal-content modal-lg" data-page-node-id="lKhIEZMFThjK8dH2YrZiuy">
             <div class="modal-header" data-page-node-id="1TdB07tzxGzc9MuWA5nsWz">
                 <h3 data-page-node-id="mB1mbX7SQBdBpOzBClAq2g"><i class="fa-solid fa-folder" data-page-node-id="dhwvkPnYDrlYXBkM1xcejn"></i> 批量上传文档</h3>
-                <button class="modal-close" onclick="closeBatchUploadModal()" data-page-node-id="QfaiZJNSDE4TZJ977eShSV"><i class="fa-solid fa-xmark" data-page-node-id="mybKieX8MNSNlJ7S8DPfrT"></i></button>
+                <button class="modal-close" data-action="closeBatchUploadModal" data-args='[""]' data-page-node-id="QfaiZJNSDE4TZJ977eShSV"><i class="fa-solid fa-xmark" data-page-node-id="mybKieX8MNSNlJ7S8DPfrT"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="Xguydt30cNAKBU7ON95IW0">
                 <div class="upload-dropzone" id="upload-dropzone"
@@ -3276,8 +3276,8 @@
                 <div id="upload-file-list" class="upload-file-list" data-page-node-id="sm7cC0kUygK0NRf4gptFWb"></div>
             </div>
             <div class="modal-footer" data-page-node-id="UxjFmbuCJGVoLEDTqc6M4o">
-                <button class="btn btn-outline-secondary" onclick="closeBatchUploadModal()" data-page-node-id="UGIWmqz3LrDJl1dMutLlNu">取消</button>
-                <button class="btn btn-primary" id="batch-upload-btn" onclick="startBatchUpload()" disabled data-page-node-id="BuobwrOhfeZTgCeI2zcbc5">开始上传</button>
+                <button class="btn btn-outline-secondary" data-action="closeBatchUploadModal" data-args='[""]' data-page-node-id="UGIWmqz3LrDJl1dMutLlNu">取消</button>
+                <button class="btn btn-primary" id="batch-upload-btn" data-action="startBatchUpload" data-args='[""]' disabled data-page-node-id="BuobwrOhfeZTgCeI2zcbc5">开始上传</button>
             </div>
         </div>
     </div>
@@ -3287,7 +3287,7 @@
         <div class="modal-content modal-lg" data-page-node-id="6BbZC2FNoaQ9yCMxhMwruE">
             <div class="modal-header" data-page-node-id="9wTZdufdAHNMPF3fTcYVVH">
                 <h3 data-page-node-id="1HZhSbLUNoiOuOU5jFFxHb"><i class="fa-solid fa-file-lines" data-page-node-id="b2hwx0uLFHiHHXJy1MHkMs"></i> 从钉钉文档导入</h3>
-                <button class="modal-close" onclick="closeDingtalkImportModal()" data-page-node-id="E6I4sNKWyNCvz5AeBUJfhh"><i class="fa-solid fa-xmark" data-page-node-id="oJIZtVFrbaMS1l5Pf7KqAk"></i></button>
+                <button class="modal-close" data-action="closeDingtalkImportModal" data-args='[""]' data-page-node-id="E6I4sNKWyNCvz5AeBUJfhh"><i class="fa-solid fa-xmark" data-page-node-id="oJIZtVFrbaMS1l5Pf7KqAk"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="Z3D2wQ3YrBgLnJppTDSFxW">
                 <div class="dingtalk-import-layout" data-page-node-id="X3T44MUEuHsY8C16zdyEcP">
@@ -3295,7 +3295,7 @@
                     <div class="dingtalk-import-left" data-page-node-id="M3GYnxAkt9JiDqGqlz32Df">
                         <div class="panel-header" style="padding: 8px 12px;" data-page-node-id="ZrhOcjGsuqOBjtMEwYDiSj">
                             <h4 style="font-size: 13px;" data-page-node-id="L84foEeSEi2NOBmv6IP1Wl">已同步的钉钉文档</h4>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshDingtalkImportList()" data-page-node-id="6XdtzI3PVmuCgB3j87C5tO"><i class="fa-solid fa-rotate-right" data-page-node-id="PIpFwVEMrrqq6B2P5PznWB"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" data-action="refreshDingtalkImportList" data-args='[""]' data-page-node-id="6XdtzI3PVmuCgB3j87C5tO"><i class="fa-solid fa-rotate-right" data-page-node-id="PIpFwVEMrrqq6B2P5PznWB"></i></button>
                         </div>
                         <div class="search-box" style="padding: 8px 12px;" data-page-node-id="ftJomkHZWBomt92DXBlL0A">
                             <input type="text" class="form-control" id="ddoc-import-search" placeholder="搜索本地文档..." oninput="debouncedRefreshDingtalkImportList()" data-page-node-id="kPWfdToFNYeDCTBEUz0blY">
@@ -3308,7 +3308,7 @@
                             <label data-page-node-id="UFMEBHcPjNAIVygsJeJfx7">搜索钉钉云端文档</label>
                             <div class="input-group" data-page-node-id="scU4Qts971DkPaHKej7vt3">
                                 <input type="text" class="form-control" id="ddoc-import-query" placeholder="输入关键词搜索..." onkeydown="if(event.key==='Enter')searchDingtalkImport()" data-page-node-id="pPcL4gUiDW0KmwLtZt7Dud">
-                                <button class="btn btn-primary" onclick="searchDingtalkImport()" data-page-node-id="Ukf5dAREWpj9mhxDFPjmvH"><i class="fa-solid fa-search" data-page-node-id="z0EBrW2NqQWD4wyIDGLCfb"></i> 搜索</button>
+                                <button class="btn btn-primary" data-action="searchDingtalkImport" data-args='[""]' data-page-node-id="Ukf5dAREWpj9mhxDFPjmvH"><i class="fa-solid fa-search" data-page-node-id="z0EBrW2NqQWD4wyIDGLCfb"></i> 搜索</button>
                             </div>
                         </div>
                         <div id="ddoc-import-remote-list" class="dingtalk-import-remote-list" data-page-node-id="5gGmmnzqrdokrY1Ix3SAk4"></div>
@@ -3318,8 +3318,8 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="GNOBZ3jFc0EDO1e7FKkIX8">
-                <button class="btn btn-outline-secondary" onclick="closeDingtalkImportModal()" data-page-node-id="9wgffMBvSpWd6r7x7ciAEA">关闭</button>
-                <button class="btn btn-primary" id="ddoc-import-confirm-btn" onclick="confirmDingtalkImport()" disabled data-page-node-id="LQ17NUNEhBWummN81Fm4TI">导入到知识库</button>
+                <button class="btn btn-outline-secondary" data-action="closeDingtalkImportModal" data-args='[""]' data-page-node-id="9wgffMBvSpWd6r7x7ciAEA">关闭</button>
+                <button class="btn btn-primary" id="ddoc-import-confirm-btn" data-action="confirmDingtalkImport" data-args='[""]' disabled data-page-node-id="LQ17NUNEhBWummN81Fm4TI">导入到知识库</button>
             </div>
         </div>
     </div>
@@ -3329,22 +3329,22 @@
         <div class="modal-content modal-lg" data-page-node-id="52hxZmvqP8YHYe2fExwc7I">
             <div class="modal-header" data-page-node-id="rPFicpgxIdf5zPmd60sfo4">
                 <h3 data-page-node-id="ttnhQMRu4z6zreMml4uAJN"><i class="fa-solid fa-cloud-arrow-up" data-page-node-id="H7fOtMBKNmb0d0TLZIUJCb"></i> 从飞书文档导入</h3>
-                <button class="modal-close" onclick="closeFeishuImportModal()" data-page-node-id="D4R0SLj8tsbmUFHdjkaDMX"><i class="fa-solid fa-xmark" data-page-node-id="zRmBNpwi1gBkwrMv5BhMxC"></i></button>
+                <button class="modal-close" data-action="closeFeishuImportModal" data-args='[""]' data-page-node-id="D4R0SLj8tsbmUFHdjkaDMX"><i class="fa-solid fa-xmark" data-page-node-id="zRmBNpwi1gBkwrMv5BhMxC"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="HhpzmPcqzcV6BRVNVaw4Q6">
                 <div class="form-group" data-page-node-id="7pJsaYrjqr82zqPejhOy1i">
                     <label data-page-node-id="KEOEVG8wPMExj5NSkB08Fv">搜索飞书文档</label>
                     <div class="input-group" data-page-node-id="IwVzCUWcXHEfbBrZiZnIpE">
                         <input type="text" class="form-control" id="fdoc-import-query" placeholder="输入关键词搜索飞书文档..." onkeydown="if(event.key==='Enter')searchFeishuDocs()" data-page-node-id="ez8JUR54zXAPKqN3IytvI8">
-                        <button class="btn btn-primary" onclick="searchFeishuDocs()" data-page-node-id="TvmI4s0fT26top2CRxI3T3"><i class="fa-solid fa-search" data-page-node-id="3zPT4Wh4odnqalmbaMBrdk"></i> 搜索</button>
+                        <button class="btn btn-primary" data-action="searchFeishuDocs" data-args='[""]' data-page-node-id="TvmI4s0fT26top2CRxI3T3"><i class="fa-solid fa-search" data-page-node-id="3zPT4Wh4odnqalmbaMBrdk"></i> 搜索</button>
                     </div>
                 </div>
                 <div id="fdoc-import-list" class="dingtalk-import-remote-list" data-page-node-id="26lNG7WRZqvaiNneI3PKpO"></div>
                 <div id="fdoc-import-preview" class="dingtalk-import-preview" data-page-node-id="PRzJUDjUln4MGroBAntH24"></div>
             </div>
             <div class="modal-footer" data-page-node-id="kv9In7P3ltjKyOMdxtEkbZ">
-                <button class="btn btn-outline-secondary" onclick="closeFeishuImportModal()" data-page-node-id="39NI4WkEgpk1VncP4o1PtY">关闭</button>
-                <button class="btn btn-primary" id="fdoc-import-confirm-btn" onclick="confirmFeishuImport()" disabled data-page-node-id="aQWVFM3B2NTSdhde7hVm0N">导入到知识库</button>
+                <button class="btn btn-outline-secondary" data-action="closeFeishuImportModal" data-args='[""]' data-page-node-id="39NI4WkEgpk1VncP4o1PtY">关闭</button>
+                <button class="btn btn-primary" id="fdoc-import-confirm-btn" data-action="confirmFeishuImport" data-args='[""]' disabled data-page-node-id="aQWVFM3B2NTSdhde7hVm0N">导入到知识库</button>
             </div>
         </div>
     </div>
@@ -3354,13 +3354,13 @@
         <div class="modal-content modal-xl" data-page-node-id="XG4r28yGLaYZyCfOketHer">
             <div class="modal-header" data-page-node-id="kyW06df7q9CJBMzJtrOj8m">
                 <h3 id="doc-view-title" data-page-node-id="LbvNkhxM2qyGBGG3d26smg">文档内容</h3>
-                <button class="modal-close" onclick="closeDocViewModal()" data-page-node-id="ADwLGGAAWEP3Nw0j3hz2Hv"><i class="fa-solid fa-xmark" data-page-node-id="xa4sziNjr5f2feySF9hBrm"></i></button>
+                <button class="modal-close" data-action="closeDocViewModal" data-args='[""]' data-page-node-id="ADwLGGAAWEP3Nw0j3hz2Hv"><i class="fa-solid fa-xmark" data-page-node-id="xa4sziNjr5f2feySF9hBrm"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="y2KuAYTlj87C3iSDqtWJdb">
                 <div id="doc-view-content" class="doc-view-content" data-page-node-id="WbwWFNFDWZnKmuGO5rXFOo"></div>
             </div>
             <div class="modal-footer" data-page-node-id="kt8Q5L2ITV0SD1Sj7CfKCR">
-                <button class="btn btn-primary" onclick="closeDocViewModal()" data-page-node-id="rU6Rxy1ze4DPD4Z28UO3we">关闭</button>
+                <button class="btn btn-primary" data-action="closeDocViewModal" data-args='[""]' data-page-node-id="rU6Rxy1ze4DPD4Z28UO3we">关闭</button>
             </div>
         </div>
     </div>
@@ -3370,7 +3370,7 @@
         <div class="modal-content modal-xl" data-page-node-id="IaQj6dKPZG06JQ9wXg6gpm">
             <div class="modal-header" data-page-node-id="p4U2qnCSiuwURtBYS70SNk">
                 <h3 id="doc-edit-modal-title" data-page-node-id="xTF1RZargrjoG1FM5gW99B"><i class="fa-solid fa-pen-to-square" data-page-node-id="4sgC2p1gzpiVasAz4aMA6w"></i> 编辑文档</h3>
-                <button class="modal-close" onclick="closeDocEditModal()" data-page-node-id="1TBHVT6gypNUGJ3pVFr6WU"><i class="fa-solid fa-xmark" data-page-node-id="W1xpwGZzx6eawx1H86PRD6"></i></button>
+                <button class="modal-close" data-action="closeDocEditModal" data-args='[""]' data-page-node-id="1TBHVT6gypNUGJ3pVFr6WU"><i class="fa-solid fa-xmark" data-page-node-id="W1xpwGZzx6eawx1H86PRD6"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="iyDVReoloYu7ighV0Ifmnf">
                 <div class="form-group" data-page-node-id="6I3uDOERxEoDG8yhKIepp0">
@@ -3387,8 +3387,8 @@
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="BotuArTSlLu0N9iIdEfkiE">
-                <button class="btn btn-outline-secondary" onclick="closeDocEditModal()" data-page-node-id="zwFImAToulrkpSVVdTMmex">取消</button>
-                <button class="btn btn-primary" onclick="saveDocEdit()" data-page-node-id="Jij3zOkPzwx3uCtzYETRzP"><i class="fa-solid fa-floppy-disk" data-page-node-id="3LsCuFQs67Y1ZgrxuNyqVm"></i> 保存修改</button>
+                <button class="btn btn-outline-secondary" data-action="closeDocEditModal" data-args='[""]' data-page-node-id="zwFImAToulrkpSVVdTMmex">取消</button>
+                <button class="btn btn-primary" data-action="saveDocEdit" data-args='[""]' data-page-node-id="Jij3zOkPzwx3uCtzYETRzP"><i class="fa-solid fa-floppy-disk" data-page-node-id="3LsCuFQs67Y1ZgrxuNyqVm"></i> 保存修改</button>
             </div>
         </div>
     </div>
@@ -3396,7 +3396,7 @@
     <!-- Image Lightbox -->
     <div class="modal image-lightbox" id="image-lightbox" onclick="if(event.target===this)closeImageLightbox()" data-page-node-id="DVduHZf9TLhN9H4P3MWgCG">
         <div class="image-lightbox-content" data-page-node-id="XG3SP1Hv9WVftUmJBJsAE9">
-            <button class="modal-close image-lightbox-close" onclick="closeImageLightbox()" aria-label="关闭" data-page-node-id="Vk44sm8hrnsQXuUQiHsEah"><i class="fa-solid fa-xmark" data-page-node-id="UM4iiqZdCyN3PAtZ3ceCsM"></i></button>
+            <button class="modal-close image-lightbox-close" data-action="closeImageLightbox" data-args='[""]' aria-label="关闭" data-page-node-id="Vk44sm8hrnsQXuUQiHsEah"><i class="fa-solid fa-xmark" data-page-node-id="UM4iiqZdCyN3PAtZ3ceCsM"></i></button>
             <img id="image-lightbox-img" src="" alt="查看大图" data-page-node-id="QbNHEiWGnrJP7rs3JeXYvy">
             <div class="image-lightbox-toolbar" data-page-node-id="CFgMOMLymmKIldtmcGRL4N">
                 <a id="image-lightbox-open" class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" data-page-node-id="2TFeVymhgajSCX0q2Epg5a"><i class="fa-solid fa-arrow-up-right-from-square" data-page-node-id="0y0GzNNlcORNuS62ioMUSu"></i> 新窗口打开</a>
@@ -3441,7 +3441,7 @@
         <div class="modal-content modal-lg" data-page-node-id="brdVh2xuSwd18G1nTLpVPn">
             <div class="modal-header" data-page-node-id="GQGkkZrgEAfD5UtL3dagvM">
                 <h3 id="skill-config-title" data-page-node-id="r924RIlftBiWujVCY9AxYN">技能配置</h3>
-                <button class="modal-close" onclick="closeSkillConfigModal()" data-page-node-id="EQb6NjxCSYBtTVRFTU0wC5"><i class="fa-solid fa-xmark" data-page-node-id="DXyxT4XuYT7Af8BFI6S5i8"></i></button>
+                <button class="modal-close" data-action="closeSkillConfigModal" data-args='[""]' data-page-node-id="EQb6NjxCSYBtTVRFTU0wC5"><i class="fa-solid fa-xmark" data-page-node-id="DXyxT4XuYT7Af8BFI6S5i8"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="FhaoOfPbcU4aKY3UJCwiHA">
                 <input type="hidden" id="skill-config-name" data-page-node-id="Kl9CkW9qiKuwVI301TmO5n">
@@ -3453,8 +3453,8 @@
                           placeholder="# 暂无 config.yaml，输入 YAML 参数后保存即可创建"></textarea>
             </div>
             <div class="modal-footer" data-page-node-id="c9IHvMnoowKknLqveDHK49">
-                <button class="btn btn-outline" onclick="closeSkillConfigModal()" data-page-node-id="6s0da4mW9WcqlOgmlAztnX">取消</button>
-                <button class="btn btn-primary" id="skill-config-save-btn" onclick="saveSkillConfig()" data-page-node-id="hdBovGp9bvncdIWTIq0nXh">保存并重载</button>
+                <button class="btn btn-outline" data-action="closeSkillConfigModal" data-args='[""]' data-page-node-id="6s0da4mW9WcqlOgmlAztnX">取消</button>
+                <button class="btn btn-primary" id="skill-config-save-btn" data-action="saveSkillConfig" data-args='[""]' data-page-node-id="hdBovGp9bvncdIWTIq0nXh">保存并重载</button>
             </div>
         </div>
     </div>
@@ -3464,7 +3464,7 @@
         <div class="modal-content modal-lg" data-page-node-id="vL4nJSGhBD6ZMTZscLxMzw">
             <div class="modal-header" data-page-node-id="ldXp73vL2UaS4d9ZmyMb3q">
                 <h3 id="skill-intent-title" data-page-node-id="xzZdFxBZz1Et1Dgw8iI64z">意图关键词</h3>
-                <button class="modal-close" onclick="closeSkillIntentModal()" data-page-node-id="Vt4HZOLFYEsovZ3DXY85Dt"><i class="fa-solid fa-xmark" data-page-node-id="evEJ5HHpHFjOYRemUaVWoU"></i></button>
+                <button class="modal-close" data-action="closeSkillIntentModal" data-args='[""]' data-page-node-id="Vt4HZOLFYEsovZ3DXY85Dt"><i class="fa-solid fa-xmark" data-page-node-id="evEJ5HHpHFjOYRemUaVWoU"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="6TGFVyL4N05zJrck88of89">
                 <input type="hidden" id="skill-intent-name" data-page-node-id="ry8IpzH2P7q0E1EvliLoyi">
@@ -3476,12 +3476,12 @@
                     <input type="text" class="form-control" id="skill-intent-input"
                            placeholder="输入关键词后回车或点「添加」（支持逗号/空格分隔批量）"
                            onkeydown="if(event.key==='Enter'){event.preventDefault();addSkillIntentKeyword();}" style="flex:1;" data-page-node-id="1HgoCDcmAMddGxa9xqnvcy">
-                    <button class="btn btn-outline" onclick="addSkillIntentKeyword()" data-page-node-id="bbyBqGnF6i5gAszuHonH6p"><i class="fa-solid fa-plus" data-page-node-id="7nGryfl8DmLEECkJEahoDQ"></i> 添加</button>
+                    <button class="btn btn-outline" data-action="addSkillIntentKeyword" data-args='[""]' data-page-node-id="bbyBqGnF6i5gAszuHonH6p"><i class="fa-solid fa-plus" data-page-node-id="7nGryfl8DmLEECkJEahoDQ"></i> 添加</button>
                 </div>
             </div>
             <div class="modal-footer" data-page-node-id="CMkP93H07ZUxeFPAfEUElA">
-                <button class="btn btn-outline" onclick="closeSkillIntentModal()" data-page-node-id="R9MRAHKYlnfo4OHEoH0Xj8">取消</button>
-                <button class="btn btn-primary" id="skill-intent-save-btn" onclick="saveSkillIntent()" data-page-node-id="UiuD2HpuLPi94O9yxTdsZl">保存并重载</button>
+                <button class="btn btn-outline" data-action="closeSkillIntentModal" data-args='[""]' data-page-node-id="R9MRAHKYlnfo4OHEoH0Xj8">取消</button>
+                <button class="btn btn-primary" id="skill-intent-save-btn" data-action="saveSkillIntent" data-args='[""]' data-page-node-id="UiuD2HpuLPi94O9yxTdsZl">保存并重载</button>
             </div>
         </div>
     </div>
@@ -3491,14 +3491,14 @@
         <div class="modal-content modal-lg" data-page-node-id="j1goN1IOEn0ua5LWORwUBT">
             <div class="modal-header" data-page-node-id="BzzXNM77iIXIuOmFHxELtV">
                 <h3 id="skill-ai-intent-title" data-page-node-id="Mu1y577YIiahR4o88ZLSvz">AI 生成意图词</h3>
-                <button class="modal-close" onclick="closeSkillAiIntentModal()" data-page-node-id="NCPHe5m4BWEAcbnQoWTeJC"><i class="fa-solid fa-xmark" data-page-node-id="GoQTMiAJw2Z0SSxwas9oOu"></i></button>
+                <button class="modal-close" data-action="closeSkillAiIntentModal" data-args='[""]' data-page-node-id="NCPHe5m4BWEAcbnQoWTeJC"><i class="fa-solid fa-xmark" data-page-node-id="GoQTMiAJw2Z0SSxwas9oOu"></i></button>
             </div>
             <div class="modal-body" id="skill-ai-intent-body" data-page-node-id="ol1gb5qvz8kAfCQEsRU41o">
                 <!-- 动态渲染：loading / 4 步生成过程 -->
             </div>
             <div class="modal-footer" data-page-node-id="Eeq1r2qSJurBf8j9r8Jzuh">
-                <button class="btn btn-outline" onclick="closeSkillAiIntentModal()" data-page-node-id="LHOTDXxBU4a0mAhWCO2WVP">关闭</button>
-                <button class="btn btn-primary" id="skill-ai-intent-rerun" onclick="runSkillAiIntent(true)" style="display:none;" data-page-node-id="ngA6FiHQLMoBg3jle1LG0y"><i class="fa-solid fa-rotate" data-page-node-id="fJfE9SIvMQmrlcvawUjUFA"></i> 重新生成（覆盖）</button>
+                <button class="btn btn-outline" data-action="closeSkillAiIntentModal" data-args='[""]' data-page-node-id="LHOTDXxBU4a0mAhWCO2WVP">关闭</button>
+                <button class="btn btn-primary" id="skill-ai-intent-rerun" data-action="runSkillAiIntent" data-args='[true]' style="display:none;" data-page-node-id="ngA6FiHQLMoBg3jle1LG0y"><i class="fa-solid fa-rotate" data-page-node-id="fJfE9SIvMQmrlcvawUjUFA"></i> 重新生成（覆盖）</button>
             </div>
         </div>
     </div>
@@ -3508,13 +3508,13 @@
         <div class="modal-content modal-lg" data-page-node-id="p8yH9PgolSQxML7JHcJ77K">
             <div class="modal-header" data-page-node-id="4t9bkgZGNC1vc576TUc4cL">
                 <h3 id="rt-modal-title" data-page-node-id="QbziUEcmXjA0bOt4nrCCWz">链路追踪详情</h3>
-                <button class="modal-close" onclick="closeRouteTraceModal()" data-page-node-id="Wk1ExRMHEHbrbl1thh3z2N"><i class="fa-solid fa-xmark" data-page-node-id="IQSYm0SQU9i8f4co6wrrxD"></i></button>
+                <button class="modal-close" data-action="closeRouteTraceModal" data-args='[""]' data-page-node-id="Wk1ExRMHEHbrbl1thh3z2N"><i class="fa-solid fa-xmark" data-page-node-id="IQSYm0SQU9i8f4co6wrrxD"></i></button>
             </div>
             <div class="modal-body" id="rt-modal-body" data-page-node-id="0H6hpcChZOPCAGnvhcx7kG">
                 <div class="empty-state" data-page-node-id="jkZcb4uJpVsLYzvQUSRDMb">加载中…</div>
             </div>
             <div class="modal-footer" data-page-node-id="Z20HmUZ5pFCgzyIcpTGjaS">
-                <button class="btn btn-outline" onclick="closeRouteTraceModal()" data-page-node-id="fAICIhVr0OO6CNGrQAXLeH">关闭</button>
+                <button class="btn btn-outline" data-action="closeRouteTraceModal" data-args='[""]' data-page-node-id="fAICIhVr0OO6CNGrQAXLeH">关闭</button>
             </div>
         </div>
     </div>
@@ -3580,7 +3580,7 @@
         <div class="modal-content" data-page-node-id="u0Mv9s7WQEl1R6joILZUGx">
             <div class="modal-header" data-page-node-id="Bpyiyt98H53a2MqqBLYGvk">
                 <h3 id="memory-modal-title" data-page-node-id="ZbNULs79W5MAm3GwXmprHB">新增记忆</h3>
-                <button class="modal-close" onclick="closeMemoryModal()" data-page-node-id="AB4pT3X1tnlaHDROq9OYxY"><i class="fa-solid fa-xmark" data-page-node-id="RcjnPD0vm9InMPWnArNeoJ"></i></button>
+                <button class="modal-close" data-action="closeMemoryModal" data-args='[""]' data-page-node-id="AB4pT3X1tnlaHDROq9OYxY"><i class="fa-solid fa-xmark" data-page-node-id="RcjnPD0vm9InMPWnArNeoJ"></i></button>
             </div>
             <div class="modal-body" data-page-node-id="F8bpJ97BCBm09NRdGl2VOg">
                 <div class="form-group" data-page-node-id="WoOSGvZcARQSGB7dn3ii0b">
@@ -3603,8 +3603,8 @@
                 <p class="hint" id="memory-modal-scope-hint" data-page-node-id="Ic3BsRD9QXlFIM929PIjDw"></p>
             </div>
             <div class="modal-footer" data-page-node-id="StczwCGsn6rt4vdJ7CpRDO">
-                <button class="btn btn-outline-secondary" onclick="closeMemoryModal()" data-page-node-id="PNOXu0OxEnr7LMirLMylMo">取消</button>
-                <button class="btn btn-primary" id="memory-modal-save" onclick="submitMemoryModal()" data-page-node-id="TAaJOt9Zj3ERDlnF6kPwp8">保存</button>
+                <button class="btn btn-outline-secondary" data-action="closeMemoryModal" data-args='[""]' data-page-node-id="PNOXu0OxEnr7LMirLMylMo">取消</button>
+                <button class="btn btn-primary" id="memory-modal-save" data-action="submitMemoryModal" data-args='[""]' data-page-node-id="TAaJOt9Zj3ERDlnF6kPwp8">保存</button>
             </div>
         </div>
     </div>
@@ -3614,7 +3614,7 @@
         <div class="modal-content modal-lg" data-page-node-id="XkJlEL2dwAOy5KfWUn7YP4">
             <div class="modal-header" data-page-node-id="CryFZXmkzWhXuGg56Km860">
                 <h3 data-page-node-id="NvuqC2E3Hq6kOriYFtP17E"><i class="fa-solid fa-pen-to-square" data-page-node-id="TYXGOkguy3VkmqTh6B5n9i"></i> 编辑 AI 拟回复 — 草稿 <span id="draft-edit-id" data-page-node-id="pjOLyifCw57fYrLyFti8ea">#0</span></h3>
-                <button class="modal-close" onclick="_draftCloseEditModal()" data-page-node-id="FHykxSgz3KhYlwd1K76NNr"><i class="fa-solid fa-xmark" data-page-node-id="YKU8VuzMyfSfENdmEnVBQD"></i></button>
+                <button class="modal-close" data-action="_draftCloseEditModal" data-args='[""]' data-page-node-id="FHykxSgz3KhYlwd1K76NNr"><i class="fa-solid fa-xmark" data-page-node-id="YKU8VuzMyfSfENdmEnVBQD"></i></button>
             </div>
             <div class="draft-edit-modal-body" data-page-node-id="w9KSPhFZJ9wVHb7QrvhooY">
                 <label data-page-node-id="jcZj8KSFpOTZGAOXclo3Cz">修改回复内容后发送：</label>
@@ -3624,8 +3624,8 @@
                 </p>
             </div>
             <div class="modal-footer" data-page-node-id="Cx7Jl7Zxql3bAasQnEBAOq">
-                <button class="btn btn-outline-secondary" onclick="_draftCloseEditModal()" data-page-node-id="JTx6FwcbFAmhJFFrZHu4n8">取消</button>
-                <button class="btn btn-primary" id="draft-edit-submit-btn" onclick="_draftSubmitEdit()" data-page-node-id="WD2VCYv8btgSxdFgn7EuF8">
+                <button class="btn btn-outline-secondary" data-action="_draftCloseEditModal" data-args='[""]' data-page-node-id="JTx6FwcbFAmhJFFrZHu4n8">取消</button>
+                <button class="btn btn-primary" id="draft-edit-submit-btn" data-action="_draftSubmitEdit" data-args='[""]' data-page-node-id="WD2VCYv8btgSxdFgn7EuF8">
                     <i class="fa-solid fa-paper-plane" data-page-node-id="cm4EXP5awykbILGAERWAKo"></i> 编辑并发送
                 </button>
             </div>
@@ -3637,13 +3637,13 @@
         <div class="onboarding-card" data-page-node-id="rvWNYIEkTMb1QZWqfIyCKn">
             <div class="onboarding-step-header" data-page-node-id="tO2HpRczraO7tPZ86mQEBz">
                 <span id="onboarding-indicator" class="onboarding-indicator" data-page-node-id="hW3T7dCrYmiGx3gc1tRuvw">步骤 1 / 3</span>
-                <button class="onboarding-skip" onclick="onboardingSkip()" title="跳过引导" data-page-node-id="xEknsLxfkPmkY0OE60Mfqz">跳过</button>
+                <button class="onboarding-skip" data-action="onboardingSkip" data-args='[""]' title="跳过引导" data-page-node-id="xEknsLxfkPmkY0OE60Mfqz">跳过</button>
             </div>
             <div class="onboarding-icon" data-page-node-id="3Kilk2uGFxCu9hpDKVnrAa"><i class="fa-solid fa-rocket" data-page-node-id="du9eYEIZoSaDtuhvRhhS4e"></i></div>
             <h3 id="onboarding-title" class="onboarding-title" data-page-node-id="J71k8QUXcpYEx8NXnDEch0">配置 API Key</h3>
             <p id="onboarding-desc" class="onboarding-desc" data-page-node-id="WSBBxTfTHPa1ISKL6jPywA">打开系统配置 -> LLM 模型，填入您的 API Key 并保存。</p>
             <div class="onboarding-actions" data-page-node-id="Gwrwo0aUA4DlzQBghgFUA5">
-                <button id="onboarding-btn" class="btn btn-primary" onclick="onboardingNext()" data-page-node-id="0WFiBsy5Hemh7x1PsQodbL">下一步</button>
+                <button id="onboarding-btn" class="btn btn-primary" data-action="onboardingNext" data-args='[""]' data-page-node-id="0WFiBsy5Hemh7x1PsQodbL">下一步</button>
             </div>
         </div>
     </div>

@@ -8,6 +8,8 @@
 //    导致的块级函数声明语义变化），与各 page 经典脚本当前默认行为一致。
 //  - esbuild 仅作「压缩」（minify，非 bundle），不重命名顶层 function/var（外部引用未知），
 //    故 window.switchPage 等全局桥接与 onclick="switchPage()" 内联处理器不受影响。
+//  - 压缩同时生成 .map sourcemap（--sourcemap），便于在浏览器 DevTools 中调试 14.8k 行前端；
+//    manifest.json 额外记录 cssMap / jsMap 文件名。
 //  - 内容哈希文件名 → 长效缓存；api.py 读取 dist/manifest.json 注入 ?v= 版本号。
 //  - drafts.js 为 type=module，不参与合并，仍单独加载（见 index.html）。
 //
@@ -123,23 +125,33 @@ function concat(order, sep) {
 function minify(code, loader) {
   if (!existsSync(ESBUILD)) {
     console.warn('[build] 未找到 esbuild，跳过压缩（仍输出未压缩 bundle）');
-    return code;
+    return { code, map: null };
   }
   // 用临时文件而非 stdin 传递源码：超大拼接输入经 execFileSync 的 stdin 管道
   // 易触发 esbuild 死锁（父进程写 stdin 与读 stdout 互锁），落盘后由 esbuild 直接读文件最稳。
   const tmp = mkdtempSync(join(tmpdir(), 'lb-build-'));
   const srcPath = join(tmp, `in.${loader}`);
+  const outPath = join(tmp, `out.${loader}`);
   writeFileSync(srcPath, code);
   try {
-    // 传文件路径时 esbuild 按扩展名推断 loader（in.css/in.js），无需 --loader
-    return execFileSync(ESBUILD, ['--minify', srcPath], {
+    // 传文件路径时 esbuild 按扩展名推断 loader（in.css/in.js），无需 --loader。
+    // --sourcemap 生成独立 out.<loader>.map；压缩产物末尾带
+    // //# sourceMappingURL=out.<loader>.map（CSS 为 /*# ... */），构建后再改写成最终文件名。
+    execFileSync(ESBUILD, ['--minify', '--sourcemap', `--outfile=${outPath}`, srcPath], {
       maxBuffer: 1 << 28,
-    }).toString();
+    });
+    const minCode = readFileSync(outPath, 'utf8');
+    let map = null;
+    const mapPath = outPath + '.map';
+    if (existsSync(mapPath)) map = readFileSync(mapPath, 'utf8');
+    return { code: minCode, map };
   } catch (e) {
     console.warn('[build] esbuild 压缩失败，回退未压缩：', e.message);
-    return code;
+    return { code, map: null };
   } finally {
-    try { unlinkSync(srcPath); } catch { /* ignore */ }
+    for (const p of [srcPath, outPath, outPath + '.map']) {
+      try { unlinkSync(p); } catch { /* ignore */ }
+    }
     try { rmdirSync(tmp); } catch { /* ignore */ }
   }
 }
@@ -148,7 +160,21 @@ function hashOf(s) {
   return createHash('sha256').update(s).digest('hex').slice(0, 12);
 }
 
-// ---- 单次构建：清理旧 bundle → 合并压缩 → 写 manifest ----
+// ---- 单次构建：清理旧 bundle → 合并压缩(+sourcemap) → 写 manifest ----
+function emit(name, min) {
+  let code = min.code;
+  if (min.map) {
+    const mapName = name + '.map';
+    writeFileSync(join(OUT, mapName), min.map);
+    // 把压缩产物末尾的 sourceMappingURL 指向最终 map 文件名（原指向临时 out.* 名）
+    code = code
+      .replace(/\/\/# sourceMappingURL=.*$/m, `//# sourceMappingURL=${mapName}`)
+      .replace(/\/\*# sourceMappingURL=.*\*\//, `/*# sourceMappingURL=${mapName} */`);
+  }
+  writeFileSync(join(OUT, name), code);
+  return name;
+}
+
 function build() {
   if (existsSync(OUT)) {
     for (const f of readdirSync(OUT)) {
@@ -159,19 +185,26 @@ function build() {
   }
 
   const cssMin = minify(concat(CSS_ORDER, '\n'), 'css');
-  const cssName = `bundle.${hashOf(cssMin)}.css`;
-  writeFileSync(join(OUT, cssName), cssMin);
+  const cssName = `bundle.${hashOf(cssMin.code)}.css`;
+  emit(cssName, cssMin);
 
   const jsMin = minify(concat(JS_ORDER, '\n;\n'), 'js');
-  const jsName = `bundle.${hashOf(jsMin)}.js`;
-  writeFileSync(join(OUT, jsName), jsMin);
+  const jsName = `bundle.${hashOf(jsMin.code)}.js`;
+  emit(jsName, jsMin);
 
-  const manifest = { css: cssName, js: jsName };
+  const manifest = {
+    css: cssName,
+    js: jsName,
+    cssMap: cssMin.map ? cssName + '.map' : null,
+    jsMap: jsMin.map ? jsName + '.map' : null,
+  };
   writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
   console.log(
-    `[build] 完成：CSS ${CSS_ORDER.length} 文件 → ${cssName} (${cssMin.length} B)；` +
-      `JS ${JS_ORDER.length} 文件 → ${jsName} (${jsMin.length} B)`
+    `[build] 完成：CSS ${CSS_ORDER.length} 文件 → ${cssName} (${cssMin.code.length} B)` +
+      (cssMin.map ? ` + ${cssName}.map` : '') +
+      `；JS ${JS_ORDER.length} 文件 → ${jsName} (${jsMin.code.length} B)` +
+      (jsMin.map ? ` + ${jsName}.map` : '')
   );
 }
 

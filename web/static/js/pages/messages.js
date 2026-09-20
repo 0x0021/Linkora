@@ -847,6 +847,10 @@ document.addEventListener('visibilitychange', () => {
 window.startMessageRefresh = startMessageRefresh;
 window.stopMessageRefresh = stopMessageRefresh;
 
+// 暴露确定性渲染函数到 window.Linkora（Phase 2 质量护栏，对运行行为零影响）
+window.Linkora = window.Linkora || {};
+window.Linkora.renderMsgContent = renderMsgContent;
+
 
 // ============ 消息分析面板 (P5-C) ============
 let _msgAnalyticsChart = null;

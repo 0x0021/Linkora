@@ -34,10 +34,20 @@ function makeEl() {
 }
 
 if (typeof globalThis.document !== 'undefined') {
-  globalThis.document.getElementById = () => makeEl();
-  globalThis.document.createElement = () => makeEl();
-  globalThis.document.querySelectorAll = () => [];
-  globalThis.document.querySelector = () => null;
+  const realDoc = globalThis.document;
+  const nativeGetById = realDoc.getElementById.bind(realDoc);
+  const nativeCreate = realDoc.createElement.bind(realDoc);
+  const nativeQuery = realDoc.querySelector ? realDoc.querySelector.bind(realDoc) : null;
+  const nativeQueryAll = realDoc.querySelectorAll ? realDoc.querySelectorAll.bind(realDoc) : null;
+
+  // 真实优先策略（Phase 2 质量护栏）：
+  //  - 若页面/测试在 jsdom 中真实注入了对应节点，返回「真实节点」，从而支持真实 DOM 断言；
+  //  - 否则回退万能假元素，保证既有「轻量 DOM stub」冒烟测试继续不崩（向后兼容）。
+  // createElement 直接还原为原生（真实元素行为更正确，且不触发既有 smoke 的 NPE）。
+  realDoc.getElementById = (id) => nativeGetById(id) || makeEl();
+  realDoc.createElement = (...args) => nativeCreate(...args);
+  if (nativeQuery) realDoc.querySelector = (sel) => nativeQuery(sel);
+  if (nativeQueryAll) realDoc.querySelectorAll = (sel) => nativeQueryAll(sel);
 }
 
 // ---- 注入 app.js / components 提供的全局 ----

@@ -11,7 +11,14 @@ const api = window.api || new ApiClient();
 //   委托仅做分发，不调用 preventDefault（保留与原内联 onclick 完全等价的行为，
 //   避免破坏复选框等表单控件原生逻辑；详见下方分发函数内的说明）。
 (function () {
-  const L = (window.Linkora = window.Linkora || { actions: {} });
+  // 注意：页面脚本（dashboard/messages/persona/cost_quality）会先以
+  // `window.Linkora = window.Linkora || {}` 创建无 actions 的命名空间，
+  // 这里必须补齐 actions，而不是依赖 `|| { actions: {} }` 的默认值——
+  // 否则 L.actions 为 undefined，register('pager-go') 抛错并中断整个 IIFE，
+  // 事件委托（document click 分发）将永远挂不上，全站 data-action 按钮失效。
+  window.Linkora = window.Linkora || {};
+  if (!window.Linkora.actions) window.Linkora.actions = {};
+  const L = window.Linkora;
 
   function dispatch(e) {
     // 事件目标可能是文本节点外的元素；closest 仅在 Element 上可用
@@ -707,10 +714,16 @@ const _MARKET_CAT_LABELS = {
 };
 
 // Run initialization when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
+// 生产 bundle 是 <script defer> 单文件：执行时 readyState 已是 'interactive'，
+// 若此处同步 init()，排在 app.js 之后的 onboarding.js / simulate.js 顶层
+// let/const 尚未求值（TDZ），init 链路一旦触到即抛
+// "Cannot access X before initialization"。defer 脚本一定先于 DOMContentLoaded
+// 执行完，故 'interactive' 时也应等 DOMContentLoaded；仅 complete（脚本被动态
+// 注入等极端场景）才同步初始化。
+if (document.readyState === 'complete') {
     init();
+} else {
+    document.addEventListener('DOMContentLoaded', init);
 }
 
 

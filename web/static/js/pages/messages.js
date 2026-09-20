@@ -728,9 +728,12 @@ async function syncHistory() {
 }
 
 // 左侧「同步中心」入口 + 模态框
+// 显隐统一走 `.active`（与其余弹窗一致，CSS: .modal{display:none} / .modal.active{display:flex}）。
+// 此前用 style.display 驱动，导致 app.js 的 a11y 层 topModal()（按 .active 判定最上层弹窗）
+// 认不出它 → 全站唯一一个「按 Esc 关不掉」的弹窗。
 function openSyncCenter() {
     const modal = document.getElementById('sync-center-modal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) modal.classList.add('active');
     _refreshSyncCenterOnOpen();
 }
 
@@ -770,7 +773,7 @@ async function _refreshSyncCenterOnOpen() {
 function closeSyncCenter() {
     // 仅隐藏弹窗，不中止轮询循环——后台同步继续，重开弹窗仍可见进度
     const modal = document.getElementById('sync-center-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) modal.classList.remove('active');
 }
 
 async function submitSyncCenter() {

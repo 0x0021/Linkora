@@ -8,7 +8,8 @@
  * 或 defer 单脚本里 init() 同步执行撞上后续文件顶层 let 的 TDZ。这类错误只有真正执行才暴露。
  *
  * 它同时是本机「无 GUI 浏览器」约束下，对**手动全页冒烟**的自动化替代：
- * 逐个 switchPage() 走完 17 个页面，任何一页在加载/渲染期抛错都会让 CI 变红。
+ * 逐个 switchPage() 走完 17 个页面，任何一页在加载/渲染期抛错都会让 CI 变红；
+ * 并进一步真的**点击**迁移后的真实控件（tab / 弹窗 / 全选），覆盖交互路径。
  *
  * 断言：
  *   A. 起步：加载期无运行时错误 / window.Linkora.actions 已建立（= register 未崩）
@@ -18,6 +19,14 @@
  *          init() 在赋值处中断 → 后续 window.loadDashboard/loadMessages 全部缺失，
  *          护栏退化成"在半个 app 上断言"）
  *   C. 页面遍历：17 个页面逐个切换，页容器须激活，且不得产生新的运行时错误
+ *   D. 交互冒烟（真点 Phase 0 迁移后的控件）：
+ *          D1 tab 按钮 data-args 与自身 data-tab 一致 + 点击后自激活（抓参数错配）
+ *          D2 弹窗 a11y 契约：含关闭钮的弹窗其关闭钮必须带 aria-label
+ *             （= [data-action^=close] 选择器迁移是否生效的精确探针）
+ *          D3 同步中心「点入口打开 → Esc 关闭」真实往返 + 全站弹窗 Esc 关闭
+ *          D4 全站弹窗关闭钮直点可关闭
+ *          D5 全选复选框：@el 间接引用生效且未被 preventDefault 回滚
+
  *
  * jsdom 已知限制（已在下方 stub 掉，不算产品缺陷）：
  *   - 不执行 <script type="module">（drafts.js 用 module，故预置 no-op loadDraftsPage）
@@ -201,6 +210,16 @@ console.log(`[runtime] bundle = ${manifest.js}`);
 const allErrors = () => errors.concat(escaped);
 const realErrors = () => allErrors().filter((e) => !BENIGN.some((b) => e.includes(b)));
 
+// —— 交互冒烟用的小工具 ——
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 用真实鼠标事件点击：会经过 document 级事件委托，等价于用户手点
+const click = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+// 自 `before` 起新增的「真实」错误（滤掉 jsdom 限制类噪声）
+const freshErrors = (before) => allErrors().slice(before).filter((e) => !BENIGN.some((b) => e.includes(b)));
+const pressEsc = () => w.document.dispatchEvent(
+  new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+);
+
 // init() 应当暴露的全部全局（见 app.js::init() 尾部）
 const INIT_GLOBALS = [
   'switchPage', 'switchPlatform', 'initPlatformSwitcher',
@@ -304,6 +323,176 @@ try {
 } catch (e) {
   failures.push('页面遍历异常: ' + (e && e.message ? e.message : e));
   console.error('[runtime] 页面遍历异常:', e && e.stack ? e.stack.split('\n').slice(0, 3).join('\n') : e);
+}
+
+// ---- D. 交互冒烟：真点 Phase 0 迁移后的真实控件 ----
+// 为什么需要：Phase 0 把 151 处内联 onclick 迁成 data-action，但此前的护栏只点过一个
+// 「合成」按钮，从未点过模板里真实的 tab / 弹窗关闭钮 / 全选复选框。这类迁移一旦把参数
+// 配错、或 a11y 的 [data-action^="close"] 选择器失效，就是「构建绿 + 单测绿 + 页面照崩」。
+try {
+  // D1. tab 按钮：data-args 必须与元素自身 data-tab/data-sub 一致，且点击后自身激活。
+  //     若迁移时 args 错配（A 按钮带了 B 的参数），激活的会是另一个 tab，断言立刻失败。
+  const TAB_GROUPS = [
+    { name: 'rag', sel: '#page-rag .section-tab', key: 'tab', min: 6 },
+    { name: 'keywords', sel: '#page-keywords .section-tab', key: 'tab', min: 2 },
+    { name: 'intent', sel: '.intent-tab-btn', key: 'tab', min: 3 },
+    { name: 'skills-sub', sel: '.skill-subnav-btn', key: 'sub', min: 2 },
+    { name: 'market', sel: '#marketplace-tabs .market-tab', key: 'tab', min: 6 },
+  ];
+  let tabCount = 0;
+  const tabProblems = [];
+  for (const g of TAB_GROUPS) {
+    const els = Array.from(w.document.querySelectorAll(g.sel));
+    if (els.length < g.min) tabProblems.push(`${g.name} 组元素数 ${els.length} < 预期下限 ${g.min}`);
+    for (const el of els) {
+      tabCount++;
+      const key = el.dataset[g.key];
+      let args = null;
+      try { args = el.dataset.args ? JSON.parse(el.dataset.args) : null; } catch { /* 视为不一致 */ }
+      const label = `${g.name}/${key}`;
+      if (!el.dataset.action || !Array.isArray(args) || args[0] !== key) {
+        tabProblems.push(`${label} data-args 与自身 data-${g.key} 不一致`);
+        continue;
+      }
+      const before = allErrors().length;
+      let threw = null;
+      try { click(el); } catch (e) { threw = e && e.message ? e.message : String(e); }
+      await sleep(30);
+      const errs = freshErrors(before);
+      if (threw) tabProblems.push(`${label} 点击抛错: ${threw}`);
+      else if (!el.classList.contains('active')) tabProblems.push(`${label} 点击后未激活（args 可能错配）`);
+      else if (errs.length) tabProblems.push(`${label} 运行时错误: ${errs[0].split('\n')[0]}`);
+    }
+  }
+  check(tabCount >= 19 && tabProblems.length === 0,
+    `全部 ${tabCount} 个 tab 按钮：参数与自身 data-tab 一致且点击后自激活`,
+    tabProblems.length ? tabProblems.slice(0, 3).join('；') : '');
+
+  // D2. 弹窗 a11y 契约：每个带关闭钮的弹窗，其关闭钮都必须带 aria-label。
+  //     这是「a11y 选择器由 [onclick^=close] 迁到 [data-action^=close] 是否生效」的精确探针——
+  //     选择器若退回旧写法，所有 aria-label 都会消失（旧属性已不存在）。
+  const MODALS_WITHOUT_CLOSE = new Set(['draft-edit-modal']); // 遗留命名 _draftCloseEditModal（不以 close 开头）
+  const modals = Array.from(w.document.querySelectorAll('.modal'));
+  let labelled = 0;
+  const unlabelled = [];
+  const noClose = [];
+  for (const m of modals) {
+    const btn = m.querySelector('[data-action^="close"]');
+    if (!btn) { noClose.push(m.id); continue; }
+    if (btn.getAttribute('aria-label')) labelled++; else unlabelled.push(m.id);
+  }
+  check(modals.length >= 19, `.modal 数量符合预期（${modals.length}）`);
+  check(labelled >= 18 && unlabelled.length === 0,
+    '含关闭钮的弹窗均已获 aria-label（a11y 选择器迁移生效）',
+    unlabelled.length ? `未标注: ${unlabelled.join(',')}` : `${labelled} 个`);
+  const unexpectedNoClose = noClose.filter((id) => !MODALS_WITHOUT_CLOSE.has(id));
+  check(unexpectedNoClose.length === 0, '缺关闭钮的弹窗仅为已知遗留',
+    unexpectedNoClose.length ? `新增: ${unexpectedNoClose.join(',')}` : (noClose.join(',') || '无'));
+
+  // D3a. 真实往返：点「同步中心」入口打开 → Esc 关闭。
+  //      走的是用户真实路径，并能抓住「弹窗用 style.display 而非 .active 驱动」这类缺陷
+  //      （a11y 的 topModal() 只看 .active，display 驱动的弹窗 Esc 关不掉）。
+  const syncEntry = w.document.querySelector('[data-action="openSyncCenter"]');
+  if (!syncEntry) {
+    check(false, '同步中心入口按钮存在（openSyncCenter）');
+  } else {
+    const syncModal = w.document.getElementById('sync-center-modal');
+    const before = allErrors().length;
+    let threw = null;
+    try { click(syncEntry); } catch (e) { threw = e && e.message ? e.message : String(e); }
+    await sleep(60);
+    const opened = !!syncModal && syncModal.classList.contains('active');
+    try { pressEsc(); } catch { /* 下面统一判定 */ }
+    await sleep(30);
+    const closed = !!syncModal && !syncModal.classList.contains('active');
+    const errs = freshErrors(before);
+    check(!threw && opened && closed && errs.length === 0,
+      '同步中心：点入口打开 → Esc 关闭（真实路径往返）',
+      [!threw ? '' : '点击抛错:' + threw, opened ? '' : '点后未打开', closed ? '' : 'Esc 未关闭',
+        errs.length ? '错误:' + errs[0].split('\n')[0] : ''].filter(Boolean).join('；'));
+  }
+
+  // D3b. 逐个弹窗：置为 active → Esc 应关闭（验证 closeModal 能找到并点到关闭钮）
+  const a11yModals = Array.from(w.document.querySelectorAll('.modal:not(.image-lightbox)'));
+  const escProblems = [];
+  for (const m of a11yModals) {
+    m.classList.add('active');
+    const before = allErrors().length;
+    let threw = null;
+    try { pressEsc(); } catch (e) { threw = e && e.message ? e.message : String(e); }
+    await sleep(20);
+    const errs = freshErrors(before);
+    if (threw || m.classList.contains('active') || errs.length) {
+      escProblems.push(`${m.id}${threw ? ' 抛错:' + threw : ''}`
+        + `${m.classList.contains('active') ? ' 未关闭' : ''}`
+        + `${errs.length ? ' 错误:' + errs[0].split('\n')[0] : ''}`);
+    }
+    m.classList.remove('active');
+  }
+  check(escProblems.length === 0, `全部 ${a11yModals.length} 个弹窗可按 Esc 关闭`,
+    escProblems.length ? escProblems.slice(0, 3).join('；') : '');
+
+  // D4. 逐个弹窗：点关闭钮应关闭（真实用户操作路径）
+  const clickProblems = [];
+  let clickCount = 0;
+  for (const m of modals) {
+    const btn = m.querySelector('[data-action^="close"]');
+    if (!btn) continue;
+    clickCount++;
+    m.classList.add('active');
+    const before = allErrors().length;
+    let threw = null;
+    try { click(btn); } catch (e) { threw = e && e.message ? e.message : String(e); }
+    await sleep(20);
+    const errs = freshErrors(before);
+    if (threw || m.classList.contains('active') || errs.length) {
+      clickProblems.push(`${m.id}${threw ? ' 抛错:' + threw : ''}`
+        + `${m.classList.contains('active') ? ' 未关闭' : ''}`
+        + `${errs.length ? ' 错误:' + errs[0].split('\n')[0] : ''}`);
+    }
+    m.classList.remove('active');
+    m.style.display = '';
+  }
+  check(clickCount >= 18 && clickProblems.length === 0, `全部 ${clickCount} 个弹窗关闭钮可关闭`,
+    clickProblems.length ? clickProblems.slice(0, 3).join('；') : '');
+
+  // D5. 全选复选框：验证 @el 间接引用（data-args:["@el"] → 被点元素）与「委托不 preventDefault」。
+  //     委托若 preventDefault，复选框的原生勾选会被回滚 → 留下「行被勾上、全选框自己弹回未勾」
+  //     的不一致状态。此断言正是当初那个决策（不 preventDefault）的守卫。
+  const master = w.document.querySelector('[data-action="toggleAllKwSelect"]');
+  if (!master) {
+    check(false, '全选复选框存在（toggleAllKwSelect）');
+  } else {
+    const host = w.document.createElement('div');
+    for (const id of ['9001', '9002']) {
+      const cb = w.document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'kw-checkbox';
+      cb.dataset.id = id;
+      host.appendChild(cb);
+    }
+    w.document.body.appendChild(host);
+    master.checked = false;
+    const before = allErrors().length;
+    let threw = null;
+    try { click(master); } catch (e) { threw = e && e.message ? e.message : String(e); }
+    await sleep(30);
+    const rows = Array.from(host.querySelectorAll('.kw-checkbox'));
+    const rowsChecked = rows.length === 2 && rows.every((r) => r.checked);
+    const errs = freshErrors(before);
+    check(!threw && master.checked === true && rowsChecked && errs.length === 0,
+      '全选：@el 间接引用生效且未被 preventDefault 回滚',
+      [!threw ? '' : '抛错:' + threw, master.checked ? '' : '全选框被回滚为未勾选',
+        rowsChecked ? '' : '行未全部勾选',
+        errs.length ? '错误:' + errs[0].split('\n')[0] : ''].filter(Boolean).join('；'));
+    // 复位：取消全选并移除临时行，避免污染后续断言
+    click(master);
+    await sleep(20);
+    host.remove();
+  }
+} catch (e) {
+  failures.push('交互冒烟异常: ' + (e && e.message ? e.message : e));
+  console.error('[runtime] 交互冒烟异常:', e && e.stack ? e.stack.split('\n').slice(0, 3).join('\n') : e);
 }
 
 try { dom.window.close(); } catch { /* ignore */ }

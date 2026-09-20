@@ -11,6 +11,9 @@
     "test:frontend": "vitest run",
     "test:frontend:watch": "vitest",
     "build:frontend": "node scripts/build_frontend.mjs",
-    "build:frontend:watch": "node scripts/build_frontend.mjs --watch"
+    "build:frontend:watch": "node scripts/build_frontend.mjs --watch",
+    "smoke:bundle": "node scripts/smoke_bundle.mjs",
+    "smoke:runtime": "node scripts/smoke_runtime.mjs",
+    "verify:frontend": "npm run build:frontend && npm run smoke:bundle && npm run smoke:runtime && npm run test:frontend"
   }
 }

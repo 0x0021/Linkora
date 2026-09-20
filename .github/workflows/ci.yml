@@ -67,3 +67,49 @@ jobs:
       # 传路径会覆盖 include。早期写成 `pyright src/` 导致 web/ 从未被类型门禁覆盖，
       # 由此漏掉 web/routers/image.py「在 str 上调 Path 方法」的真实崩溃 bug（2026-08-28）。
       run: uv run pyright
+
+  frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+
+    # npm ci 走 package-lock.json，esbuild 版本被锁定 → 构建产物可复现，
+    # 下面的「产物漂移」检查才可靠。
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build bundle
+      run: npm run build:frontend
+
+    - name: Check bundle is up to date
+      # web/static/dist 强制进仓且由构建生成：源码改了却没重建（或重建结果未提交）
+      # 会让线上跑的与仓库不一致。构建产物现在是确定性的（sourcemap 的 sources
+      # 已规范化为固定名，不再嵌随机临时路径），因此这里可以严格断言零漂移。
+      run: |
+        if [ -n "$(git status --porcelain -- web/static/dist)" ]; then
+          echo "::error::web/static/dist 与源码不同步，请在本地运行 npm run build:frontend 并提交产物"
+          git status --porcelain -- web/static/dist
+          git diff -- web/static/dist | head -40
+          exit 1
+        fi
+
+    # 三层护栏，缺一不可：
+    #   smoke:bundle  — 产物里有该有的符号（静态）
+    #   smoke:runtime — jsdom 真跑一遍 HTML+bundle，抓加载期崩溃（命名空间残缺 / TDZ）
+    #   test:frontend — 真实 DOM 渲染断言
+    - name: Frontend smoke (bundle symbols)
+      run: npm run smoke:bundle
+
+    - name: Frontend smoke (runtime boot)
+      run: npm run smoke:runtime
+
+    - name: Frontend tests
+      run: npm run test:frontend

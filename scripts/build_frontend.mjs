@@ -143,7 +143,7 @@ function minify(code, loader) {
     const minCode = readFileSync(outPath, 'utf8');
     let map = null;
     const mapPath = outPath + '.map';
-    if (existsSync(mapPath)) map = readFileSync(mapPath, 'utf8');
+    if (existsSync(mapPath)) map = normalizeMap(readFileSync(mapPath, 'utf8'), loader);
     return { code: minCode, map };
   } catch (e) {
     console.warn('[build] esbuild 压缩失败，回退未压缩：', e.message);
@@ -153,6 +153,21 @@ function minify(code, loader) {
       try { unlinkSync(p); } catch { /* ignore */ }
     }
     try { rmdirSync(tmp); } catch { /* ignore */ }
+  }
+}
+
+// esbuild 会把输入文件的**绝对路径**写进 map.sources——而输入落在随机临时目录
+// （/var/folders/.../lb-build-xxxx/in.js），导致每次构建 .map 都变、dist 永久漂移、
+// CI 的「重建后 git diff --quiet」门禁失效。这里把 sources 规范化为稳定名。
+// （不能用 --sourcefile：该开关仅对 stdin 输入生效，配文件输入会让 esbuild 报错回退未压缩。）
+function normalizeMap(mapText, loader) {
+  try {
+    const m = JSON.parse(mapText);
+    m.sources = (m.sources || []).map(() => `in.${loader}`);
+    return JSON.stringify(m);
+  } catch (e) {
+    console.warn('[build] sourcemap 规范化失败，原样输出：', e.message);
+    return mapText;
   }
 }
 

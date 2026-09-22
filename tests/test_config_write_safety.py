@@ -101,9 +101,20 @@ def test_placeholder_password_rejected_fail_closed():
         WebConfig(auth_enabled=True, auth_password="REPLACE_WITH_YOUR_STRONG_PASSWORD")
 
 
-def test_example_still_ships_placeholder():
-    """示例模板须保留占位密码，否则上述 fail-closed 守卫失去意义（漂移预警）。"""
+def test_example_ships_default_password():
+    """示例模板须随附「可用」的出厂默认口令 Admin@P0sw0rd（非 fail-closed 占位符），
+    使 cp 模板即可启动并登录；该口令必须不在 fail-closed 黑名单内，否则抄模板后
+    启动即被拒（历史「没默认密码」回归）。
+
+    真正的 fail-closed 守卫仍由 test_placeholder_password_rejected_fail_closed 守护：
+    REPLACE_WITH_YOUR_STRONG_PASSWORD 等占位/弱口令依旧被拒。
+    """
+    from src.config_models import WebConfig
+
     example = yaml.safe_load(
         (REPO_ROOT / "config.yaml.example").read_text(encoding="utf-8")
     )
-    assert example["web"]["auth_password"] == "REPLACE_WITH_YOUR_STRONG_PASSWORD"
+    pw = example["web"]["auth_password"]
+    assert pw == "Admin@P0sw0rd"
+    # 出厂默认口令必须可用（不触发 fail-closed），否则等于没给默认密码
+    WebConfig(auth_enabled=True, auth_password=pw)  # 不应抛 ValueError

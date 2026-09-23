@@ -138,7 +138,8 @@ class InboundMixin(EngineMixinBase):
 
     def _reply_gate_reason(self, message: Message,
                            taken_over: "bool | None" = None,
-                           owner_present: "bool | None" = None) -> "str | None":
+                           owner_present: "bool | None" = None,
+                           fresh_read_check: bool = False) -> "str | None":
         """返回当前应抑制 AI 自动回复的闸门原因；无闸门命中返回 None。
 
         供「前置过滤」与「发送前复核」两道校验共用，保证逻辑完全一致：
@@ -166,7 +167,7 @@ class InboundMixin(EngineMixinBase):
         #    从而规避“漏回追问”旧事故。仅当 DWS 未读状态失真时才可能漏回，
         #    可用 config.poller.suppress_when_owner_read=false 关闭。
         if getattr(self.config.poller, "suppress_when_owner_read", False) \
-                and self._owner_conversation_is_read(message):
+                and self._owner_conversation_is_read(message, fresh=fresh_read_check):
             return "DWS 判定会话已读"
         return None
 
@@ -195,22 +196,30 @@ class InboundMixin(EngineMixinBase):
         此处为并发兜底——LLM 生成耗数秒~数十秒，人工完全可能在该窗口内回复/在场，
         故在 _send_reply 真正发送前必须再判一次（_reply_gate_reason 共用同套闸门）。
         返回 True = 允许发送；任一闸门返回“不回复”即整体放弃发送。
+
+        已读闸门此处强制 fresh_read_check=True：绕过 30s 缓存、向 DWS 拉取最新未读
+        状态，使「人工在 LLM 生成期间标记会话已读 → 取消即将发出的回复」可靠生效。
+        否则陈旧缓存会让 30s 内的标记已读在生成窗口内失效（实测 魏欣悦 案例：
+        15:38:45 缓存未读态，15:39:06 发送时仅过 21s 命中陈旧缓存，已读标记被无视）。
         """
-        reason = self._reply_gate_reason(message)
+        reason = self._reply_gate_reason(message, fresh_read_check=True)
         if reason is not None:
             logger.info("[门控] 发送前复核：%s，放弃发送", reason)
             return False
         return True
 
-    def _owner_conversation_is_read(self, message: Message) -> bool:
+    def _owner_conversation_is_read(self, message: Message, fresh: bool = False) -> bool:
         """DWS 已读闸门：本会话当前是否被 DWS 判定为“已读(无未读)”。
 
         通过 chat_message_list_unread_conversations 取未读会话集合，若本会话不在其中
         （或无未读计数）即视为 owner 已读全部消息。结果按会话缓存（TTL 30s）避免热路径
         频繁调 DWS。异常时保守返回 False（不抑制，照常回复），避免 DWS 抖动误杀正常回复。
+
+        fresh=True 用于发送前最后一刻复核：绕过 30s 缓存拉取最新未读状态，使「人工在
+        LLM 生成期间标记已读 → 取消即将发出的回复」可靠生效（详见 _unread_conversation_ids）。
         """
         try:
-            unread_ids = self._unread_conversation_ids()
+            unread_ids = self._unread_conversation_ids(force_refresh=fresh)
         except Exception as e:
             logger.warning("[已读闸门] 查询未读会话失败，保守放行回复: %s", e)
             return False
@@ -220,14 +229,19 @@ class InboundMixin(EngineMixinBase):
             return False
         return cid != "" and cid not in unread_ids
 
-    def _unread_conversation_ids(self) -> set[str]:
-        """取 DWS 未读会话 ID 集合（openConversationId），带 30s TTL 缓存。"""
+    def _unread_conversation_ids(self, force_refresh: bool = False) -> set[str]:
+        """取 DWS 未读会话 ID 集合（openConversationId），带 30s TTL 缓存。
+
+        force_refresh=True 时跳过缓存、立即向 DWS 拉取最新未读列表——仅用于发送前
+        最后一刻的复核（_should_reply_now → fresh_read_check），确保人工在 LLM 生成
+        期间标记已读能可靠取消即将发出的回复；热路径（前置过滤/预检）仍走缓存以省 DWS 调用。
+        """
         now = time.time()
         # 每次进入先清「未知」哨兵；仅当本次查询结构异常才重新置位，
         # 避免上一轮的未知状态污染后续成功的真实查询/缓存命中。
         self._unread_conv_unknown = False
         cache = getattr(self, "_unread_conv_cache", None)
-        if cache is not None and (now - cache[1]) < 30:
+        if not force_refresh and cache is not None and (now - cache[1]) < 30:
             return cache[0]
         try:
             convs = self.dws.chat_message_list_unread_conversations(

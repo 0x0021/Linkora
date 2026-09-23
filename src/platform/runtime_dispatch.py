@@ -5,6 +5,7 @@ from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tr
 import functools
 import logging
 import sqlite3
+import time
 
 from src.poller_utils import is_read_receipt_content
 
@@ -342,6 +343,17 @@ class ReplyDispatchMixin(EngineMixinBase):
         reply_title, filtered = prepared
 
         reply_uuid = str(uuid.uuid4())
+
+        # === 已读反悔窗口（read_grace）===
+        # 回复已生成好，但先等 read_grace_seconds 秒，给人工一个“读完后让 bot 闭嘴”
+        # 的机会：等待期间若你把会话标记已读，紧随其后的发送前复核（fresh 拉取最新
+        # 未读状态）会直接取消发送。这是“我已读的会话绝对不再往外发自动回复”的硬保证。
+        # 仅在确实要发（未命中限频/冷却）时才等待，避免无谓拖延被限流/冷却的回复。
+        _grace = getattr(getattr(self.config, "poller", None), "read_grace_seconds", 0) or 0
+        if _grace > 0 and not self._reply_rate_limited() and not self._reply_cooldown_active(message):
+            logger.info("[门控] 已读反悔窗口：延迟 %ss 后复核再发（来自 %s）",
+                        _grace, message.sender_name)
+            time.sleep(_grace)
 
         # === 发送前最后一刻门控复核 ===
         # 入站已判过一次（_handle_message_with_rid），但 LLM 生成耗时长，人工可能

@@ -79,6 +79,7 @@ platforms:
       owner_present_cooldown_seconds: 600            # 真人在场冷却（秒）：窗口内真人活跃则 AI 不插嘴，离场超时后接管
       poll_new_message_max_age_hours: 24             # 轮询侧「新消息」年龄门槛（小时）：超过则不触发 AI 回复。取 min(history_days, 本值/24)；与 history_days（上下文取数窗口）解耦，防止去重漏标时把几天前的老消息重放成新消息。0=不额外收紧
       suppress_when_owner_read: true                 # 已读闸门：DWS 判定会话已读(无未读)则 AI 不回；新未读消息仍照常回。失真漏回时设 false
+      read_grace_seconds: 10                         # 已读反悔窗口（秒）：回复生成好后先等这么久再发，期间你标记已读则直接取消发送（我已读的会话绝不发自动回复）。0=不等待
       mark_read_after_process: true                  # 处理完后将该会话消息标记为已读
       # —— 背压 / 并发 ——
       max_dispatch_per_cycle: 30                     # 单轮最多派发给 handler 的消息数（0=不限制）

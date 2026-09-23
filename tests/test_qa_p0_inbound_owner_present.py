@@ -87,7 +87,7 @@ class _InboundHost(InboundMixin, ReplyGuardMixin):
         self._reply_cooldown_active = MagicMock(return_value=False)
         self._handle_oa_approval_urge = MagicMock(return_value=False)
         self._apply_rule_result = MagicMock(return_value=False)
-        self._owner_conversation_is_read = lambda m: False
+        self._owner_conversation_is_read = lambda m, fresh=False: False
         self._handle_media_fallback = MagicMock()
         self._cleanup_backoff = MagicMock()
         # 被测路径桩：LLM 派发（命中门控放行时应当被调用）

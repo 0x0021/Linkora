@@ -37,7 +37,7 @@ def _inbound(present=False, taken=False, self_msg=False, read=False,
     inst._has_user_taken_over = lambda m: taken
     inst._is_owner_present = lambda m: present
     inst._is_message_from_self = lambda m: self_msg
-    inst._owner_conversation_is_read = lambda m: read
+    inst._owner_conversation_is_read = lambda m, fresh=False: read
     inst.config = SimpleNamespace(poller=SimpleNamespace(
         suppress_when_owner_read=suppress_read))
     return inst
@@ -230,7 +230,7 @@ class _PrefilterHost(InboundMixin):
         self._is_message_from_self = lambda m: False
         self._has_user_taken_over = lambda m: False
         self._is_owner_present = lambda m: False
-        self._owner_conversation_is_read = lambda m: read
+        self._owner_conversation_is_read = lambda m, fresh=False: read
         # 入站链路其余分支桩
         self._should_skip_inbound = MagicMock(return_value=False)
         self._reply_cooldown_active = MagicMock(return_value=False)
@@ -260,3 +260,70 @@ def test_prefilter_proceeds_to_llm_when_gate_passes():
     host._handle_message_with_rid(msg, "rid-1")
     host._process_llm_reply.assert_called_once()
     host._mark_inbound_processed.assert_not_called()
+
+
+# === 已读闸门·发送前强制 fresh（修复 魏欣悦 案例：标记已读仍回复）===
+def test_unread_ids_force_refresh_bypasses_cache():
+    """force_refresh=True 必须绕过 30s 缓存向 DWS 拉取最新未读列表。
+
+    模拟：预检时 c1 未读（缓存），LLM 生成期间用户标记已读 → DWS 返回空，
+    发送前 force_refresh 必须拿到空集合（c1 视为已读），否则陈旧缓存会让
+    “标记已读”在 30s 生成窗口内失效、照常发出回复。
+    """
+    inst = InboundMixin()
+    inst.dws = MagicMock()
+    inst.config = SimpleNamespace(poller=SimpleNamespace(unread_conversation_count=20))
+    calls = {"n": 0}
+
+    def _side_effect(count):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return [{"openConversationId": "c1", "unreadCount": 1}]
+        return []  # 之后用户标记已读 → 不再未读
+
+    inst.dws.chat_message_list_unread_conversations.side_effect = _side_effect
+    # 第一次普通调用（写入缓存）
+    assert inst._unread_conversation_ids() == {"c1"}
+    # 紧接着（未过 30s）普通调用命中陈旧缓存，仍返回 c1
+    assert inst._unread_conversation_ids() == {"c1"}
+    # force_refresh 必须绕过缓存拿到最新（空集合）
+    assert inst._unread_conversation_ids(force_refresh=True) == set()
+
+
+def test_should_reply_now_forces_fresh_read_check():
+    """发送前复核（_should_reply_now）必须把 fresh=True 透传给已读闸门。
+
+    这是“人工在 LLM 生成期间标记已读 → 取消即将发出的回复”可靠生效的前提：
+    若仍走 30s 陈旧缓存，生成窗口内的已读标记会被无视。
+    """
+    inst = InboundMixin()
+    captured: dict = {}
+    inst._owner_conversation_is_read = lambda m, fresh=False: captured.setdefault("fresh", fresh)
+    inst.config = SimpleNamespace(poller=SimpleNamespace(suppress_when_owner_read=True))
+    inst._has_user_taken_over = lambda m: False
+    inst._is_owner_present = lambda m: False
+    inst._is_message_from_self = lambda m: False
+    inst._should_reply_now(_Msg())
+    assert captured["fresh"] is True
+
+
+def test_should_reply_now_blocks_when_read_after_prefilter():
+    """端到端·发送前复核：预检时未读（放行进 LLM），生成期间用户标记已读，
+    发送前 fresh 复核应判定已读并放弃发送——这正是“我标记了已读它还回复”的反面。"""
+    inst = InboundMixin()
+    inst.dws = MagicMock()
+    inst.config = SimpleNamespace(poller=SimpleNamespace(
+        suppress_when_owner_read=True, unread_conversation_count=20))
+    # 预检：c1 在未读列表（放行）；发送前（fresh）：已读（c1 不在列表）→ 抑制
+    inst.dws.chat_message_list_unread_conversations.side_effect = [
+        [{"openConversationId": "c1", "unreadCount": 1}],  # 预检
+        [],  # 发送前 fresh 拉取：已读
+    ]
+    inst._has_user_taken_over = lambda m: False
+    inst._is_owner_present = lambda m: False
+    inst._is_message_from_self = lambda m: False
+    msg = _Msg(chat_id="c1")
+    # 预检放行（命中“DWS 判定会话已读”之前先验证其反面）
+    assert inst._reply_gate_reason(msg) is None  # 预检未读 → 放行
+    # 发送前 fresh 复核 → 已读 → 放弃
+    assert inst._should_reply_now(msg) is False

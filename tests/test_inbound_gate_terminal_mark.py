@@ -57,7 +57,7 @@ class _TerminalMarkHost(InboundMixin):
         self._has_replied_after = MagicMock(return_value=False)
         self._has_user_taken_over = MagicMock(return_value=False)
         self._is_owner_present = MagicMock(return_value=False)
-        self._owner_conversation_is_read = lambda m: False
+        self._owner_conversation_is_read = lambda m, fresh=False: False
         # 入站链路其余分支桩
         self._should_skip_inbound = MagicMock(return_value=False)
         self._reply_cooldown_active = MagicMock(return_value=False)

@@ -10,7 +10,10 @@
 - 复用动态摘要的「信号驱动 + 单 daemon worker + per-chat 去重 + CAS 写回」骨架，
   主回复链路不阻塞；失败兜底仅记日志。
 - 收集用 get_recent_unarchived_messages(display_limit)（时间正序、排除摘要元消息），
-  天然覆盖整个近期窗口（含 recent 段），从根本上修掉「只取一部分」的问题。
+  并按「今天 00:00（本地时区）」过滤——Web「对话摘要」页按 今日/昨日/近七天 展示，
+  摘要内容必须与窗口语义一致：今天触发重摘时若把最近 N 条（可能横跨数月）整段
+  重摘，8 月的旧内容会整段混进「今日」卡片（2026-09-23 用户反馈）。改为按天取材后，
+  每天的重摘只覆盖当天消息，旧内容随跨天自然出清。
 """
 from __future__ import annotations
 
@@ -180,15 +183,11 @@ class DisplaySummaryScheduler:
 
     def _process_job_inner(self, job: DisplaySummaryJob) -> None:
         chat_id = job.chat_id
-        try:
-            messages = self._store._message_repo.get_recent_unarchived_messages(
-                chat_id, limit=self._display_limit,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning("[展示摘要] 收集消息失败 chat_id=%s: %s", chat_id[:20], e)
-            return
+        messages = self._collect_window_messages(chat_id)
         total = len(messages)
-        if total < self._min_messages:
+        if total == 0:
+            # 今天（取材窗口内）没有任何消息 → 无需摘要。旧摘要行保留原 boundary_ts，
+            # 不会被 Web「今日」窗口误捞（list_recent_display_summaries 按 boundary_ts 过滤）。
             return
         # 新鲜度护栏：已有覆盖充分且未过期则跳过，避免无谓重摘要
         try:
@@ -196,12 +195,17 @@ class DisplaySummaryScheduler:
         except Exception as e:  # noqa: BLE001
             logger.debug("[展示摘要] 读缓存失败 chat_id=%s: %s", chat_id[:20], e)
             cached = None
-        if cached is not None and cached.covered_count >= total:
-            # 无新消息 → 取材窗口（最近 N 条）与已覆盖范围一致，摘要内容不会变，直接跳过。
-            # 【P0】此处不可再叠加「超过 freshness_seconds 就重算」：那会让**每个空闲会话**
-            # 每 30 分钟被重新摘要一次（实测 924 个会话 → 持续不断的 LLM 调用 + 写库流），
-            # 无谓烧 token 并持续与轮询器抢写锁。只有「有新消息」才需要重摘要。
+        latest_msg_id = messages[-1].msg_id if messages else ""
+        if cached is not None and cached.older_boundary_msg_id == latest_msg_id:
+            # 已覆盖到最新消息 → 无新内容，直接跳过。
+            # 注意：不能用 covered_count >= total 判断——按天取材后 covered_count 是
+            # 「当天条数」，跨天后旧摘要的 covered_count（数月累计）恒大于当天条数，
+            # 数量比较会把「内容全过期」的摘要误判成已覆盖（2026-09-23 回归）。
             logger.debug("[展示摘要] 无新消息，跳过 chat_id=%s（已覆盖 %d 条）", chat_id, total)
+            return
+        if total < self._min_messages and cached is None:
+            # 全新会话且窗口内消息过少：不值得摘要（避免单条消息就触发 LLM）。
+            # 注意：已有摘要时不走此护栏——跨天后旧摘要内容不属于今天，必须重摘替换。
             return
         try:
             # max_messages=0 → 不截断，覆盖整个近期窗口（含 recent 段）
@@ -226,6 +230,31 @@ class DisplaySummaryScheduler:
         ):
             logger.debug("[展示摘要] 写回成功 chat_id=%s 覆盖 %d 条 边界时间=%s",
                          chat_id, total, boundary_ts)
+
+    # ----------------------------------------------------------- 取材窗口
+    def _collect_window_messages(self, chat_id: str) -> list:
+        """收集取材窗口内的消息：今天 00:00（本地时区）起、时间正序、排除元消息。
+
+        时间过滤在 Python 侧做而非 SQL：messages.timestamp 历史上存在
+        「naive 本地时间 / 带 +08:00 偏移 / UTC aware」多种形态，字符串比较不可靠；
+        统一 parse 后折算回本地 naive 再与窗口起点比较。
+        """
+        try:
+            raw = self._store._message_repo.get_recent_unarchived_messages(
+                chat_id, limit=self._display_limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[展示摘要] 收集消息失败 chat_id=%s: %s", chat_id[:20], e)
+            return []
+        since = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        window: list = []
+        for m in raw:
+            ts = m.timestamp
+            if ts.tzinfo is not None:
+                ts = ts.astimezone().replace(tzinfo=None)
+            if ts >= since:
+                window.append(m)
+        return window
 
     def _write_with_retry(self, *, chat_id: str, summary: str, boundary_msg_id: str,
                           covered_count: int, expected_generation: int,

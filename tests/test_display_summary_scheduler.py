@@ -182,6 +182,55 @@ def test_scheduler_resummarizes_when_new_messages(tmp_path):
     assert store._conversation_repo.get_display_summary("J").covered_count == 6
 
 
+def test_scheduler_scopes_to_today_window(tmp_path):
+    """取材窗口必须收敛到「今天 00:00 起」——昨天及更早的消息不得混进今日摘要。
+
+    复现根因：旧逻辑取「最近 N 条」不限时间，今天来一条新消息触发重摘时，
+    数月前的旧内容整段进入「今日」卡片（2026-09-23 用户反馈）。
+    """
+    store = _make_store(tmp_path)
+    cur = store._message_repo._cc().cursor()
+    now = datetime.now(timezone.utc)
+    today_mid = now.replace(hour=12, minute=0, second=0, microsecond=0)
+    _insert_conversation(cur, "T", "chatT", 8, None, _iso(now))
+    # 昨天 3 条 + 今天 2 条
+    for i in range(3):
+        _insert_message(cur, "T", f"t-old{i}", f"old{i}",
+                        _iso(today_mid - timedelta(days=1, minutes=30 - i)))
+    for i in range(2):
+        _insert_message(cur, "T", f"t-new{i}", f"new{i}", _iso(today_mid + timedelta(minutes=i)))
+    # 旧摘要覆盖 40 条（横跨数月的旧内容）
+    store._conversation_repo.upsert_display_summary("T", "旧摘要-含8月内容", "t-old2", 40)
+    store._message_repo._cc().commit()
+
+    agent = _FakeAgent()
+    sched = DisplaySummaryScheduler(agent=agent, store=store, platform="", display_limit=40)
+    sched._process_job_inner(DisplaySummaryJob(chat_id="T"))
+
+    assert agent.calls == 1, "旧摘要覆盖数(40)与新窗口条数(2)不一致，应重摘"
+    row = store._conversation_repo.get_display_summary("T")
+    assert row.covered_count == 2, "摘要必须只覆盖今天的消息"
+    assert "DISPLAY_SUMMARY[2]" == row.summary_text
+
+
+def test_scheduler_skips_chat_without_today_messages(tmp_path):
+    """今天没有任何消息的会话不应被摘要（旧内容不得借今日窗口返场）。"""
+    store = _make_store(tmp_path)
+    cur = store._message_repo._cc().cursor()
+    now = datetime.now(timezone.utc)
+    _insert_conversation(cur, "O", "chatO", 5, None, _iso(now))
+    for i in range(5):
+        _insert_message(cur, "O", f"o{i}", f"m{i}",
+                        _iso(now.replace(hour=12) - timedelta(days=2, minutes=30 - i)))
+    store._message_repo._cc().commit()
+
+    agent = _FakeAgent()
+    sched = DisplaySummaryScheduler(agent=agent, store=store, platform="")
+    sched._process_job_inner(DisplaySummaryJob(chat_id="O"))
+    assert agent.calls == 0, "窗口内无消息不应调 LLM"
+    assert store._conversation_repo.get_display_summary("O") is None
+
+
 def test_delete_conversation_cleans_display_summary(tmp_path):
     store = _make_store(tmp_path)
     repo = store._conversation_repo

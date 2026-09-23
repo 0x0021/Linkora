@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 
 from src.memory.classifier import classify_memory_scope
@@ -125,28 +124,30 @@ class SaveMemoryTool(BaseTool):
                 chat_type=chat_type, source=source or "manual", explicit_scope=explicit_scope,
             )
 
-            # 去重：内容完全相同或语义高度相似(按 scope 范围)则跳过，
-            # 避免 LLM 反复保存同一事实灌满记忆表、召回时返回大量近重复项。
-            if self.store._memory_repo.check_memory_duplicate(
-                content, embedding_client=self.embedding_client,
-                sender_id=sender_id, scope=scope,
+            # 聚合键：个人= sender_id（按人整合）；公共= 主题桶（按主题整合）。
+            if scope == "public":
+                from src.memory.memory_repo import public_memory_topic_key
+                group_key = public_memory_topic_key(content)
+            else:
+                group_key = sender_id or ""
+
+            # 去重：pending 缓冲或已整合摘要中已有相同内容则跳过，避免重复灌入。
+            if self.store._memory_repo.pending_fact_exists(
+                scope=scope, group_key=group_key, content=content,
             ):
                 logger.info("记忆去重命中，跳过保存: %s...", content[:30])
                 return {"success": True, "skipped": True, "reason": "duplicate",
                         "content_length": len(content), "scope": scope}
 
-            embedding = None
-            if self.embedding_client.enabled:
-                embedding = self.embedding_client.embed(content)
-
-            key = "mem_" + hashlib.md5(content.encode("utf-8")).hexdigest()[:12]
-            memory_id = self.store._memory_repo.save_memory(
-                key=key, content=content, source=source or "manual",
-                chat_id=chat_id, embedding=embedding,
-                sender_id=sender_id, sender_name=sender_name, scope=scope,
+            # 摘要化记忆：写入待整合缓冲（memory_pending），由汇总调度器合并进整合摘要，
+            # 不再逐条存库。
+            self.store._memory_repo.add_pending_fact(
+                scope=scope, group_key=group_key, content=content,
+                sender_name=sender_name, chat_id=chat_id,
             )
-            return {"success": True, "memory_id": memory_id, "content_length": len(content),
-                    "has_embedding": embedding is not None, "scope": scope, "scope_reason": reason}
+            return {"success": True, "content_length": len(content),
+                    "scope": scope, "scope_reason": reason,
+                    "group_key": group_key, "mode": "pending"}
         except Exception as e:
             logger.exception("写入长期记忆失败: %s", e)
             return {"error": f"写入长期记忆失败: {e}"}

@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryMixin(EngineMixinBase):
+    def _public_topic_key(self, text: str) -> str:
+        """把一条公共记忆归入某个主题桶，作为聚合键（group_key）。"""
+        from src.memory.memory_repo import public_memory_topic_key
+        return public_memory_topic_key(text)
+
     def _auto_save_memory(self, user_msg: Message, ai_reply: str, history: list[Message] | None = None) -> None:
         """对话结束后用 LLM 自动提炼重要信息存入长期记忆。
 
@@ -100,11 +105,12 @@ class MemoryMixin(EngineMixinBase):
                         return
 
                     saved_count = 0
+                    seen_in_batch: set[str] = set()
                     for memory_text in extracted:
                         # === 自动判定范围（个人 / 公共）===
                         try:
                             from src.memory.classifier import classify_memory_scope
-                            scope, scope_reason, _ = classify_memory_scope(
+                            scope, _scope_reason, _ = classify_memory_scope(
                                 memory_text,
                                 sender_id=user_msg.sender_id or "",
                                 chat_type=user_msg.chat_type,
@@ -114,46 +120,42 @@ class MemoryMixin(EngineMixinBase):
                             logger.warning("[记忆] 范围分类失败，默认个人: %s", cls_err)
                             scope = "personal"
 
-                        # === 去重检查（异常时保守跳过，避免重复入库）===
+                        # 聚合键：个人= sender_id（按人整合）；公共= 主题桶（按主题整合）
+                        group_key = (
+                            (user_msg.sender_id or "")
+                            if scope == "personal"
+                            else self._public_topic_key(memory_text)
+                        )
+
+                        # === 去重（批次内 + 已落 pending + 已整合摘要）===
+                        norm = memory_text.strip()
+                        if not norm or norm in seen_in_batch:
+                            continue
+                        seen_in_batch.add(norm)
                         try:
-                            is_dup = self.store._memory_repo.check_memory_duplicate(
-                                memory_text, embedding_client=self.embedding_client,
-                                sender_id=user_msg.sender_id or "", scope=scope)
+                            if self.store._memory_repo.pending_fact_exists(
+                                scope=scope, group_key=group_key, content=norm
+                            ):
+                                logger.debug("[记忆] 跳过重复事实: %s", memory_text[:40])
+                                continue
                         except sqlite3.Error as dup_err:
                             logger.warning("[记忆] 去重检查异常，保守跳过: %s", dup_err)
                             continue
-                        if is_dup:
-                            logger.debug("[记忆] 跳过重复: %s", memory_text[:40])
-                            continue
 
-                        # === 生成 embedding（失败则跳过，避免无法被 recall_memory 召回）===
-                        embedding = None
+                        # === 写入待整合缓冲（不再逐条存库；由汇总调度器合并为摘要）===
                         try:
-                            embedding = self.embedding_client.embed(memory_text)
-                        except (ValueError, TypeError) as emb_err:
-                            logger.debug("[记忆] 无法生成嵌入: %s", emb_err)
-                        if not embedding:
-                            logger.debug("[记忆] embedding 为空，跳过保存（无法被召回）: %s", memory_text[:40])
-                            continue
-
-                        # === 保存 ===
-                        import hashlib
-                        key = "auto_" + hashlib.md5(memory_text.encode("utf-8")).hexdigest()[:12]
-                        self.store._memory_repo.save_memory(
-                            key=key,
-                            content=memory_text,
-                            source="auto_extract",
-                            chat_id=user_msg.chat_id,
-                            embedding=embedding,
-                            sender_id=user_msg.sender_id or "",
-                            sender_name=user_msg.sender_name or "",
-                            scope=scope,
-                        )
-                        saved_count += 1
-                        logger.info("[记忆] 已保存[%s]: %s", scope, memory_text[:60])
+                            self.store._memory_repo.add_pending_fact(
+                                scope=scope, group_key=group_key, content=norm,
+                                sender_name=user_msg.sender_name or "",
+                                chat_id=user_msg.chat_id,
+                            )
+                            saved_count += 1
+                            logger.info("[记忆] 已入缓冲[%s/%s]: %s", scope, group_key, memory_text[:60])
+                        except sqlite3.Error as e:
+                            logger.warning("[记忆] 写入 pending 失败: %s", e)
 
                     if saved_count > 0:
-                        logger.info("[记忆] 本轮对话保存了 %d 条新记忆", saved_count)
+                        logger.info("[记忆] 本轮对话提取了 %d 条新事实进入整合缓冲", saved_count)
                 except sqlite3.Error as e:
                     logger.warning("[记忆] 异步记忆提取失败: %s", e)
 
@@ -208,6 +210,89 @@ class MemoryMixin(EngineMixinBase):
                         break
 
         thread = threading.Thread(target=cleanup_loop, daemon=True, name="memory-cleanup")
+        return thread
+
+    def _start_memory_summarize_scheduler(self) -> threading.Thread:
+        """启动「记忆汇总调度器」（摘要化记忆的核心）。
+
+        周期性把 memory_pending 中同组（scope, group_key）的待整合事实，与已有整合
+        摘要经 LLM 合并去重，upsert 回同一摘要行（kind='summary'），再清空 pending。
+        从而把「逐条单条事实」持续整合为「按人/主题的整合摘要」，并支持增量更新。
+
+        失败兜底：合并失败不删 pending（事实留待下轮重试，不丢信息）；LLM 限流(429)
+        经 _bg_throttle 退避，暂停本轮剩余合并；embedding 不可用时摘要行 embedding
+        留空，由 backfill 在服务启动/后续周期补算。
+        """
+        cfg = self.config.memory.summary_merge
+        enabled = cfg.get("enabled", True)
+        interval_min = int(cfg.get("interval_minutes", 10))
+        max_facts = int(cfg.get("max_facts_per_merge", 50))
+        min_facts = int(cfg.get("min_facts_to_merge", 1))
+        th = self.config.llm_throttle
+
+        def summarize_loop():
+            while self._running:
+                if not enabled:
+                    time.sleep(60)
+                    continue
+                try:
+                    repo = self.store._memory_repo
+                    groups = repo.get_pending_groups()
+                    for scope, group_key in groups:
+                        facts = repo.get_pending_facts(scope, group_key)
+                        if max_facts and len(facts) > max_facts:
+                            facts = facts[:max_facts]
+                        if len(facts) < min_facts:
+                            continue
+                        # 限流/退避：429 期间不轰炸免费额度，pending 留待下轮
+                        if th.enabled and not self._bg_throttle.acquire():
+                            logger.info("[记忆汇总] 主模型限流退避，跳过本轮剩余合并")
+                            break
+                        old = repo.get_summary(scope, group_key)
+                        old_text = old["content"] if old else ""
+                        try:
+                            merged = self.llm_agent.merge_memories_into_summary(old_text, facts)
+                        except Exception as e:  # 合并异常（如 LLM 故障）→ 保留 pending 重试
+                            logger.warning("[记忆汇总] 合并失败，保留 pending 下轮重试: %s", e)
+                            continue
+                        if not merged or not merged.strip():
+                            continue
+                        emb = None
+                        if self.embedding_client and getattr(self.embedding_client, "enabled", False):
+                            try:
+                                emb = self.embedding_client.embed(merged)
+                            except Exception as e:
+                                logger.debug("[记忆汇总] embedding 失败（摘要将回填）: %s", e)
+                        sender_id = group_key if scope == "personal" else ""
+                        repo.upsert_summary(
+                            scope=scope, group_key=group_key, content=merged.strip(),
+                            embedding=emb, sender_id=sender_id,
+                            sender_name=(old.get("sender_name") or "") if old else "",
+                            source="summary",
+                        )
+                        repo.delete_pending_for(scope, group_key)
+                        logger.info("[记忆汇总] 已整合 %s/%s：%d 条事实 → 摘要(%d字)",
+                                    scope, group_key, len(facts), len(merged))
+
+                    # 回填缺失 embedding 的摘要行（迁移后 / 合并时无 embedding 的情况）
+                    if self.embedding_client and getattr(self.embedding_client, "enabled", False):
+                        try:
+                            n = repo.backfill_summary_embeddings(self.embedding_client)
+                            if n:
+                                logger.info("[记忆回填] 补算 %d 条摘要 embedding", n)
+                        except Exception as e:
+                            logger.warning("[记忆回填] 失败: %s", e)
+                except Exception as e:
+                    logger.error("[记忆汇总] 调度器执行失败: %s", e)
+
+                # 每配置的分钟数执行一次（等待期间可被关闭信号立即唤醒）
+                for _ in range(max(1, interval_min) * 60):
+                    if not self._running:
+                        break
+                    if self._shutdown_event.wait(1):
+                        break
+
+        thread = threading.Thread(target=summarize_loop, daemon=True, name="memory-summarize")
         return thread
 
     def _start_decision_cleanup_scheduler(self) -> threading.Thread:

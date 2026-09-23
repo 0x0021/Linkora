@@ -756,6 +756,15 @@ class MemoryConfig(BaseModel):
     # 是否在索引内缓存归一化后的 embedding，支撑自动重建与精确重建。
     # 开启会增加内存（≈ dim×4×N 字节）。关闭后 maybe_rebuild 退化为无操作。
     vector_cache_embeddings: bool = True
+    # 摘要化记忆（2026-09-23）：自动提取的事实先入 memory_pending 缓冲，
+    # 由「记忆汇总调度器」周期性把同组 pending 事实 + 已有摘要经 LLM 合并为整合摘要。
+    # 取代原先「每条事实单独存一行」的逐条记忆模式。
+    summary_merge: dict = Field(default_factory=lambda: {
+        "enabled": True,
+        "interval_minutes": 10,        # 汇总调度器检查周期（分钟）
+        "max_facts_per_merge": 50,    # 单组合并的事实上限（防止 prompt 过长）
+        "min_facts_to_merge": 1,      # 至少多少条 pending 才触发合并
+    })
 
 
 

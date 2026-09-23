@@ -102,13 +102,37 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
             sender_name TEXT,
             embedding TEXT,
             created_at TEXT NOT NULL,
-            scope TEXT DEFAULT 'personal'
+            scope TEXT DEFAULT 'personal',
+            -- 摘要化记忆改造（2026-09-23）：
+            -- kind: 'fact'（旧版逐条事实，迁移后删除）/ 'summary'（整合摘要，新默认）
+            -- group_key: 聚合键——个人记忆= sender_id；公共记忆= 主题桶（如 'public:网络'）
+            -- updated_at: 摘要最近一次合并/更新时间，支撑「更新」语义
+            kind TEXT DEFAULT 'fact',
+            group_key TEXT,
+            updated_at TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_memories_chat_id ON memories(chat_id);
         CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at);
         CREATE INDEX IF NOT EXISTS idx_memories_sender ON memories(sender_id);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_key ON memories(key);
+        CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);
+        CREATE INDEX IF NOT EXISTS idx_memories_group ON memories(scope, group_key);
+
+        -- 待整合事实缓冲表：自动提取 / 手动保存的事实先落这里，由汇总调度器
+        -- 周期性合并进「按 (scope, group_key) 聚合的整合摘要」，避免逐条堆积。
+        CREATE TABLE IF NOT EXISTS memory_pending (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scope TEXT DEFAULT 'personal',
+            group_key TEXT,
+            content TEXT NOT NULL,
+            sender_name TEXT,
+            chat_id TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_memory_pending_group ON memory_pending(scope, group_key);
+        CREATE INDEX IF NOT EXISTS idx_memory_pending_created ON memory_pending(created_at);
 
         CREATE TABLE IF NOT EXISTS kb_documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,6 +234,10 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     # 行在召回时被过滤，实现「同主题只留最新结论、旧结论自动沉底」。
     _ensure_column(cur, "memories", "status", "TEXT DEFAULT 'active'")
     _ensure_column(cur, "memories", "superseded_by", "INTEGER")
+    # 摘要化记忆改造（2026-09-23）：旧库补列；新库已在 CREATE TABLE 中带齐。
+    _ensure_column(cur, "memories", "kind", "TEXT DEFAULT 'fact'")
+    _ensure_column(cur, "memories", "group_key", "TEXT")
+    _ensure_column(cur, "memories", "updated_at", "TEXT")
     _ensure_column(cur, "kb_chunks", "retry_pending", "INTEGER DEFAULT 0")
     # KB 分块作废/版本控制：与 memories 同构，支持重投文档时作废旧 chunk 而非累积。
     _ensure_column(cur, "kb_chunks", "status", "TEXT DEFAULT 'active'")

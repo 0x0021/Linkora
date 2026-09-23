@@ -29,6 +29,7 @@ from .reply import (
     process_message,
     summarize_conversation,
     extract_memories_from_conversation,
+    merge_memories_into_summary,
 )
 
 __all__ = [
@@ -47,4 +48,5 @@ __all__ = [
     "process_message",
     "summarize_conversation",
     "extract_memories_from_conversation",
+    "merge_memories_into_summary",
 ]

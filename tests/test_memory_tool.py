@@ -99,8 +99,8 @@ from src.tools.memory import SaveMemoryTool
 
 def _make_save_tool(is_dup=False):
     store = MagicMock()
-    store._memory_repo.check_memory_duplicate.return_value = is_dup
-    store._memory_repo.save_memory.return_value = 42
+    store._memory_repo.pending_fact_exists.return_value = is_dup
+    store._memory_repo.add_pending_fact.return_value = None
     emb = MagicMock()
     emb.enabled = True
     emb.embed.return_value = [0.1, 0.2, 0.3]
@@ -109,31 +109,41 @@ def _make_save_tool(is_dup=False):
 
 class TestSaveMemoryDedup:
     def test_duplicate_is_skipped(self):
-        """命中去重时应跳过保存，不调 save_memory。"""
+        """命中 pending/摘要去重时应跳过，不写 pending。"""
         tool, store = _make_save_tool(is_dup=True)
         r = tool.execute({"content": "张三负责采购", "sender_id": "u1"})
         assert r.get("skipped") is True
         assert r.get("reason") == "duplicate"
-        store._memory_repo.save_memory.assert_not_called()
+        store._memory_repo.add_pending_fact.assert_not_called()
 
     def test_non_duplicate_saves(self):
-        """未命中去重时正常保存。"""
+        """未命中时写入 pending 缓冲（摘要化记忆：不逐条存库）。"""
         tool, store = _make_save_tool(is_dup=False)
         r = tool.execute({"content": "李四负责财务", "sender_id": "u1"})
         assert r.get("success") is True
         assert r.get("skipped") is None
-        store._memory_repo.save_memory.assert_called_once()
+        assert r.get("mode") == "pending"
+        store._memory_repo.add_pending_fact.assert_called_once()
 
     def test_dedup_scoped_by_sender(self):
-        """去重检查应带上 sender_id 做范围隔离。"""
+        """去重检查应按 (scope, group_key) 隔离——个人记忆 group_key=sender_id。"""
         tool, store = _make_save_tool(is_dup=False)
         tool.execute({"content": "内容", "sender_id": "u9"})
-        _, kwargs = store._memory_repo.check_memory_duplicate.call_args
-        assert kwargs.get("sender_id") == "u9"
+        _, kwargs = store._memory_repo.pending_fact_exists.call_args
+        assert kwargs.get("scope") == "personal"
+        assert kwargs.get("group_key") == "u9"
+
+    def test_public_grouped_by_topic(self):
+        """公共记忆按主题分桶，group_key 形如 public:xxx。"""
+        tool, store = _make_save_tool(is_dup=False)
+        tool.execute({"content": "内网访问地址 10.0.0.1", "sender_id": "u1", "scope": "public"})
+        _, kwargs = store._memory_repo.pending_fact_exists.call_args
+        assert kwargs.get("scope") == "public"
+        assert str(kwargs.get("group_key")).startswith("public:")
 
     def test_blank_content_rejected(self):
         """纯空白内容应被拒绝且不查重。"""
         tool, store = _make_save_tool()
         r = tool.execute({"content": "   "})
         assert r.get("error")
-        store._memory_repo.check_memory_duplicate.assert_not_called()
+        store._memory_repo.pending_fact_exists.assert_not_called()

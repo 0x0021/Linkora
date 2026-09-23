@@ -32,6 +32,23 @@ _MEMORY_SUPERSEDE_THRESHOLD = 0.85
 _MEMORY_RECENCY_HALF_LIFE_DAYS = 60.0
 _MEMORY_RECENCY_BONUS = 0.08
 
+# 公共记忆主题分桶（按主题聚合为少量整合摘要）。顺序即优先级；都不命中 → "public:其他"。
+PUBLIC_TOPIC_BUCKETS: list[tuple[str, list[str]]] = [
+    ("网络与访问", ["网络", "地址", "ip", "内网", "外网", "代理", "域名", "端口", "http", "https", "vpn", "网站", "资源站", "访问", "url", "链接"]),
+    ("流程与审批", ["流程", "审批", "表单", "oa", "工单", "权限申请", "申请", "规则", "制度", "规范"]),
+    ("人员与组织", ["负责", "交接", "岗位", "部门", "团队", "经理", "总监", "离职", "入职", "变动", "编制", "汇报"]),
+    ("系统与账号", ["账号", "密码", "系统", "登录", "工号", "配置", "接口", "sso", "权限"]),
+]
+
+
+def public_memory_topic_key(text: str) -> str:
+    """把一条公共记忆归入某个主题桶，作为聚合键（group_key）。"""
+    t = (text or "").lower()
+    for topic, kws in PUBLIC_TOPIC_BUCKETS:
+        if any(kw in t for kw in kws):
+            return f"public:{topic}"
+    return "public:其他"
+
 
 def _recency_weight(created_at_iso: Optional[str]) -> float:
     """时效权重 ∈ (0, 1]，越新越接近 1。无法解析时回落 0.5。"""
@@ -418,6 +435,151 @@ class MemoryRepo:
             logger.info("记忆 #%d 作废了 %d 条语义相近旧记忆", new_id, len(superseded))
         return len(superseded)
 
+    # ============ 摘要化整合记忆（2026-09-23） ============
+    # 设计：记忆不再是逐条事实，而是「按 (scope, group_key) 聚合的整合摘要」。
+    # - 新事实先落 memory_pending（待整合缓冲，持久化）；
+    # - 汇总调度器周期性把某组的 pending 事实 + 已有摘要 经 LLM 合并 → upsert 回同一行；
+    # - 单组恒只有一条 kind='summary' 行，天然支持「存储 / 检索 / 更新」。
+
+    def _summary_key(self, scope: str, group_key: str) -> str:
+        import hashlib
+        return "sum_" + hashlib.md5(f"{scope}|{group_key}".encode("utf-8")).hexdigest()[:16]
+
+    def get_summary(self, scope: str, group_key: str) -> dict | None:
+        """取某聚合组的整合摘要行（无则返回 None）。"""
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "SELECT * FROM memories WHERE scope = ? AND group_key = ? AND kind = 'summary' LIMIT 1",
+            (scope, group_key),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+    def upsert_summary(self, *, scope: str, group_key: str, content: str,
+                       embedding: list[float] | None = None,
+                       sender_id: str = "", sender_name: str = "",
+                       source: str = "summary", chat_id: str = "") -> int:
+        """按 (scope, group_key) 写入或更新一条整合摘要（「更新」语义的核心）。
+
+        已存在该组摘要行 → UPDATE content/embedding/updated_at；否则 INSERT 新行
+        （kind='summary'）。新事实经合并后回写同一行，而非新增逐条记录，从而
+        从根本上消除「逐条单条记忆堆积」。
+        """
+        now_iso = datetime.now().isoformat()
+        emb_str = json.dumps(embedding) if embedding else None
+        with self.store._lock:
+            cur = self.store.conn.cursor()
+            cur.execute(
+                "SELECT id FROM memories WHERE scope = ? AND group_key = ? AND kind = 'summary' LIMIT 1",
+                (scope, group_key),
+            )
+            row = cur.fetchone()
+            if row:
+                mem_id = row["id"]
+                cur.execute(
+                    "UPDATE memories SET content = ?, embedding = ?, updated_at = ?, "
+                    "sender_id = ?, sender_name = ?, source = ?, chat_id = ? WHERE id = ?",
+                    (content, emb_str, now_iso, sender_id, sender_name, source, chat_id, mem_id),
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO memories (key, content, source, chat_id, sender_id, sender_name, "
+                    "embedding, created_at, scope, kind, group_key, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'summary', ?, ?)",
+                    (self._summary_key(scope, group_key), content, source, chat_id, sender_id,
+                     sender_name, emb_str, now_iso, scope, group_key, now_iso),
+                )
+                mem_id = cur.lastrowid
+            self.store.conn.commit()
+        return int(mem_id) if mem_id is not None else 0
+
+    def add_pending_fact(self, *, scope: str, group_key: str, content: str,
+                         sender_name: str = "", chat_id: str = "") -> None:
+        """把一条待整合事实写入 memory_pending 缓冲（持久化，重启不丢）。"""
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "INSERT INTO memory_pending (scope, group_key, content, sender_name, chat_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (scope, group_key, content, sender_name, chat_id, datetime.now().isoformat()),
+        )
+        self.store.conn.commit()
+
+    def pending_fact_exists(self, *, scope: str, group_key: str, content: str) -> bool:
+        """判断某组是否已有完全相同内容的事实（pending 或已整合的摘要），用于去重。"""
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM memory_pending WHERE scope = ? AND group_key = ? AND content = ? LIMIT 1",
+            (scope, group_key, content),
+        )
+        if cur.fetchone():
+            return True
+        cur.execute(
+            "SELECT 1 FROM memories WHERE scope = ? AND group_key = ? AND kind = 'summary' AND content = ? LIMIT 1",
+            (scope, group_key, content),
+        )
+        return cur.fetchone() is not None
+
+    def get_pending_groups(self) -> list[tuple[str, str]]:
+        """返回当前有 pending 事实的 (scope, group_key) 去重组列表。"""
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT scope, group_key FROM memory_pending ORDER BY created_at"
+        )
+        return [(r["scope"], r["group_key"]) for r in cur.fetchall()]
+
+    def get_pending_facts(self, scope: str, group_key: str) -> list[str]:
+        """取某组全部 pending 事实内容（按写入顺序）。"""
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "SELECT content FROM memory_pending WHERE scope = ? AND group_key = ? ORDER BY id",
+            (scope, group_key),
+        )
+        return [r["content"] for r in cur.fetchall()]
+
+    def delete_pending_for(self, scope: str, group_key: str) -> int:
+        """删除某组已被整合的 pending 事实（返回删除条数）。"""
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "DELETE FROM memory_pending WHERE scope = ? AND group_key = ?",
+            (scope, group_key),
+        )
+        n = cur.rowcount
+        self.store.conn.commit()
+        return int(n)
+
+    def count_pending(self) -> int:
+        cur = self.store.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM memory_pending")
+        return int(cur.fetchone()[0])
+
+    def backfill_summary_embeddings(self, embedding_client) -> int:
+        """为缺失 embedding 的摘要行补算向量（迁移后/服务启动时使用）。
+
+        摘要行若无 embedding，向量召回(recall_memory)与公共记忆自动注入均无法命中它；
+        故在汇总调度器与启动期回填，保证「检索」可用。返回补算条数。
+        """
+        cur = self.store.conn.cursor()
+        cur.execute(
+            "SELECT id, content FROM memories WHERE kind = 'summary' "
+            "AND (embedding IS NULL OR embedding = '')"
+        )
+        rows = cur.fetchall()
+        done = 0
+        for r in rows:
+            try:
+                emb = embedding_client.embed(str(r["content"]))
+            except Exception as e:  # 防御：单条失败不影响其他
+                logger.warning("[记忆回填] embedding 失败 id=%s: %s", r["id"], e)
+                continue
+            if not emb:
+                continue
+            cur.execute("UPDATE memories SET embedding = ? WHERE id = ?",
+                        (json.dumps(emb), r["id"]))
+            done += 1
+        if done:
+            self.store.conn.commit()
+        return done
+
     # ============ 风格 / 人设画像（Feature B） ============
 
     def cleanup_old_memories(
@@ -453,11 +615,19 @@ class MemoryRepo:
             if gc_superseded:
                 cur.execute("DELETE FROM memories WHERE status = 'superseded'")
                 deleted_count += cur.rowcount
+            # 摘要化改造：仅清理「旧版逐条事实」(kind='fact'/NULL)，整合摘要
+            # (kind='summary') 属人工/LLM 精选的聚合知识，永久保留、不被年龄清理。
+            # 未整合的 pending 事实过老也一并清除（会随新对话重新提取，不必无限堆积）。
             cur.execute(
-                "DELETE FROM memories WHERE (status = 'active' OR status IS NULL) AND created_at < ?",
+                "DELETE FROM memories WHERE (kind = 'fact' OR kind IS NULL) "
+                "AND (status = 'active' OR status IS NULL) AND created_at < ?",
                 (cutoff_iso,),
             )
             deleted_count += cur.rowcount
+            cur.execute(
+                "DELETE FROM memory_pending WHERE created_at < ?",
+                (cutoff_iso,),
+            )
             self.store.conn.commit()
 
         if deleted_count > 0:

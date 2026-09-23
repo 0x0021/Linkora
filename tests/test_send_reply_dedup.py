@@ -29,6 +29,7 @@ def _make_app():
     app.dws = MagicMock()
     app.config = MagicMock()
     app.config.poller.reply_cooldown_seconds = 0
+    app.config.poller.read_grace_seconds = 0
     app.config.poller.graceful_fallback_msg_types = []
     app.config.safety.default_fallback = ""
     app.config.safety.media_fallback_text = ""

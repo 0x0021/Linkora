@@ -174,6 +174,10 @@ def _fake_config(retention=10):
         skills=object(),
         rules=object(),
         tools=SimpleNamespace(available=["a", "b"]),
+        memory=SimpleNamespace(summary_merge={
+            "enabled": True, "interval_minutes": 10,
+            "max_facts_per_merge": 50, "min_facts_to_merge": 1,
+        }),
         llm_throttle=object(),
         embedding=SimpleNamespace(enabled=True, provider="p", offline=False, model="m"),
         dws=SimpleNamespace(timeout=30, retries=2, dry_run=True, profile=""),
@@ -240,6 +244,7 @@ def test_run_launches_per_platform_poller_threads(monkeypatch):
     bot.db_backup = None
     bot._bg_threads = []
     bot._start_memory_cleanup_scheduler = lambda: MagicMock()
+    bot._start_memory_summarize_scheduler = lambda: MagicMock()
     bot._start_conversation_summary_scheduler = lambda: MagicMock()
     bot._start_decision_cleanup_scheduler = lambda: MagicMock()
     bot._start_messages_cleanup_scheduler = lambda: MagicMock()

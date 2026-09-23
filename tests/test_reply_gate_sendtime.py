@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import threading
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.platform.runtime import RuntimeMixin
 from src.platform.runtime_inbound import InboundMixin
@@ -185,6 +185,30 @@ def test_send_reply_proceeds_when_gate_passes():
     assert result is True
     rt._dispatch_reply_send.assert_called_once()
     rt._mark_inbound_processed.assert_not_called()
+
+
+def test_send_reply_read_grace_window_delays_then_aborts_when_read():
+    """已读反悔窗口：read_grace>0 时，发送前先 sleep(grace) 再复核；
+    若复核判定已读（_should_reply_now=False）则放弃发送、绝不实际发出。"""
+    rt = _FakeRuntime(should_reply=False)
+    rt.config.poller.read_grace_seconds = 1
+    with patch("src.platform.runtime_dispatch.time.sleep") as mocksleep:
+        result = rt._send_reply(_Msg(), "AI 的回复")
+    assert result is False
+    mocksleep.assert_called_once_with(1)
+    rt._dispatch_reply_send.assert_not_called()
+    rt._mark_inbound_processed.assert_called_once()
+
+
+def test_send_reply_no_grace_when_zero():
+    """read_grace=0 时不做延迟，正常直接发送。"""
+    rt = _FakeRuntime(should_reply=True)
+    rt.config.poller.read_grace_seconds = 0
+    with patch("src.platform.runtime_dispatch.time.sleep") as mocksleep:
+        result = rt._send_reply(_Msg(), "AI 的回复")
+    assert result is True
+    mocksleep.assert_not_called()
+    rt._dispatch_reply_send.assert_called_once()
 
 
 # === 前置过滤（双重校验·第一道）：进入 LLM 前拦截 ===

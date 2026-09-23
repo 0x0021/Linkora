@@ -41,6 +41,7 @@ from src.llm.agent_steps import (
     process_message as _process_message_fn,
     extract_memories_from_conversation as _extract_memories_fn,
     summarize_conversation as _summarize_conversation_fn,
+    merge_memories_into_summary as _merge_memories_fn,
 )
 
 if TYPE_CHECKING:
@@ -535,6 +536,10 @@ class LLMAgent:
     def summarize_conversation(self, messages: list[Message], max_messages: int = 0) -> str:
         """用 LLM 生成对话摘要。"""
         return _summarize_conversation_fn(self, messages, max_messages)
+
+    def merge_memories_into_summary(self, old_summary: str, new_facts: list[str]) -> str:
+        """把已有摘要与新事实合并去重为更新后的整合摘要（摘要化记忆的更新点）。"""
+        return _merge_memories_fn(self, old_summary, new_facts)
 
 # test-line
 

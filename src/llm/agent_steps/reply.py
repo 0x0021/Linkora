@@ -431,3 +431,70 @@ def summarize_conversation(
     except Exception as e:
         logger.debug("[摘要] 生成失败: %s", e)
         return ""
+
+
+def merge_memories_into_summary(
+    agent,
+    old_summary: str,
+    new_facts: list[str],
+) -> str:
+    """把「已有整合摘要」与「若干新事实」合并去重，生成更新后的整合摘要。
+
+    这是摘要化记忆的「更新」实现点：新事实不单独成行，而是合并进同一份摘要。
+    LLM 不可用时退回结构化兜底（拼接 + 去重），保证系统在任何情况下都能整合。
+    """
+    new_facts = [f.strip() for f in (new_facts or []) if f and f.strip()]
+    if not new_facts:
+        return (old_summary or "").strip()
+    if not old_summary or not old_summary.strip():
+        # 无旧摘要：新事实即初始摘要（去重即可）
+        return _fallback_merge_summary("", new_facts)
+
+    merge_prompt = [
+        {"role": "system", "content": """你负责维护一份「整合记忆摘要」。下面先给出现有摘要，再给出近期从对话中 freshly 提取的新事实。
+
+要求：
+1. 将新事实合并进现有摘要，生成一个更新后的、连贯的整合摘要。
+2. 保留所有关键事实与核心上下文；剔除冗余、重复、过时或被新事实推翻的旧表述（以新事实为准）。
+3. 按主题/条目组织，条理清晰、简洁；用中文。
+4. 不要编造现有摘要与新事实之外的信息；不要添加"以下是摘要"之类元说明。
+5. 若新事实与现有摘要冲突，以新事实覆盖旧表述。
+
+只输出合并后的整合摘要文本，不要其他内容。"""},
+        {"role": "user", "content": (
+            f"【现有摘要】\n{old_summary.strip()}\n\n"
+            f"【新事实】\n" + "\n".join(f"- {f}" for f in new_facts)
+        )},
+    ]
+    try:
+        response = agent.client.chat(merge_prompt, temperature=0.1)
+        if response and response.content and response.content.strip():
+            merged = response.content.strip()
+            try:
+                merged = strip_internal_artifacts(merged)
+            except Exception:
+                logger.debug("[resilience] 摘要合并清洗失败，保留原文", exc_info=True)
+            return merged
+    except Exception as e:
+        logger.debug("[记忆合并] LLM 合并失败，退回结构化兜底: %s", e)
+    return _fallback_merge_summary(old_summary, new_facts)
+
+
+def _fallback_merge_summary(old_summary: str, new_facts: list[str]) -> str:
+    """无 LLM 时的结构化兜底：拼接旧摘要与新事实，按归一化文本去重。"""
+    items: list[str] = []
+    seen: set[str] = set()
+
+    def _norm(s: str) -> str:
+        return "".join(ch for ch in s if ch.isalnum()).lower()
+
+    for raw in ([old_summary] if old_summary and old_summary.strip() else []) + list(new_facts):
+        s = raw.strip()
+        if not s:
+            continue
+        n = _norm(s)
+        if n and n in seen:
+            continue
+        seen.add(n)
+        items.append(s)
+    return "\n".join(f"- {it}" for it in items)

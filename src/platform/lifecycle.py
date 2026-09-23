@@ -187,6 +187,13 @@ class LifecycleMixin(EngineMixinBase):
             self._bg_threads.append(messages_cleanup_thread)
             logger.info("消息记录清理调度器已启动（每24小时执行一次）")
 
+            # 启动记忆汇总调度器（逐条事实 → 按人/主题整合摘要）
+            memory_summarize_thread = self._start_memory_summarize_scheduler()
+            memory_summarize_thread.start()
+            self._bg_threads.append(memory_summarize_thread)
+            logger.info("记忆汇总调度器已启动（每%d分钟整合一次待整合事实）",
+                        self.config.memory.summary_merge.get("interval_minutes", 10))
+
             # 启动全局表清理调度器（D7：tool_execution_logs/feedback/message_drafts 保留期清理）
             global_tables_cleanup_thread = self._start_global_tables_cleanup_scheduler()
             global_tables_cleanup_thread.start()

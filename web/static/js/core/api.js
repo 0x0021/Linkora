@@ -462,6 +462,46 @@ class ApiClient {
         this._downloadBlob(blob, 'keywords_export.json');
     }
 
+    // ============ 答复门禁规则 ============
+    async getGateRules(category = '', search = '', limit = 500) {
+        let url = `/api/gate-rules?limit=${limit}`;
+        if (category) url += `&category=${encodeURIComponent(category)}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        return await this.fetch(url);
+    }
+
+    async getGateRule(id) {
+        return await this.fetch(`/api/gate-rules/${id}`);
+    }
+
+    async addGateRule(data) {
+        return await this.fetch('/api/gate-rules', 'POST', data);
+    }
+
+    async updateGateRule(id, data) {
+        return await this.fetch(`/api/gate-rules/${id}`, 'PUT', data);
+    }
+
+    async deleteGateRule(id) {
+        return await this.fetch(`/api/gate-rules/${id}`, 'DELETE');
+    }
+
+    async toggleGateRule(id) {
+        return await this.fetch(`/api/gate-rules/${id}/toggle`, 'POST', {});
+    }
+
+    async batchGateRules(ids, action) {
+        return await this.fetch('/api/gate-rules/batch', 'POST', { ids, action });
+    }
+
+    async getGateRuleStats() {
+        return await this.fetch('/api/gate-rules/stats', 'GET', null, { useCache: true });
+    }
+
+    async testGateMatch(text) {
+        return await this.fetch('/api/gate-rules/test-match', 'POST', { text, force: true });
+    }
+
     async getDingtalkDocs(keyword = '', limit = 100) {
         let url = `/api/dingtalk-docs?limit=${limit}`;
         if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;

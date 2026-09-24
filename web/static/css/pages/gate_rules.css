@@ -1,0 +1,197 @@
+/* ============ pages/gate_rules.css ============ */
+/* 答复门禁规则管理页面样式；复用 keywords.css / theme.css 中的 kw-*、tag、status-badge 等类，
+   此处仅补充门禁页面特有类。 */
+
+/* ===== 规则表格：gate 页 10 列列宽（表格骨架复用 keywords.css 共享规则） ===== */
+#page-gate-rules .kw-table th:nth-child(1),
+#page-gate-rules .kw-table td:nth-child(1) { width: 3%; text-align: center; }
+#page-gate-rules .kw-table th:nth-child(2),
+#page-gate-rules .kw-table td:nth-child(2) { width: 9%; }
+#page-gate-rules .kw-table th:nth-child(3),
+#page-gate-rules .kw-table td:nth-child(3) { width: 13%; }
+#page-gate-rules .kw-table th:nth-child(4),
+#page-gate-rules .kw-table td:nth-child(4) { width: 7%; }
+#page-gate-rules .kw-table th:nth-child(5),
+#page-gate-rules .kw-table td:nth-child(5) { width: 22%; }
+#page-gate-rules .kw-table th:nth-child(6),
+#page-gate-rules .kw-table td:nth-child(6) { width: 21%; }
+#page-gate-rules .kw-table th:nth-child(7),
+#page-gate-rules .kw-table td:nth-child(7) { width: 6%; text-align: center; }
+#page-gate-rules .kw-table th:nth-child(8),
+#page-gate-rules .kw-table td:nth-child(8) { width: 6%; text-align: center; }
+#page-gate-rules .kw-table th:nth-child(9),
+#page-gate-rules .kw-table td:nth-child(9) { width: 5%; text-align: center; }
+#page-gate-rules .kw-table th:nth-child(10),
+#page-gate-rules .kw-table td:nth-child(10) { width: 8%; text-align: center; }
+
+/* 分类/方式 tag 不换行；模式列 code 截断 */
+#page-gate-rules .kw-table .tag { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+#page-gate-rules .kw-table .pattern-code { display: inline-block; max-width: 100%; }
+
+/* 分页条 */
+#page-gate-rules .gate-pager { display: flex; justify-content: flex-end; padding: 10px 4px 2px; }
+
+/* 分类标签：复用 .tag 基础样式，按 data-cat 着色 */
+.gate-cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+    --gate-cat-color: #64748b;
+    color: var(--gate-cat-color);
+    background: color-mix(in srgb, var(--gate-cat-color) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--gate-cat-color) 32%, transparent);
+}
+.gate-cat[data-cat="private_privacy"] { --gate-cat-color: #ec4899; }
+.gate-cat[data-cat="illegal_info"]    { --gate-cat-color: #ef4444; }
+.gate-cat[data-cat="negative_emotion"]{ --gate-cat-color: #f59e0b; }
+.gate-cat[data-cat="other"]           { --gate-cat-color: #64748b; }
+
+/* 规则名称单元格 */
+.gate-name-cell {
+    font-weight: 600;
+    color: var(--text-strong, #e6edf3);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 批量选择复选框 */
+.gate-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent, #3b82f6);
+}
+
+/* ===== 命中测试：结果展示（test-panel / test-input / test-output 已在 theme.css 提供） ===== */
+.test-result-none {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 180px;
+    text-align: center;
+    color: var(--text-muted, #8b98a5);
+}
+.test-result-none p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.test-result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: color-mix(in srgb, #ef4444 12%, transparent);
+    border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+    margin-bottom: 12px;
+}
+.test-result-header .match-count {
+    font-size: 15px;
+    font-weight: 700;
+}
+.test-result-header .top-reply {
+    font-size: 13px;
+    color: var(--text-muted, #8b98a5);
+}
+
+.test-result-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.test-result-item {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--panel-soft, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+.test-result-pattern {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.test-result-pattern code {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fca5a5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    word-break: break-all;
+}
+.test-result-reply {
+    font-size: 13px;
+    color: var(--text, #c9d4df);
+    line-height: 1.6;
+}
+.test-result-reply b {
+    color: var(--text-strong, #e6edf3);
+}
+
+/* ===== 概览区：横向 KPI 卡 + 高频命中面板 ===== */
+#page-gate-rules .gate-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+#page-gate-rules .gate-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+.gate-kpi {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--panel-bg, #fff);
+    border: 1px solid var(--border, rgba(120, 120, 120, 0.16));
+    border-radius: 12px;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+.gate-kpi:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--kpi-color, #3b82f6) 16%, transparent);
+}
+.gate-kpi-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    color: var(--kpi-color, #3b82f6);
+    background: color-mix(in srgb, var(--kpi-color, #3b82f6) 13%, transparent);
+}
+.gate-kpi-body { min-width: 0; }
+.gate-kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong, #e6edf3);
+}
+.gate-kpi-label {
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-muted, #8b98a5);
+}
+@media (max-width: 768px) {
+    #page-gate-rules .gate-kpi-row { grid-template-columns: 1fr; }
+}

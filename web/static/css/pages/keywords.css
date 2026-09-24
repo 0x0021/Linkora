@@ -157,7 +157,7 @@
 }
 
 /* ===================== 高频命中条形图 ===================== */
-#page-keywords .kw-tophits-panel {
+:is(#page-keywords, #page-gate-rules) .kw-tophits-panel {
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -167,22 +167,22 @@
     animation: kwFadeUp .4s .22s both;
 }
 
-#page-keywords .kw-tophits-head {
+:is(#page-keywords, #page-gate-rules) .kw-tophits-head {
     display: flex; align-items: baseline; justify-content: space-between;
     margin-bottom: .55rem;
     flex-shrink: 0;
 }
-#page-keywords .kw-tophits-title {
+:is(#page-keywords, #page-gate-rules) .kw-tophits-title {
     font-size: .85rem; font-weight: 600; color: var(--text-primary, #1f2937);
     display: flex; align-items: center; gap: .4rem;
 }
-#page-keywords .kw-tophits-title i { color: #f97316; font-size: .82rem; }
-#page-keywords .kw-tophits-sub {
+:is(#page-keywords, #page-gate-rules) .kw-tophits-title i { color: #f97316; font-size: .82rem; }
+:is(#page-keywords, #page-gate-rules) .kw-tophits-sub {
     font-size: .66rem; color: var(--text-tertiary, #94a3b8);
     letter-spacing: .02em;
 }
 
-#page-keywords .kw-heatmap {
+:is(#page-keywords, #page-gate-rules) .kw-heatmap {
     display: flex;
     flex-direction: column;
     gap: .35rem;
@@ -190,7 +190,7 @@
     min-height: 0;
 }
 
-#page-keywords .kw-bar-row {
+:is(#page-keywords, #page-gate-rules) .kw-bar-row {
     display: flex;
     align-items: center;
     gap: .45rem;
@@ -200,7 +200,7 @@
     animation: kwBarSlide .3s ease forwards;
 }
 
-#page-keywords .kw-bar-rank {
+:is(#page-keywords, #page-gate-rules) .kw-bar-rank {
     width: 18px;
     height: 18px;
     border-radius: var(--radius-sm);
@@ -213,20 +213,20 @@
     justify-content: center;
     flex-shrink: 0;
 }
-#page-keywords .kw-bar-rank.top1 {
+:is(#page-keywords, #page-gate-rules) .kw-bar-rank.top1 {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #78350f;
 }
-#page-keywords .kw-bar-rank.top2 {
+:is(#page-keywords, #page-gate-rules) .kw-bar-rank.top2 {
     background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
     color: #475569;
 }
-#page-keywords .kw-bar-rank.top3 {
+:is(#page-keywords, #page-gate-rules) .kw-bar-rank.top3 {
     background: linear-gradient(135deg, #fdba74, #fb923c);
     color: #9a3412;
 }
 
-#page-keywords .kw-bar-label {
+:is(#page-keywords, #page-gate-rules) .kw-bar-label {
     flex: 1;
     min-width: 0;
     font-size: .72rem;
@@ -236,7 +236,7 @@
     text-overflow: ellipsis;
 }
 
-#page-keywords .kw-bar-track {
+:is(#page-keywords, #page-gate-rules) .kw-bar-track {
     flex: 2;
     height: 8px;
     background: var(--bg-tertiary, #f1f5f9);
@@ -244,14 +244,14 @@
     overflow: hidden;
 }
 
-#page-keywords .kw-bar-fill {
+:is(#page-keywords, #page-gate-rules) .kw-bar-fill {
     height: 100%;
     border-radius: var(--radius-sm);
     background: linear-gradient(90deg, var(--brand-primary), var(--brand-purple));
     transition: width .5s cubic-bezier(.16,1,.3,1);
 }
 
-#page-keywords .kw-bar-count {
+:is(#page-keywords, #page-gate-rules) .kw-bar-count {
     width: 36px;
     text-align: right;
     font-size: .72rem;
@@ -260,7 +260,7 @@
     flex-shrink: 0;
 }
 
-#page-keywords .kw-bar-empty {
+:is(#page-keywords, #page-gate-rules) .kw-bar-empty {
     color: var(--text-tertiary, #94a3b8);
     font-size: .78rem;
     text-align: center;
@@ -321,14 +321,14 @@
     line-height: 1.3;
 }
 
-#page-keywords .kw-table { width: 100%; font-size: 0.8125rem; display: block; }
-#page-keywords .kw-table thead,
-#page-keywords .kw-table tbody { display: block; }
-#page-keywords .kw-table tr { display: flex; align-items: center; }
-#page-keywords .kw-table th,
-#page-keywords .kw-table td { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#page-keywords .kw-table thead { background: var(--bg-subtle); position: sticky; top: 0; z-index: 2; }
-#page-keywords .kw-table thead th {
+:is(#page-keywords, #page-gate-rules) .kw-table { width: 100%; font-size: 0.8125rem; display: block; }
+:is(#page-keywords, #page-gate-rules) .kw-table thead,
+:is(#page-keywords, #page-gate-rules) .kw-table tbody { display: block; }
+:is(#page-keywords, #page-gate-rules) .kw-table tr { display: flex; align-items: center; }
+:is(#page-keywords, #page-gate-rules) .kw-table th,
+:is(#page-keywords, #page-gate-rules) .kw-table td { flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(#page-keywords, #page-gate-rules) .kw-table thead { background: var(--bg-subtle); position: sticky; top: 0; z-index: 2; }
+:is(#page-keywords, #page-gate-rules) .kw-table thead th {
     text-align: left;
     padding: 0.5rem 0.5rem;
     font-weight: 600;
@@ -339,7 +339,7 @@
     border-bottom: 2px solid var(--border-light);
     background: var(--bg-subtle);
 }
-#page-keywords .kw-table tbody td {
+:is(#page-keywords, #page-gate-rules) .kw-table tbody td {
     padding: 0.4rem 0.5rem;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-light);
@@ -360,25 +360,25 @@
 #page-keywords .kw-table td:nth-child(7) { width: 5%; text-align: center; }
 #page-keywords .kw-table th:nth-child(8),
 #page-keywords .kw-table td:nth-child(8) { width: 8%; text-align: center; }
-#page-keywords .kw-table tbody tr {
+:is(#page-keywords, #page-gate-rules) .kw-table tbody tr {
     position: relative;
     transition: background .15s ease;
     animation: kwRowIn .4s both;
     animation-delay: calc(var(--i, 0) * .035s);
 }
-#page-keywords .kw-table tbody tr:last-child td { border-bottom: none; }
-#page-keywords .kw-table tbody tr:hover {
+:is(#page-keywords, #page-gate-rules) .kw-table tbody tr:last-child td { border-bottom: none; }
+:is(#page-keywords, #page-gate-rules) .kw-table tbody tr:hover {
     background: color-mix(in srgb, var(--brand-primary) 6%, transparent);
 }
-#page-keywords .kw-table tbody tr::before {
+:is(#page-keywords, #page-gate-rules) .kw-table tbody tr::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0;
     width: 3px; background: var(--brand-primary);
     transform: scaleY(0); transform-origin: center;
     transition: transform .22s ease;
 }
-#page-keywords .kw-table tbody tr:hover::before { transform: scaleY(1); }
+:is(#page-keywords, #page-gate-rules) .kw-table tbody tr:hover::before { transform: scaleY(1); }
 
-#page-keywords .pattern-code {
+:is(#page-keywords, #page-gate-rules) .pattern-code {
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
     font-size: .82rem;
     background: color-mix(in srgb, var(--brand-primary) 9%, transparent);
@@ -386,13 +386,13 @@
     padding: .2rem .5rem; border-radius: var(--radius-sm);
     border: 1px solid color-mix(in srgb, var(--brand-primary) 16%, transparent);
 }
-#page-keywords .reply-cell {
+:is(#page-keywords, #page-gate-rules) .reply-cell {
     color: var(--text-secondary, #475569);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     max-width: none;
 }
 /* 空状态行：flex 布局下 colspan 无效，用 width:100% 铺满 */
-#page-keywords .kw-table .empty-cell {
+:is(#page-keywords, #page-gate-rules) .kw-table .empty-cell {
     width: 100%;
     text-align: center;
     color: var(--text-tertiary);
@@ -458,7 +458,7 @@
 @media (max-width: 640px) {
     #page-keywords .kw-stats-col { grid-template-columns: 1fr; }
     #page-keywords .kw-hit-row { grid-template-columns: 22px 1fr auto; }
-    #page-keywords .reply-cell { max-width: 160px; }
+    :is(#page-keywords, #page-gate-rules) .reply-cell { max-width: 160px; }
     #page-keywords .main-panel-header .action-group {
         flex-direction: column;
         align-items: stretch;
@@ -476,9 +476,9 @@
 
 @media (prefers-reduced-motion: reduce) {
     #page-keywords .kw-stat-card,
-    #page-keywords .kw-tophits-panel,
+    :is(#page-keywords, #page-gate-rules) .kw-tophits-panel,
     #page-keywords .main-panel,
     #page-keywords .kw-hit-row,
-    #page-keywords .kw-table tbody tr { animation: none !important; }
+    :is(#page-keywords, #page-gate-rules) .kw-table tbody tr { animation: none !important; }
     #page-keywords .kw-hit-bar > span { transition: none !important; }
 }

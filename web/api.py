@@ -1188,6 +1188,7 @@ from web.routers.orgs import router as _orgs_router
 from web.routers.skills_marketplace import router as _skills_marketplace_router
 from web.routers.memories import router as _memories_router
 from web.routers.rules import router as _rules_router
+from web.routers.gate_rules import router as _gate_rules_router
 from web.routers.intents import router as _intents_router
 from web.routers.decisions import router as _decisions_router
 from web.routers.routing_quality import router as _routing_quality_router
@@ -1222,6 +1223,7 @@ app.include_router(_orgs_router)
 app.include_router(_skills_marketplace_router)
 app.include_router(_memories_router)
 app.include_router(_rules_router)
+app.include_router(_gate_rules_router)
 app.include_router(_intents_router)
 app.include_router(_decisions_router)
 app.include_router(_routing_quality_router)

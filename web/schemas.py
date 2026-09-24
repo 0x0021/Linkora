@@ -225,6 +225,40 @@ class KeywordBatchOp(BaseModel):
     category: Optional[str] = None
 
 
+# ── 答复门禁规则 ──────────────────────────────────────────────────────────────
+class GateRule(BaseModel):
+    category: str = "other"
+    category_label: str = ""
+    name: str = ""
+    match_type: str = "keyword"   # keyword | regex
+    pattern: str
+    intercept_message: str = ""
+    priority: int = 0
+    enabled: int = 1
+
+
+class GateRuleUpdate(BaseModel):
+    category: Optional[str] = None
+    category_label: Optional[str] = None
+    name: Optional[str] = None
+    match_type: Optional[str] = None
+    pattern: Optional[str] = None
+    intercept_message: Optional[str] = None
+    priority: Optional[int] = None
+    enabled: Optional[int] = None
+
+
+class GateRuleMatchTest(BaseModel):
+    text: str
+    force: bool = True   # 命中测试默认读最新规则
+
+
+class GateRuleBatchOp(BaseModel):
+    ids: list[int]
+    action: str           # enable | disable | delete
+    category: Optional[str] = None
+
+
 class RagChatQuery(BaseModel):
     query: str
     top_k: int = 5

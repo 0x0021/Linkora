@@ -559,6 +559,12 @@ class InboundMixin(EngineMixinBase):
             if self._handle_oa_approval_urge(message):
                 return
 
+            # === 答复门禁：用户提问命中禁止答复规则则直接拦截（发拦截提示、不调 LLM）===
+            # 命中即阻断，避免把隐私/违法/辱骂类提问送进 LLM，也避免产生任何答复。
+            # 异常时 fail-open 放行（不影响正常业务消息）。
+            if self._check_reply_gate(message):
+                return
+
             result = self.rule_engine.check(message)
             if self._apply_rule_result(message, result):
                 return
@@ -599,6 +605,58 @@ class InboundMixin(EngineMixinBase):
                     need_backoff_cleanup = False
             if need_backoff_cleanup:
                 self._cleanup_backoff()
+    def _check_reply_gate(self, message: Message) -> bool:
+        """答复门禁：检测用户提问是否命中禁止答复规则。
+
+        命中返回 True（已拦截处理），调用方据此跳过后续 LLM 处理；
+        未命中或检测异常返回 False（放行）。
+
+        行为：命中后把对应规则的拦截提示作为一条「固定话术」发给用户（给出拦截提示），
+        并标记入站已处理，避免轮询反复重试刷屏。异常一律 fail-open 放行，
+        绝不因门禁异常阻断正常业务消息。
+        """
+        try:
+            from src.gate.reply_gate import evaluate_gate_rules
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[门禁] 引擎导入失败，放行消息: %s", e)
+            return False
+
+        text = (message.content or "").strip()
+        if not text:
+            return False
+
+        try:
+            result = evaluate_gate_rules(self.store, text)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[门禁] 检测异常，放行消息: %s", e)
+            return False
+
+        if not result.blocked:
+            return False
+
+        intercept = result.intercept_message or "抱歉，该内容暂无法回答。"
+        logger.info(
+            "[门禁] 命中禁止答复规则 id=%s 分类=%s(%s)，拦截提问：%s",
+            result.rule_id, result.category, result.category_label, text[:60],
+        )
+        tracker.record(
+            sender_id=message.sender_id or "",
+            sender=message.sender_name or "",
+            conversation_id=message.chat_id or "",
+            chat=message.chat_name or message.chat_id,
+            content=text[:80],
+            intent="gate.reply_block",
+            action="reply-rule",
+            reply_preview=intercept[:80],
+            platform_id=_active_platform_ctx.get(),
+        )
+        if not self._send_reply(message, intercept):
+            logger.warning(
+                "[门禁] 拦截提示发送失败，标记防重复: msg_id=%s", message.msg_id[:20],
+            )
+            self._mark_inbound_processed(message)
+        return True
+
     def _handle_oa_approval_urge(self, message: Message) -> bool:
         """OA 审批转发处理：催审批 → 固定话术并返回 True；提问/动作指令 → 返回 False 交 LLM。"""
         if not (self.config.oa_approval.enabled and self._is_oa_approval_message(message)):

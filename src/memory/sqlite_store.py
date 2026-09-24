@@ -307,6 +307,7 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
         self.__baseline_repo = None
         self.__feedback_repo = None
         self.__keyword_rule_repo = None
+        self.__gate_rule_repo = None
         self.__tool_execution_repo = None
 
     def _remove_chunks_from_index(self, chunk_ids: list[int]) -> None:
@@ -369,6 +370,50 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
 
     def keyword_rules_stats(self, top_hits_limit: int = 50) -> dict:
         return self._keyword_rule_repo.stats(top_hits_limit)
+
+    # ── 答复门禁规则（gate_rules）门面 ──────────────────────────────────────
+    def add_gate_rule(
+        self,
+        category: str,
+        category_label: str,
+        name: str,
+        match_type: str,
+        pattern: str,
+        intercept_message: str,
+        priority: int = 0,
+        enabled: int = 1,
+    ) -> int:
+        return self._gate_rule_repo.add(
+            category, category_label, name, match_type, pattern,
+            intercept_message, priority, enabled,
+        )
+
+    def list_gate_rules(
+        self, category: str = "", enabled: int | None = None, limit: int = 500,
+    ) -> list[dict]:
+        return self._gate_rule_repo.list(category, enabled, limit)
+
+    def get_gate_rule(self, rule_id: int) -> dict | None:
+        return self._gate_rule_repo.get(rule_id)
+
+    def update_gate_rule(self, rule_id: int, **kwargs) -> None:
+        self._gate_rule_repo.update(rule_id, **kwargs)
+
+    def delete_gate_rule(self, rule_id: int) -> None:
+        self._gate_rule_repo.delete(rule_id)
+
+    def gate_rule_categories(self) -> list[tuple[str, str]]:
+        """返回 [(category, category_label), ...]。"""
+        return self._gate_rule_repo.categories()
+
+    def increment_gate_rule_hit(self, rule_id: int) -> None:
+        self._gate_rule_repo.increment_hit(rule_id)
+
+    def count_gate_rules(self, enabled: int | None = None) -> int:
+        return self._gate_rule_repo.count(enabled)
+
+    def gate_rules_stats(self, top_hits_limit: int = 50) -> dict:
+        return self._gate_rule_repo.stats(top_hits_limit)
 
     def log_tool_execution(
         self,
@@ -558,6 +603,14 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
             from src.memory.keyword_rule_repo import KeywordRuleRepo
             self.__keyword_rule_repo = KeywordRuleRepo(self)
         return self.__keyword_rule_repo
+
+    @property
+    def _gate_rule_repo(self):
+        """Lazy-load GateRuleRepo（答复门禁规则）。"""
+        if self.__gate_rule_repo is None:
+            from src.memory.gate_rule_repo import GateRuleRepo
+            self.__gate_rule_repo = GateRuleRepo(self)
+        return self.__gate_rule_repo
 
     @property
     def _tool_execution_repo(self):

@@ -179,6 +179,25 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
         CREATE INDEX IF NOT EXISTS idx_kw_category ON keyword_rules(category);
         CREATE INDEX IF NOT EXISTS idx_kw_enabled ON keyword_rules(enabled);
 
+        -- 答复门禁规则：对用户提问做内容级拦截（私人隐私 / 违法信息 / 负面情绪 / 其他可扩展）
+        CREATE TABLE IF NOT EXISTS gate_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL DEFAULT 'other',
+            category_label TEXT NOT NULL DEFAULT '',
+            name TEXT NOT NULL DEFAULT '',
+            match_type TEXT NOT NULL DEFAULT 'keyword',
+            pattern TEXT NOT NULL,
+            intercept_message TEXT NOT NULL DEFAULT '',
+            priority INTEGER DEFAULT 0,
+            enabled INTEGER DEFAULT 1,
+            hit_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_gate_category ON gate_rules(category);
+        CREATE INDEX IF NOT EXISTS idx_gate_enabled ON gate_rules(enabled);
+
         CREATE TABLE IF NOT EXISTS dingtalk_docs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             doc_id TEXT UNIQUE NOT NULL,

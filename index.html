@@ -33,25 +33,25 @@
         </div>
 
         <h1>Linkora 文档站点</h1>
-        <p>自动生成文档站点，最后更新：2026-09-24 07:19:35</p>
+        <p>自动生成文档站点，最后更新：2026-09-24 07:39:45</p>
 
         <div class="stats" id="overview">
             <h2>项目统计</h2>
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-value">276</div>
+                    <div class="stat-value">278</div>
                     <div class="stat-label">API 类</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">460</div>
+                    <div class="stat-value">465</div>
                     <div class="stat-label">API 函数</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">272</div>
+                    <div class="stat-value">273</div>
                     <div class="stat-label">测试文件</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">3992</div>
+                    <div class="stat-value">4007</div>
                     <div class="stat-label">测试用例</div>
                 </div>
             </div>
@@ -67,12 +67,6 @@
                     <th>描述</th>
                 </tr>
                 <tr>
-                    <td><code>AccessControlMixin</code></td>
-                    <td><code>src.poller_core_access</code></td>
-                    <td>16</td>
-                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
-                </tr>
-                <tr>
                     <td><code>_PathOverrideState</code></td>
                     <td><code>src.paths</code></td>
                     <td>6</td>
@@ -82,128 +76,125 @@
 thread...</td>
                 </tr>
                 <tr>
-                    <td><code>DwsConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>Message</code></td>
+                    <td><code>src.models</code></td>
                     <td>0</td>
                     <td>...</td>
                 </tr>
                 <tr>
-                    <td><code>AdapterOverrideConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>LinkoraComponentBase</code></td>
+                    <td><code>src.component_base</code></td>
                     <td>0</td>
-                    <td>适配器专属覆盖配置，用于 PlatformConfig 中按平台覆盖默认适配器参数。
-
-钉钉平台对应 DwsConfig 字段；飞书/企微对应各自 CLI 的 ...</td>
+                    <td>...</td>
                 </tr>
                 <tr>
-                    <td><code>PollerConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>_AuditState</code></td>
+                    <td><code>src.audit</code></td>
+                    <td>3</td>
+                    <td>审计日志状态（替代 global _audit_path）。...</td>
+                </tr>
+                <tr>
+                    <td><code>_SyncCancelled</code></td>
+                    <td><code>src.poller_core_history</code></td>
+                    <td>0</td>
+                    <td>由 cancel_check 在同步过程中抛出，用于优雅中止历史同步（前端「取消」按钮）。...</td>
+                </tr>
+                <tr>
+                    <td><code>HistorySyncMixin</code></td>
+                    <td><code>src.poller_core_history</code></td>
+                    <td>5</td>
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>DiscoveryMixin</code></td>
+                    <td><code>src.poller_core_discovery</code></td>
+                    <td>4</td>
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>RuleResult</code></td>
+                    <td><code>src.rule_engine</code></td>
                     <td>0</td>
                     <td>...</td>
                 </tr>
                 <tr>
                     <td><code>KeywordRule</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>RulesConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>StorageConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>...</td>
-                </tr>
-                <tr>
-                    <td><code>PlatformRagConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>平台级 KB（RAG）覆盖配置。所有字段可选，None 表示沿用全局 rag 值。
-
-典型场景：飞书文档较长需要更大的 chunk_size，企微消息短可缩小分...</td>
-                </tr>
-                <tr>
-                    <td><code>PlatformLLMConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>平台级 LLM 覆盖配置。所有字段可选，None 表示沿用全局 llm 值。
-
-典型场景：飞书/企微使用专属 provider/model/api_key，不配...</td>
-                </tr>
-                <tr>
-                    <td><code>PlatformToolsConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>平台级 Tools 覆盖配置。所有字段可选，None 表示沿用全局 tools 值。
-
-典型场景：飞书/企微单独开关某些工具（如 search_enabled ...</td>
-                </tr>
-                <tr>
-                    <td><code>PlatformConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>src.rule_engine</code></td>
                     <td>1</td>
-                    <td>多平台隔离：每个 IM 平台一个独立配置（独立适配器 / 独立数据库 / 独立轮询器）。
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>RuleEngine</code></td>
+                    <td><code>src.rule_engine</code></td>
+                    <td>11</td>
+                    <td>...</td>
+                </tr>
+                <tr>
+                    <td><code>ParseMixin</code></td>
+                    <td><code>src.poller_core_parse</code></td>
+                    <td>13</td>
+                    <td>MessagePoller 子系统萃取（mixin，经多继承组合回主类）。...</td>
+                </tr>
+                <tr>
+                    <td><code>DocSyncScheduler</code></td>
+                    <td><code>src.doc_sync_scheduler</code></td>
+                    <td>11</td>
+                    <td>钉钉文档定时自动同步器。
 
-向后兼容：若 config.yaml 无 ``platforms``...</td>
+- 定期轮询已标记为"自动同步"的钉钉文档
+- 检测内容变化（通过 last_modified 或内容哈希）
+- 内容变化时自动重新...</td>
                 </tr>
                 <tr>
-                    <td><code>OcrPostprocessConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>OCR 后处理管线配置。
+                    <td><code>ModuleHotReloader</code></td>
+                    <td><code>src.dev_hot_reload</code></td>
+                    <td>11</td>
+                    <td>开发态模块热加载器。
 
-每个步骤可独立开关，控制 OCR 文本清洗的粒度。
-在 poller → OCR → message_loop 链路中，OCR 结果...</td>
+用法：
+    reloader = ModuleHotReloader(project_root="/path/to/linkora"...</td>
                 </tr>
                 <tr>
-                    <td><code>LoggingConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>DecisionRecord</code></td>
+                    <td><code>src.decision_tracker</code></td>
                     <td>0</td>
-                    <td>...</td>
+                    <td>单条消息处理决策。...</td>
                 </tr>
                 <tr>
-                    <td><code>LlmAdvancedConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>...</td>
+                    <td><code>DecisionTracker</code></td>
+                    <td><code>src.decision_tracker</code></td>
+                    <td>7</td>
+                    <td>有界、进程内的决策记录器（支持多平台隔离）。...</td>
                 </tr>
                 <tr>
-                    <td><code>LlmConfig</code></td>
-                    <td><code>src.config_models</code></td>
-                    <td>0</td>
-                    <td>...</td>
+                    <td><code>LinkoraError</code></td>
+                    <td><code>src.exceptions</code></td>
+                    <td>2</td>
+                    <td>所有 Linkora 业务异常的基类。...</td>
                 </tr>
                 <tr>
-                    <td><code>LlmThrottleConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>DBError</code></td>
+                    <td><code>src.exceptions</code></td>
                     <td>0</td>
-                    <td>后台 LLM 任务（对话摘要 / 记忆提取）的限速与空闲降频配置。
-
-目的：免费 LLM 额度有严格频次限制，后台任务若无节流会在启动/空闲时
-持续轰炸接口（已...</td>
+                    <td>数据库操作失败的基类。...</td>
                 </tr>
                 <tr>
-                    <td><code>ToolsConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>DBConnectionError</code></td>
+                    <td><code>src.exceptions</code></td>
                     <td>0</td>
-                    <td>...</td>
+                    <td>数据库连接失败（连接池耗尽、文件损坏等）。...</td>
                 </tr>
                 <tr>
-                    <td><code>EmbeddingConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>DBWriteError</code></td>
+                    <td><code>src.exceptions</code></td>
                     <td>0</td>
-                    <td>...</td>
+                    <td>数据库写入失败（约束冲突、事务失败等）。...</td>
                 </tr>
                 <tr>
-                    <td><code>MemoryConfig</code></td>
-                    <td><code>src.config_models</code></td>
+                    <td><code>DBBusyError</code></td>
+                    <td><code>src.exceptions</code></td>
                     <td>0</td>
-                    <td>...</td>
+                    <td>数据库忙（SQLite Busy Timeout）。...</td>
                 </tr>
             </table>
         </div>
@@ -216,84 +207,84 @@ thread...</td>
                     <th>用例数</th>
                 </tr>
                 <tr>
-                    <td><code>test_skill_loader.py</code></td>
-                    <td>47</td>
-                </tr>
-                <tr>
-                    <td><code>test_media_upload.py</code></td>
-                    <td>10</td>
-                </tr>
-                <tr>
-                    <td><code>test_identity_constraint.py</code></td>
-                    <td>17</td>
-                </tr>
-                <tr>
-                    <td><code>test_web_routers_departments.py</code></td>
+                    <td><code>test_image_path.py</code></td>
                     <td>9</td>
                 </tr>
                 <tr>
-                    <td><code>test_memory_isolation.py</code></td>
-                    <td>6</td>
+                    <td><code>test_market_rankings_concurrency.py</code></td>
+                    <td>1</td>
                 </tr>
                 <tr>
-                    <td><code>test_account_identity.py</code></td>
-                    <td>7</td>
-                </tr>
-                <tr>
-                    <td><code>test_skill_icon_download.py</code></td>
-                    <td>3</td>
-                </tr>
-                <tr>
-                    <td><code>test_web_routers_skills_marketplace.py</code></td>
-                    <td>9</td>
-                </tr>
-                <tr>
-                    <td><code>test_management_tools.py</code></td>
-                    <td>34</td>
-                </tr>
-                <tr>
-                    <td><code>test_handler_error_paths.py</code></td>
+                    <td><code>test_llm_client_no_fallback.py</code></td>
                     <td>2</td>
                 </tr>
                 <tr>
-                    <td><code>test_kb_playwright_dns.py</code></td>
+                    <td><code>test_timeout_guard.py</code></td>
+                    <td>7</td>
+                </tr>
+                <tr>
+                    <td><code>test_utils_edge.py</code></td>
                     <td>3</td>
                 </tr>
                 <tr>
-                    <td><code>test_web_dashboard_live.py</code></td>
+                    <td><code>test_vector_index_atomic_save.py</code></td>
+                    <td>1</td>
+                </tr>
+                <tr>
+                    <td><code>test_web_auth.py</code></td>
+                    <td>22</td>
+                </tr>
+                <tr>
+                    <td><code>test_wecom_download_size_limit.py</code></td>
                     <td>3</td>
                 </tr>
                 <tr>
-                    <td><code>test_system_prompt_fault.py</code></td>
-                    <td>9</td>
-                </tr>
-                <tr>
-                    <td><code>test_persona_guardrails.py</code></td>
-                    <td>17</td>
-                </tr>
-                <tr>
-                    <td><code>test_poller_core_ocr.py</code></td>
-                    <td>18</td>
-                </tr>
-                <tr>
-                    <td><code>test_tool_platform_runtime_gate.py</code></td>
+                    <td><code>test_tools_registry.py</code></td>
                     <td>5</td>
-                </tr>
-                <tr>
-                    <td><code>test_platform_core.py</code></td>
-                    <td>4</td>
-                </tr>
-                <tr>
-                    <td><code>test_oa_instance_id.py</code></td>
-                    <td>11</td>
                 </tr>
                 <tr>
                     <td><code>test_rate_limit_lock.py</code></td>
                     <td>4</td>
                 </tr>
                 <tr>
-                    <td><code>test_reranker.py</code></td>
-                    <td>30</td>
+                    <td><code>test_rag_inject.py</code></td>
+                    <td>17</td>
+                </tr>
+                <tr>
+                    <td><code>test_llm_rate_limit_degradation.py</code></td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><code>test_coverage_edge_supplement_20260713_235450_895.py</code></td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><code>test_poller.py</code></td>
+                    <td>61</td>
+                </tr>
+                <tr>
+                    <td><code>test_tools_chat.py</code></td>
+                    <td>25</td>
+                </tr>
+                <tr>
+                    <td><code>test_minutes_truncate.py</code></td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td><code>test_dev_watcher.py</code></td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td><code>test_exception_hierarchy.py</code></td>
+                    <td>7</td>
+                </tr>
+                <tr>
+                    <td><code>test_db_backup.py</code></td>
+                    <td>36</td>
+                </tr>
+                <tr>
+                    <td><code>test_message_image_backfill.py</code></td>
+                    <td>4</td>
                 </tr>
             </table>
         </div>
@@ -304,6 +295,10 @@ thread...</td>
                 <tr>
                     <th>版本</th>
                     <th>发布日期</th>
+                </tr>
+                <tr>
+                    <td><code>v0.5.6</code></td>
+                    <td>2026-09-24</td>
                 </tr>
                 <tr>
                     <td><code>v0.5.5</code></td>
@@ -340,10 +335,6 @@ thread...</td>
                 <tr>
                     <td><code>v0.4.7</code></td>
                     <td>2026-08-24</td>
-                </tr>
-                <tr>
-                    <td><code>v0.4.6</code></td>
-                    <td>2026-08-22</td>
                 </tr>
             </table>
         </div>

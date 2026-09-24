@@ -245,7 +245,7 @@ const INIT_GLOBALS = [
 
 // 期望的页面集合（与 app.js::switchPage 的 titles 表一致）
 const EXPECTED_PAGES = [
-  'dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'deadletters',
+  'dashboard', 'keywords', 'gate-rules', 'rag', 'messages', 'intent', 'skills', 'tools', 'deadletters',
   'drafts', 'config', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate', 'summaries',
 ];
 

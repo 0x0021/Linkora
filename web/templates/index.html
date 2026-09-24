@@ -44,6 +44,7 @@
     <link rel="stylesheet" href="/static/css/pages/rules.css?v={{ rules_page_v }}" data-page-node-id="0Kr3ovpUSfbgKcImxUoMIe">
     <link rel="stylesheet" href="/static/css/pages/settings.css?v={{ settings_page_v }}" data-page-node-id="SkXoePaSoKpFSzUmZHTPoo">
     <link rel="stylesheet" href="/static/css/pages/keywords.css?v={{ keywords_page_v }}" data-page-node-id="zPzGXD6d6CtbRJY6bitHy6">
+    <link rel="stylesheet" href="/static/css/pages/gate_rules.css?v={{ gate_rules_css_v }}" data-page-node-id="g4T3rU1eGv7NmGxh92yZl">
     <link rel="stylesheet" href="/static/css/pages/metrics.css?v={{ metrics_css_v }}" data-page-node-id="njGaZ1aXW1kqNMFqkXnxjN">
     <link rel="stylesheet" href="/static/css/pages/simulate.css?v={{ simulate_css_v }}" data-page-node-id="pF4z1qB4xrzSYNMWMM2JDC">
     <link rel="stylesheet" href="/static/css/pages/dead_letters.css?v={{ dead_letters_css_v }}" data-page-node-id="HSqZAIO5SSkgiX1PlByptB">
@@ -119,6 +120,10 @@
                     <a href="#" class="nav-item" data-page="keywords" data-page-node-id="uehcjZ4LnYmv3kI0RHhfkD">
                         <span class="nav-icon" data-page-node-id="P0li0S9Ia1MPRfkI7s3zrv"><i class="fa-solid fa-key" data-page-node-id="RuFzD19RhyGBvYDTIm7G0b"></i></span>
                         <span class="nav-text" data-page-node-id="PdeJuAOUl0UN9rkw8gKumL">关键词规则</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="gate-rules" data-page-node-id="g1aT3rU1eGv7NmGxh92yZk">
+                        <span class="nav-icon" data-page-node-id="b7tX2ww71J71pdLiIQbADM"><i class="fa-solid fa-shield-halved" data-page-node-id="hjpaJKoUBWwZxzPGkXUY7b"></i></span>
+                        <span class="nav-text" data-page-node-id="gA97TAcNdRmMpoLIPY6Whn">答复门禁</span>
                     </a>
                     <a href="#" class="nav-item" data-page="intent" data-page-node-id="5H0SjDc6PZpPYKeSSVLewW">
                         <span class="nav-icon" data-page-node-id="9SMBOrWkiDsTzNb6oE8PRX"><i class="fa-solid fa-route" data-page-node-id="SyLkvpcrwaqnPYc36FTRfR"></i></span>
@@ -549,6 +554,234 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gate Rules Page - 答复门禁规则管理 -->
+                <div class="page" id="page-gate-rules" data-page-node-id="g4T3rU1eGv7NmGxh92yZm">
+                    <div class="page-header" data-page-node-id="g4T3rU1eGv7NmGxh92yZn">
+                        <div class="page-header-text" data-page-node-id="g4T3rU1eGv7NmGxh92yZo">
+                            <div class="page-header-icon" data-page-node-id="g4T3rU1eGv7NmGxh92yZp"><i class="fa-solid fa-shield-halved" data-page-node-id="g4T3rU1eGv7NmGxh92yZq"></i></div>
+                            <div data-page-node-id="g4T3rU1eGv7NmGxh92yZr">
+                                <h2 class="page-header-title" data-page-node-id="g4T3rU1eGv7NmGxh92yZs">答复门禁</h2>
+                                <p class="page-header-desc" data-page-node-id="g4T3rU1eGv7NmGxh92yZt">配置禁止答复的规则：命中后直接拦截用户提问并给出提示，覆盖个人隐私、违法信息、负面情绪等类别</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section-tabs" data-page-node-id="g4T3rU1eGv7NmGxh92yZu">
+                        <button class="section-tab active" data-tab="rules" data-action="switchGateTab" data-args='["rules"]' data-page-node-id="g4T3rU1eGv7NmGxh92yZv">
+                            <i class="fa-solid fa-list" data-page-node-id="g4T3rU1eGv7NmGxh92yZw"></i> 规则列表
+                        </button>
+                        <button class="section-tab" data-tab="test" data-action="switchGateTab" data-args='["test"]' data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
+                            <i class="fa-solid fa-flask" data-page-node-id="g4T3rU1eGv7NmGxh92yZy"></i> 匹配测试
+                        </button>
+                    </div>
+
+                    <!-- 规则列表 Tab -->
+                    <div class="section-tab-content active" id="gate-tab-rules" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">
+                        <!-- 概览区：横向 KPI 卡 + 高频命中热度图 -->
+                        <div class="gate-overview" data-page-node-id="g4T3rU1eGv7NmGxh92yZ0">
+                            <div class="gate-kpi-row" data-page-node-id="g4T3rU1eGv7NmGxh92yZ1">
+                                <div class="gate-kpi" style="--kpi-color:#3b82f6;" data-page-node-id="g4T3rU1eGv7NmGxh92yZ2">
+                                    <div class="gate-kpi-icon" data-page-node-id="g4T3rU1eGv7NmGxh92yZ3"><i class="fa-solid fa-layer-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZ4"></i></div>
+                                    <div class="gate-kpi-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZ5">
+                                        <div class="gate-kpi-value" id="gate-stat-total" data-count="0" data-page-node-id="g4T3rU1eGv7NmGxh92yZ6">0</div>
+                                        <div class="gate-kpi-label" data-page-node-id="g4T3rU1eGv7NmGxh92yZ7">总规则数</div>
+                                    </div>
+                                </div>
+                                <div class="gate-kpi" style="--kpi-color:#22c55e;" data-page-node-id="g4T3rU1eGv7NmGxh92yZ8">
+                                    <div class="gate-kpi-icon" data-page-node-id="g4T3rU1eGv7NmGxh92yZ9"><i class="fa-solid fa-circle-check" data-page-node-id="g4T3rU1eGv7NmGxh92yZa"></i></div>
+                                    <div class="gate-kpi-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZb">
+                                        <div class="gate-kpi-value" id="gate-stat-enabled" data-count="0" data-page-node-id="g4T3rU1eGv7NmGxh92yZc">0</div>
+                                        <div class="gate-kpi-label" data-page-node-id="g4T3rU1eGv7NmGxh92yZd">已启用</div>
+                                    </div>
+                                </div>
+                                <div class="gate-kpi" style="--kpi-color:#f59e0b;" data-page-node-id="g4T3rU1eGv7NmGxh92yZe">
+                                    <div class="gate-kpi-icon" data-page-node-id="g4T3rU1eGv7NmGxh92yZf"><i class="fa-solid fa-bolt" data-page-node-id="g4T3rU1eGv7NmGxh92yZg"></i></div>
+                                    <div class="gate-kpi-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZh">
+                                        <div class="gate-kpi-value" id="gate-stat-hits" data-count="0" data-page-node-id="g4T3rU1eGv7NmGxh92yZi">0</div>
+                                        <div class="gate-kpi-label" data-page-node-id="g4T3rU1eGv7NmGxh92yZj">总命中次数</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 高频命中 -->
+                            <div class="kw-tophits-panel" data-page-node-id="g4T3rU1eGv7NmGxh92yZk">
+                                <div class="kw-tophits-head" data-page-node-id="g4T3rU1eGv7NmGxh92yZl">
+                                    <div class="kw-tophits-title" data-page-node-id="g4T3rU1eGv7NmGxh92yZm"><i class="fa-solid fa-fire-flame-curved" data-page-node-id="g4T3rU1eGv7NmGxh92yZn"></i> 高频命中热度</div>
+                                    <div class="kw-tophits-sub" data-page-node-id="g4T3rU1eGv7NmGxh92yZo">Top 10 命中排行 · 条形越长命中越多</div>
+                                </div>
+                                <div class="kw-heatmap" id="gate-top-hits" data-page-node-id="g4T3rU1eGv7NmGxh92yZp"></div>
+                            </div>
+                        </div>
+
+                        <div class="main-panel" data-page-node-id="g4T3rU1eGv7NmGxh92yZq">
+                            <div class="main-panel-header" data-page-node-id="g4T3rU1eGv7NmGxh92yZr">
+                                <div data-page-node-id="g4T3rU1eGv7NmGxh92yZs">
+                                    <h3 id="gate-list-title" data-page-node-id="g4T3rU1eGv7NmGxh92yZt">全部规则</h3>
+                                    <div class="action-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZu">
+                                        <div class="search-box" data-page-node-id="g4T3rU1eGv7NmGxh92yZv">
+                                            <input type="text" class="form-control" id="gate-search" placeholder="搜索规则名称或命中模式…" oninput="if(window.debouncedLoadGateRules)window.debouncedLoadGateRules()" data-page-node-id="g4T3rU1eGv7NmGxh92yZw">
+                                        </div>
+                                        <select class="form-select" id="gate-cat-filter" onchange="loadGateRules()" data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
+                                            <option value="" data-page-node-id="g4T3rU1eGv7NmGxh92yZy">全部分类</option>
+                                            <option value="private_privacy" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">私人隐私</option>
+                                            <option value="illegal_info" data-page-node-id="g4T3rU1eGv7NmGxh92yZ0">违法信息</option>
+                                            <option value="negative_emotion" data-page-node-id="g4T3rU1eGv7NmGxh92yZ1">负面情绪</option>
+                                            <option value="other" data-page-node-id="g4T3rU1eGv7NmGxh92yZ2">其他</option>
+                                        </select>
+                                        <select class="form-select" id="gate-type-filter" onchange="loadGateRules()" data-page-node-id="g4T3rU1eGv7NmGxh92yZ3">
+                                            <option value="" data-page-node-id="g4T3rU1eGv7NmGxh92yZ4">全部类型</option>
+                                            <option value="keyword" data-page-node-id="g4T3rU1eGv7NmGxh92yZ5">关键词</option>
+                                            <option value="regex" data-page-node-id="g4T3rU1eGv7NmGxh92yZ6">正则</option>
+                                        </select>
+                                        <div class="action-btns" data-page-node-id="g4T3rU1eGv7NmGxh92yZ7">
+                                            <button class="btn btn-sm btn-primary" data-action="showGateRuleModal" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZ8"><i class="fa-solid fa-plus" data-page-node-id="g4T3rU1eGv7NmGxh92yZ9"></i> 新建</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bulk-actions" id="gate-bulk-actions" style="display:none;" data-page-node-id="g4T3rU1eGv7NmGxh92yZa">
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="batchEnableGate" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZb">启用</button>
+                                    <button class="btn btn-sm btn-outline-secondary" data-action="batchDisableGate" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZc">禁用</button>
+                                    <button class="btn btn-sm btn-danger" data-action="batchDeleteGate" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZd">删除</button>
+                                </div>
+                            </div>
+                            <div class="main-panel-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZe">
+                                <div class="table-wrap" data-page-node-id="g4T3rU1eGv7NmGxh92yZf">
+                                    <table class="kw-table" id="gate-table" data-page-node-id="g4T3rU1eGv7NmGxh92yZg">
+                                        <thead data-page-node-id="g4T3rU1eGv7NmGxh92yZh">
+                                            <tr data-page-node-id="g4T3rU1eGv7NmGxh92yZi">
+                                                <th style="text-align: center;" data-page-node-id="g4T3rU1eGv7NmGxh92yZj"><input type="checkbox" class="form-check-input" data-action="toggleAllGateSelect" data-args='["@el"]' data-page-node-id="g4T3rU1eGv7NmGxh92yZk"></th>
+                                                <th data-page-node-id="g4T3rU1eGv7NmGxh92yZl">分类 / 标签</th>
+                                                <th data-page-node-id="g4T3rU1eGv7NmGxh92yZm">名称</th>
+                                                <th data-page-node-id="g4T3rU1eGv7NmGxh92yZn">命中方式</th>
+                                                <th data-page-node-id="g4T3rU1eGv7NmGxh92yZo">命中模式</th>
+                                                <th data-page-node-id="g4T3rU1eGv7NmGxh92yZp">拦截提示</th>
+                                                <th style="text-align: center;" data-page-node-id="g4T3rU1eGv7NmGxh92yZq">优先级</th>
+                                                <th style="text-align: center;" data-page-node-id="g4T3rU1eGv7NmGxh92yZr">命中数</th>
+                                                <th style="text-align: center;" data-page-node-id="g4T3rU1eGv7NmGxh92yZs">状态</th>
+                                                <th style="text-align: center;" data-page-node-id="g4T3rU1eGv7NmGxh92yZt">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="gate-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZu">
+                                            <tr data-page-node-id="g4T3rU1eGv7NmGxh92yZv"><td class="empty-cell" style="width:100%;text-align:center;" data-page-node-id="g4T3rU1eGv7NmGxh92yZw">加载中…</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <div class="gate-pager" id="gate-pager" data-page-node-id="g4T3rU1eGv7NmGxh92yZx"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 匹配测试 Tab -->
+                    <div class="section-tab-content" id="gate-tab-test" style="display:none;" data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
+                        <div class="panel" data-page-node-id="g4T3rU1eGv7NmGxh92yZy">
+                            <div class="panel-header" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">
+                                <h3 data-page-node-id="g4T3rU1eGv7NmGxh92yZ0"><i class="fa-solid fa-flask" data-page-node-id="g4T3rU1eGv7NmGxh92yZ1"></i> 门禁命中测试</h3>
+                                <span class="badge bg-primary" data-page-node-id="g4T3rU1eGv7NmGxh92yZ2">实时测试</span>
+                            </div>
+                            <div class="panel-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZ3">
+                                <div class="test-panel" data-page-node-id="g4T3rU1eGv7NmGxh92yZ4">
+                                    <div class="test-input" data-page-node-id="g4T3rU1eGv7NmGxh92yZ5">
+                                        <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZ6">
+                                            <label for="gate-test-text" data-page-node-id="g4T3rU1eGv7NmGxh92yZ7">输入测试文本</label>
+                                            <textarea class="form-control" id="gate-test-text"
+                                                      rows="4" placeholder="输入一条用户提问，验证是否会被门禁拦截…"></textarea>
+                                        </div>
+                                        <div data-page-node-id="g4T3rU1eGv7NmGxh92yZ8">
+                                            <button class="btn btn-primary" data-action="testGateMatch" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZ9">
+                                                <i class="fa-solid fa-microscope" data-page-node-id="g4T3rU1eGv7NmGxh92yZa"></i> 开始测试
+                                            </button>
+                                            <button class="btn btn-outline-secondary" data-action="clearGateTest" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZb">
+                                                <i class="fa-solid fa-eraser" data-page-node-id="g4T3rU1eGv7NmGxh92yZc"></i> 清空
+                                            </button>
+                                        </div>
+                                        <div class="form-tip" data-page-node-id="g4T3rU1eGv7NmGxh92yZd">
+                                            <i class="fa-solid fa-lightbulb" data-page-node-id="g4T3rU1eGv7NmGxh92yZe"></i> 关键词模式命中任一逗号分隔词即拦截，正则模式命中任一条表达式即拦截；优先级高的规则优先命中
+                                        </div>
+                                    </div>
+                                    <div class="test-output" id="gate-test-result" data-page-node-id="g4T3rU1eGv7NmGxh92yZf">
+                                        <div class="empty-state" data-page-node-id="g4T3rU1eGv7NmGxh92yZg">
+                                            <div class="empty-icon" data-page-node-id="g4T3rU1eGv7NmGxh92yZh"><i class="fa-solid fa-flask" data-page-node-id="g4T3rU1eGv7NmGxh92yZi"></i></div>
+                                            <h3 data-page-node-id="g4T3rU1eGv7NmGxh92yZj">等待测试</h3>
+                                            <p data-page-node-id="g4T3rU1eGv7NmGxh92yZk">输入文本，验证门禁命中效果</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gate Rule Modal -->
+                <div class="modal" id="gate-rule-modal" data-page-node-id="g4T3rU1eGv7NmGxh92yZl">
+                    <div class="modal-content modal-lg" data-page-node-id="g4T3rU1eGv7NmGxh92yZm">
+                        <div class="modal-header" data-page-node-id="g4T3rU1eGv7NmGxh92yZn">
+                            <h3 id="gate-modal-title" data-page-node-id="g4T3rU1eGv7NmGxh92yZo">新建门禁规则</h3>
+                            <button class="modal-close" data-action="closeGateRuleModal" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZp"><i class="fa-solid fa-xmark" data-page-node-id="g4T3rU1eGv7NmGxh92yZq"></i></button>
+                        </div>
+                        <div class="modal-body" data-page-node-id="g4T3rU1eGv7NmGxh92yZr">
+                            <input type="hidden" id="gate-modal-id" data-page-node-id="g4T3rU1eGv7NmGxh92yZs">
+                            <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZt">
+                                <label data-page-node-id="g4T3rU1eGv7NmGxh92yZu">规则名称</label>
+                                <input type="text" class="form-control" id="gate-modal-name"
+                                       placeholder="如：禁止询问家庭成员隐私" data-page-node-id="g4T3rU1eGv7NmGxh92yZv">
+                            </div>
+                            <div class="form-row" data-page-node-id="g4T3rU1eGv7NmGxh92yZw">
+                                <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
+                                    <label data-page-node-id="g4T3rU1eGv7NmGxh92yZy">分类</label>
+                                    <select class="form-control" id="gate-modal-category" onchange="onGateCategoryChange()" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">
+                                        <option value="private_privacy" data-page-node-id="g4T3rU1eGv7NmGxh92yZ0">私人隐私</option>
+                                        <option value="illegal_info" data-page-node-id="g4T3rU1eGv7NmGxh92yZ1">违法信息</option>
+                                        <option value="negative_emotion" data-page-node-id="g4T3rU1eGv7NmGxh92yZ2">负面情绪</option>
+                                        <option value="other" data-page-node-id="g4T3rU1eGv7NmGxh92yZ3">其他</option>
+                                        <option value="__custom__" data-page-node-id="g4T3rU1eGv7NmGxh92yZ4">自定义分类…</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZ5" style="display:none;">
+                                    <label data-page-node-id="g4T3rU1eGv7NmGxh92yZ6">自定义分类名</label>
+                                    <input type="text" class="form-control" id="gate-modal-category-custom"
+                                           placeholder="输入自定义分类 key，如 political" data-page-node-id="g4T3rU1eGv7NmGxh92yZ7">
+                                </div>
+                            </div>
+                            <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZ8">
+                                <label data-page-node-id="g4T3rU1eGv7NmGxh92yZ9">命中方式</label>
+                                <select class="form-control" id="gate-modal-type" onchange="onGateTypeChange()" data-page-node-id="g4T3rU1eGv7NmGxh92yZa">
+                                    <option value="keyword" data-page-node-id="g4T3rU1eGv7NmGxh92yZb">关键词（逗号分隔，命中任一即拦截）</option>
+                                    <option value="regex" data-page-node-id="g4T3rU1eGv7NmGxh92yZc">正则（命中任一条即拦截）</option>
+                                </select>
+                            </div>
+                            <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZd">
+                                <label data-page-node-id="g4T3rU1eGv7NmGxh92yZe">命中模式 <span class="required" data-page-node-id="g4T3rU1eGv7NmGxh92yZf">*</span></label>
+                                <textarea class="form-control" id="gate-modal-pattern" rows="3"
+                                          placeholder="关键词：家庭, 婚史, 年龄&#10;正则：梯[子子]|vpn" data-page-node-id="g4T3rU1eGv7NmGxh92yZg"></textarea>
+                                <div class="form-tip" id="gate-pattern-hint" data-page-node-id="g4T3rU1eGv7NmGxh92yZh">关键词模式：逗号分隔多个词，文本中出现任一关键词即拦截（大小写不敏感）。</div>
+                            </div>
+                            <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZi">
+                                <label data-page-node-id="g4T3rU1eGv7NmGxh92yZj">拦截提示</label>
+                                <textarea class="form-control" id="gate-modal-intercept" rows="3"
+                                          placeholder="命中后返回给用户的提示语，如：抱歉，这类私人问题我无法回答。" data-page-node-id="g4T3rU1eGv7NmGxh92yZk"></textarea>
+                            </div>
+                            <div class="form-row" data-page-node-id="g4T3rU1eGv7NmGxh92yZl">
+                                <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZm">
+                                    <label data-page-node-id="g4T3rU1eGv7NmGxh92yZn">优先级</label>
+                                    <input type="number" class="form-control" id="gate-modal-priority"
+                                           value="0" min="0" max="100" data-page-node-id="g4T3rU1eGv7NmGxh92yZo">
+                                </div>
+                                <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZp">
+                                    <div class="toggle-wrap" data-page-node-id="g4T3rU1eGv7NmGxh92yZq">
+                                        <label class="toggle" data-page-node-id="g4T3rU1eGv7NmGxh92yZr">
+                                            <input type="checkbox" id="gate-modal-enabled" checked data-page-node-id="g4T3rU1eGv7NmGxh92yZs">
+                                            <span class="toggle-slider" data-page-node-id="g4T3rU1eGv7NmGxh92yZt"></span>
+                                        </label>
+                                        <span class="toggle-label" data-page-node-id="g4T3rU1eGv7NmGxh92yZu">启用此规则</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer" data-page-node-id="g4T3rU1eGv7NmGxh92yZv">
+                            <button class="btn btn-outline-secondary" data-action="closeGateRuleModal" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZw">取消</button>
+                            <button class="btn btn-primary" data-action="saveGateRule" data-args='[""]' data-page-node-id="g4T3rU1eGv7NmGxh92yZx">保存</button>
                         </div>
                     </div>
                 </div>
@@ -3557,6 +3790,7 @@
     <script src="/static/js/pages/departments.js?v={{ departments_js_v }}"></script>
     <script src="/static/js/pages/intent.js?v={{ intent_js_v }}"></script>
     <script src="/static/js/pages/keywords.js?v={{ keywords_js_v }}"></script>
+    <script src="/static/js/pages/gate_rules.js?v={{ gate_rules_js_v }}"></script>
     <script src="/static/js/pages/messages.js?v={{ messages_js_v }}"></script>
     <script src="/static/js/pages/rag.js?v={{ rag_js_v }}"></script>
     <script src="/static/js/pages/skills.js?v={{ skills_js_v }}"></script>

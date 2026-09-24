@@ -346,6 +346,7 @@ function switchPage(page) {
         logs: '运行日志',
         simulate: '模拟测试',
         summaries: '对话摘要',
+        'gate-rules': '答复门禁',
     };
     document.getElementById('page-title').textContent = titles[page] || page;
     currentPage = page;
@@ -375,6 +376,7 @@ function switchPage(page) {
         if (typeof stopLogsPolling === 'function') stopLogsPolling();
     }
     if (page === 'keywords') loadKeywords();
+    if (page === 'gate-rules') loadGateRules();
     if (page === 'rag') loadRagPage();
     if (page === 'messages') { loadMessages(); loadDepartments(); startMessageRefresh(); window.loadMessagesAnalytics && loadMessagesAnalytics(); }
     else { stopMessageRefresh(); }
@@ -627,7 +629,7 @@ async function init() {
         // 注意：currentPage 初始为 'dashboard'，switchPage('dashboard') 会因页面未改变而短路返回，
         // 导致 loadDashboard/lodaDashboardData 不会被触发。因此对仪表盘场景需直接调用 loadDashboard。
         // 允许的页面白名单（与 switchPage 的 titles 保持一致）
-        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate', 'summaries'];
+        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate', 'summaries', 'gate-rules'];
         const saved = (() => { try { return sessionStorage.getItem('marvis_last_page'); } catch (_) { return null; } })();
         if (saved && ALLOWED_PAGES.includes(saved)) {
             if (saved === 'dashboard') {
@@ -997,6 +999,7 @@ window.debouncedFilterThread = debounce(filterThread, 300);
 // 但 oninput 直接触发整页服务端重载 → 中文 IME 下 8–10 次/键击 = 8–10 次全量请求。
 // 套 debounce(300) 把请求收敛到输入停顿后一次（过滤仍由 load 内客户端逻辑完成）。
 window.debouncedLoadDeadLettersPage = debounce(loadDeadLettersPage, 300);
+window.debouncedLoadGateRules = debounce(loadGateRules, 300);
 
 // ===== 全局模态框行为：Esc 关闭 + 背景点击关闭 + 焦点管理 + 无障碍 =====
 (function () {

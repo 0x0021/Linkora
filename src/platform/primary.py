@@ -3,8 +3,12 @@ from .engine_mixins_base import EngineMixinBase
 from ._timeout import run_with_timeout
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
+from src.config_models import SummaryBackfillConfig
 import logging
 from typing import TYPE_CHECKING
+
+# 最小/测试配置可能没有 summary_backfill 段；缺省回退到模型定义的默认值（单一真源）。
+_BF_MAX_AGE_DEFAULT = SummaryBackfillConfig.model_fields["max_summary_age_days"].default
 
 if TYPE_CHECKING:
     # `from .base import *` 并不导出 BaseIMAdapter，_build_adapter 的返回注解需显式
@@ -412,9 +416,12 @@ class PrimaryMixin(EngineMixinBase):
         )
         # H2-A：为每个平台（独立 LLMAgent + 独立 SQLiteStore）接线一个后台异步摘要调度器。
         # 两步接线避免 agent↔scheduler 循环依赖：先建 agent，再建 scheduler(agent)，最后回赋值。
+        # 防御式读取配置：最小/测试配置可能没有 summary_backfill 段（与下方 memory 段同约定）。
         summary_scheduler = SummaryScheduler(
             agent=llm_agent, store=store, platform=pcfg.id,
-            max_age_days=self.config.summary_backfill.max_summary_age_days,
+            max_age_days=getattr(
+                getattr(self.config, "summary_backfill", None),
+                "max_summary_age_days", _BF_MAX_AGE_DEFAULT),
         )
         llm_agent._summary_scheduler = summary_scheduler
         summary_scheduler.start()

@@ -4,11 +4,15 @@ from ._timeout import run_with_timeout
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
+from src.config_models import SummaryBackfillConfig
 import logging
 import sqlite3
 from src.paths import get_skills_root
 from src.utils.security import mask_oid
 from src.im_adapter.errors import IMAdapterError
+
+# 最小/测试配置可能没有 summary_backfill 段；缺省回退到模型定义的默认值（单一真源）。
+_BF_MAX_AGE_DEFAULT = SummaryBackfillConfig.model_fields["max_summary_age_days"].default
 
 
 logger = logging.getLogger("src.platform.runtime")
@@ -255,10 +259,13 @@ class SetupMixin(EngineMixinBase):
             few_shot_examples=self.store._few_shot_repo.get_few_shot_examples(),
         )
         # H2-A：主平台(dingtalk)也在首次装配时接线一个后台异步摘要调度器。
+        # 防御式读取配置：最小/测试配置可能没有 summary_backfill 段。
         dingtalk_scheduler = SummaryScheduler(
             agent=self.platforms["dingtalk"].llm_agent, store=self.store,
             platform="dingtalk",
-            max_age_days=self.config.summary_backfill.max_summary_age_days,
+            max_age_days=getattr(
+                getattr(self.config, "summary_backfill", None),
+                "max_summary_age_days", _BF_MAX_AGE_DEFAULT),
         )
         self.platforms["dingtalk"].llm_agent._summary_scheduler = dingtalk_scheduler
         dingtalk_scheduler.start()
@@ -332,8 +339,9 @@ class SetupMixin(EngineMixinBase):
         # 与 rolling / proactive 共用同一份 conversation_summaries 缓存，使「当天 / 近七天」
         # 摘要连续完整；失败非致命，绝不拖垮主回复链路。
         from src.llm.summary_backfill import SummaryBackfill
-        bf_cfg = self.config.summary_backfill
-        if bf_cfg.enabled:
+        # 防御式读取：最小/测试配置可能没有 summary_backfill 段（视为未启用）。
+        bf_cfg = getattr(self.config, "summary_backfill", None)
+        if bf_cfg is not None and bf_cfg.enabled:
             throttle_min = getattr(self.config.llm_throttle, "background_min_interval_seconds", 20) or 20
             backfill_scheduler = SummaryBackfill(
                 agent=self.platforms["dingtalk"].llm_agent,

@@ -156,15 +156,25 @@ def test_client_record_usage_zero_usage_skipped(tmp_ledger):
     assert stats["totals"]["calls"] == 0
 
 
-def test_chat_signature_accepts_purpose(tmp_ledger):
-    """chat() 的 purpose 参数不破坏既有位置参数调用形状（签名兼容性锚定）。"""
+def test_chat_signature_has_no_purpose_param():
+    """chat() 签名不得含 purpose——大量测试以 fake client 替换整个 chat()，
+    签名加参会把桩全部炸掉（CI 血泪）；用途经 purpose_scope contextvar 传递。"""
     import inspect
     from src.llm.client import LLMClient
     sig = inspect.signature(LLMClient.chat)
-    params = list(sig.parameters.values())
-    assert [p.name for p in params[:2]] == ["self", "messages"]
-    assert sig.parameters["purpose"].kind is inspect.Parameter.KEYWORD_ONLY or \
-        sig.parameters["purpose"].default == "other"
+    assert "purpose" not in sig.parameters
+
+
+def test_purpose_scope_nesting_and_reset():
+    """purpose_scope：作用域内取值正确、嵌套恢复、退出后回退默认。"""
+    from src.llm.usage_ledger import purpose_scope, current_purpose, PURPOSE_OTHER
+    assert current_purpose() == PURPOSE_OTHER
+    with purpose_scope("reply"):
+        assert current_purpose() == "reply"
+        with purpose_scope("summary"):
+            assert current_purpose() == "summary"
+        assert current_purpose() == "reply"
+    assert current_purpose() == PURPOSE_OTHER
 
 
 # ---------------------------------------------------------------------------

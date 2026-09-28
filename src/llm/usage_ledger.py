@@ -16,6 +16,8 @@
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 import sqlite3
 from datetime import datetime, timedelta
@@ -23,6 +25,26 @@ from datetime import datetime, timedelta
 from src.paths import data_path
 
 logger = logging.getLogger(__name__)
+
+# 用途上下文：调用方用 purpose_scope("summary") 包裹 client.chat()，client 内部
+# 记账时读取。用 ContextVar 而非 chat() 参数的原因：① 不改公开签名——大量测试
+# 用 fake client 替换整个 chat()，新增参数会把桩全部炸掉（CI 血泪）；② contextvar
+# 天然线程/async 隔离，比实例属性并发安全。
+_purpose_var: contextvars.ContextVar = contextvars.ContextVar("llm_usage_purpose", default="other")
+
+
+@contextlib.contextmanager
+def purpose_scope(purpose: str):
+    """标注当前上下文的 LLM 用途（供 client 层统一记账归属）。"""
+    token = _purpose_var.set(purpose or "other")
+    try:
+        yield
+    finally:
+        _purpose_var.reset(token)
+
+
+def current_purpose() -> str:
+    return _purpose_var.get() or "other"
 
 # 用途标识（purpose）。新增用途直接用新字符串即可（表按文本存储，无需迁移），
 # 这里列出已知用途供前端做中文标签映射与回归测试锚定。

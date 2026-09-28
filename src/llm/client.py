@@ -27,6 +27,7 @@ except Exception:
 
 from src.config import LlmConfig
 from src.llm.exceptions import LLMRateLimitExhaustedError
+from src.llm.usage_ledger import current_purpose as _current_purpose
 from src.exceptions import LLMNetworkError, LLMRateLimitError, LLMAuthError
 
 logger = logging.getLogger(__name__)
@@ -480,22 +481,19 @@ class LLMClient:
     # Iterator 上没有该属性而报 reportAttributeAccessIssue（历史上被 Unknown 掩盖）。
     @overload
     def chat(self, messages: list[dict], tools: list[dict] | None = ...,
-             temperature: float | None = ..., stream: Literal[False] = ...,
-             purpose: str = ...) -> LLMResponse: ...
+             temperature: float | None = ..., stream: Literal[False] = ...) -> LLMResponse: ...
 
     @overload
     def chat(self, messages: list[dict], tools: list[dict] | None = ...,
-             temperature: float | None = ..., *, stream: Literal[True],
-             purpose: str = ...) -> Iterator[LLMStreamChunk]: ...
+             temperature: float | None = ..., *, stream: Literal[True]) -> Iterator[LLMStreamChunk]: ...
 
     @overload
     def chat(self, messages: list[dict], tools: list[dict] | None = ...,
-             temperature: float | None = ..., *, stream: bool,
-             purpose: str = ...) -> LLMResponse | Iterator[LLMStreamChunk]: ...
+             temperature: float | None = ..., *,
+             stream: bool) -> LLMResponse | Iterator[LLMStreamChunk]: ...
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None,
-                 temperature: float | None = None, stream: bool = False,
-                 purpose: str = "other") -> LLMResponse | Iterator[LLMStreamChunk]:
+                 temperature: float | None = None, stream: bool = False) -> LLMResponse | Iterator[LLMStreamChunk]:
         """调用 LLM：主模型优先，瞬时故障指数退避重试；
         主模型耗尽后，在同一服务商模型池（model_pool）内逐个轮换；
         池内全部失败，再降级到跨服务商备用模型池（fallback_model_pool，
@@ -504,8 +502,10 @@ class LLMClient:
 
         Args:
             stream: 是否启用流式输出。流式仅在主模型上尝试，失败则降级为非流式。
-            purpose: 用途标注（reply/summary/memory/persona/skill/tool/kb/other），
-                供统一用量台账（usage_ledger）按用途聚合 token/成本。未标注归 other。
+
+        用途标注（记账）：调用方用 ``usage_ledger.purpose_scope("summary")`` 包裹
+        本调用即可，本方法签名不含 purpose——大量测试以 fake client 替换整个
+        chat()，签名加参会把桩全部炸掉（CI 血泪），contextvar 天然并发安全。
         """
         kwargs: dict[str, Any] = {
             "model": self.config.model,
@@ -544,7 +544,7 @@ class LLMClient:
                 model_kwargs = dict(kwargs)
                 model_kwargs["model"] = model
                 try:
-                    return self._do_chat(client, model_kwargs, stream=True, purpose=purpose)
+                    return self._do_chat(client, model_kwargs, stream=True)
                 except (APIConnectionError, APITimeoutError) as e:
                     state.last_err = e
                     logger.warning("LLM(%s) 流式网络错误，降级为非流式: %s", model, e)
@@ -566,8 +566,7 @@ class LLMClient:
             model_kwargs = dict(kwargs)
             model_kwargs["model"] = model
             result = self._retry_primary_model(
-                client, model, model_kwargs, state, max_retries, base_backoff, backoff_jitter,
-                purpose=purpose,
+                client, model, model_kwargs, state, max_retries, base_backoff, backoff_jitter
             )
             if result is not None:
                 return result
@@ -591,8 +590,7 @@ class LLMClient:
             raise state.last_err  # type: ignore[misc]
 
         fb = self._try_fallback_pool(
-            self.fallback_order, self.fallback_clients, kwargs, messages, state, label="跨服务商备用",
-            purpose=purpose,
+            self.fallback_order, self.fallback_clients, kwargs, messages, state, label="跨服务商备用"
         )
         if fb is not None:
             return fb
@@ -600,7 +598,6 @@ class LLMClient:
         sf = self._try_fallback_pool(
             self.secondary_fallback_order, self.secondary_fallback_clients,
             kwargs, messages, state, label="第二层备用",
-            purpose=purpose,
         )
         if sf is not None:
             return sf
@@ -616,8 +613,7 @@ class LLMClient:
         ) from state.last_fallback_err
 
     def _retry_primary_model(
-        self, client, model, model_kwargs, state, max_retries, base_backoff, backoff_jitter=0.0,
-        purpose: str = "other",
+        self, client, model, model_kwargs, state, max_retries, base_backoff, backoff_jitter=0.0
     ):
         """主模型池单模型重试原语（F7/F8 抽出）：对单模型做最多 max_retries 次指数退避重试。
 
@@ -631,7 +627,7 @@ class LLMClient:
                 logger.debug("LLM 模型 %s 处于冷却期，跳过本模型", model)
                 return None
             try:
-                return self._do_chat(client, model_kwargs, stream=False, purpose=purpose)
+                return self._do_chat(client, model_kwargs, stream=False)
             except Exception as e:
                 state.last_err = e
                 is_rate_limited, _is_auth, retryable = _classify_failure(e)
@@ -671,8 +667,7 @@ class LLMClient:
                 logger.warning("LLM(%s) 重试 %d 次后仍失败，尝试下一模型", model, max_retries)
         return None
 
-    def _try_fallback_pool(self, pool_order, pool_clients, kwargs, messages, state, label,
-                           purpose: str = "other"):
+    def _try_fallback_pool(self, pool_order, pool_clients, kwargs, messages, state, label):
         """跨服务商/第二层备用模型池尝试原语（F7/F8 抽出）：池内每模型单次尝试，失败跳下一模型。
 
         返回首个成功响应；池内全失败返回 None（并写入 state.last_fallback_err）。
@@ -697,7 +692,7 @@ class LLMClient:
             state.note_attempt()
             state.check_budget(f"{label}模型池均因限流失败")
             try:
-                return self._do_chat(fb_client, fb_kwargs, stream=False, purpose=purpose)
+                return self._do_chat(fb_client, fb_kwargs, stream=False)
             except Exception as fb_err:
                 last_pool_err = fb_err
                 is_rate_limited, is_auth, _retryable = _classify_failure(fb_err)
@@ -720,9 +715,11 @@ class LLMClient:
         return None
 
 
-    def _do_chat(self, client: OpenAI, kwargs: dict, stream: bool = False,
-                 purpose: str = "other") -> LLMResponse | Iterator[LLMStreamChunk]:
+    def _do_chat(self, client: OpenAI, kwargs: dict, stream: bool = False) -> LLMResponse | Iterator[LLMStreamChunk]:
         """执行实际的 LLM 调用（含可选全局并发控制）。"""
+        # purpose 在此层捕获（普通函数立即求值）：流式路径返回的是生成器，
+        # 若延迟到生成器体内读 contextvar，调用方的 purpose_scope 已退出。
+        purpose = _current_purpose()
         if stream:
             return self._do_chat_stream(client, kwargs, purpose=purpose)
         if self._concurrency_semaphore:

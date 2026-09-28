@@ -871,6 +871,10 @@ class SummaryBackfillConfig(BaseModel):
     enabled: bool = True  # 是否启用启动期摘要补跑（默认开）
     max_backfill_days: int = 14  # 最多补跑最近 N 天（防止极端停机刷爆 LLM）
     min_messages_per_chat: int = 3  # 单会话某日不足此条数则跳过（避免噪声摘要）
+    # 摘要生成的时间上限（省 token）：早于「现在 - N 天」的旧自然日不再补生成摘要。
+    # 0 表示不启用该上限（按 max_backfill_days 处理全部遗漏窗口）。与 H2-A 滚动摘要
+    # 调度器共用同一语义，确保「过去 N 天之前的旧消息」整体不再消耗 LLM 额度。
+    max_summary_age_days: int = 7
 
 
 class RagConfig(BaseModel):

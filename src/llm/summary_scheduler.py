@@ -15,7 +15,7 @@ import logging
 import queue
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from src.memory.sqlite_store import SQLiteStore
@@ -52,10 +52,15 @@ class SummaryScheduler:
         scheduler.stop()           # 退出时优雅停止（join）
     """
 
-    def __init__(self, agent: "LLMAgent", store: "SQLiteStore", platform: str = "dingtalk") -> None:
+    def __init__(self, agent: "LLMAgent", store: "SQLiteStore", platform: str = "dingtalk",
+                 max_age_days: int = 7) -> None:
         self._agent = agent
         self._store = store
         self._platform = platform
+        # 摘要生成的时间上限（省 token）：整批 older 消息中最新的那条仍早于
+        # 「现在 - max_age_days」时，视为陈旧会话，跳过本次摘要（不调 LLM）。
+        # <=0 表示不启用上限，任何 older 都照常提炼（测试/兜底用）。
+        self._max_age_days = max(0, int(max_age_days))
         self._queue: "queue.Queue[SummaryJob]" = queue.Queue()
         self._pending: set[str] = set()  # 在途 chat_id（in-flight），用于去重
         self._pending_lock = threading.Lock()
@@ -107,6 +112,25 @@ class SummaryScheduler:
             return
         if self._stop_event.is_set():
             return
+        # 时间上限（省 token）：整批 older 都属于「现在 - max_age_days」之前的旧消息，
+        # 直接跳过提炼，不为陈旧历史消耗 LLM。主回复链路本就会降级为 recent 仅，
+        # 跳过写库不影响回复质量。max_age_days<=0 时不启用该上限。
+        if self._max_age_days and older:
+            try:
+                cutoff = datetime.now() - timedelta(days=self._max_age_days)
+                newest = max(
+                    (m.timestamp for m in older if m.timestamp is not None),
+                    default=None,
+                )
+            except (TypeError, ValueError):
+                # 时间戳基准不一致（naive/aware 混比等）时 fail-safe：不跳过，照常提炼
+                newest = None
+            if newest is not None and newest < cutoff:
+                logger.debug(
+                    "[摘要调度] 跳过旧会话摘要 chat_id=%s（最新旧消息 %s 早于 %d 天前，省 token）",
+                    chat_id, newest.isoformat(), self._max_age_days,
+                )
+                return
         with self._pending_lock:
             if chat_id in self._pending:
                 # 同 chat 已在途：跳过入队（单 worker 串行 + pending 去重，物理不可能双写）

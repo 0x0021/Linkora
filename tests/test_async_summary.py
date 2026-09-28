@@ -70,7 +70,7 @@ def _make_scheduler(tmp_path: Path, summary_text: str = "这是一段对话摘�
     db_path = str(tmp_path / "test_async.db")
     store = SQLiteStore(db_path=db_path)  # 触发 init_db（含 conversation_summaries 建表）
     agent = _SummaryAgent(summary_text=summary_text, store=store)
-    scheduler = SummaryScheduler(agent=agent, store=store)
+    scheduler = SummaryScheduler(agent=agent, store=store, max_age_days=0)
     agent._summary_scheduler = scheduler
     return scheduler, store, agent
 
@@ -241,6 +241,61 @@ class TestCacheHitAndDegrade:
                 lambda: (store._conversation_repo.get_conversation_summary("chat_async") is not None
                          and store._conversation_repo.get_conversation_summary("chat_async").summary_text == "新摘要")
             ), "过期后应在后台用新摘要补算写回"
+        finally:
+            scheduler.stop()
+
+
+class TestSkipOldConversation:
+    """时间上限（省 token）：早于「现在 - max_age_days」的陈旧 older 跳过提炼。"""
+
+    def _recent_msg(self, content: str, idx: int) -> Message:
+        # 最近 1 天内的消息（落在默认 7 天上限内）
+        return Message(
+            msg_id=f"r{idx}",
+            chat_id="chat_recent",
+            chat_type="single",
+            chat_name=None,
+            sender_id="u1",
+            sender_name="小明",
+            content=content,
+            msg_type="text",
+            timestamp=datetime.now() - timedelta(minutes=idx),
+            role="user",
+        )
+
+    def _make_cutoff_scheduler(self, tmp_path):
+        # 用默认 max_age_days=7 构造，验证时间上限行为（与 _make_scheduler 的 0 区分）
+        db_path = str(tmp_path / "test_cutoff.db")
+        store = SQLiteStore(db_path=db_path)
+        agent = _SummaryAgent(store=store)
+        scheduler = SummaryScheduler(agent=agent, store=store, max_age_days=7)
+        agent._summary_scheduler = scheduler
+        return scheduler, store, agent
+
+    def test_old_older_is_skipped(self, tmp_path):
+        scheduler, store, agent = self._make_cutoff_scheduler(tmp_path)
+        scheduler.start()
+        try:
+            # 默认 max_age_days=7；_msg 用 2024 年时间戳 → 远超上限，应跳过
+            older = [_msg(f"旧消息{i}", i) for i in range(5)]
+            scheduler.schedule("chat_async", older)
+            # 不应入队、不应调 LLM
+            assert scheduler._queue.qsize() == 0, "陈旧 older 不应入队"
+            assert agent.client.calls == [], "陈旧 older 不应触发 LLM 摘要"
+            assert scheduler._pending == set(), "陈旧 older 不应进入 pending"
+        finally:
+            scheduler.stop()
+
+    def test_recent_older_still_summarized(self, tmp_path):
+        scheduler, store, agent = self._make_cutoff_scheduler(tmp_path)
+        scheduler.start()
+        try:
+            # 最近消息（落在 7 天上限内）应照常提炼
+            older = [self._recent_msg(f"近期消息{i}", i) for i in range(5)]
+            scheduler.schedule("chat_recent", older)
+            assert _wait_until(
+                lambda: store._conversation_repo.get_conversation_summary("chat_recent") is not None
+            ), "近期 older 仍应生成摘要"
         finally:
             scheduler.stop()
 

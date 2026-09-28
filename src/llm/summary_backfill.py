@@ -162,8 +162,24 @@ class SummaryBackfill:
         )
         # 遗漏的自然日列表：从 last_run 所在自然日的次日 到 昨天（今天由正常滚动/主动覆盖）
         missed_days = self._list_missed_days(last_run, now, backfill_days)
+
+        # 时间上限（省 token）：早于「现在 - max_summary_age_days」的旧自然日不再补生成摘要。
+        # 仅保留最近 N 天内的遗漏窗口，更早的旧消息整日跳过，避免为陈旧历史消耗 LLM。
+        max_age = max(0, int(self._cfg.max_summary_age_days))
+        if max_age > 0:
+            cutoff_day = (now - timedelta(days=max_age)).replace(
+                hour=0, minute=0, second=0, microsecond=0,
+            )
+            kept_days = [d for d in missed_days if d >= cutoff_day]
+            skipped = len(missed_days) - len(kept_days)
+            if skipped:
+                logger.info(
+                    "[摘要补跑] 跳过 %d 个早于 %d 天前的旧自然日，不再生成摘要（省 token）",
+                    skipped, max_age,
+                )
+            missed_days = kept_days
         if not missed_days:
-            logger.debug("[摘要补跑] 无可补跑的自然日")
+            logger.debug("[摘要补跑] 无可补跑的自然日（均在时间上限之外）")
             return
 
         logger.info(

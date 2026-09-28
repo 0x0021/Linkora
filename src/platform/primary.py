@@ -412,7 +412,10 @@ class PrimaryMixin(EngineMixinBase):
         )
         # H2-A：为每个平台（独立 LLMAgent + 独立 SQLiteStore）接线一个后台异步摘要调度器。
         # 两步接线避免 agent↔scheduler 循环依赖：先建 agent，再建 scheduler(agent)，最后回赋值。
-        summary_scheduler = SummaryScheduler(agent=llm_agent, store=store, platform=pcfg.id)
+        summary_scheduler = SummaryScheduler(
+            agent=llm_agent, store=store, platform=pcfg.id,
+            max_age_days=self.config.summary_backfill.max_summary_age_days,
+        )
         llm_agent._summary_scheduler = summary_scheduler
         summary_scheduler.start()
         logger.info("[H2-A] 平台 %s 后台异步摘要调度器已启动", pcfg.id)

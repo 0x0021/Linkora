@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import os
 import re
+import secrets
 import tempfile
 import threading
 import time
@@ -496,21 +497,44 @@ async def security_headers_middleware(request: Request, call_next):
     """为所有 HTTP 响应注入安全头（本地内网管理工具，非对公网服务）。
 
     防点击劫持 / MIME 嗅探 / XSS 反射，对内部工具的安全水位提升。
+
+    CSP 分两档：
+    - 主页 "/"：严格 CSP —— script-src 去掉 'unsafe-inline'，改用一次性 nonce
+      仅放行模板内的主题预取内联脚本（防 FOUC，必须先于渲染执行）。
+      nonce 先于 call_next 生成并挂到 request.state，index() 渲染模板时取用；
+      主页响应为 Cache-Control: no-cache，nonce 每请求轮换不会被缓存钉死。
+    - 其余路径（含 FastAPI /docs 的 Swagger UI 内联脚本）：维持原放宽 CSP。
     """
+    strict_csp = request.url.path == "/"
+    nonce = secrets.token_urlsafe(24) if strict_csp else ""
+    if strict_csp:
+        request.state.csp_nonce = nonce
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    # CSP: 本地管理工具，放宽以适配 Bootstrap/FontAwesome 等内联样式/CDN
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: blob:; "
-        "font-src 'self' data:; "
-        "connect-src 'self'"
-    )
+    if strict_csp:
+        # style-src 保留 'unsafe-inline'：模板中大量 style="" 内联属性依赖它，
+        # 移除会整站样式失效；XSS 防护收益主要在 script-src。
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'"
+        )
+    else:
+        # CSP: 本地管理工具，放宽以适配 Bootstrap/FontAwesome 等内联样式/CDN
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'"
+        )
     return response
 
 
@@ -1033,13 +1057,18 @@ def _read_bundle_manifest() -> dict:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
+async def index(request: Request):
     html_path = get_templates_dir() / "index.html"
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape
         env = Environment(autoescape=select_autoescape(["html"]))
         env.loader = FileSystemLoader(str(html_path.parent))
         tpl = env.get_template(html_path.name)
+        # nonce 由 security_headers_middleware 为 "/" 生成（严格 CSP：
+        # script-src 去 'unsafe-inline'，仅放行带 nonce 的内联主题预取脚本）。
+        # 直接调用（无中间件，如部分测试）时降级为空 → 内联脚本会被严格 CSP
+        # 拦截，但该场景下 CSP 头也不会是严格档，行为一致。
+        nonce = getattr(getattr(request, "state", None), "csp_nonce", "")
         def v(name: str) -> str:
             p = get_static_dir() / name
             try:
@@ -1047,6 +1076,7 @@ async def index():
             except FileNotFoundError:
                 return "1"
         html = tpl.render(
+            csp_nonce=nonce,
             style_v=v("css/style.css"),
             **_read_bundle_manifest(),
             theme_v=v("css/theme.css"),
@@ -1059,7 +1089,9 @@ async def index():
             # 每个 core 脚本使用自身 mtime 版本号（不能共用 app_js_v，否则改 core/app.js 后浏览器仍用旧缓存）
             core_api_js_v=v("js/core/api.js"),
             core_store_js_v=v("js/core/store.js"),
+            core_logger_js_v=v("js/core/logger.js"),
             core_util_js_v=v("js/core/util.js"),
+            core_ui_js_v=v("js/core/ui.js"),
             core_app_js_v=v("js/core/app.js"),
             core_onboarding_js_v=v("js/core/onboarding.js"),
             theme_js_v=v("js/theme.js"),

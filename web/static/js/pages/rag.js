@@ -242,10 +242,10 @@ async function loadKbDocs() {
             <td>${formatTime(d.updated_at)}</td>
             <td>
                 <div class="action-btns">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="viewKbDoc(${d.id})" title="查看"><i class="fa-solid fa-eye"></i></button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="editKbDoc(${d.id})" title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="reindexKbDoc(${d.id})" title="重建索引"><i class="fa-solid fa-rotate-right"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteKbDoc(${d.id})" title="删除"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="viewKbDoc" data-args='[${d.id}]' title="查看"><i class="fa-solid fa-eye"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="editKbDoc" data-args='[${d.id}]' title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="reindexKbDoc" data-args='[${d.id}]' title="重建索引"><i class="fa-solid fa-rotate-right"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" data-action="deleteKbDoc" data-args='[${d.id}]' title="删除"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         </tr>
@@ -264,8 +264,9 @@ function reloadKbDocs() {
 }
 
 // 搜索框防抖：300ms 内连续输入只触发一次，搜索必重置到第 1 页
-// —— 用 window.* 是因为 HTML 用 oninput="debouncedLoadKbDocs()" 内联调用，
-// 需保持全局可访问性（app.js 定义的 debounce 同理）。
+// —— 挂到 window.* 是因为 HTML 搜索框用 data-action="debouncedLoadKbDocs"
+// 经 app.js 事件委托调用（委托回退到 window[fn]），需保持全局可访问性
+// （app.js 定义的 debounce 同理）。
 let _kbSearchDebounced = null;
 function debouncedLoadKbDocs() {
     if (!_kbSearchDebounced) {
@@ -308,7 +309,7 @@ async function loadKbChunksPage() {
 
         container.innerHTML = data.documents.map(function(d) {
             var isActive = selectedChunkDocId && String(selectedChunkDocId) === String(d.id);
-            return '<div class="chunk-doc-item' + (isActive ? ' active' : '') + '" onclick="selectChunkDoc(' + d.id + ')">' +
+            return '<div class="chunk-doc-item' + (isActive ? ' active' : '') + '" data-action="selectChunkDoc" data-args=\'[\' + d.id + \']\'>' +
                 '<div class="chunk-doc-item-title" title="' + escapeHtml(d.title) + '">' + escapeHtml(d.title) + '</div>' +
                 '<div class="chunk-doc-item-meta">' +
                     '<span><i class="fa-solid fa-puzzle-piece"></i> ' + (d.chunk_count || 0) + ' \u5757</span>' +
@@ -686,7 +687,7 @@ async function refreshDingtalkImportList() {
         }
         listEl.innerHTML = data.docs.map(doc => `
             <div class="list-item ${ddocImportSelectedId === doc.doc_id ? 'selected' : ''}" 
-                 data-doc-id="${escapeHtml(doc.doc_id)}" onclick="selectDingtalkImportDoc(this.dataset.docId, this)">
+                 data-doc-id="${escapeHtml(doc.doc_id)}" data-action="selectDingtalkImportDoc" data-args='["@attr:doc-id","@el"]'>
                 <div class="list-item-title">${escapeHtml(doc.title)}</div>
                 <div class="list-item-meta">${formatTime(doc.synced_at)}</div>
             </div>
@@ -738,7 +739,7 @@ async function searchDingtalkImport() {
             return `
                 <div class="remote-doc-item">
                     <span>${escapeHtml(title)}</span>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="syncAndSelectDingtalkDoc('${docId}', '${escapeHtml(title)}')"><i class="fa-solid fa-download"></i> 同步并导入</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="syncAndSelectDingtalkDoc" data-args='["${docId}", "${escapeHtml(title)}"]'><i class="fa-solid fa-download"></i> 同步并导入</button>
                 </div>
             `;
         }).join('');
@@ -847,7 +848,7 @@ async function searchFeishuDocs() {
             return `
                 <div class="remote-doc-item">
                     <span>${escapeHtml(title)}</span>
-                    <button class="btn btn-sm btn-primary" onclick="selectFeishuImportDoc('${escapeHtml(token)}', '${escapeHtml(title)}', '${escapeHtml(etype)}', this)">导入此文档</button>
+                    <button class="btn btn-sm btn-primary" data-action="selectFeishuImportDoc" data-args='["${escapeHtml(token)}", "${escapeHtml(title)}", "${escapeHtml(etype)}", "@el"]'>导入此文档</button>
                 </div>
             `;
         }).join('');
@@ -1000,7 +1001,7 @@ function renderBatchFileList() {
                 <span class="file-name">${escapeHtml(item.file.name)}</span>
                 <span class="file-size">${(item.file.size / 1024).toFixed(1)} KB</span>
                 <span class="file-status ${item.status}">${statusText}</span>
-                ${item.status === 'pending' ? `<span class="file-remove" onclick="removeBatchFile(${i})">${iconize("✕")}</span>` : ''}
+                ${item.status === 'pending' ? `<span class="file-remove" data-action="removeBatchFile" data-args='[${i}]'>${iconize("✕")}</span>` : ''}
             </div>
         `;
     }).join('');
@@ -1422,8 +1423,8 @@ async function loadMemoryList() {
                 <td>${createdAt}</td>
                 <td>
                     <div class="action-btns">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="editMemory(${m.id})" title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteMemoryConfirm(${m.id})" title="删除"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" data-action="editMemory" data-args='[${m.id}]' title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" data-action="deleteMemoryConfirm" data-args='[${m.id}]' title="删除"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </td>
             </tr>`;
@@ -1451,7 +1452,7 @@ function renderMemoryPager(total, limit, offset) {
     const pagerBtn = (html, target, opts = {}) => {
         const disabled = opts.disabled ? ' disabled' : '';
         const cls = opts.active ? ' active' : '';
-        return `<button class="mk-pager-btn${cls}"${disabled} onclick="goMemoryPage(${target})">${html}</button>`;
+        return `<button class="mk-pager-btn${cls}"${disabled} data-action="goMemoryPage" data-args='[${target}]'>${html}</button>`;
     };
     const start = Math.max(1, cur - 2);
     const end = Math.min(totalPages, cur + 2);
@@ -1469,9 +1470,9 @@ function renderMemoryPager(total, limit, offset) {
     }
     pager.innerHTML = `<div class="marketplace-pager">` +
         `<span class="mk-pager-info">共 ${total} 条</span>` +
-        `<button class="mk-pager-btn"${prevDisabled} onclick="goMemoryPage(${cur - 1})" aria-label="上一页"><i class="fa-solid fa-chevron-left"></i></button>` +
+        `<button class="mk-pager-btn"${prevDisabled} data-action="goMemoryPage" data-args='[${cur - 1}]' aria-label="上一页"><i class="fa-solid fa-chevron-left"></i></button>` +
         nums +
-        `<button class="mk-pager-btn"${nextDisabled} onclick="goMemoryPage(${cur + 1})" aria-label="下一页"><i class="fa-solid fa-chevron-right"></i></button>` +
+        `<button class="mk-pager-btn"${nextDisabled} data-action="goMemoryPage" data-args='[${cur + 1}]' aria-label="下一页"><i class="fa-solid fa-chevron-right"></i></button>` +
         `<span class="mk-pager-info">第 ${cur} / ${totalPages} 页</span>` +
         `</div>`;
 }

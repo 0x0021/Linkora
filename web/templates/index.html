@@ -58,7 +58,10 @@
     {% endif %}
     {# F-H7：Chart.js(~205KB) 改为按需懒加载，首个含图表页面才动态注入，
        见 core/util.js::loadChart() 与各图表渲染函数顶部 await window.loadChart() #}
-    <script>
+    {# 主题预取必须内联（先于首帧渲染设置 data-theme 防 FOUC）；CSP 严格档
+       （script-src 无 'unsafe-inline'）靠一次性 nonce 放行本块，nonce 由
+       security_headers_middleware 每请求生成（见 web/api.py） #}
+    <script nonce="{{ csp_nonce }}">
       (function () {
         try {
           var t = localStorage.getItem('dt-theme') || 'system';
@@ -317,7 +320,7 @@
                                             <div class="stat-label" data-page-node-id="TMLh8gwKdEnn2aL7AUkOgL">知识库文档</div>
                                         </div>
                                     </div>
-                                    <div class="stat-card" id="stat-card-ddocs" role="button" tabindex="0" data-action="showDingtalkImportModal" data-args='[""]' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showDingtalkImportModal();}" style="cursor:pointer" data-page-node-id="JCxU5kObSXTfVyj1EZvgTh">
+                                    <div class="stat-card" id="stat-card-ddocs" role="button" tabindex="0" data-action="showDingtalkImportModal" data-args='[""]' style="cursor:pointer" data-page-node-id="JCxU5kObSXTfVyj1EZvgTh">
                                         <div class="stat-icon" data-page-node-id="0g9CByucbPuYDYjFmHBMZN"><i class="fa-solid fa-file-lines" data-page-node-id="mDOLbn4Id3NVFTsDfD0QAZ"></i></div>
                                         <div class="stat-info" data-page-node-id="6kAIJwDJQxai8znpBCJmE4">
                                             <div class="stat-value" id="stat-ddocs" data-page-node-id="tzUKTG4phexMOdMIQYbOlU"><span class="stat-skeleton skeleton skeleton-line tall" data-page-node-id="ueJusUoNt9cuHEtJeR2XZf"></span></div>
@@ -481,9 +484,9 @@
                                 <h3 id="kw-list-title" data-page-node-id="pjBvelrHSbyYytbL5pSHUA">全部规则</h3>
                                 <div class="action-group" data-page-node-id="6VX7CVGJiG7xgVEcVNE8tc">
                                     <div class="search-box" data-page-node-id="uXenrdYob2mGkNn98uGN2F">
-                                        <input type="text" class="form-control" id="kw-search" placeholder="搜索规则..." oninput="debouncedLoadKeywords()" data-page-node-id="kNYBShH4azkpE38GAkOfTU">
+                                        <input type="text" class="form-control" id="kw-search" placeholder="搜索规则..." data-action="debouncedLoadKeywords" data-page-node-id="kNYBShH4azkpE38GAkOfTU">
                                     </div>
-                                    <select class="form-select" id="kw-type-filter" onchange="loadKeywords()" data-page-node-id="jXjJTfsuVcU7PRMHQagHtO">
+                                    <select class="form-select" id="kw-type-filter" data-action="loadKeywords" data-page-node-id="jXjJTfsuVcU7PRMHQagHtO">
                                         <option value="" data-page-node-id="z7bnjM7GB72crFpknZfq3J">全部类型</option>
                                         <option value="fuzzy" data-page-node-id="kYlB6UAzmjviJuEpVLT2sT">模糊匹配</option>
                                         <option value="exact" data-page-node-id="CinDuHZGZDiaSoOFFCRL5E">精确匹配</option>
@@ -628,16 +631,16 @@
                                     <h3 id="gate-list-title" data-page-node-id="g4T3rU1eGv7NmGxh92yZt">全部规则</h3>
                                     <div class="action-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZu">
                                         <div class="search-box" data-page-node-id="g4T3rU1eGv7NmGxh92yZv">
-                                            <input type="text" class="form-control" id="gate-search" placeholder="搜索规则名称或命中模式…" oninput="if(window.debouncedLoadGateRules)window.debouncedLoadGateRules()" data-page-node-id="g4T3rU1eGv7NmGxh92yZw">
+                                            <input type="text" class="form-control" id="gate-search" placeholder="搜索规则名称或命中模式…" data-action="debouncedLoadGateRules" data-page-node-id="g4T3rU1eGv7NmGxh92yZw">
                                         </div>
-                                        <select class="form-select" id="gate-cat-filter" onchange="loadGateRules()" data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
+                                        <select class="form-select" id="gate-cat-filter" data-action="loadGateRules" data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
                                             <option value="" data-page-node-id="g4T3rU1eGv7NmGxh92yZy">全部分类</option>
                                             <option value="private_privacy" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">私人隐私</option>
                                             <option value="illegal_info" data-page-node-id="g4T3rU1eGv7NmGxh92yZ0">违法信息</option>
                                             <option value="negative_emotion" data-page-node-id="g4T3rU1eGv7NmGxh92yZ1">负面情绪</option>
                                             <option value="other" data-page-node-id="g4T3rU1eGv7NmGxh92yZ2">其他</option>
                                         </select>
-                                        <select class="form-select" id="gate-type-filter" onchange="loadGateRules()" data-page-node-id="g4T3rU1eGv7NmGxh92yZ3">
+                                        <select class="form-select" id="gate-type-filter" data-action="loadGateRules" data-page-node-id="g4T3rU1eGv7NmGxh92yZ3">
                                             <option value="" data-page-node-id="g4T3rU1eGv7NmGxh92yZ4">全部类型</option>
                                             <option value="keyword" data-page-node-id="g4T3rU1eGv7NmGxh92yZ5">关键词</option>
                                             <option value="regex" data-page-node-id="g4T3rU1eGv7NmGxh92yZ6">正则</option>
@@ -737,7 +740,7 @@
                             <div class="form-row" data-page-node-id="g4T3rU1eGv7NmGxh92yZw">
                                 <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZx">
                                     <label data-page-node-id="g4T3rU1eGv7NmGxh92yZy">分类</label>
-                                    <select class="form-control" id="gate-modal-category" onchange="onGateCategoryChange()" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">
+                                    <select class="form-control" id="gate-modal-category" data-action="onGateCategoryChange" data-page-node-id="g4T3rU1eGv7NmGxh92yZz">
                                         <option value="private_privacy" data-page-node-id="g4T3rU1eGv7NmGxh92yZ0">私人隐私</option>
                                         <option value="illegal_info" data-page-node-id="g4T3rU1eGv7NmGxh92yZ1">违法信息</option>
                                         <option value="negative_emotion" data-page-node-id="g4T3rU1eGv7NmGxh92yZ2">负面情绪</option>
@@ -753,7 +756,7 @@
                             </div>
                             <div class="form-group" data-page-node-id="g4T3rU1eGv7NmGxh92yZ8">
                                 <label data-page-node-id="g4T3rU1eGv7NmGxh92yZ9">命中方式</label>
-                                <select class="form-control" id="gate-modal-type" onchange="onGateTypeChange()" data-page-node-id="g4T3rU1eGv7NmGxh92yZa">
+                                <select class="form-control" id="gate-modal-type" data-action="onGateTypeChange" data-page-node-id="g4T3rU1eGv7NmGxh92yZa">
                                     <option value="keyword" data-page-node-id="g4T3rU1eGv7NmGxh92yZb">关键词（逗号分隔，命中任一即拦截）</option>
                                     <option value="regex" data-page-node-id="g4T3rU1eGv7NmGxh92yZc">正则（命中任一条即拦截）</option>
                                 </select>
@@ -973,21 +976,21 @@
                     <div class="section-tab-content" id="rag-tab-documents" data-page-node-id="eOjW2E8cImhsrDfsKRFkbR">
                         <div class="page-actions" data-page-node-id="tHM2benKfkMbDc30GXvPnB">
                             <div class="filter-group" data-page-node-id="nRsFS5DbHgWYmdEREURNc0">
-                                <select id="kb-type-filter" class="form-select" onchange="reloadKbDocs()" data-page-node-id="EkjwMrHnWDwWV1Kvsb8TNf">
+                                <select id="kb-type-filter" class="form-select" data-action="reloadKbDocs" data-page-node-id="EkjwMrHnWDwWV1Kvsb8TNf">
                                     <option value="" data-page-node-id="tSwjBtUCSE1mx2ZlhVmMW3">全部类型</option>
                                     <option value="text" data-page-node-id="2wGYGJ31t8rSoNwQEKyANf">文本</option>
                                     <option value="markdown" data-page-node-id="99tIx68saNfCy8V2yXrF0g">Markdown</option>
                                     <option value="dingtalk" data-page-node-id="3GOj936zmXuUk7z3R8ivF9">钉钉文档</option>
                                     <option value="faq" data-page-node-id="XzQMjmWrYxxyailJsnuQ3V">FAQ</option>
                                 </select>
-                                <select id="kb-status-filter" class="form-select" onchange="reloadKbDocs()" data-page-node-id="fHEPKhLtrSnaqMUvI2HHn1">
+                                <select id="kb-status-filter" class="form-select" data-action="reloadKbDocs" data-page-node-id="fHEPKhLtrSnaqMUvI2HHn1">
                                     <option value="" data-page-node-id="khREu7EWgq0YfFlCq1jBI0">全部状态</option>
                                     <option value="pending" data-page-node-id="oveMrEJAyFkqutHU9QKk2h">待索引</option>
                                     <option value="indexed" data-page-node-id="iGBIoG3Z1YdpJ7onXQDiwv">已索引</option>
                                 </select>
                                 <div class="search-box" data-page-node-id="K5NP4hLDDSvtUMhvNKg5x3">
-                                    <input type="text" id="kb-search" class="form-control" placeholder="搜索文档..." 
-                                           oninput="debouncedLoadKbDocs()" data-page-node-id="8Hp3aZTIQDCfpPzfZ0GPpT">
+                                    <input type="text" id="kb-search" class="form-control" placeholder="搜索文档..."
+                                           data-action="debouncedLoadKbDocs" data-page-node-id="8Hp3aZTIQDCfpPzfZ0GPpT">
                                 </div>
                             </div>
                             <div class="action-group" data-page-node-id="Yn115ooI8VhgHElmfu3MHK">
@@ -1187,8 +1190,8 @@
                                         </div>
                                     </div>
                                     <div class="chat-input-area" data-page-node-id="u3gSWdUYFub6CHvqQWC8ZF">
-                                        <textarea id="rag-chat-input" placeholder="输入你的问题..." 
-                                                  onkeydown="handleChatKeydown(event)"></textarea>
+                                        <textarea id="rag-chat-input" placeholder="输入你的问题..."
+                                                  data-keydown="handleChatKeydown" data-keydown-keys="*" data-args='["@event"]'></textarea>
                                         <button class="chat-send-btn btn btn-primary" data-action="sendRagChat" data-args='[""]' data-page-node-id="BiuC5Cuiq7Dl9FuuBEiCpg">
                                             发送 <i class="fa-solid fa-arrow-right" data-page-node-id="rzpl5h3PMd2BZASBZ79qBU"></i>
                                         </button>
@@ -1285,7 +1288,7 @@
                                 <div class="header-actions" data-page-node-id="xYPZ6oOQ6nFKT5GgXlGBQX">
                                     <div class="search-box thread-search" data-page-node-id="tKtiulvLmPOURcy5icPnE9">
                                         <i class="fa-solid fa-search" data-page-node-id="HF2i4j3CBEvs4DMIn9AY3Q"></i>
-                                        <input type="text" class="form-control" id="msg-search" placeholder="搜索会话..." oninput="debouncedLoadMessages()" data-page-node-id="YHn9XrVkC9C3dCwdZBX5QK">
+                                        <input type="text" class="form-control" id="msg-search" placeholder="搜索会话..." data-action="debouncedLoadMessages" data-page-node-id="YHn9XrVkC9C3dCwdZBX5QK">
                                     </div>
                                     <button class="btn btn-sm btn-outline" id="sync-center-entry-btn" data-action="openSyncCenter" data-args='[""]' title="打开同步中心" data-page-node-id="yOJnGFeb96BDaFc8CiDKtk">
                                         <i class="fa-solid fa-sliders" data-page-node-id="gbhUYfPhuLiHigr8NM81Dl"></i> 同步中心
@@ -1305,7 +1308,7 @@
                                 <div class="header-actions" data-page-node-id="hlGg2D2n49bndcHdS0QCNc">
                                     <div class="search-box thread-search" data-page-node-id="5wxipl99MVUrYL3D4izgaH">
                                         <i class="fa-solid fa-search" data-page-node-id="B4UHccX8KETu5X0jCG2Y4z"></i>
-                                        <input type="text" id="msg-thread-search" placeholder="在当前会话内搜索..." oninput="debouncedFilterThread()" data-page-node-id="QAwN49oH9OK37ICsHUBA0e">
+                                        <input type="text" id="msg-thread-search" placeholder="在当前会话内搜索..." data-action="debouncedFilterThread" data-page-node-id="QAwN49oH9OK37ICsHUBA0e">
                                     </div>
                                     <button class="btn btn-sm btn-success" id="sync-history-btn" data-action="syncHistory" data-args='[""]' data-page-node-id="ZyDCCEyzdiCauiroMw7DMa">
                                         <i class="fa-solid fa-rotate-right" data-page-node-id="yuGjkNzhhGaerLxO8gzNK6"></i> 同步本会话
@@ -1322,7 +1325,7 @@
                                         <button class="btn btn-sm btn-outline btn-danger" data-action="_msgBatchDelete" data-args='[""]' data-page-node-id="cLsHHrAi1uvg2Qv00Qpkyf"><i class="fa-solid fa-trash" data-page-node-id="OYZxnjtvBOY3tJfo3xNIpK"></i> 删除所选</button>
                                         <button class="btn btn-sm btn-outline" data-action="_msgDeselectAll" data-args='[""]' data-page-node-id="S8DOgeSTaVTiOzKMGHIMtn">取消</button>
                                     </div>
-                                    <select id="msg-conv-filter" onchange="loadMessages()" style="display:none" data-page-node-id="RDFvLHgRqhiprwR5H04ikI">
+                                    <select id="msg-conv-filter" data-action="loadMessages" style="display:none" data-page-node-id="RDFvLHgRqhiprwR5H04ikI">
                                         <option value="" data-page-node-id="XmwERlKR0RumMtnr8bEP0g">全部会话</option>
                                     </select>
                                 </div>
@@ -1513,16 +1516,16 @@
                         <div class="panel intent-filter-panel" data-page-node-id="5FiNeKAnOk6Ae5KFciJ1Z0">
                             <div class="panel-body" data-page-node-id="TvPZTKN4whSTjoNWu9WBwI">
                                 <div class="intent-filter-body" data-page-node-id="hyfgDMSMLoRhFOk9pDOuUW">
-                                    <select id="filter-sender" class="form-select" style="width: auto; min-width: 120px;" onchange="loadDecisionsHistory(1)" data-page-node-id="T4d21gCAkr3xOqJjtbG58I">
+                                    <select id="filter-sender" class="form-select" style="width: auto; min-width: 120px;" data-action="loadDecisionsHistory" data-args='[1]' data-page-node-id="T4d21gCAkr3xOqJjtbG58I">
                                         <option value="" data-page-node-id="HlrKnNXUC4njjOP4dIH0Ma">全部发送者</option>
                                     </select>
-                                    <select id="filter-intent" class="form-select" style="width: auto; min-width: 120px;" onchange="loadDecisionsHistory(1)" data-page-node-id="Mli1jhYqEEOSTMxH21EZfc">
+                                    <select id="filter-intent" class="form-select" style="width: auto; min-width: 120px;" data-action="loadDecisionsHistory" data-args='[1]' data-page-node-id="Mli1jhYqEEOSTMxH21EZfc">
                                         <option value="" data-page-node-id="nT0eCLtmmQE8VNuwqHjBw5">全部意图</option>
                                     </select>
-                                    <select id="filter-action" class="form-select" style="width: auto; min-width: 120px;" onchange="loadDecisionsHistory(1)" data-page-node-id="gaX0Wi6loTkF5E7MSiyUix">
+                                    <select id="filter-action" class="form-select" style="width: auto; min-width: 120px;" data-action="loadDecisionsHistory" data-args='[1]' data-page-node-id="gaX0Wi6loTkF5E7MSiyUix">
                                         <option value="" data-page-node-id="pF84Dcy7fcQBgr7d5WJayk">全部动作</option>
                                     </select>
-                                    <select id="filter-time" class="form-select" style="width: auto; min-width: 100px;" onchange="loadDecisionsHistory(1)" data-page-node-id="pCbLEhlGWngxACL3mZe32X">
+                                    <select id="filter-time" class="form-select" style="width: auto; min-width: 100px;" data-action="loadDecisionsHistory" data-args='[1]' data-page-node-id="pCbLEhlGWngxACL3mZe32X">
                                         <option value="" data-page-node-id="zIgmvinaDXPGh538UA4iny">全部</option>
                                         <option value="today" data-page-node-id="JwDHSGPt8dr3rV8hR4VyGe">今天</option>
                                         <option value="month" data-page-node-id="emSgu60sH3qU6xFOK7mPuU">本月</option>
@@ -1596,17 +1599,17 @@
                         <div class="panel intent-filter-panel" data-page-node-id="YeHElCFlJFCqvfN2ovmmhQ">
                             <div class="panel-body" data-page-node-id="hUN9xL1b8zJ9JwDVUeSfSK">
                                 <div class="intent-filter-body" data-page-node-id="LDRpJx1A9fF9HU7CXQKmdX">
-                                    <select id="rt-filter-skill" class="form-select" style="width: auto; min-width: 140px;" onchange="loadRouteTrace(1)" data-page-node-id="ctrpAJopSoGVeklBlCrykF">
+                                    <select id="rt-filter-skill" class="form-select" style="width: auto; min-width: 140px;" data-action="loadRouteTrace" data-args='[1]' data-page-node-id="ctrpAJopSoGVeklBlCrykF">
                                         <option value="" data-page-node-id="24JWs0oTDzGpgbe1pE01MO">全部主技能</option>
                                     </select>
-                                    <select id="rt-filter-source" class="form-select" style="width: auto; min-width: 140px;" onchange="loadRouteTrace(1)" data-page-node-id="GWLwwFzwKIRbWqokYvzEZV">
+                                    <select id="rt-filter-source" class="form-select" style="width: auto; min-width: 140px;" data-action="loadRouteTrace" data-args='[1]' data-page-node-id="GWLwwFzwKIRbWqokYvzEZV">
                                         <option value="" data-page-node-id="uUlEz4t0VPvbyv5te7DTh9">全部路由来源</option>
                                     </select>
-                                    <select id="rt-filter-time" class="form-select" style="width: auto; min-width: 110px;" onchange="loadRouteTrace(1)" data-page-node-id="68ykkothl7IMHufpbgHlJD">
+                                    <select id="rt-filter-time" class="form-select" style="width: auto; min-width: 110px;" data-action="loadRouteTrace" data-args='[1]' data-page-node-id="68ykkothl7IMHufpbgHlJD">
                                         <option value="" data-page-node-id="tDPFNIQroWeJprp7bFHV71">全部时间</option>
                                         <option value="today" data-page-node-id="bkmID8ciI59Yy6QqTelBnV">今天</option>
                                     </select>
-                                    <select id="rt-filter-blocked" class="form-select" style="width: auto; min-width: 140px;" onchange="loadRouteTrace(1)" data-page-node-id="dR0U8GpeI1oUtwjjQVfBCL">
+                                    <select id="rt-filter-blocked" class="form-select" style="width: auto; min-width: 140px;" data-action="loadRouteTrace" data-args='[1]' data-page-node-id="dR0U8GpeI1oUtwjjQVfBCL">
                                         <option value="" data-page-node-id="4lNM41vHcD7C9RWDwPAaeF">全部屏蔽状态</option>
                                         <option value="blocked" data-page-node-id="3OBBRBs4LZnmzECTnskoTi">有屏蔽</option>
                                         <option value="unblocked" data-page-node-id="lZMMspOzuhLMrnYLDtjgC2">无屏蔽</option>
@@ -1652,7 +1655,7 @@
                                 </button>
                                 <label class="btn btn-sm btn-outline-secondary" title="从 YAML 文件导入配置" data-page-node-id="sMuVlKUDRA7uffO9PDSc3M">
                                     <i class="fa-solid fa-upload" data-page-node-id="HhCd74kEwMjxm5HxbShxSG"></i> 导入
-                                    <input type="file" accept=".yaml,.yml" onchange="importConfig(this)" style="display:none;" data-page-node-id="ysHEcDutgUj851vW7FvSHG">
+                                    <input type="file" accept=".yaml,.yml" data-action="importConfig" data-args='["@el"]' style="display:none;" data-page-node-id="ysHEcDutgUj851vW7FvSHG">
                                 </label>
                             </div>
                             <span class="config-action-divider" aria-hidden="true" data-page-node-id="foxXPUW6TdnaKOm76Hzvxj"></span>
@@ -2228,13 +2231,13 @@
                         </div>
                         <div class="page-header-actions" data-page-node-id="muRU9UNqBa5gjLQaDGB12V">
                             <div class="search-box" data-page-node-id="7Nn2Sv0P9S0WV7sJhDMv1X">
-                                <input type="text" class="form-control" id="dlq-search" placeholder="搜索死信..." oninput="debouncedLoadDeadLettersPage()" data-page-node-id="oDCUiv5sZhWNyWfeH29XMJ">
+                                <input type="text" class="form-control" id="dlq-search" placeholder="搜索死信..." data-action="debouncedLoadDeadLettersPage" data-page-node-id="oDCUiv5sZhWNyWfeH29XMJ">
                             </div>
                             <span id="dlq-stats" class="dlq-stats-badge" data-page-node-id="i1lA25DYGbrAG1dbRBBzz9"><i class="fa-solid fa-list-ul" style="font-size:11px;opacity:.5;" data-page-node-id="3eZEBzqkVGDx5E7Aar4ulo"></i> 共 <span class="count" data-page-node-id="VKT7KA6X0IzLvPpBMa5suK">0</span> 条</span>
                             <button class="btn btn-sm btn-outline-secondary" data-action="loadDeadLettersPage" data-args='[""]' style="margin-left:8px;" data-page-node-id="bzIN2E2ycUGehBloYF0oOM">
                                 <i class="fa-solid fa-rotate" data-page-node-id="r3oT4XgUZSERwyrAs30F9F"></i> 刷新
                             </button>
-                            <button class="btn btn-sm btn-outline" data-action="_dlqBatchReplay" data-args='[""]' title="一键重放全部待处理死信" style="margin-left:4px;color:var(--brand-primary);border-color:var(--brand-primary);" data-page-node-id="u6NsjIRPa1kd5SBfxYtkTV">
+                            <button class="btn btn-sm btn-outline" id="dlq-batch-replay-btn" data-action="_dlqBatchReplay" title="一键重放全部待处理死信" style="margin-left:4px;color:var(--brand-primary);border-color:var(--brand-primary);" data-page-node-id="u6NsjIRPa1kd5SBfxYtkTV">
                                 <i class="fa-solid fa-forward-fast" data-page-node-id="1IJCTa0bzuLWIb1kn2DV4m"></i> 全部重放
                             </button>
                             <button class="btn btn-sm btn-outline" data-action="exportDeadLettersCSV" data-args='[""]' title="导出死信队列为 CSV" style="margin-left:4px;" data-page-node-id="9EOUWHCatRHNUHhrlHmgYJ">
@@ -2345,7 +2348,7 @@
                             <div class="draft-tabs" id="draft-tabs-container" data-page-node-id="4aT4p3AkXJBltlJbpTqYlE"></div>
                             <div class="draft-toolbar-right" data-page-node-id="SjhhTdkpsMdaqsAXwfhyBl">
                                 <div class="search-box draft-search-box" data-page-node-id="XlsqjDyvAjPvSyaQHCcHKs">
-                                    <input type="text" class="form-control" id="draft-search" placeholder="搜索草稿..." oninput="debouncedLoadDraftsPage()" data-page-node-id="80JzQ5McFeFJDWFDupwsTW">
+                                    <input type="text" class="form-control" id="draft-search" placeholder="搜索草稿..." data-action="debouncedLoadDraftsPage" data-page-node-id="80JzQ5McFeFJDWFDupwsTW">
                                 </div>
                                 <button class="btn btn-sm btn-primary draft-batch-read-btn" id="draft-batch-read-btn" style="display:none;" data-action="_draftBatchMarkRead" data-args='[""]' data-page-node-id="DCUFcOUgInP9uSuKBXjUQr">
                                     <i class="fa-solid fa-check-double" data-page-node-id="kGGkzvyNancfzu1C2GUcMq"></i> 批量标记已读
@@ -2463,8 +2466,8 @@
                                         <input type="text" class="form-control" id="skill-market-search"
                                                placeholder="搜索技能名称、描述或作者..."
                                                autocomplete="off"
-                                               oninput="onMarketSearchInput()"
-                                               onkeydown="if(event.key==='Enter')onMarketSearchInput()" data-page-node-id="x0iKLimG6E51fA7dMdxRuU">
+                                               data-action="onMarketSearchInput"
+                                               data-keydown="onMarketSearchInput" data-page-node-id="x0iKLimG6E51fA7dMdxRuU">
                                     </div>
                                     <div class="marketplace-tabs" id="marketplace-tabs" data-page-node-id="y6ljEOXli5xVgnB6p1KCgg">
                                         <button class="market-tab active" data-tab="all" data-action="switchMarketTab" data-args='["all"]' data-page-node-id="7SEnh7MHzxlSIRoHg1eey3"><span data-page-node-id="GrE0TnGOmyJmYEjJwC1YxH">全部</span></button>
@@ -2503,7 +2506,7 @@
                                     <input type="text" class="form-control" id="skill-repo-input"
                                            placeholder="如 aaaaqwq/claude-code-skills@web-search"
                                            style="flex:1;min-width:200px;"
-                                           onkeydown="if(event.key==='Enter')installSkill()" data-page-node-id="9PBK3jpxSJGjeJDXM5OekH">
+                                           data-keydown="installSkill" data-page-node-id="9PBK3jpxSJGjeJDXM5OekH">
                                     <select class="form-select" id="skill-platform-select" style="width:auto;min-width:120px;" data-page-node-id="eJRqwD7b4eTBAFF51kWAhN">
                                         <option value="" data-page-node-id="d1ki5NHJaAhbUM7ig1oZjb">通用</option>
                                         <option value="dingtalk" data-page-node-id="HblvRK4NpEIHoFcDGw24m6">钉钉专属</option>
@@ -2549,7 +2552,7 @@
                     </div>
                     <div class="page-header-actions" data-page-node-id="YwnWlKJn6Tf9668zaxqtjA">
                         <div class="search-box" data-page-node-id="MD22DbKQH78G58ZK2F5IG8">
-                            <input type="text" class="form-control" id="metrics-search" placeholder="搜索平台..." oninput="filterMetricsTable()" data-page-node-id="Dm7u8vXb1kk0YkkevCNbmU">
+                            <input type="text" class="form-control" id="metrics-search" placeholder="搜索平台..." data-action="filterMetricsTable" data-page-node-id="Dm7u8vXb1kk0YkkevCNbmU">
                         </div>
                         <button class="btn btn-sm btn-outline" data-action="exportMetricsCSV" data-args='[""]' title="导出路由质量数据为 CSV" style="margin-right:8px;" data-page-node-id="cAcGvREzvWYWzcblyTxjzD">
                             <i class="fa-solid fa-file-csv" data-page-node-id="tRCGAO4MqphpCIUvThrVRQ"></i> 导出 CSV
@@ -2762,7 +2765,7 @@
                     <div class="metrics-table-card" data-page-node-id="D0WqoiWF0g1LDeiSrHiNVC">
                         <div class="chart-title" data-page-node-id="lMYWtaBOoYxk5jKuopqGPG"><i class="fa-solid fa-quote-right" data-page-node-id="nHSAPWpqsreYSCXEH5Xa49"></i> 引文页脚命中记录（最近 20 条）</div>
                         <div class="search-box" style="padding: 0 0 var(--space-sm);" data-page-node-id="ppflHACcoX9EDprMvVdyHB">
-                            <input type="text" class="form-control" id="cq-search" placeholder="搜索引文记录..." oninput="filterCQTable()" data-page-node-id="cnU9Qbhp71oS7EvJ62bBcY">
+                            <input type="text" class="form-control" id="cq-search" placeholder="搜索引文记录..." data-action="filterCQTable" data-page-node-id="cnU9Qbhp71oS7EvJ62bBcY">
                         </div>
                         <div id="cq-citations-table" data-page-node-id="ysBbBYyYED0x7oWmkoLh0N">
                             <div class="metrics-empty" data-page-node-id="B3MszBmqaunkBbcnuS82h6">加载中…</div>
@@ -2961,7 +2964,7 @@
                             <h3 data-page-node-id="OAZ3KOyZpkRFfu0vwFK6HY"><i class="fa-solid fa-pen-to-square" data-page-node-id="he2F4hG7CJAGz1DlAMUhBL"></i> 手动覆盖</h3>
                             <div class="panel-actions" data-page-node-id="Y3j9PP4kOoK8HFiRoRNeI3">
                                 <label class="ps-switch" data-page-node-id="b7u5mnqG6Xc1UBQ6LFw7Yd">
-                                    <input type="checkbox" id="ps-override-enabled" onchange="onOverrideToggle(this.checked)" data-page-node-id="dp85QsB0mWFYZAAK05ahHK">
+                                    <input type="checkbox" id="ps-override-enabled" data-action="onOverrideToggle" data-args='["@prop:checked"]' data-page-node-id="dp85QsB0mWFYZAAK05ahHK">
                                     <span class="ps-switch-slider" data-page-node-id="SAX1Lvqm1AG5EvuCN9FqdC"></span>
                                     <span class="ps-switch-text" data-page-node-id="recHzZkuCSW5OxGnDUoTpA">启用</span>
                                 </label>
@@ -2971,7 +2974,7 @@
                             <p class="ps-hint" data-page-node-id="zS04uuNDUChIAfAsgtcCPG">此文本会<strong data-page-node-id="27blLh3Ws4f4B7ieEsq5HM">整体替换</strong>自动画像并注入 system prompt；<strong data-page-node-id="6UGPKRH5qQnsztg5k9LvyW">留空则始终回退到主人风格画像</strong>。除非你要固定人设，否则保持为空。</p>
                             <div class="ps-scope-row" data-page-node-id="WJKE9aoG6gBb4aGxuIJ23Z">
                                 <label class="ps-scope-label" data-page-node-id="lKioskksOZEm2ZeuKwEe3k">作用域</label>
-                                <select id="ps-override-scope" class="ps-scope-select" onchange="onOverrideScopeChange(this.value)" data-page-node-id="41DMbjOYXGG40warNgtq6H">
+                                <select id="ps-override-scope" class="ps-scope-select" data-action="onOverrideScopeChange" data-args='["@prop:value"]' data-page-node-id="41DMbjOYXGG40warNgtq6H">
                                     <option value="platform" data-page-node-id="lhCSz7WWUs9CXvpHbsfvzn">仅本平台</option>
                                     <option value="global" data-page-node-id="4SugemCYASZeTtowW7biqe">全部平台（全局）</option>
                                 </select>
@@ -3121,7 +3124,7 @@
                                         <div class="sim-avatar" id="sim-avatar" data-page-node-id="TLn0SAhivIZdpHyBAvbwk8">测</div>
                                         <input type="text" class="form-control" id="simulate-sender"
                                                placeholder="发送者名称" value="测试用户"
-                                               oninput="updateSimAvatar(this.value)" data-page-node-id="9rzCz74HAYw3drkLER4GWj">
+                                               data-action="updateSimAvatar" data-args='["@prop:value"]' data-page-node-id="9rzCz74HAYw3drkLER4GWj">
                                     </div>
                                     <textarea class="sim-textarea" id="simulate-content"
                                               placeholder="输入要测试的消息内容，例如「今天天气怎么样？」"></textarea>
@@ -3136,7 +3139,7 @@
                                     <!-- 本次测试的模式覆盖：不改全局配置即可并排对比两种问答模式 -->
                                     <div class="sim-rag-mode-row" data-page-node-id="eXuo6S6Pbx2zLCiGM6VQKh">
                                         <label for="simulate-rag-mode" data-page-node-id="qIyhYkhVNm8dFmK06aGygu">本次模式</label>
-                                        <select class="form-control form-control-sm" id="simulate-rag-mode" onchange="_syncSimRagModeHint()" data-page-node-id="vDBfwprjdE4RXCnUCzGq9Q">
+                                        <select class="form-control form-control-sm" id="simulate-rag-mode" data-action="_syncSimRagModeHint" data-page-node-id="vDBfwprjdE4RXCnUCzGq9Q">
                                             <option value="" data-page-node-id="W4fCi2ecZLEWJlsp3WhnzA">跟随系统设置</option>
                                             <option value="true" data-page-node-id="8ZYEoaOpg3s1p3Oe86HMiP">严格问答（仅知识库）</option>
                                             <option value="false" data-page-node-id="F3pbRPvIPXD9TZjOkD8ALb">标准问答（通用知识+工具）</option>
@@ -3165,7 +3168,7 @@
                                             <i class="fa-solid fa-clock-rotate-left" data-page-node-id="nfBdYqJeHIgloO2YG6Daut"></i> 测试历史
                                         </span>
                                         <div class="search-box sim-history-search" data-page-node-id="f5VL5aEWNykMUwhhwBq1fW">
-                                            <input type="text" class="form-control" id="sim-search" placeholder="搜索历史..." oninput="renderSimHistory()" data-page-node-id="ZPoHi49rfu4Ydit9gFlMGe">
+                                            <input type="text" class="form-control" id="sim-search" placeholder="搜索历史..." data-action="renderSimHistory" data-page-node-id="ZPoHi49rfu4Ydit9gFlMGe">
                                         </div>
                                         <button class="btn btn-xs btn-outline-secondary" data-action="clearSimHistory" data-args='[""]' title="清空历史" data-page-node-id="edMaZQtNYZWeo8ZiCFK6A1">
                                             <i class="fa-solid fa-trash" data-page-node-id="dvt06uSja5dC7T0nj2GJ1G"></i>
@@ -3386,8 +3389,8 @@
                     <div class="upload-icon" data-page-node-id="3ygxIny9iaRYtWEbZqOC0Y"><i class="fa-solid fa-folder" data-page-node-id="olA1qj1oPHyIGbbxT832NW"></i></div>
                     <p data-page-node-id="gROPZE6eknBZVPsnKCo88V">点击或拖拽文件到此处上传</p>
                     <p class="hint" data-page-node-id="Ag4BuJrYRKpLoiz4GHEhFT">支持 JSON、CSV、TXT 格式</p>
-                    <input type="file" id="import-file" accept=".json,.csv,.txt" 
-                           onchange="handleImportFile(event)" data-page-node-id="crzEMyNamimixNSvXpdnTz">
+                    <input type="file" id="import-file" accept=".json,.csv,.txt"
+                           data-action="handleImportFile" data-args='["@event"]' data-page-node-id="crzEMyNamimixNSvXpdnTz">
                 </div>
                 <div id="import-preview" data-page-node-id="DMjwlnplNh8bx0evEnuxNw">
                     <div class="import-preview" data-page-node-id="xSKVYwtOQni9nUEccOnjbh">
@@ -3505,13 +3508,12 @@
             </div>
             <div class="modal-body" data-page-node-id="Xguydt30cNAKBU7ON95IW0">
                 <div class="upload-dropzone" id="upload-dropzone"
-                     ondragover="handleDragOver(event)"
-                     ondragleave="handleDragLeave(event)"
-                     ondrop="handleDrop(event)" data-page-node-id="fK68SHLpuGdJjHHDECjLqu">
+                     data-dragover="handleDragOver" data-dragleave="handleDragLeave" data-drop="handleDrop"
+                     data-args='["@event"]' data-page-node-id="fK68SHLpuGdJjHHDECjLqu">
                     <div class="upload-icon" data-page-node-id="QbDF7AJ6XoIhoQMiKsrcC9"><i class="fa-solid fa-folder-open" data-page-node-id="hvKyYDJI59w6u3eF0d5lSZ"></i></div>
                     <p data-page-node-id="oyVacKCbourHxZTep492bK">拖拽文件到此处，或 <span class="link" data-action="triggerClick" data-args='["batch-file-input"]' data-page-node-id="LwGDeFcC2bf53OtGC5i4Dv">点击选择</span></p>
                     <p class="text-muted" data-page-node-id="VjY73aPRU6l8BFshWcepu9">支持 .txt, .md, .markdown, .pdf, .ppt, .pptx, .doc, .docx, .html, .htm, 图片(.png/.jpg)</p>
-                    <input type="file" id="batch-file-input" multiple accept=".txt,.md,.markdown,.pdf,.ppt,.pptx,.doc,.docx,.html,.htm,.png,.jpg,.jpeg,.bmp" onchange="handleBatchFileSelect(event)" data-page-node-id="EUeUX6OXCPnLDbSFyjpEur">
+                    <input type="file" id="batch-file-input" multiple accept=".txt,.md,.markdown,.pdf,.ppt,.pptx,.doc,.docx,.html,.htm,.png,.jpg,.jpeg,.bmp" data-action="handleBatchFileSelect" data-args='["@event"]' data-page-node-id="EUeUX6OXCPnLDbSFyjpEur">
                 </div>
                 <div id="upload-file-list" class="upload-file-list" data-page-node-id="sm7cC0kUygK0NRf4gptFWb"></div>
             </div>
@@ -3538,7 +3540,7 @@
                             <button class="btn btn-sm btn-outline-secondary" data-action="refreshDingtalkImportList" data-args='[""]' data-page-node-id="6XdtzI3PVmuCgB3j87C5tO"><i class="fa-solid fa-rotate-right" data-page-node-id="PIpFwVEMrrqq6B2P5PznWB"></i></button>
                         </div>
                         <div class="search-box" style="padding: 8px 12px;" data-page-node-id="ftJomkHZWBomt92DXBlL0A">
-                            <input type="text" class="form-control" id="ddoc-import-search" placeholder="搜索本地文档..." oninput="debouncedRefreshDingtalkImportList()" data-page-node-id="kPWfdToFNYeDCTBEUz0blY">
+                            <input type="text" class="form-control" id="ddoc-import-search" placeholder="搜索本地文档..." data-action="debouncedRefreshDingtalkImportList" data-page-node-id="kPWfdToFNYeDCTBEUz0blY">
                         </div>
                         <div id="ddoc-import-list" class="dingtalk-import-doc-list" data-page-node-id="JyJH7tWuhHCTpknHgKmokS"></div>
                     </div>
@@ -3547,7 +3549,7 @@
                         <div class="form-group" data-page-node-id="aQ4KzTgpjHQaT3je2MZ7qE">
                             <label data-page-node-id="UFMEBHcPjNAIVygsJeJfx7">搜索钉钉云端文档</label>
                             <div class="input-group" data-page-node-id="scU4Qts971DkPaHKej7vt3">
-                                <input type="text" class="form-control" id="ddoc-import-query" placeholder="输入关键词搜索..." onkeydown="if(event.key==='Enter')searchDingtalkImport()" data-page-node-id="pPcL4gUiDW0KmwLtZt7Dud">
+                                <input type="text" class="form-control" id="ddoc-import-query" placeholder="输入关键词搜索..." data-keydown="searchDingtalkImport" data-page-node-id="pPcL4gUiDW0KmwLtZt7Dud">
                                 <button class="btn btn-primary" data-action="searchDingtalkImport" data-args='[""]' data-page-node-id="Ukf5dAREWpj9mhxDFPjmvH"><i class="fa-solid fa-search" data-page-node-id="z0EBrW2NqQWD4wyIDGLCfb"></i> 搜索</button>
                             </div>
                         </div>
@@ -3575,7 +3577,7 @@
                 <div class="form-group" data-page-node-id="7pJsaYrjqr82zqPejhOy1i">
                     <label data-page-node-id="KEOEVG8wPMExj5NSkB08Fv">搜索飞书文档</label>
                     <div class="input-group" data-page-node-id="IwVzCUWcXHEfbBrZiZnIpE">
-                        <input type="text" class="form-control" id="fdoc-import-query" placeholder="输入关键词搜索飞书文档..." onkeydown="if(event.key==='Enter')searchFeishuDocs()" data-page-node-id="ez8JUR54zXAPKqN3IytvI8">
+                        <input type="text" class="form-control" id="fdoc-import-query" placeholder="输入关键词搜索飞书文档..." data-keydown="searchFeishuDocs" data-page-node-id="ez8JUR54zXAPKqN3IytvI8">
                         <button class="btn btn-primary" data-action="searchFeishuDocs" data-args='[""]' data-page-node-id="TvmI4s0fT26top2CRxI3T3"><i class="fa-solid fa-search" data-page-node-id="3zPT4Wh4odnqalmbaMBrdk"></i> 搜索</button>
                     </div>
                 </div>
@@ -3634,7 +3636,7 @@
     </div>
 
     <!-- Image Lightbox -->
-    <div class="modal image-lightbox" id="image-lightbox" onclick="if(event.target===this)closeImageLightbox()" data-page-node-id="DVduHZf9TLhN9H4P3MWgCG">
+    <div class="modal image-lightbox" id="image-lightbox" data-page-node-id="DVduHZf9TLhN9H4P3MWgCG">
         <div class="image-lightbox-content" data-page-node-id="XG3SP1Hv9WVftUmJBJsAE9">
             <button class="modal-close image-lightbox-close" data-action="closeImageLightbox" data-args='[""]' aria-label="关闭" data-page-node-id="Vk44sm8hrnsQXuUQiHsEah"><i class="fa-solid fa-xmark" data-page-node-id="UM4iiqZdCyN3PAtZ3ceCsM"></i></button>
             <img id="image-lightbox-img" src="" alt="查看大图" data-page-node-id="QbNHEiWGnrJP7rs3JeXYvy">
@@ -3659,7 +3661,7 @@
             </div>
             <h4 class="login-title" data-page-node-id="zsHp39Z1Fh34KYW7DicbSi">连接企业智能，桥接无限可能</h4>
             <p class="login-sub" data-page-node-id="VaByw4ts8aFNlxxoPRrpvu">企业 AI 智能连接平台 · 统一接入钉钉 / 企业微信 / 飞书，融合知识库、技能与 MCP</p>
-            <form class="login-form" id="login-form" onsubmit="event.preventDefault(); doLogin(); return false;" data-page-node-id="nor18LxbsMRJeordhkNHZA">
+            <form class="login-form" id="login-form" data-submit="doLogin" data-page-node-id="nor18LxbsMRJeordhkNHZA">
                 <div class="form-group" data-page-node-id="t6MyOWIL98zDmXKxiaC5NS">
                     <label for="login-username" data-page-node-id="jmh5ytkrTv9Huv7ZAWGNHQ">用户名</label>
                     <input type="text" class="form-control" id="login-username" name="username" placeholder="请输入用户名" autocomplete="username" data-page-node-id="Yph5m9MQHYNDcxxeW5zqDs">
@@ -3715,7 +3717,7 @@
                 <div style="display:flex;gap:8px;" data-page-node-id="hGlNb39Iuz5ECfVbLV7iFy">
                     <input type="text" class="form-control" id="skill-intent-input"
                            placeholder="输入关键词后回车或点「添加」（支持逗号/空格分隔批量）"
-                           onkeydown="if(event.key==='Enter'){event.preventDefault();addSkillIntentKeyword();}" style="flex:1;" data-page-node-id="1HgoCDcmAMddGxa9xqnvcy">
+                           data-keydown="addSkillIntentKeyword" style="flex:1;" data-page-node-id="1HgoCDcmAMddGxa9xqnvcy">
                     <button class="btn btn-outline" data-action="addSkillIntentKeyword" data-args='[""]' data-page-node-id="bbyBqGnF6i5gAszuHonH6p"><i class="fa-solid fa-plus" data-page-node-id="7nGryfl8DmLEECkJEahoDQ"></i> 添加</button>
                 </div>
             </div>
@@ -3776,7 +3778,9 @@
     <!-- 核心模块 -->
     <script src="/static/js/core/api.js?v={{ core_api_js_v }}"></script>
     <script src="/static/js/core/store.js?v={{ core_store_js_v }}"></script>
+    <script src="/static/js/core/logger.js?v={{ core_logger_js_v }}"></script>
     <script src="/static/js/core/util.js?v={{ core_util_js_v }}"></script>
+    <script src="/static/js/core/ui.js?v={{ core_ui_js_v }}"></script>
     <!-- 共享组件层（kpiCard/chartCard/dataTable/panel/stateBadge）：统一卡片/图表/表格/徽标渲染，消除各页重复实现 -->
     <script src="/static/js/components/kpiCard.js?v={{ kpiCard_js_v }}"></script>
     <script src="/static/js/components/chartCard.js?v={{ chartCard_js_v }}"></script>

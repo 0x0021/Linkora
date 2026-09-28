@@ -32,6 +32,9 @@
  *          D8 <a href="#"> 的默认 # 跳转被阻止（等价旧内联的 return false）
  *          D9 图片 404 降级：/api/image/* 破图替换为 .img-unavailable 占位（幂等、
  *             连 .chat-image-wrap 一并替换），外链图片与灯箱共享节点不得被改写
+ *          D10 委托三通道分流语义守卫：文本框 input/change 不双发、select/checkbox
+ *             不双发、data-keydown 默认仅 Enter（防打字即执行）、data-keydown-keys="*"
+ *             全键 + @event 传入、表单 data-submit 只由 submit 触发（点击不误触）
  *
  * jsdom 已知限制（已在下方 stub 掉，不算产品缺陷）：
  *   - 不执行 <script type="module">（drafts.js 是 module，故预置 no-op loadDraftsPage
@@ -509,15 +512,14 @@ try {
     host.remove();
   }
 
-  // D6. 防内联事件回流：模板内联 onclick 已完成 4 → 1 的收口，不允许再长回来。
-  //     唯一保留的一处是图片灯箱的背景点击关闭——它需要比较 event.target === this，
-  //     而委托的调用约定是 fn.apply(el, args)（不传事件对象），无法通用化。
-  const INLINE_ONCLICK_ALLOWED = ['if(event.target===this)closeImageLightbox()'];
+  // D6. 防内联事件回流：模板内联 onclick 已全部清零（灯箱背景点击关闭也已迁为
+  //     app.js 专用监听）。此断言禁止任何内联 onclick 长回来。
+  const INLINE_ONCLICK_ALLOWED = [];
   const tplHtml = fs.readFileSync(path.join(ROOT, 'web', 'templates', 'index.html'), 'utf8');
   const inlineOnclicks = Array.from(tplHtml.matchAll(/onclick="([^"]*)"/g), (mm) => mm[1].trim());
   const unexpectedInline = inlineOnclicks.filter((v) => !INLINE_ONCLICK_ALLOWED.includes(v));
   check(unexpectedInline.length === 0,
-    `模板无新增内联 onclick（允许 ${INLINE_ONCLICK_ALLOWED.length} 处已知：灯箱背景关闭）`,
+    `模板无内联 onclick（允许 ${INLINE_ONCLICK_ALLOWED.length} 处）`,
     unexpectedInline.length
       ? `新增 ${unexpectedInline.length} 处: ${unexpectedInline.slice(0, 2).join(' | ').slice(0, 120)}`
       : `实际 ${inlineOnclicks.length} 处`);
@@ -649,6 +651,83 @@ try {
     if (!wrapOk) bad.push('对话图包裹层未一并替换');
     if (!lbOk) bad.push('灯箱共享节点被替换');
     check(bad.length === 0, '图片 404 降级为占位（本站图片降级 / 外链不动 / 灯箱保护）', bad.join('；'));
+
+  // D10. 三通道分流 + data-keydown 守卫 + data-submit（内联事件全迁后的语义守卫）。
+  //      委托按事件类型分流：click→按钮/复选框、input→text/search/range/textarea、
+  //      change→select/file、data-keydown→键盘。这里逐条锁住「同一动作被多个事件
+  //      双发」「data-keydown 无守卫打字即执行」「表单 data-action 被 click 冒泡误触」
+  //      这三类真实缺陷的回归。
+  {
+    const stage = w.document.createElement('div');
+    w.document.body.appendChild(stage);
+    const mk = (tag, attrs) => {
+      const el = w.document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+      stage.appendChild(el);
+      return el;
+    };
+    w.Linkora.actions.__ch_probe = function (x) {
+      this.__hits = (this.__hits || 0) + 1;
+      this.__lastArg = x;
+    };
+
+    // ① 文本输入框：input 分发 1 次，change（失焦模拟）不追加
+    const txt = mk('input', { type: 'text', 'data-action': '__ch_probe' });
+    txt.dispatchEvent(new w.Event('input', { bubbles: true }));
+    txt.dispatchEvent(new w.Event('change', { bubbles: true }));
+    check(txt.__hits === 1, '文本输入框：input 分发 1 次，change（失焦）不重复触发', `实际 ${txt.__hits || 0} 次`);
+
+    // ② select：change 分发 1 次，input 不双发
+    const sel = mk('select', { 'data-action': '__ch_probe' });
+    sel.dispatchEvent(new w.Event('input', { bubbles: true }));
+    sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    check(sel.__hits === 1, 'select：change 分发 1 次，input 不双发', `实际 ${sel.__hits || 0} 次`);
+
+    // ③ checkbox：click 分发 1 次，change 不双发（click 时 checked 已翻转）
+    const cb = mk('input', { type: 'checkbox', 'data-action': '__ch_probe' });
+    click(cb);
+    cb.dispatchEvent(new w.Event('change', { bubbles: true }));
+    check(cb.__hits === 1, 'checkbox：click 分发 1 次，change 不双发', `实际 ${cb.__hits || 0} 次`);
+
+    // ④ data-keydown 默认仅 Enter：打字（其他键）不得触发——曾致技能搜索框
+    //    每敲一个字符就调 installSkill 的回归守卫
+    const s1 = mk('input', { type: 'text', 'data-keydown': '__ch_probe' });
+    s1.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }));
+    const afterTyping = s1.__hits || 0;
+    s1.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    check(afterTyping === 0 && s1.__hits === 1, 'data-keydown 默认仅 Enter 触发（打字不触发）',
+      `打字 ${afterTyping} 次 / Enter 后累计 ${s1.__hits || 0}`);
+
+    // ⑤ data-keydown-keys="*" 全键触发，@event 占位把事件对象原样传入（RAG 输入框形态）
+    const s2 = mk('input', { type: 'text', 'data-keydown': '__ch_probe', 'data-keydown-keys': '*', 'data-args': '["@event"]' });
+    s2.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }));
+    s2.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    const evOk = s2.__lastArg && typeof s2.__lastArg === 'object' && s2.__lastArg.type === 'keydown';
+    check(s2.__hits === 2 && evOk, 'data-keydown-keys="*" 全键触发且 @event 原样传入', `累计 ${s2.__hits || 0}`);
+
+    // ⑥ 表单 data-submit：submit 触发一次并阻止默认提交；表单内点击控件不得冒泡误触
+    //    （历史缺陷形态：表单挂 data-action → 点输入框就触发 doLogin）
+    const form = mk('form', { 'data-submit': '__ch_probe' });
+    const inner = w.document.createElement('input');
+    inner.type = 'text';
+    form.appendChild(inner);
+    let submitPrevented = null;
+    // 捕获阶段先于委托（冒泡阶段）执行，同步读 defaultPrevented 会读到 preventDefault 之前
+    // 的值——与 D8 相同，异步读最终值。
+    const cap = (e) => { setTimeout(() => { submitPrevented = e.defaultPrevented; }, 0); };
+    w.document.addEventListener('submit', cap, true);
+    click(inner);
+    const clickHits = form.__hits || 0;
+    form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await sleep(10);
+    w.document.removeEventListener('submit', cap, true);
+    check(clickHits === 0 && form.__hits === 1 && submitPrevented === true,
+      '表单 data-submit：submit 触发一次并阻止默认提交，表单内点击不误触',
+      `点击误触 ${clickHits} 次 / submit 后 ${form.__hits || 0} 次 / preventDefault=${submitPrevented}`);
+
+    stage.remove();
+    delete w.Linkora.actions.__ch_probe;
+  }
   }
 } catch (e) {
   failures.push('交互冒烟异常: ' + (e && e.message ? e.message : e));

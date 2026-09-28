@@ -339,7 +339,7 @@ function renderRouteCard(rec) {
         <div class="rt-ribbon">${ribbon}</div>
         <div class="rt-chips">${chips.join("")}</div>
         <div class="rt-expand">
-            <button class="rt-expand-btn" onclick="toggleRtExpand(this)"><i class="fa-solid fa-water"></i> 链路瀑布 <i class="fa-solid fa-chevron-down rt-expand-ico"></i></button>
+            <button class="rt-expand-btn" data-action="toggleRtExpand" data-args='["@el"]'><i class="fa-solid fa-water"></i> 链路瀑布 <i class="fa-solid fa-chevron-down rt-expand-ico"></i></button>
             <div class="rt-expand-body" style="display:none">
                 ${gantt}
                 <div class="rt-hops">${hopLines || '<div class="rt-term-empty">⚠ 无阶段记录 (stages_json 为空)</div>'}</div>
@@ -348,7 +348,7 @@ function renderRouteCard(rec) {
         <div class="rt-card-foot">
             <span class="rt-total"><b>${totalTxt}</b> 总耗时</span>
             <span class="rt-foot-meta">${stages.length} 跳 · ${toolsTxt} · 分 ${scoreStr} · #${rec.id}</span>
-            <button class="rt-detail-btn" onclick="openRouteTraceDetail(${rec.id})">详情 →</button>
+            <button class="rt-detail-btn" data-action="openRouteTraceDetail" data-args='[${rec.id}]'>详情 →</button>
         </div>`;
     return card;
 }
@@ -462,7 +462,7 @@ function renderRouteTracePagination(data) {
 
     const pageBtn = (p, label, opts = {}) => {
         const cls = ["rt-pg", opts.active ? "rt-pg-active" : "", opts.disabled ? "rt-pg-disabled" : ""].join(" ").trim();
-        const attr = opts.disabled ? "" : `onclick="loadRouteTrace(${p})"`;
+        const attr = opts.disabled ? "" : `data-action="loadRouteTrace" data-args='[${p}]'`;
         const inner = label ?? String(p);
         return `<button class="${cls}" ${attr}>${inner}</button>`;
     };

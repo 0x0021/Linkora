@@ -48,9 +48,9 @@ async function loadDeadLettersPage() {
     container.innerHTML = '<div class="dlq-empty"><i class="fa-solid fa-spinner fa-spin" style="color:#94a3b8;"></i><p>加载中\u2026</p></div>';
 
     var tabs = ['pending', 'replayed', 'discarded'].map(function(s) {
-        return '<button class="dlq-tab' + (_dlqStatus === s ? ' active' : '') + '" data-status="' + s + '" onclick="_dlqSwitchStatus(\'' + s + '\')">' + _dlqStatusLabel(s) + '</button>';
+        return '<button class="dlq-tab' + (_dlqStatus === s ? ' active' : '') + '" data-status="' + s + '" data-action="_dlqSwitchStatus" data-args=\'["\' + s + \'"]\'>' + _dlqStatusLabel(s) + '</button>';
     }).join('');
-    var allBtn = '<button class="dlq-tab' + (_dlqStatus === 'all' ? ' active' : '') + '" data-status="all" onclick="_dlqSwitchStatus(\'all\')">全部</button>';
+    var allBtn = '<button class="dlq-tab' + (_dlqStatus === 'all' ? ' active' : '') + '" data-status="all" data-action="_dlqSwitchStatus" data-args=\'["all"]\'>全部</button>';
 
     try {
         var data = await api.fetch('/api/dead-letters?status=' + _dlqStatus + '&limit=' + _DLQ_PAGE_SIZE + '&offset=' + ((_dlqPage - 1) * _DLQ_PAGE_SIZE));
@@ -69,7 +69,7 @@ async function loadDeadLettersPage() {
         // Build table (always shown, even when empty)
         var html = '<div class="dlq-tabs">' + allBtn + tabs + '</div>';
         html += '<div class="dlq-table-wrap"><table class="dlq-table"><thead><tr>';
-        html += '<th style="width:32px"><input type="checkbox" class="batch-checkbox" onclick="_dlqToggleAll(this)" title="全选"></th>';
+        html += '<th style="width:32px"><input type="checkbox" class="batch-checkbox" data-action="_dlqToggleAll" data-args=\'["@el"]\' title="全选"></th>';
         html += '<th>ID</th>';
         html += '<th>时间</th>';
         html += '<th style="max-width:90px">发送者</th>';
@@ -117,8 +117,8 @@ async function loadDeadLettersPage() {
             var actions;
             if (item.status === 'pending') {
                 actions = '<div class="dlq-actions">' +
-                    '<button class="btn-replay" onclick="_dlqReplay(' + item.id + ', this)"><i class="fa-solid fa-rotate"></i> 重放</button>' +
-                    '<button class="btn-discard" onclick="_dlqDiscard(' + item.id + ', this)"><i class="fa-solid fa-trash"></i></button>' +
+                    '<button class="btn-replay" data-action="_dlqReplay" data-args=\'[\' + item.id + \', "@el"]\'><i class="fa-solid fa-rotate"></i> 重放</button>' +
+                    '<button class="btn-discard" data-action="_dlqDiscard" data-args=\'[\' + item.id + \', "@el"]\'><i class="fa-solid fa-trash"></i></button>' +
                     '</div>';
             } else if (item.status === 'replayed') {
                 // 截断到「月-日 时:分」(11字)，避免操作列被撑宽
@@ -134,7 +134,7 @@ async function loadDeadLettersPage() {
                 : (warnStages.indexOf(item.stage) >= 0) ? 'stage-warn' : 'stage-ok';
 
             html += '<tr data-id="' + item.id + '">';
-            html += '<td><input type="checkbox" class="batch-checkbox" data-dlq-id="' + item.id + '" onclick="_dlqOnCheck(this)" ' + (_dlqSelected[item.id] ? 'checked' : '') + '></td>';
+            html += '<td><input type="checkbox" class="batch-checkbox" data-dlq-id="' + item.id + '" data-action="_dlqOnCheck" data-args=\'["@el"]\' ' + (_dlqSelected[item.id] ? 'checked' : '') + '></td>';
             html += '<td class="dlq-id-cell">#' + item.id + '</td>';
             html += '<td style="font-size:12px;color:#64748b;" title="' + ts + '">' + ts + '</td>';
             html += '<td style="font-size:12.5px;max-width:90px;" title="' + _esc(item.sender_name || item.sender_id || '') + '">' + _esc((item.sender_name || item.sender_id || '\u2014').slice(0, 14)) + '</td>';
@@ -231,7 +231,7 @@ async function _dlqBatchReplay() {
     if (!confirm('确认重放全部待处理死信？此操作不可撤销。')) return;
     _dlqBatchRunning = true;
 
-    var btn = document.querySelector('button[onclick="_dlqBatchReplay()"]');
+    var btn = document.getElementById('dlq-batch-replay-btn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 重放中...'; }
     showToast('正在批量重放死信...', 'info');
 

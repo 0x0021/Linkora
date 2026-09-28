@@ -103,7 +103,7 @@ function renderGateTablePage() {
             : '<span class="tag tag-green">关键词</span>';
         return `
         <tr style="--i:${i}">
-            <td><input type="checkbox" class="gate-checkbox" data-id="${rule.id}" ${selectedGateRuleIds.has(rule.id) ? 'checked' : ''} onchange="toggleGateSelect(${rule.id})"></td>
+            <td><input type="checkbox" class="gate-checkbox" data-id="${rule.id}" ${selectedGateRuleIds.has(rule.id) ? 'checked' : ''} data-action="toggleGateSelect" data-args='[${rule.id}]'></td>
             <td><span class="tag gate-cat" data-cat="${escapeHtml(cat)}" title="${escapeHtml(catLabel)}">${escapeHtml(catLabel)}</span></td>
             <td class="gate-name-cell" title="${escapeHtml(rule.name || '')}">${escapeHtml(rule.name || '—')}</td>
             <td>${typeTag}</td>
@@ -118,8 +118,8 @@ function renderGateTablePage() {
             </td>
             <td>
                 <div class="action-btns">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="editGateRule(${rule.id})" title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteGateRule(${rule.id})" title="删除"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="editGateRule" data-args='[${rule.id}]' title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" data-action="deleteGateRule" data-args='[${rule.id}]' title="删除"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         </tr>`;

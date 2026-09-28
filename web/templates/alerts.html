@@ -97,7 +97,7 @@
     <div class="container">
         <header>
             <h1>🚨 告警中心</h1>
-            <button class="refresh-btn" onclick="loadAlerts()">刷新</button>
+            <button class="refresh-btn" id="alerts-refresh-btn">刷新</button>
         </header>
 
         <div class="stats-grid" id="statsGrid">
@@ -212,6 +212,7 @@
         }
 
         // 页面加载时自动获取告警
+        document.getElementById('alerts-refresh-btn').addEventListener('click', loadAlerts);
         loadAlerts();
         
         // 每 30 秒自动刷新

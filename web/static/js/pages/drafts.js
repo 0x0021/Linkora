@@ -234,7 +234,7 @@ async function loadDraftsPage() {
     // Build tab bar → render into dedicated toolbar container
     var tabsHtml = '';
     ['all', 'pending', 'approved', 'discarded'].forEach(function (s) {
-        tabsHtml += '<button class="draft-tab' + (_draftStatus === s ? ' active' : '') + '" data-status="' + s + '" onclick="_draftSwitchStatus(\'' + s + '\')">' + DRAFT_STATUS_LABELS[s] + '</button>';
+        tabsHtml += '<button class="draft-tab' + (_draftStatus === s ? ' active' : '') + '" data-status="' + s + '" data-action="_draftSwitchStatus" data-args=\'["\' + s + \'"]\'>' + DRAFT_STATUS_LABELS[s] + '</button>';
     });
     var tabsContainer = document.getElementById('draft-tabs-container');
     if (tabsContainer) tabsContainer.innerHTML = tabsHtml;
@@ -270,7 +270,7 @@ async function loadDraftsPage() {
             + '<col class="c-col-check"><col class="c-col-platform"><col class="c-col-sender"><col class="c-col-conv">'
             + '<col><col><col class="c-col-rag"><col class="c-col-time"><col class="c-col-actions">' // 用户消息/AI拟回复吃剩余
             + '</colgroup><thead><tr>';
-        html += '<th style="width:32px"><input type="checkbox" class="batch-checkbox" onclick="_draftToggleAll(this)" title="全选"></th>';
+        html += '<th style="width:32px"><input type="checkbox" class="batch-checkbox" data-action="_draftToggleAll" data-args=\'["@el"]\' title="全选"></th>';
         html += '<th>\u5e73\u53f0</th>';
         html += '<th style="min-width:60px">\u53d1\u9001\u8005</th>';
         html += '<th style="min-width:70px">\u4f1a\u8bdd</th>';
@@ -301,9 +301,9 @@ async function loadDraftsPage() {
             var actions;
             if (item.status === 'pending') {
                 actions = '<div class="draft-actions">' +
-                    '<button class="btn-draft-approve" onclick="event.stopPropagation();_draftApprove(\'' + item.draft_id + '\', this)"><i class="fa-solid fa-circle-check"></i> \u6279\u51c6\u53d1\u9001</button>' +
-                    '<button class="btn-draft-edit" onclick="event.stopPropagation();_draftShowEditModal(\'' + item.draft_id + '\')"><i class="fa-solid fa-pen-to-square"></i> \u7f16\u8f91\u5e76\u53d1\u9001</button>' +
-                    '<button class="btn-draft-discard" onclick="event.stopPropagation();_draftDiscard(\'' + item.draft_id + '\', this)"><i class="fa-solid fa-trash"></i></button>' +
+                    '<button class="btn-draft-approve" data-action="_draftApprove" data-args=\'["\' + item.draft_id + \'", "@el"]\' data-stop-propagation><i class="fa-solid fa-circle-check"></i> \u6279\u51c6\u53d1\u9001</button>' +
+                    '<button class="btn-draft-edit" data-action="_draftShowEditModal" data-args=\'["\' + item.draft_id + \'"]\' data-stop-propagation><i class="fa-solid fa-pen-to-square"></i> \u7f16\u8f91\u5e76\u53d1\u9001</button>' +
+                    '<button class="btn-draft-discard" data-action="_draftDiscard" data-args=\'["\' + item.draft_id + \'", "@el"]\' data-stop-propagation><i class="fa-solid fa-trash"></i></button>' +
                     '</div>';
             } else if (item.status === 'approved') {
                 actions = '<span style="font-size:11px;color:var(--text-tertiary);">\u5df2\u53d1\u9001</span>';
@@ -312,7 +312,7 @@ async function loadDraftsPage() {
             }
 
             html += '<tr class="draft-row" data-id="' + item.draft_id + '">';
-            html += '<td><input type="checkbox" class="batch-checkbox" data-draft-id="' + item.draft_id + '" onclick="_draftOnCheck(this)" ' + (_draftSelected[item.draft_id] ? 'checked' : '') + '></td>';
+            html += '<td><input type="checkbox" class="batch-checkbox" data-draft-id="' + item.draft_id + '" data-action="_draftOnCheck" data-args=\'["@el"]\' ' + (_draftSelected[item.draft_id] ? 'checked' : '') + '></td>';
             html += '<td style="font-size:12px;color:#64748b;">' + escapeHtml(platform) + '</td>';
             html += '<td style="font-size:12.5px;min-width:60px;" title="' + escapeHtml(item.sender_name || item.sender_id || '') + '">' + escapeHtml(sender) + '</td>';
             html += '<td style="font-size:12.5px;min-width:70px;" title="' + escapeHtml(item.conversation_name || item.conversation_id || '') + '">' + escapeHtml(conversation) + '</td>';

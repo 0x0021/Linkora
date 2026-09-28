@@ -4,7 +4,10 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
     "jsdom": "^25.0.1",
+    "prettier": "^3.3.3",
     "vitest": "^4.1.11"
   },
   "scripts": {
@@ -14,6 +17,9 @@
     "build:frontend:watch": "node scripts/build_frontend.mjs --watch",
     "smoke:bundle": "node scripts/smoke_bundle.mjs",
     "smoke:runtime": "node scripts/smoke_runtime.mjs",
-    "verify:frontend": "npm run build:frontend && npm run smoke:bundle && npm run smoke:runtime && npm run test:frontend"
+    "lint": "eslint web/static/js --ext .js",
+    "lint:fix": "eslint web/static/js --ext .js --fix",
+    "format": "prettier --write \"web/static/js/**/*.js\"",
+    "verify:frontend": "npm run build:frontend && npm run lint && npm run smoke:bundle && npm run smoke:runtime && npm run test:frontend"
   }
 }

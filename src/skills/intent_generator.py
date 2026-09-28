@@ -132,7 +132,7 @@ class IntentGenerator:
         trace["messages"] = messages
 
         try:
-            resp: LLMResponse = self.client.chat(messages, temperature=0.1)
+            resp: LLMResponse = self.client.chat(messages, temperature=0.1, purpose="skill")
         except Exception as e:  # 网络/限流/超时
             logger.warning("[IntentGen] 调用 LLM 失败（技能 %s）: %s", skill.name, e)
             trace["error"] = f"LLM 调用失败: {e}"

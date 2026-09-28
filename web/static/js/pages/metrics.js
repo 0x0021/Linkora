@@ -41,6 +41,9 @@ function metricsFmtCost(usd) {
 async function loadMetricsPage() {
     try {
         const data = await api.fetch("/api/llm-metrics");
+        // 全口径用量台账（含对话外消耗：摘要/记忆/画像/技能等）——失败不阻塞主指标
+        let usage = null;
+        try { usage = await api.fetch("/api/metrics/llm-usage?hours=24"); } catch (_) { usage = null; }
         if (!data || data.available === false) {
             metricsRenderEmptyKpis();
             ["chart-metrics-skill","chart-metrics-source","chart-metrics-tokens"].forEach(id => {
@@ -49,6 +52,7 @@ async function loadMetricsPage() {
             });
             const tableEl = document.getElementById("metrics-platform-table");
             if (tableEl) tableEl.innerHTML = '<div class="metrics-empty">暂无数据</div>';
+            renderUsageDistribution(usage);
             return;
         }
         renderMetricsKPI(data);
@@ -56,12 +60,85 @@ async function loadMetricsPage() {
         renderSkillChart(data);
         renderSourceChart(data);
         renderTokenChart(data);
+        renderUsageDistribution(usage);
         renderPlatformBreakdown(data);
         renderTokenTrendChart();
     } catch (e) {
         metricsRenderEmptyKpis();
         showToast("指标加载失败: " + (e.message || e), "error");
     }
+}
+
+// 用途中文标签（与 cost_quality.js 的 _CQ_PURPOSE_LABELS 同源语义）
+const _METRICS_PURPOSE_LABELS = {
+    reply: "对话回复",
+    summary: "对话摘要",
+    memory: "记忆提取/合并",
+    persona: "主人画像",
+    skill: "技能意图生成",
+    tool: "工具结果清洗",
+    kb: "知识库处理",
+    other: "其他",
+};
+
+// 全口径用量分布横向条形图（按用途，近 24h）+ 简报行
+async function renderUsageDistribution(usage) {
+    const note = document.getElementById("metrics-usage-note");
+    if (note) {
+        if (usage && usage.available && usage.totals) {
+            const t = usage.totals;
+            note.textContent = "全口径（含对话外消耗，近 24h）："
+                + metricsFmtTokens(t.total_tokens || 0) + " tokens · "
+                + "¥" + (t.cost_cny || 0).toFixed(4)
+                + " · " + (t.calls || 0) + " 次调用"
+                + ((t.estimated_calls || 0) > 0 ? `（${t.estimated_calls} 次估算）` : "");
+        } else {
+            note.textContent = "全口径用量：暂无数据（服务产生 LLM 调用后开始统计）";
+        }
+    }
+    const id = "chart-metrics-usage";
+    const wrap = document.getElementById("wrap-" + id);
+    if (!wrap) return;
+    const byPurpose = (usage && usage.available && usage.by_purpose) || {};
+    const keys = Object.keys(byPurpose).sort((a, b) => (byPurpose[b].total_tokens || 0) - (byPurpose[a].total_tokens || 0));
+    if (keys.length === 0) {
+        ChartCard.showEmpty(wrap, "暂无用量记录（服务产生 LLM 调用后开始统计）");
+        return;
+    }
+    const ct = chartTheme();
+    ChartCard.destroy(id);
+    const ctx = ChartCard.ensureCanvas(wrap, id);
+    if (!ctx) return;
+    await window.loadChart();
+    const palette = ["#2563eb", "#8b5cf6", "#16a34a", "#f59e0b", "#ec4899", "#06b6d4", "#dc2626", "#64748b"];
+    const chart = new Chart(ctx.canvas, {
+        type: "bar",
+        data: {
+            labels: keys.map(k => _METRICS_PURPOSE_LABELS[k] || k),
+            datasets: [{
+                label: "Token",
+                data: keys.map(k => byPurpose[k].total_tokens || 0),
+                backgroundColor: keys.map((_, i) => palette[i % palette.length] + "cc"),
+                borderColor: keys.map((_, i) => palette[i % palette.length]),
+                borderWidth: 1, borderRadius: 4,
+            }],
+        },
+        options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx2 => metricsFmtTokens(ctx2.parsed.x) + " tokens · ¥" + ((byPurpose[keys[ctx2.dataIndex]] || {}).cost_cny || 0).toFixed(4) } },
+            },
+            scales: {
+                x: { beginAtZero: true, ticks: { color: ct.tick, callback: v => metricsFmtTokens(v) }, grid: { color: ct.grid } },
+                y: { ticks: { color: ct.tick }, grid: { display: false } },
+            },
+            animation: { duration: 600, easing: "easeOutQuart" },
+        },
+    });
+    ChartCard.setChart(id, chart);
 }
 
 // KPI 卡片（统一 KpiCard；容器 id 即卡片 id，由 index.html 提供空壳）
@@ -420,6 +497,7 @@ function stopMetricsPolling() {
     if (_sourceChart) { _sourceChart.destroy(); _sourceChart = null; }
     if (_tokenChart) { _tokenChart.destroy(); _tokenChart = null; }
     if (_tokenTrendChart) { _tokenTrendChart.destroy(); _tokenTrendChart = null; }
+    ChartCard.destroy("chart-metrics-usage");
 }
 
 // P5 下沉：可靠性面板数据获取改用 DashboardReliabilityService（原 inline fetch → service），同时移除独立 poller fetch

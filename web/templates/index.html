@@ -2588,12 +2588,17 @@
                 <!-- Token 消耗对比图 -->
                 <div class="metrics-charts-grid" style="margin-top:var(--space-md);grid-template-columns:1fr 1fr;" data-page-node-id="BBs9t3F5TXsC7mFwU5paz6">
                     <div class="metrics-chart-card" data-page-node-id="aomJB7oJ0aSizcYYhTtGPD">
-                        <div class="chart-title" data-page-node-id="i85wN7oJKMJRFDA1rGlRP8"><i class="fa-solid fa-coins" data-page-node-id="6ESoWtfEp1ChHoZsNQQPye"></i> 各平台 Token 消耗</div>
+                        <div class="chart-title" data-page-node-id="i85wN7oJKMJRFDA1rGlRP8"><i class="fa-solid fa-coins" data-page-node-id="6ESoWtfEp1ChHoZsNQQPye"></i> 各平台 Token 消耗 <span class="config-hint" style="font-weight:normal;" title="本图仅统计对话回复链路；全口径（含摘要/记忆/画像等）见下方用量分布">（仅回复链路）</span></div>
                         <div class="metrics-chart-wrap" data-page-node-id="ZjAZ5RhGB9N3fQ4R59kMWm"><canvas id="chart-metrics-tokens" data-page-node-id="z1XEW6WHsNjE2JZboIDHzb"></canvas></div>
+                        <div id="metrics-usage-note" class="config-hint" style="margin-top:var(--space-sm);" data-page-node-id="metricsUsageNote"></div>
                     </div>
                     <div class="metrics-chart-card" data-page-node-id="gQYe5sn0KMk4Vq01SbIPIf">
                         <div class="chart-title" data-page-node-id="gKvsmqQDailJeK9b3ysK45"><i class="fa-solid fa-chart-line" data-page-node-id="bflOOLjmHFVwPb3ySS7NwA"></i> Token 消耗趋势（近24h）</div>
                         <div class="metrics-chart-wrap" id="wrap-chart-metrics-token-trend" data-page-node-id="0F3XH9O98OmFdsq3DzDFv5"><canvas id="chart-metrics-token-trend" data-page-node-id="qlx4QHSMZnl0tENRevYX4V"></canvas></div>
+                    </div>
+                    <div class="metrics-chart-card" style="grid-column:1 / -1;" data-page-node-id="metricsUsageCard">
+                        <div class="chart-title" data-page-node-id="metricsUsageTitle"><i class="fa-solid fa-table-list" data-page-node-id="metricsUsageIcon"></i> LLM 用量分布（按用途 · 全口径，含对话外消耗）</div>
+                        <div class="metrics-chart-wrap" id="wrap-chart-metrics-usage" data-page-node-id="metricsUsageWrap"><canvas id="chart-metrics-usage" data-page-node-id="metricsUsageCanvas"></canvas></div>
                     </div>
                     <div class="panel" id="metrics-reliability-panel" style="display:none;" data-page-node-id="4u08cCplgWuGBUkrbkVGSn">
                         <div class="panel-header" data-page-node-id="HI9O0vDrGFnPei9bJlhUok">
@@ -2721,7 +2726,7 @@
                         </div>
                         <div data-page-node-id="UIFsQZHmnamsMo4GgT8MxT">
                             <h2 class="page-header-title" data-page-node-id="j7cqvasCLHhTCx7ffHgGmE">成本 / 质量</h2>
-                            <p class="page-header-desc" data-page-node-id="iXENNWwvC2cIlRcUbpe6JL">LLM 调用成本（¥）与回复质量（转人工率 / RAG 命中率 / 引文页脚命中率 / 反馈有用率）观测</p>
+                            <p class="page-header-desc" data-page-node-id="iXENNWwvC2cIlRcUbpe6JL">LLM 调用成本（¥）与回复质量观测。成本/Token 为<b>全口径</b>：含对话回复 + 摘要 / 记忆 / 画像 / 技能等对话外消耗</p>
                             <p class="config-hint" style="margin-top:6px;" data-page-node-id="Bz4pgQpMo2skYXEB3k1UaR">成本 = 模型单价 × 实际 Token。内置已覆盖常见模型（agnes-2.5-flash 免费）；切换收费模型若未出数，可在 <b data-page-node-id="G99ozO4rX6FCdkLl9HxfIa">后台设置 → 模型与提示 → 模型价格配置</b> 中填写单价。</p>
                         </div>
                     </div>
@@ -2743,6 +2748,15 @@
                     <div class="metrics-kpi-card accent-cyan" id="cq-kpi-rag" data-page-node-id="5CKOA8XV6JDJE9sHq90V90"></div>
                     <div class="metrics-kpi-card accent-pink" id="cq-kpi-cited" data-page-node-id="hShxvt3kujzY5axWk6jTiI"></div>
                     <div class="metrics-kpi-card accent-blue" id="cq-kpi-feedback" data-page-node-id="REviFWUQ2rji1lZDhMjEFK"></div>
+                </div>
+
+                <!-- LLM 用量台账：按用途分布（全口径，含对话外消耗） -->
+                <div class="metrics-table-card" style="margin-top:var(--space-md);" data-page-node-id="cqUsageCard">
+                    <div class="chart-title" data-page-node-id="cqUsageTitle"><i class="fa-solid fa-table-list"></i> LLM 用量分布（按用途 · 全口径）</div>
+                    <p class="config-hint" style="margin:0 0 var(--space-sm);" data-page-node-id="cqUsageHint">统计所有 LLM 调用（含摘要生成、记忆提取/合并、主人画像、技能意图生成、工具清洗、知识库处理）；标注「估算」的调用为流式响应且服务端未回 usage 时的启发式估值。</p>
+                    <div id="cq-usage-table" data-page-node-id="cqUsageTable">
+                        <div class="metrics-empty">加载中…</div>
+                    </div>
                 </div>
 
                 <!-- 图表区 -->

@@ -15,6 +15,7 @@ from src.llm.reply import (
     _segment_is_incomplete,
     enforce_brevity,
 )
+from src.llm.usage_ledger import purpose_scope
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,8 @@ def ensure_complete_reply(
             partial = "".join(segments[:break_idx + 1]).rstrip()
             rest = "".join(segments[break_idx + 1:])
             messages.append({"role": "user", "content": partial})
-            resp = client.chat(messages, stream=False, temperature=0.2, purpose="reply")
+            with purpose_scope("reply"):
+                resp = client.chat(messages, stream=False, temperature=0.2)
             cont = getattr(resp, "content", "") or ""
             cont = cont.strip()
             if not cont:
@@ -91,7 +93,8 @@ def ensure_complete_reply(
                 # 整段连一个句末标点都没有：确属被截断的长句，只能整段续写。
                 tail_seg = text.rstrip()
             messages.append({"role": "user", "content": tail_seg})
-            resp = client.chat(messages, stream=False, temperature=0.2, purpose="reply")
+            with purpose_scope("reply"):
+                resp = client.chat(messages, stream=False, temperature=0.2)
             cont = getattr(resp, "content", "") or ""
             cont = cont.strip()
             if not cont:

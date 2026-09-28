@@ -19,6 +19,7 @@ import logging
 from typing import Optional, cast
 
 from src.intent import IntentRegistry, LAYER_DOMAIN, default_registry
+from src.llm.usage_ledger import purpose_scope
 from src.llm.client import LLMClient, LLMResponse
 from src.utils.llm_json import extract_json
 
@@ -132,7 +133,8 @@ class IntentGenerator:
         trace["messages"] = messages
 
         try:
-            resp: LLMResponse = self.client.chat(messages, temperature=0.1, purpose="skill")
+            with purpose_scope("skill"):
+                resp: LLMResponse = self.client.chat(messages, temperature=0.1)
         except Exception as e:  # 网络/限流/超时
             logger.warning("[IntentGen] 调用 LLM 失败（技能 %s）: %s", skill.name, e)
             trace["error"] = f"LLM 调用失败: {e}"

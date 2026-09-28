@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from src.config import AppConfig
+from src.llm.usage_ledger import purpose_scope
 from src.shared_state import get_app_instance
 from src.utils.llm_json import extract_json
 from web.dependencies import get_store as _dep_get_store, get_current_platform, logger
@@ -213,7 +214,8 @@ def _enrich_with_llm(profile: dict, owner: str) -> dict:
             {"role": "system", "content": "你是沟通风格分析专家，擅长从对话样本中提炼人物口吻特征。"},
             {"role": "user", "content": user_msg},
         ]
-        resp = client.chat(messages, temperature=0.3, purpose="persona")
+        with purpose_scope("persona"):
+            resp = client.chat(messages, temperature=0.3)
         llm_prompt = (resp.content or "").strip()
         if llm_prompt and len(llm_prompt) > 10:
             # 隐私护栏（#6 升级）：先脱敏样本，二次脱敏画像文本，再做残留校验——
@@ -745,7 +747,7 @@ def _clone_reply_production(client, cfg, agent, user_msg: str,
         resp = client.chat([
             {"role": "system", "content": sys},
             {"role": "user", "content": user_msg},
-        ], temperature=temperature, purpose="persona")
+        ], temperature=temperature)
         return (resp.content or "").strip()[:600]
     except Exception as e:
         logger.debug("[persona] 生产管线克隆回复失败: %s", e)
@@ -784,7 +786,7 @@ def _judge_clone(client, cfg, owner: str, clone: str, truth: str):
         resp = client.chat([
             {"role": "system", "content": sys},
             {"role": "user", "content": usr},
-        ], temperature=0.2, purpose="persona")
+        ], temperature=0.2)
         text = (resp.content or "").strip()
         if not text:
             # 推理模型常把正文全塞进 reasoning_content（客户端已剥离），content 为空

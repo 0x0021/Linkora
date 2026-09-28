@@ -6,6 +6,7 @@ import re
 import tempfile
 import time
 import logging
+from src.llm.usage_ledger import purpose_scope
 
 from ..rag_metrics import record_clean, record_chunk, snapshot as _rag_metrics_snapshot
 
@@ -256,7 +257,8 @@ def _llm_clean_once(text: str, llm_client) -> str:
             "content": "请清洗以下文档内容：\n\n" + text,
         },
     ]
-    resp = llm_client.chat(messages, temperature=0, stream=False, purpose="tool")
+    with purpose_scope("tool"):
+        resp = llm_client.chat(messages, temperature=0, stream=False)
     if isinstance(resp, dict):
         return resp.get("content", "") or ""
     return getattr(resp, "content", "") or ""

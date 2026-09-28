@@ -17,6 +17,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from src.tools.utils import split_text
+from src.llm.usage_ledger import purpose_scope
 
 class _LazyApiModule:
     """惰性代理：首次属性访问时才 import web.api，消除 kb↔api 顶层循环导入。
@@ -584,7 +585,8 @@ async def kb_chat(query: RagChatQuery):
                             {"role": "system", "content": "你是一个知识助手，请根据提供的参考资料回答用户的问题。回答要简洁准确，并在末尾标注引用来源编号。"},
                             {"role": "user", "content": f"参考资料：\n{context}\n\n用户问题：{query.query}"},
                         ]
-                        llm_resp = llm_client.chat(messages, purpose="kb")
+                        with purpose_scope("kb"):
+                            llm_resp = llm_client.chat(messages)
                         response["answer"] = llm_resp.content or ""
                         response["llm_status"] = "success" if response["answer"] else "failed"
                         if response["llm_status"] == "failed":

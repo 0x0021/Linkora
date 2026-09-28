@@ -12,6 +12,7 @@ from src.constants import is_summary_noise_message
 from src.llm.agent_reply import AgentReply
 from src.llm.client import LLMResponse
 from src.llm.exceptions import LLMProcessingError, LLMRateLimitExhaustedError
+from src.llm.usage_ledger import purpose_scope
 from src.llm.rag_strict import resolve_strict_mode
 from src.llm.reply import enforce_brevity, gate_reply, strip_internal_artifacts
 from src.llm.reply_helper import ensure_complete_reply
@@ -185,7 +186,8 @@ def process_message(
             _t0 = time.perf_counter()
 
             use_stream = stream_supported and round_num == 1 and not tools
-            response = agent.client.chat(messages, tools=tools, stream=use_stream, purpose="reply")
+            with purpose_scope("reply"):
+                response = agent.client.chat(messages, tools=tools, stream=use_stream)
             llm_latency_ms += (time.perf_counter() - _t0) * 1000
             llm_rounds = round_num
 
@@ -293,7 +295,8 @@ def extract_memories_from_conversation(
     ]
 
     try:
-        response = agent.client.chat(extraction_prompt, temperature=0.1, purpose="memory")
+        with purpose_scope("memory"):
+            response = agent.client.chat(extraction_prompt, temperature=0.1)
         if not response.content:
             return []
 
@@ -432,7 +435,8 @@ def summarize_conversation(
     ]
 
     try:
-        response = agent.client.chat(summary_prompt, temperature=0.1, purpose="summary")
+        with purpose_scope("summary"):
+            response = agent.client.chat(summary_prompt, temperature=0.1)
         if not response.content:
             return ""
         summarized = response.content.strip()
@@ -484,7 +488,8 @@ def merge_memories_into_summary(
         )},
     ]
     try:
-        response = agent.client.chat(merge_prompt, temperature=0.1, purpose="memory")
+        with purpose_scope("memory"):
+            response = agent.client.chat(merge_prompt, temperature=0.1)
         if response and response.content and response.content.strip():
             merged = response.content.strip()
             try:

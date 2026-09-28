@@ -270,7 +270,7 @@ function renderTopSenders(senders) {
     const container = document.getElementById('top-senders-list');
     if (!container) return;
     if (!senders || senders.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 24px;"><p>暂无数据</p></div>';
+        container.innerHTML = renderEmptyState('暂无数据', { style: 'padding: 24px;', noIcon: true });
         return;
     }
     const topSenders = senders.slice(0, 5);
@@ -429,7 +429,7 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                             <div class="empty-icon" style="font-size:4rem;">⚠️</div>
                             <p style="font-size:1.1rem;margin-top:1rem;">数据加载失败</p>
                             <p class="text-sm text-gray-500">请检查服务是否正常运行，或点击下方按钮重试</p>
-                            <button class="btn btn-primary" onclick="loadDashboard()" style="margin-top:1rem;">
+                            <button class="btn btn-primary" data-action="loadDashboard" style="margin-top:1rem;">
                                 <i class="fa-solid fa-arrows-rotate"></i> 重新加载
                             </button>
                         </div>
@@ -573,7 +573,7 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                 const decContainer = document.getElementById('decisions-top-list');
                 if (!decContainer) return;
                 if (decisions.length === 0) {
-                    decContainer.innerHTML = `<div class="empty-state"><div class="empty-icon">${iconize("📊")}</div><p>暂无决策记录</p></div>`;
+                    decContainer.innerHTML = renderEmptyState('暂无决策记录', { icon: iconize('📊') });
                     return;
                 }
                 renderDecisionFeed('decisions-top-list', decisions, { max: 2, emptyText: '暂无决策记录' });
@@ -832,7 +832,8 @@ function fitDashboardToViewport() {
 }
 window.fitDashboardToViewport = fitDashboardToViewport;
 window.addEventListener('resize', fitDashboardToViewport);
-window.addEventListener('load', fitDashboardToViewport);
+// 注：不再注册 window 'load' 监听——脚本执行时 load 事件早已触发，该监听永不
+// 执行（等价于死代码）；首次适配由 loadDashboard() 直接调用一次完成。
 // 数据更新（Hero 数字/胶囊内容变化）会改变高度，定时复核 zoom
 setInterval(fitDashboardToViewport, 2500);
 

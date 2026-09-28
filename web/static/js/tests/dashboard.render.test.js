@@ -9,6 +9,9 @@ beforeAll(async () => {
   // dashboard.js 模块级有 setInterval(fitDashboardToViewport, 2500) 副作用，
   // 用 fake timers 冻结，避免定时器泄漏 / 干扰测试进程退出。
   vi.useFakeTimers();
+  // dashboard.js 跨文件依赖 core/ui.js 的 renderEmptyState（经典脚本共享全局，浏览器下由
+  // 加载顺序保证；测试(ESM)下需显式先 import 让 globalThis.renderEmptyState 可用）
+  await import('../core/ui.js');
   // 加载整个页面脚本，触发 window.Linkora 桥接
   await import('../pages/dashboard.js');
   expect(window.Linkora).toBeTruthy();

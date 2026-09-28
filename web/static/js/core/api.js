@@ -62,9 +62,14 @@ class ApiClient {
      * 使用 Basic Auth 登录（兼容旧方式）
      */
     setAuth(username, password) {
+        // 注意：仅设置内存态 Basic 凭证，**不持久化到 localStorage**。
+        // 旧实现会把 Base64(用户名:密码) 写入 localStorage（key web_auth），
+        // 而 Base64 可逆，任意 XSS 都能解出明文账号密码 → 账号接管。
+        // 后端 _require_basic_auth 同时支持 Basic 与 Bearer(JWT)，活跃会话用 JWT；
+        // Basic 仅作 JWT 不可用时的兼容回退，无需把密码落盘。刷新后若 JWT 失效
+        // 会重新弹登录框（内部工具可接受），不再裸存密码。
         this._auth = 'Basic ' + btoa(unescape(encodeURIComponent(username + ':' + password)));
         this._token = null;
-        try { localStorage.setItem('web_auth', this._auth); } catch (_) {}
         try { localStorage.removeItem('jwt_token'); } catch (_) {}
     }
 

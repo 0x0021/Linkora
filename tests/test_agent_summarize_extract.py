@@ -388,3 +388,57 @@ class TestSummarizeConversation:
         user_content = prompt_msgs[-1]["content"]
         # 截断到 300
         assert user_content.count("y") == 300
+
+    def test_prompt_forbids_replacing_named_executor_with_ai(self):
+        """【回归】摘要 prompt 必须明确禁止把主人委托的具体执行者（如张博文）换成「AI」。
+
+        原缺陷：用户让张博文卸载盗版软件，摘要却写成「我让AI…卸载」，混淆了指令发出者
+        与执行者。修复后 prompt 须包含反混淆护栏，且输入素材里具名执行者不被抹成 AI。
+        """
+        client = MagicMock()
+        client.chat.return_value = LLMResponse(
+            content="【对话摘要】x", tool_calls=[], finish_reason="stop", usage={},
+        )
+        agent = _make_agent(client)
+        msgs = [
+            _msg("我让张博文卸掉我电脑上所有Autodesk盗版软件", role="user"),
+            _msg("好的，已转告。", role="assistant"),
+        ]
+        agent.summarize_conversation(msgs)
+        prompt_msgs = client.chat.call_args[0][0]
+        system_content = prompt_msgs[0]["content"]
+        user_content = prompt_msgs[-1]["content"]
+        # 护栏：明确禁止用 AI 替换具体人名（含示例张博文）
+        assert "绝不能用" in system_content
+        assert "张博文" in system_content
+        assert "AI" in system_content
+        # 输入素材中具名执行者原样保留，未被标成 AI
+        assert "张博文" in user_content
+
+    def test_owner_labeled_as_me_with_named_executor_preserved(self):
+        """输入侧：主人消息标注为「我」，且内容里的具名执行者（张博文）原样保留。"""
+        client = MagicMock()
+        client.chat.return_value = LLMResponse(
+            content="【对话摘要】x", tool_calls=[], finish_reason="stop", usage={},
+        )
+        config = MagicMock()
+        config.system_prompt = ""
+        agent = LLMAgent(
+            config=config, client=client, tool_router=None,
+            user_name="宇坤", user_dept="", org_name="", store=None,
+        )
+        msgs = [
+            Message(
+                msg_id="1", chat_id="c1", chat_type="single", chat_name="",
+                sender_id="宇坤", sender_name="宇坤",
+                content="我让张博文卸掉我电脑上所有Autodesk盗版软件",
+                msg_type="text", timestamp=datetime.now(), role="user",
+            ),
+        ]
+        agent.summarize_conversation(msgs)
+        user_content = client.chat.call_args[0][0][-1]["content"]
+        # 主人（宇坤）标注为「我」
+        assert "我: 我让张博文" in user_content
+        # 具名执行者张博文保留在内容中，未被替换成 AI
+        assert "张博文" in user_content
+        assert "卸掉我电脑上所有Autodesk盗版软件" in user_content

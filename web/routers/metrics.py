@@ -112,6 +112,23 @@ async def poller_status():
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get("/api/metrics/llm-usage")
+async def llm_usage_stats(hours: int = Query(default=24, ge=1, le=720)):
+    """LLM 用量台账（全口径）：含对话回复 + 摘要/记忆/画像/技能/工具/知识库等
+    全部 client.chat 调用的 token/成本，按用途与平台聚合。
+
+    数据源 src/llm/usage_ledger.py（主库 llm_usage 表）；routing_quality 口径
+    仅覆盖回复链路，本端点是「指标监控」页全口径 Token 统计的数据源。
+    """
+    try:
+        from src.llm.usage_ledger import get_stats
+
+        return await run_in_threadpool(get_stats, hours)
+    except Exception as e:
+        logger.error("LLM 用量台账 API 错误: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 def _llm_metrics_sync():
     """LLM 推理与路由质量指标（多平台聚合）—— 同步实现，供线程池调用。
 

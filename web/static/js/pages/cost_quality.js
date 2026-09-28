@@ -19,16 +19,30 @@ function cqFmtCostCny(cny) {
 }
 
 // KPI 卡片定义（统一 KpiCard；容器 id 即卡片 id，由 index.html 提供空壳）
+// 成本/Token 四卡读「LLM 用量台账」全口径（含对话外消耗：摘要/记忆/画像/技能等），
+// routing_quality 口径仅覆盖回复链路，保留在平台对比表中。
 const _CQ_KPIS = [
-    { id: "cq-kpi-cost",          label: "总成本（近 24h）", icon: '<i class="fa-solid fa-yen-sign"></i>',   sub: "折合人民币（USD×汇率）" },
-    { id: "cq-kpi-tokens",        label: "总 Token 消耗",   icon: '<i class="fa-solid fa-coins"></i>',      sub: "累计 LLM Token" },
-    { id: "cq-kpi-input-tokens",  label: "输入 Token",      icon: '<i class="fa-solid fa-arrow-down"></i>', sub: "累计输入 Token" },
-    { id: "cq-kpi-output-tokens", label: "输出 Token",      icon: '<i class="fa-solid fa-arrow-up"></i>',   sub: "累计输出 Token" },
+    { id: "cq-kpi-cost",          label: "总成本（近 24h）", icon: '<i class="fa-solid fa-yen-sign"></i>',   sub: "全口径 LLM 成本折合人民币（USD×汇率）" },
+    { id: "cq-kpi-tokens",        label: "总 Token 消耗",   icon: '<i class="fa-solid fa-coins"></i>',      sub: "全口径（回复+摘要+记忆+画像+技能等）" },
+    { id: "cq-kpi-input-tokens",  label: "输入 Token",      icon: '<i class="fa-solid fa-arrow-down"></i>', sub: "全口径累计输入 Token" },
+    { id: "cq-kpi-output-tokens", label: "输出 Token",      icon: '<i class="fa-solid fa-arrow-up"></i>',   sub: "全口径累计输出 Token" },
     { id: "cq-kpi-handoff",       label: "低置信转人工率",  icon: '<i class="fa-solid fa-hand"></i>',       sub: "触发草稿推主人占比" },
     { id: "cq-kpi-rag",           label: "RAG 命中率",      icon: '<i class="fa-solid fa-book-open"></i>',  sub: "知识库命中占比" },
     { id: "cq-kpi-cited",         label: "引文页脚命中率",  icon: '<i class="fa-solid fa-quote-right"></i>', sub: "实际追加溯源占比" },
     { id: "cq-kpi-feedback",      label: "反馈有用率",      icon: '<i class="fa-solid fa-thumbs-up"></i>',  sub: "用户正向反馈占比" },
 ];
+
+// 用途中文标签（后端 usage_ledger purpose 标识 → 展示名）
+const _CQ_PURPOSE_LABELS = {
+    reply: "对话回复",
+    summary: "对话摘要",
+    memory: "记忆提取/合并",
+    persona: "主人画像",
+    skill: "技能意图生成",
+    tool: "工具结果清洗",
+    kb: "知识库处理",
+    other: "其他",
+};
 
 function cqRenderEmptyKpis() {
     _CQ_KPIS.forEach(k => renderKpiCard(k.id, { label: k.label, icon: k.icon, sub: k.sub, value: "—" }));
@@ -36,11 +50,14 @@ function cqRenderEmptyKpis() {
 
 function cqRenderKpis(summary) {
     const t = (summary && summary.totals) || {};
+    // 全口径（台账）：含对话外消耗；台账不可用（旧数据/异常）时回退 routing_quality 口径
+    const u = (summary && summary.llm_usage && summary.llm_usage.available && summary.llm_usage.totals) || null;
+    const costCny = u ? u.cost_cny : (t.total_cost_cny || 0);
     const map = {
-        "cq-kpi-cost":          cqFmtCostCny(t.total_cost_cny || 0),
-        "cq-kpi-tokens":        metricsFmtTokens(t.total_tokens || 0),
-        "cq-kpi-input-tokens":  metricsFmtTokens(t.total_input_tokens || 0),
-        "cq-kpi-output-tokens": metricsFmtTokens(t.total_output_tokens || 0),
+        "cq-kpi-cost":          cqFmtCostCny(costCny),
+        "cq-kpi-tokens":        metricsFmtTokens(u ? u.total_tokens : (t.total_tokens || 0)),
+        "cq-kpi-input-tokens":  metricsFmtTokens(u ? u.input_tokens : (t.total_input_tokens || 0)),
+        "cq-kpi-output-tokens": metricsFmtTokens(u ? u.output_tokens : (t.total_output_tokens || 0)),
         "cq-kpi-handoff":       cqFmtPct(t.handoff_rate),
         "cq-kpi-rag":           cqFmtPct(t.rag_grounded_rate),
         "cq-kpi-cited":         cqFmtPct(t.cited_rate),
@@ -49,6 +66,47 @@ function cqRenderKpis(summary) {
     _CQ_KPIS.forEach(k => renderKpiCard(k.id, {
         label: k.label, icon: k.icon, sub: k.sub, value: (k.id in map ? map[k.id] : "—"),
     }));
+    cqRenderUsageTable(summary && summary.llm_usage);
+}
+
+// 用途分布表：全口径按用途聚合（调用数 / 输入 / 输出 / 总量 / 成本），含估算标记
+function cqRenderUsageTable(llmUsage) {
+    const host = document.getElementById("cq-usage-table");
+    if (!host) return;
+    if (!llmUsage || !llmUsage.available) {
+        host.innerHTML = '<div class="metrics-empty">台账暂不可用（重启服务产生新调用后逐步生成）</div>';
+        return;
+    }
+    const byPurpose = llmUsage.by_purpose || {};
+    const order = Object.keys(byPurpose).sort((a, b) => (byPurpose[b].total_tokens || 0) - (byPurpose[a].total_tokens || 0));
+    if (order.length === 0) {
+        host.innerHTML = '<div class="metrics-empty">暂无用量记录（服务产生 LLM 调用后开始统计）</div>';
+        return;
+    }
+    const rows = order.map(p => {
+        const v = byPurpose[p];
+        return {
+            purpose: _CQ_PURPOSE_LABELS[p] || p,
+            calls: v.calls || 0,
+            input_tokens: v.input_tokens || 0,
+            output_tokens: v.output_tokens || 0,
+            total_tokens: v.total_tokens || 0,
+            cost: cqFmtCostCny(v.cost_cny || 0),
+            est: (v.estimated_calls || 0) > 0 ? `（${v.estimated_calls} 次估算）` : "",
+        };
+    });
+    renderDataTable("cq-usage-table", {
+        columns: [
+            { key: "purpose", label: "用途", render: r => escapeHtml(r.purpose) },
+            { key: "calls", label: "调用次数", render: r => String(r.calls) },
+            { key: "input_tokens", label: "输入", render: r => metricsFmtTokens(r.input_tokens) },
+            { key: "output_tokens", label: "输出", render: r => metricsFmtTokens(r.output_tokens) },
+            { key: "total_tokens", label: "合计", render: r => metricsFmtTokens(r.total_tokens) },
+            { key: "cost", label: "成本", render: r => escapeHtml(r.cost) + escapeHtml(r.est) },
+        ],
+        rows,
+        emptyText: "暂无用量记录",
+    });
 }
 
 function cqChartsEmpty() {

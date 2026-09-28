@@ -256,7 +256,7 @@ def _llm_clean_once(text: str, llm_client) -> str:
             "content": "请清洗以下文档内容：\n\n" + text,
         },
     ]
-    resp = llm_client.chat(messages, temperature=0, stream=False)
+    resp = llm_client.chat(messages, temperature=0, stream=False, purpose="tool")
     if isinstance(resp, dict):
         return resp.get("content", "") or ""
     return getattr(resp, "content", "") or ""

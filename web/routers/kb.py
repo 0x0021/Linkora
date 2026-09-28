@@ -584,7 +584,7 @@ async def kb_chat(query: RagChatQuery):
                             {"role": "system", "content": "你是一个知识助手，请根据提供的参考资料回答用户的问题。回答要简洁准确，并在末尾标注引用来源编号。"},
                             {"role": "user", "content": f"参考资料：\n{context}\n\n用户问题：{query.query}"},
                         ]
-                        llm_resp = llm_client.chat(messages)
+                        llm_resp = llm_client.chat(messages, purpose="kb")
                         response["answer"] = llm_resp.content or ""
                         response["llm_status"] = "success" if response["answer"] else "failed"
                         if response["llm_status"] == "failed":

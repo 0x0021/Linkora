@@ -105,6 +105,13 @@ def _work_summary(hours):
 
     decision_total = totals["decision_total"] or 0
     feedback_total = totals["feedback_total"] or 0
+
+    # LLM 用量台账（全口径唯一真源）：覆盖对话回复 + 摘要/记忆/画像/技能/工具/知识库
+    # 等全部 client.chat 调用。KPI 总量以此为准；routing_quality 聚合仅保留平台维度
+    # 的回复链路细分（历史口径）。
+    from src.llm.usage_ledger import get_stats as ledger_get_stats
+    llm_usage = ledger_get_stats(hours)
+
     return {
         "available": bool(by_platform),
         "totals": {
@@ -116,6 +123,8 @@ def _work_summary(hours):
             "cited_rate": round(totals["cited_count"] / decision_total, 4) if decision_total else 0.0,
             "feedback_useful_rate": round(totals["feedback_useful_count"] / feedback_total, 4) if feedback_total else 0.0,
         },
+        # 全口径用量（含对话外消耗）：KPI 卡与用途分布表读这里
+        "llm_usage": llm_usage,
         "by_platform": by_platform,
         "confidence_hist": [
             {"bucket": _bucket_label(i), "count": confidence_hist_acc[i]}
@@ -164,24 +173,24 @@ async def cost_quality_trend(days: int = Query(default=7, ge=1, le=365)):
     """每日成本(¥) / 转人工率 趋势（供折线图）。"""
     try:
         def _work():
-            from src.metrics.collector import MetricsCollector, USD_CNY_RATE
+            from src.metrics.collector import USD_CNY_RATE
+            from src.llm.usage_ledger import get_daily_cost_usd as ledger_daily_cost
 
             series = []
             for d in range(days - 1, -1, -1):
                 day_start = (datetime.now() - timedelta(days=d)).strftime("%Y-%m-%d")
-                day_cost_cny = 0.0
                 day_handoff = 0
                 day_total = 0
                 for _, store in _iter_platform_stores():
-                    c = MetricsCollector(store)
-                    c.token_stats(time_range_hours=None)
-                    # 按天筛选 token_stats 的 hourly（最近 24h 窗口）不可靠，改为直接按 created_at 日聚合
-                    day_cost_cny += store._routing_quality_repo.get_daily_cost_usd(day_start) * USD_CNY_RATE
-                    store._decisions_repo.get_quality_stats(time_range_hours=None)
                     # 按天筛选 decisions
                     dr = store._decisions_repo.get_daily_handoff_stats(day_start)
                     day_total += dr["total"]
                     day_handoff += dr["handoff_count"]
+                # 每日成本切到 usage_ledger 全口径（含回复 + 摘要/记忆/画像/技能等
+                # 全部 client.chat 调用）。台账是全局库（不分平台），必须放在平台
+                # 循环外读一次；routing_quality 的日成本仅覆盖回复链路且与台账在
+                # 非流式回复上重叠，若相加会双算——故替换而非相加。
+                day_cost_cny = ledger_daily_cost(day_start) * USD_CNY_RATE
                 series.append({
                     "date": day_start,
                     "cost_cny": round(day_cost_cny, 4),

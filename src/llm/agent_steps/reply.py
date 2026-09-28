@@ -185,7 +185,7 @@ def process_message(
             _t0 = time.perf_counter()
 
             use_stream = stream_supported and round_num == 1 and not tools
-            response = agent.client.chat(messages, tools=tools, stream=use_stream)
+            response = agent.client.chat(messages, tools=tools, stream=use_stream, purpose="reply")
             llm_latency_ms += (time.perf_counter() - _t0) * 1000
             llm_rounds = round_num
 
@@ -293,7 +293,7 @@ def extract_memories_from_conversation(
     ]
 
     try:
-        response = agent.client.chat(extraction_prompt, temperature=0.1)
+        response = agent.client.chat(extraction_prompt, temperature=0.1, purpose="memory")
         if not response.content:
             return []
 
@@ -432,7 +432,7 @@ def summarize_conversation(
     ]
 
     try:
-        response = agent.client.chat(summary_prompt, temperature=0.1)
+        response = agent.client.chat(summary_prompt, temperature=0.1, purpose="summary")
         if not response.content:
             return ""
         summarized = response.content.strip()
@@ -484,7 +484,7 @@ def merge_memories_into_summary(
         )},
     ]
     try:
-        response = agent.client.chat(merge_prompt, temperature=0.1)
+        response = agent.client.chat(merge_prompt, temperature=0.1, purpose="memory")
         if response and response.content and response.content.strip():
             merged = response.content.strip()
             try:

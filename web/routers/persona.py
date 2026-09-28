@@ -213,7 +213,7 @@ def _enrich_with_llm(profile: dict, owner: str) -> dict:
             {"role": "system", "content": "你是沟通风格分析专家，擅长从对话样本中提炼人物口吻特征。"},
             {"role": "user", "content": user_msg},
         ]
-        resp = client.chat(messages, temperature=0.3)
+        resp = client.chat(messages, temperature=0.3, purpose="persona")
         llm_prompt = (resp.content or "").strip()
         if llm_prompt and len(llm_prompt) > 10:
             # 隐私护栏（#6 升级）：先脱敏样本，二次脱敏画像文本，再做残留校验——
@@ -745,7 +745,7 @@ def _clone_reply_production(client, cfg, agent, user_msg: str,
         resp = client.chat([
             {"role": "system", "content": sys},
             {"role": "user", "content": user_msg},
-        ], temperature=temperature)
+        ], temperature=temperature, purpose="persona")
         return (resp.content or "").strip()[:600]
     except Exception as e:
         logger.debug("[persona] 生产管线克隆回复失败: %s", e)
@@ -784,7 +784,7 @@ def _judge_clone(client, cfg, owner: str, clone: str, truth: str):
         resp = client.chat([
             {"role": "system", "content": sys},
             {"role": "user", "content": usr},
-        ], temperature=0.2)
+        ], temperature=0.2, purpose="persona")
         text = (resp.content or "").strip()
         if not text:
             # 推理模型常把正文全塞进 reasoning_content（客户端已剥离），content 为空

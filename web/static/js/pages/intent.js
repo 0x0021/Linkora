@@ -395,25 +395,25 @@ function renderDecisionsPagination(data) {
         return;
     }
     let html = `<nav><ul class="pagination pagination-sm">`;
-    html += `<li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="loadDecisionsHistory(${page - 1}); return false;">&laquo;</a></li>`;
+    html += `<li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-action="loadDecisionsHistory" data-args='[${page - 1}]'>&laquo;</a></li>`;
 
     // 带省略号的页码渲染（与 skills.js / routetrace.js 一致）
     const delta = 2;  // 当前页前后各显示 2 页
     const rangeStart = Math.max(1, page - delta);
     const rangeEnd = Math.min(totalPages, page + delta);
     if (rangeStart > 1) {
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="loadDecisionsHistory(1); return false;">1</a></li>`;
+        html += `<li class="page-item"><a class="page-link" href="#" data-action="loadDecisionsHistory" data-args='[1]'>1</a></li>`;
         if (rangeStart > 2) html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
     }
     for (let i = rangeStart; i <= rangeEnd; i++) {
-        html += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="#" onclick="loadDecisionsHistory(${i}); return false;">${i}</a></li>`;
+        html += `<li class="page-item ${i === page ? 'active' : ''}"><a class="page-link" href="#" data-action="loadDecisionsHistory" data-args='[${i}]'>${i}</a></li>`;
     }
     if (rangeEnd < totalPages) {
         if (rangeEnd < totalPages - 1) html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="loadDecisionsHistory(${totalPages}); return false;">${totalPages}</a></li>`;
+        html += `<li class="page-item"><a class="page-link" href="#" data-action="loadDecisionsHistory" data-args='[${totalPages}]'>${totalPages}</a></li>`;
     }
 
-    html += `<li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="loadDecisionsHistory(${page + 1}); return false;">&raquo;</a></li>`;
+    html += `<li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="#" data-action="loadDecisionsHistory" data-args='[${page + 1}]'>&raquo;</a></li>`;
     html += '</ul></nav>';
     container.innerHTML = html;
 }

@@ -117,9 +117,6 @@
     const compEl = document.getElementById('ps-src-completeness'); if (compEl) compEl.textContent = '—';
     const frEl = document.getElementById('ps-freshness'); if (frEl) { frEl.innerHTML = '<i class="fa-regular fa-clock"></i> 时效：—'; frEl.className = 'ps-meta-item'; }
   }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
 
   // ---------- 状态徽章 ----------
   function renderStatus(data) {
@@ -236,7 +233,7 @@
       </div>
       <div class="ps-cs-foot">
         <span class="ps-cs-stat">已清洗可用：<b>${cc}</b> 条</span>
-        <button class="btn btn-outline btn-sm" onclick="reanalyzePersona()"><i class="fa-solid fa-rotate"></i> 重新分析</button>
+        <button class="btn btn-outline btn-sm" data-action="reanalyzePersona"><i class="fa-solid fa-rotate"></i> 重新分析</button>
       </div>`;
   }
 
@@ -603,7 +600,7 @@ if (sample) {
     }
     wrap.innerHTML = list.map((ex, i) => `
       <div class="ps-fewshot-item" data-idx="${i}">
-        <button class="ps-fs-del" title="删除" onclick="removeFewShot(${i})"><i class="fa-solid fa-trash"></i></button>
+        <button class="ps-fs-del" title="删除" data-action="removeFewShot" data-args='[${i}]'><i class="fa-solid fa-trash"></i></button>
         <div class="ps-fs-row">
           <span class="ps-fs-tag fs-tag-user">用户</span>
           <input type="text" class="ps-fs-input fs-input-user" data-field="user" value="${escapeAttr(ex.user || '')}" placeholder="用户问的...">
@@ -636,7 +633,7 @@ if (sample) {
     div.className = 'ps-fewshot-item';
     div.dataset.idx = String(wrap.children.length);
     div.innerHTML = `
-      <button class="ps-fs-del" title="删除" onclick="removeFewShot(this)"><i class="fa-solid fa-trash"></i></button>
+      <button class="ps-fs-del" title="删除" data-action="removeFewShot" data-args='["@el"]'><i class="fa-solid fa-trash"></i></button>
       <div class="ps-fs-row">
         <span class="ps-fs-tag fs-tag-user">用户</span>
         <input type="text" class="ps-fs-input fs-input-user" data-field="user" placeholder="用户问的...">
@@ -700,9 +697,9 @@ if (sample) {
           div.innerHTML = `
             <div class="ps-fs-rec-head">
               <span class="ps-fs-rec-tag"><i class="fa-solid fa-wand-magic-sparkles"></i> 推荐样例</span>
-              <button class="ps-fs-adopt" onclick="adoptFewShot(this)"><i class="fa-solid fa-check"></i> 一键采纳</button>
+              <button class="ps-fs-adopt" data-action="adoptFewShot" data-args='["@el"]'><i class="fa-solid fa-check"></i> 一键采纳</button>
             </div>
-            <button class="ps-fs-del" title="删除" onclick="removeFewShot(this)"><i class="fa-solid fa-trash"></i></button>
+            <button class="ps-fs-del" title="删除" data-action="removeFewShot" data-args='["@el"]'><i class="fa-solid fa-trash"></i></button>
             <div class="ps-fs-row">
               <span class="ps-fs-tag fs-tag-user">用户</span>
               <input type="text" class="ps-fs-input fs-input-user" data-field="user" value="${escapeAttr(ex.user || '')}" placeholder="用户问的...">
@@ -926,8 +923,8 @@ if (sample) {
           <span class="ps-version-time">${escapeHtml(formatTime(v.created_at))}</span>
         </div>
         <div class="ps-version-actions">
-          <button class="btn btn-outline btn-xs" onclick="viewVersion(${v.id})"><i class="fa-solid fa-eye"></i> 查看</button>
-          <button class="btn btn-outline btn-xs" onclick="rollbackVersion(${v.id})"><i class="fa-solid fa-clock-rotate-left"></i> 回滚到此版</button>
+          <button class="btn btn-outline btn-xs" data-action="viewVersion" data-args='[${v.id}]'><i class="fa-solid fa-eye"></i> 查看</button>
+          <button class="btn btn-outline btn-xs" data-action="rollbackVersion" data-args='[${v.id}]'><i class="fa-solid fa-clock-rotate-left"></i> 回滚到此版</button>
         </div>
       </div>`).join('') + '</div>';
   }
@@ -957,8 +954,8 @@ if (sample) {
             <div class="ps-ver-cell"><span class="ps-ver-k">正式程度</span><span class="ps-ver-v">${p.polite_rate == null ? '—' : Math.round(p.polite_rate * 100) + '%'}</span></div>
           </div>
           <div class="ps-ver-actions">
-            <button class="btn btn-outline btn-sm" onclick="openVersionModal()"><i class="fa-solid fa-arrow-left"></i> 返回列表</button>
-            <button class="btn btn-primary btn-sm" onclick="rollbackVersion(${vid})"><i class="fa-solid fa-clock-rotate-left"></i> 回滚到此版本</button>
+            <button class="btn btn-outline btn-sm" data-action="openVersionModal"><i class="fa-solid fa-arrow-left"></i> 返回列表</button>
+            <button class="btn btn-primary btn-sm" data-action="rollbackVersion" data-args='[${vid}]'><i class="fa-solid fa-clock-rotate-left"></i> 回滚到此版本</button>
           </div>`;
       }
       if (modal) modal.classList.add('active');

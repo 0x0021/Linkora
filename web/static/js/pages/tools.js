@@ -65,19 +65,19 @@ function renderToolsList() {
 
     // 过滤栏
     const filterHtml = '\n        <div class="tools-filter-bar">\n'
-        + '            <input type="text" id="tools-filter-query" class="form-control form-control-sm" placeholder="搜索…" value="' + escapeHtml(document.getElementById('tools-filter-query') ? document.getElementById('tools-filter-query').value : '') + '" oninput="renderToolsList()" style="width:140px;">\n'
-        + '            <select id="tools-filter-status" class="form-select form-select-sm" onchange="renderToolsList()" style="width:100px;">\n'
+        + '            <input type="text" id="tools-filter-query" class="form-control form-control-sm" placeholder="搜索…" value="' + escapeHtml(document.getElementById('tools-filter-query') ? document.getElementById('tools-filter-query').value : '') + '" data-action="renderToolsList" style="width:140px;">\n'
+        + '            <select id="tools-filter-status" class="form-select form-select-sm" data-action="renderToolsList" style="width:100px;">\n'
         + '                <option value="all">全部状态</option>\n'
         + '                <option value="active">已启用</option>\n'
         + '                <option value="disabled_whitelist">白名单屏蔽</option>\n'
         + '                <option value="disabled_skill">技能停用屏蔽</option>\n'
         + '            </select>\n'
-        + '            <select id="tools-filter-source" class="form-select form-select-sm" onchange="renderToolsList()" style="width:100px;">\n'
+        + '            <select id="tools-filter-source" class="form-select form-select-sm" data-action="renderToolsList" style="width:100px;">\n'
         + '                <option value="all">全部来源</option>\n'
         + '                <option value="builtin">内置</option>\n'
         + '                <option value="skill">技能</option>\n'
         + '            </select>\n'
-        + '            <button class="btn btn-sm btn-outline-secondary" onclick="loadToolsPage()" style="margin-left:auto"><i class="fa-solid fa-rotate"></i> 刷新</button>\n'
+        + '            <button class="btn btn-sm btn-outline-secondary" data-action="loadToolsPage" style="margin-left:auto"><i class="fa-solid fa-rotate"></i> 刷新</button>\n'
         + '        </div>';
 
     // 恢复筛选框的值（页面重渲染时保留）

@@ -69,9 +69,9 @@ function extractTopics(summary) {
     const text = summary.replace(/^【对话摘要】\s*/, '');
     const topics = [];
     const patterns = [
-        /围绕\s*([^，。；\.]{2,12})\s*(展开|讨论|沟通|问题)/,
-        /关于\s*([^，。；\.]{2,12})\s*(问题|事项|安排|情况)/,
-        /([^，。；\.]{2,10})(问题|事项|安排|需求|功能|系统)/,
+        /围绕\s*([^，。；.]{2,12})\s*(展开|讨论|沟通|问题)/,
+        /关于\s*([^，。；.]{2,12})\s*(问题|事项|安排|情况)/,
+        /([^，。；.]{2,10})(问题|事项|安排|需求|功能|系统)/,
         /(采购|销售|HR|人事|考勤|外勤|SRM|钉钉|企业通|企微|飞书)/,
     ];
     for (const re of patterns) {
@@ -284,13 +284,13 @@ async function loadSummariesPage() {
         body.innerHTML = `
             <div class="summaries-toolbar">
                 <div class="summaries-window-bar">
-                    <button class="summaries-window-btn${currentWindow === 'today' ? ' active' : ''}" data-window="today" onclick="setWindow('today')">
+                    <button class="summaries-window-btn${currentWindow === 'today' ? ' active' : ''}" data-window="today" data-action="setWindow" data-args='["today"]'>
                         <i class="fa-solid fa-sun"></i>今日
                     </button>
-                    <button class="summaries-window-btn${currentWindow === 'yesterday' ? ' active' : ''}" data-window="yesterday" onclick="setWindow('yesterday')">
+                    <button class="summaries-window-btn${currentWindow === 'yesterday' ? ' active' : ''}" data-window="yesterday" data-action="setWindow" data-args='["yesterday"]'>
                         <i class="fa-solid fa-moon"></i>昨日
                     </button>
-                    <button class="summaries-window-btn${currentWindow === '7days' ? ' active' : ''}" data-window="7days" onclick="setWindow('7days')">
+                    <button class="summaries-window-btn${currentWindow === '7days' ? ' active' : ''}" data-window="7days" data-action="setWindow" data-args='["7days"]'>
                         <i class="fa-solid fa-calendar-week"></i>近七天
                     </button>
                 </div>

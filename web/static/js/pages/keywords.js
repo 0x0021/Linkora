@@ -99,7 +99,7 @@ async function loadKeywords() {
 
         tbody.innerHTML = rules.map((rule, i) => `
         <tr style="--i:${i}">
-            <td><input type="checkbox" class="kw-checkbox" data-id="${rule.id}" ${selectedKeywordIds.has(rule.id) ? 'checked' : ''} onchange="toggleKwSelect(${rule.id})"></td>
+            <td><input type="checkbox" class="kw-checkbox" data-id="${rule.id}" ${selectedKeywordIds.has(rule.id) ? 'checked' : ''} data-action="toggleKwSelect" data-args='[${rule.id}]'></td>
             <td><code class="pattern-code">${escapeHtml(rule.match_pattern)}</code></td>
             <td><span class="tag ${rule.match_type === 'fuzzy' ? 'tag-green' : rule.match_type === 'exact' ? 'tag-orange' : 'tag-purple'}">
                 ${rule.match_type === 'fuzzy' ? '模糊匹配' : rule.match_type === 'exact' ? '精确匹配' : '正则匹配'}
@@ -114,8 +114,8 @@ async function loadKeywords() {
             </td>
             <td>
                 <div class="action-btns">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="editKeyword(${rule.id})" title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteKeyword(${rule.id})" title="删除"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="editKeyword" data-args='[${rule.id}]' title="编辑"><i class="fa-solid fa-pen-to-square"></i></button>
+                    <button class="btn btn-sm btn-outline-danger" data-action="deleteKeyword" data-args='[${rule.id}]' title="删除"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </td>
         </tr>

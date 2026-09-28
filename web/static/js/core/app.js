@@ -20,43 +20,116 @@ const api = window.api || new ApiClient();
   if (!window.Linkora.actions) window.Linkora.actions = {};
   const L = window.Linkora;
 
-  function dispatch(e) {
-    // 事件目标可能是文本节点外的元素；closest 仅在 Element 上可用
-    const el = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+  // 统一动作分发：把 data-action / data-args 映射到已注册动作或全局函数，
+  // 用于替代散落的 inline onclick/onchange/oninput/onkeydown（配合去除 CSP 'unsafe-inline'）。
+  // 占位符：
+  //   "@el"        -> 触发元素自身（等价于旧 onclick 里的 this）
+  //   "@event"     -> 触发事件对象（等价于旧 onclick 里的 event）
+  //   "@attr:NAME" -> el.getAttribute('data-NAME')（等价 this.dataset.NAME 作为字符串参数）
+  //   "@prop:NAME" -> el[NAME]（等价 this.checked / this.value 等属性读取）
+  // attr 允许换用其他 data-* 属性名：同一元素可按不同事件分发到不同动作
+  // （如上传拖拽区 data-dragover / data-dragleave / data-drop，输入框 data-keydown）。
+  function runAction(e, attr) {
+    attr = attr || 'data-action';
+    const el = e.target && e.target.closest ? e.target.closest('[' + attr + ']') : null;
     if (!el) return;
-    // <a href="#"> 阻止默认的 # 跳转（URL 追加 #、可能滚回顶部）。
-    // 与旧内联 `onclick="switchPage('deadletters');return false;"` 的 return false
-    // 以及下方 a[data-page] 绑定的 e.preventDefault() 语义一致；
-    // 只对锚点生效，不触碰复选框等表单控件的原生切换逻辑。
-    if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
-    const action = el.dataset.action;
+    const action = el.getAttribute(attr);
+    if (!action) return;
     let args = [];
     if (el.dataset.args) {
       try { args = JSON.parse(el.dataset.args); } catch (_) { args = []; }
     }
     if (!Array.isArray(args)) args = [];
-    args = args.map((a) => (a === '@el' ? el : a));
+    args = args.map((a) => {
+      if (a === '@el') return el;
+      if (a === '@event') return e;
+      if (typeof a === 'string' && a.indexOf('@attr:') === 0) return el.getAttribute('data-' + a.slice(6));
+      if (typeof a === 'string' && a.indexOf('@prop:') === 0) return el[a.slice(6)];
+      return a;
+    });
     const fn = (L.actions && L.actions[action]) || window[action];
     if (typeof fn !== 'function') {
       console.warn('[Linkora] 未找到 action 处理器:', action);
       return;
     }
-    // 注意：此处不调用 e.preventDefault()。原内联 onclick 从不阻止默认行为，
-    // 保留等价语义：复选框等表单控件仍按原生逻辑切换（否则 preventDefault 会让
-    // toggleAllKwSelect 读到未翻转的 checked）。
+    if (el.hasAttribute('data-stop-propagation')) e.stopPropagation();
+    // <a href="#"> 阻止默认的 # 跳转（等价于旧 onclick 的 return false）；
+    // 其余（复选框/表单/按钮）保留原生默认行为，避免 toggleAll 等读不到翻转后的 checked。
+    if (e.type === 'click' && el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
     try { fn.apply(el, args); } catch (err) { console.error('[Linkora] action 执行失败:', action, err); }
   }
-  document.addEventListener('click', dispatch, false);
+  // click：覆盖绝大多数按钮/行点击
+  document.addEventListener('click', (e) => runAction(e), false);
+  // change/input/click 三通道分流：旧内联 oninput 的载体（text/search 输入框、
+  // range 滑块）只在 input 分发——若 change 也分发，失焦/松手时会重复触发一次；
+  // 旧内联 onchange 的载体（select/file）只在 change 分发；checkbox/radio 的旧内联
+  // 是 onclick 或 onchange，统一走 click 通道（click 时 checked 已是翻转后的新值，
+  // 键盘空格切换同样会派发 click），避免 input+change+click 三连发。
+  document.addEventListener('change', function (e) {
+    const t = e.target;
+    // 只服务 select/file：text/search/range/textarea 的旧内联是 oninput（走 input 通道）；
+    // checkbox/radio 的旧内联是 onclick 或 onchange，统一走 click 通道（click 时 checked
+    // 已是翻转后的新值，键盘空格切换同样会派发 click），避免多事件各发一次。
+    if (t && !(t.tagName === 'SELECT' || (t.tagName === 'INPUT' && t.type === 'file'))) return;
+    runAction(e);
+  }, false);
+  document.addEventListener('input', function (e) {
+    const t = e.target;
+    // select 走 change、checkbox/radio 走 click，这里跳过防双发
+    if (t && (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'radio')) return;
+    runAction(e);
+  }, false);
+  // 拖拽：覆盖批量上传拖拽区（原 ondragover/ondragleave/ondrop 内联）。
+  // 用 data-dragover / data-dragleave / data-drop 分别指定动作，data-args 传 '@event'。
+  ['dragover', 'dragleave', 'drop'].forEach(function (t) {
+    document.addEventListener(t, function (e) { runAction(e, 'data-' + t); }, false);
+  });
+  // submit：覆盖表单 onsubmit（如登录框）。用独立 data-submit 属性而非 data-action——
+  // 表单若挂 data-action，form 内任意元素的 click 冒泡到表单都会命中委托、误触发动作
+  // （表现为「点一下登录输入框就报请输入用户名密码」）。仅拦截带 data-submit 的表单
+  // 并统一 preventDefault（等价原内联 "event.preventDefault(); doLogin(); return false;"）。
+  document.addEventListener('submit', function (e) {
+    const f = e.target && e.target.closest ? e.target.closest('[data-submit]') : null;
+    if (!f) return;
+    e.preventDefault();
+    runAction(e, 'data-submit');
+  }, false);
+  // 图片加载失败兜底（替代 inline onerror）：带 data-fallback-onerror 的 img
+  // 加载失败时隐藏自身并显示紧邻的兄弟兜底元素。
+  window.addEventListener('error', function (e) {
+    const t = e.target;
+    if (t && t.tagName === 'IMG' && t.hasAttribute('data-fallback-onerror')) {
+      t.style.display = 'none';
+      const sib = t.nextElementSibling;
+      if (sib) sib.style.display = 'flex';
+    }
+  }, true);
 
   // 键盘可达性：非原生按钮元素（<div role="button"> 等）以 Enter / Space 等价一次点击。
   // 替代模板里散落的内联 onkeydown（如上传区 upload-area）——对所有同类元素通用。
   // 原生 <button>/<a> 已自带 Enter/Space 激活，跳过以免重复触发。
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
-    const el = e.target && e.target.closest ? e.target.closest('[role="button"][data-action]') : null;
-    if (!el || el.tagName === 'BUTTON' || el.tagName === 'A') return;
-    e.preventDefault();
-    el.click();
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      const el = e.target && e.target.closest ? e.target.closest('[role="button"][data-action]') : null;
+      if (el && el.tagName !== 'BUTTON' && el.tagName !== 'A') {
+        e.preventDefault();
+        el.click();
+        return;
+      }
+    }
+    // 显式键盘动作：data-keydown="fn" 等价旧内联 onkeydown。绝大多数旧内联是
+    // "if(event.key==='Enter')fn()" 形态——若不设守卫，打字每个键都会触发
+    // （曾致技能搜索框每敲一个字符就调 installSkill）。故默认仅 Enter 触发，
+    // 并 preventDefault（防输入框在 form 内时回车误提交）；需要接收全部按键
+    // 的处理函数（如 RAG 输入框 handleChatKeydown 自行判断 Enter/Shift+Enter）
+    // 用 data-keydown-keys="*" 声明，事件对象通过 data-args='["@event"]' 原样传入。
+    const holder = e.target && e.target.closest ? e.target.closest('[data-keydown]') : null;
+    if (!holder) return;
+    if (holder.getAttribute('data-keydown-keys') !== '*') {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+    }
+    runAction(e, 'data-keydown');
   }, false);
 
   L.register = function (name, fn) { L.actions[name] = fn; return fn; };
@@ -816,7 +889,7 @@ async function doLogin() {
             }
         } catch (jwtError) {
             // JWT 登录失败，尝试旧的 Basic Auth 方式
-            console.log('JWT login failed, falling back to Basic Auth:', jwtError);
+            logger.log('JWT login failed, falling back to Basic Auth:', jwtError);
         }
         
         // 回退到 Basic Auth
@@ -951,6 +1024,12 @@ function _lightboxEscHandler(e) {
 
 window.openImageLightbox = openImageLightbox;
 window.closeImageLightbox = closeImageLightbox;
+
+// 背景点击关闭灯箱（替代原内联 onclick="if(event.target===this)closeImageLightbox()"）
+(function () {
+    const lb = document.getElementById('image-lightbox');
+    if (lb) lb.addEventListener('click', function (e) { if (e.target === lb) closeImageLightbox(); });
+})();
 
 // ===== 图片加载失败降级：/api/image/ 破图替换为占位 =====
 // 背景：图片可能因历史回收事故 / 磁盘缺失而 404（本地图片已不在 tmp_images）。

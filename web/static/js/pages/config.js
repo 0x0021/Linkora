@@ -136,10 +136,13 @@ function addModelPriceRow(name = '', input = '', output = '') {
         '<input type="text" class="form-control mp-name" placeholder="模型标识，如 gpt-4o" value="' + safeName + '">' +
         '<input type="number" class="form-control mp-input" step="0.0001" min="0" placeholder="输入单价" value="' + input + '">' +
         '<input type="number" class="form-control mp-output" step="0.0001" min="0" placeholder="输出单价" value="' + output + '">' +
-        '<button type="button" class="btn btn-sm btn-danger" title="删除" onclick="this.closest(\'.model-price-row\').remove()"><i class="fa-solid fa-trash"></i></button>';
+        '<button type="button" class="btn btn-sm btn-danger" title="删除" data-action="removeModelPriceRow"><i class="fa-solid fa-trash"></i></button>';
     list.appendChild(row);
 }
 window.addModelPriceRow = addModelPriceRow;
+
+// 配合 data-action 分发：删除所在模型单价行（替代 inline onclick 的 this.closest(...).remove()）
+window.removeModelPriceRow = function (btn) { (btn || this).closest('.model-price-row').remove(); };
 
 async function loadConfigPage() {
     initSettingsNav();

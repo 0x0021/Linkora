@@ -133,7 +133,7 @@ function _renderMarketplaceCard(s) {
     const installed = _installedSkillNames.has(s.slug) || _installedSkillNames.has(s.name);
     const slug = s.slug || s.name;
     const icon = s.iconUrl
-        ? `<img src="${escapeHtml(s.iconUrl)}" class="mk-card-icon" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        ? `<img src="${escapeHtml(s.iconUrl)}" class="mk-card-icon" alt="" loading="lazy" data-fallback-onerror>
            <div class="mk-card-icon mk-card-icon-fallback" style="display:none;"><i class="fa-solid fa-cube"></i></div>`
         : `<div class="mk-card-icon mk-card-icon-fallback"><i class="fa-solid fa-cube"></i></div>`;
     const verified = s.verified
@@ -145,7 +145,7 @@ function _renderMarketplaceCard(s) {
 
     const btn = installed
         ? `<button class="btn btn-sm mk-installed" disabled><i class="fa-solid fa-check"></i> 已安装</button>`
-        : `<button class="btn btn-sm btn-primary" onclick="installFromMarketplace('${escapeHtml(slug)}')"><i class="fa-solid fa-download"></i> 安装</button>`;
+        : `<button class="btn btn-sm btn-primary" data-action="installFromMarketplace" data-args='["${escapeHtml(slug)}"]'><i class="fa-solid fa-download"></i> 安装</button>`;
 
     return `
     <div class="mk-card" data-slug="${escapeHtml(slug)}">
@@ -200,7 +200,7 @@ function _renderMarketPager(totalPages) {
     const pagerBtn = (html, target, opts = {}) => {
         const disabled = opts.disabled ? ' disabled' : '';
         const cls = opts.active ? ' active' : '';
-        return `<button class="mk-pager-btn${cls}"${disabled} onclick="marketGotoPage(${target})">${html}</button>`;
+        return `<button class="mk-pager-btn${cls}"${disabled} data-action="marketGotoPage" data-args='[${target}]'>${html}</button>`;
     };
     const start = Math.max(1, cur - 2);
     const end = Math.min(totalPages, cur + 2);
@@ -217,9 +217,9 @@ function _renderMarketPager(totalPages) {
         nums += pagerBtn(String(totalPages), totalPages, { active: cur === totalPages });
     }
     return `<div class="marketplace-pager">` +
-        `<button class="mk-pager-btn"${cur <= 1 ? ' disabled' : ''} onclick="marketChangePage(-1)" aria-label="上一页"><i class="fa-solid fa-chevron-left"></i></button>` +
+        `<button class="mk-pager-btn"${cur <= 1 ? ' disabled' : ''} data-action="marketChangePage" data-args='[-1]' aria-label="上一页"><i class="fa-solid fa-chevron-left"></i></button>` +
         nums +
-        `<button class="mk-pager-btn"${cur >= totalPages ? ' disabled' : ''} onclick="marketChangePage(1)" aria-label="下一页"><i class="fa-solid fa-chevron-right"></i></button>` +
+        `<button class="mk-pager-btn"${cur >= totalPages ? ' disabled' : ''} data-action="marketChangePage" data-args='[1]' aria-label="下一页"><i class="fa-solid fa-chevron-right"></i></button>` +
         `<span class="mk-pager-info">第 ${cur} / ${totalPages} 页</span>` +
         `</div>`;
 }
@@ -472,8 +472,9 @@ async function installFromMarketplace(slug) {
 }
 window.installFromMarketplace = installFromMarketplace;
 
-// 窗口尺寸变化时重新定位滑动指示器
+// 窗口尺寸变化时重新定位滑动指示器（加页面守卫：离开技能页后不再无谓执行）
 window.addEventListener('resize', () => {
+    if (currentPage !== 'skills') return;
     if (document.getElementById('market-tab-indicator')) _moveMarketIndicator();
 });
 
@@ -504,7 +505,7 @@ async function loadSkillsPage() {
                 <div class="empty-state">
                     <i class="fa-solid fa-triangle-exclamation" style="font-size:32px;color:#f59e0b;"></i>
                     <p style="margin-top:8px;color:#999;">认证失效或未登录</p>
-                    <button class="btn btn-sm btn-primary" onclick="showLoginOverlay()" style="margin-top:8px;">
+                    <button class="btn btn-sm btn-primary" data-action="showLoginOverlay" style="margin-top:8px;">
                         <i class="fa-solid fa-rotate"></i> 重新登录
                     </button>
                 </div>`;
@@ -537,7 +538,7 @@ async function loadSkillsPage() {
 
                 // 配置按钮：仅当技能存在 config.yaml 时显示（Task 2）
                 const configBtn = s.has_config
-                    ? `<button class="btn btn-sm btn-outline" onclick="openSkillConfig('${escapeHtml(s.name)}')">配置</button>`
+                    ? `<button class="btn btn-sm btn-outline" data-action="openSkillConfig" data-args='["${escapeHtml(s.name)}"]'>配置</button>`
                     : '';
 
                 // 关键词数组序列化为 HTML 属性安全的字符串（转义 & 和 "，避免提前闭合 onclick）
@@ -549,14 +550,14 @@ async function loadSkillsPage() {
                 const platforms = s.platforms || [];
                 const platformToggle = platforms.length > 0
                     ? `<span class="platform-badge platform-badge-${escapeHtml(platforms[0])}">${escapeHtml(_platformLabel(platforms[0]))}</span>
-                       <button class="btn btn-xs platform-action-btn" onclick="setSkillPublic('${escapeHtml(s.name)}')" title="设为通用技能，所有平台可见">设为公开</button>`
+                       <button class="btn btn-xs platform-action-btn" data-action="setSkillPublic" data-args='["${escapeHtml(s.name)}"]' title="设为通用技能，所有平台可见">设为公开</button>`
                     : `<span class="platform-badge platform-badge-common">通用</span>
                        <div class="platform-toggle-wrap">
-                         <button class="btn btn-xs platform-action-btn" onclick="togglePlatformDropdown(event, '${escapeHtml(s.name)}')">设为专有 ▾</button>
+                         <button class="btn btn-xs platform-action-btn" data-action="togglePlatformDropdown" data-args='["@event", "${escapeHtml(s.name)}"]'>设为专有 ▾</button>
                          <div class="platform-dropdown" id="pdd-${escapeHtml(s.name)}" style="display:none;">
-                           <div class="platform-dropdown-item" role="menuitem" tabindex="0" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'dingtalk')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setSkillPlatform('${escapeHtml(s.name)}', 'dingtalk');}"><i class="fa-solid fa-message" style="margin-right:4px;color:#1677ff;"></i>钉钉专属</div>
-                           <div class="platform-dropdown-item" role="menuitem" tabindex="0" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'feishu')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setSkillPlatform('${escapeHtml(s.name)}', 'feishu');}"><i class="fa-solid fa-feather" style="margin-right:4px;color:#3370ff;"></i>飞书专属</div>
-                           <div class="platform-dropdown-item" onclick="setSkillPlatform('${escapeHtml(s.name)}', 'wecom')"><i class="fa-solid fa-building" style="margin-right:4px;color:#8b5cf6;"></i>企微专属</div>
+                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='["${escapeHtml(s.name)}", "dingtalk"]'><i class="fa-solid fa-message" style="margin-right:4px;color:#1677ff;"></i>钉钉专属</div>
+                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='["${escapeHtml(s.name)}", "feishu"]'><i class="fa-solid fa-feather" style="margin-right:4px;color:#3370ff;"></i>飞书专属</div>
+                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='["${escapeHtml(s.name)}", "wecom"]'><i class="fa-solid fa-building" style="margin-right:4px;color:#8b5cf6;"></i>企微专属</div>
                          </div>
                        </div>`;
 
@@ -570,21 +571,21 @@ async function loadSkillsPage() {
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <label title="${s.enabled !== false ? '已启用，点击禁用' : '已禁用，点击启用'}" style="display:flex;align-items:center;cursor:pointer;">
-                                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} onchange="toggleSkillEnabled('${escapeHtml(s.name)}', this.checked)" style="display:none;">
+                                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} data-action="toggleSkillEnabled" data-args='["${escapeHtml(s.name)}"]' style="display:none;">
                                 <span style="display:inline-block;width:40px;height:22px;background:${s.enabled !== false ? '#2563eb' : '#cbd5e1'};border-radius:11px;position:relative;transition:background 0.2s;">
                                     <span style="display:inline-block;width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:${s.enabled !== false ? '20px' : '2px'};transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></span>
                                 </span>
                             </label>
-                            <button class="btn btn-sm btn-outline" onclick="openSkillIntent('${escapeHtml(s.name)}', ${kwJson})" title="手动维护意图关键词"><i class="fa-solid fa-tags"></i> 意图词</button>
-                            <button class="btn btn-sm btn-outline" onclick="openSkillAiIntent('${escapeHtml(s.name)}')" title="AI 分析 SKILL.md 并生成意图词，展示生成过程"><i class="fa-solid fa-wand-magic-sparkles"></i> AI生成意图词</button>
+                            <button class="btn btn-sm btn-outline" data-action="openSkillIntent" data-args='["${escapeHtml(s.name)}", ${kwJson}]' title="手动维护意图关键词"><i class="fa-solid fa-tags"></i> 意图词</button>
+                            <button class="btn btn-sm btn-outline" data-action="openSkillAiIntent" data-args='["${escapeHtml(s.name)}"]' title="AI 分析 SKILL.md 并生成意图词，展示生成过程"><i class="fa-solid fa-wand-magic-sparkles"></i> AI生成意图词</button>
                             ${configBtn}
-                            <button class="btn btn-sm btn-outline" onclick="uninstallSkill('${escapeHtml(s.name)}')" style="color:#ef4444;border-color:#ef4444;">卸载</button>
+                            <button class="btn btn-sm btn-outline" data-action="uninstallSkill" data-args='["${escapeHtml(s.name)}"]' style="color:#ef4444;border-color:#ef4444;">卸载</button>
                         </div>
                     </div>
                     <p style="color:#666;margin:0 0 10px 0;font-size:13px;">${escapeHtml(s.description)}</p>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">
                         <span style="color:#999;white-space:nowrap;">权重：</span>
-                        <input type="range" min="0" max="100" value="${pct}" oninput="updateSkillWeight('${escapeHtml(s.name)}', this.value/100, this)" 
+                        <input type="range" min="0" max="100" value="${pct}" data-action="updateSkillWeight" data-args='["${escapeHtml(s.name)}"]' 
                             style="flex:1;max-width:120px;height:6px;accent-color:#2563eb;cursor:pointer;">
                         <span class="skill-weight-val" style="min-width:36px;text-align:right;font-weight:600;color:#16a34a;">${pct}%</span>
                     </div>
@@ -603,7 +604,7 @@ async function loadSkillsPage() {
             <div class="alert alert-error" style="margin:12px;">
                 <strong>加载技能列表失败</strong>
                 <p style="margin:4px 0 0 0;color:#666;font-size:12px;">${escapeHtml(e.message || String(e))}</p>
-                <button class="btn btn-sm btn-outline-secondary" onclick="loadSkillsPage()" style="margin-top:8px;">
+                <button class="btn btn-sm btn-outline-secondary" data-action="loadSkillsPage" style="margin-top:8px;">
                     <i class="fa-solid fa-rotate"></i> 重试
                 </button>
             </div>`;
@@ -668,6 +669,12 @@ async function toggleSkillEnabled(name, enabled) {
     }
 }
 window.toggleSkillEnabled = toggleSkillEnabled;
+
+// 配合 data-action 分发：从触发元素读取属性（替代 inline onchange 的 this.checked / this.value）
+if (window.Linkora && window.Linkora.actions) {
+    window.Linkora.actions.updateSkillWeight = (el, name) => updateSkillWeight(name, Number(el.value) / 100, el);
+    window.Linkora.actions.toggleSkillEnabled = (el, name) => toggleSkillEnabled(name, el.checked);
+}
 
 async function uninstallSkill(name) {
     if (!confirm(`确定要卸载技能 "${name}" 吗？`)) return;
@@ -830,7 +837,7 @@ function renderSkillIntentChips(list) {
         wrap.innerHTML = list.map(k =>
         `<span class="pill" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;display:inline-flex;align-items:center;gap:4px;">
             ${escapeHtml(k)}
-            <button type="button" onclick="removeSkillIntentKeyword(this)" data-kw="${escapeHtml(k)}" style="border:none;background:none;color:#2563eb;cursor:pointer;padding:0;line-height:1;font-size:13px;">&times;</button>
+            <button type="button" data-action="removeSkillIntentKeyword" data-args='["@el"]' data-kw="${escapeHtml(k)}" style="border:none;background:none;color:#2563eb;cursor:pointer;padding:0;line-height:1;font-size:13px;">&times;</button>
         </span>`
     ).join(' ');
 }
@@ -988,10 +995,10 @@ function renderSkillAiIntentTrace(data) {
     const hasResult = result && !skipped && !error;
     const actionBtns = hasResult ? `
             <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-sm" onclick="showAiPromptEditor('append')" style="background:#e6f4ff;color:#0958d9;border:1px solid #91caff;">
+                <button class="btn btn-sm" data-action="showAiPromptEditor" data-args='["append"]' style="background:#e6f4ff;color:#0958d9;border:1px solid #91caff;">
                     <i class="fa-solid fa-plus"></i> 追加提示词
                 </button>
-                <button class="btn btn-sm" onclick="showAiPromptEditor('overwrite')" style="background:#fff7e6;color:#d46b08;border:1px solid #ffd591;">
+                <button class="btn btn-sm" data-action="showAiPromptEditor" data-args='["overwrite"]' style="background:#fff7e6;color:#d46b08;border:1px solid #ffd591;">
                     <i class="fa-solid fa-pen-to-square"></i> 覆盖提示词
                 </button>
                 <span style="font-size:12px;color:#999;margin-left:4px;">对当前技能的 system_prompt 进行编辑操作</span>
@@ -1072,13 +1079,13 @@ async function showAiPromptEditor(mode) {
         <div class="ai-prompt-editor">
             <div class="ai-prompt-editor-header">
                 <span>${labelTitle}</span>
-                <button class="btn btn-sm btn-outline" onclick="hideAiPromptEditor()" style="padding:2px 8px;font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
+                <button class="btn btn-sm btn-outline" data-action="hideAiPromptEditor" style="padding:2px 8px;font-size:11px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div style="padding:6px 12px;font-size:12px;color:var(--text-tertiary);">${labelHint}</div>
             <textarea id="ai-prompt-editor-text" placeholder="在此输入提示词内容...">${escapeHtml(initialValue)}</textarea>
             <div class="ai-prompt-editor-footer">
-                <button class="btn btn-sm btn-outline" onclick="hideAiPromptEditor()">取消</button>
-                <button class="btn btn-sm ${btnStyle}" id="ai-prompt-confirm-btn" onclick="confirmAiPromptEditor('${mode}')">
+                <button class="btn btn-sm btn-outline" data-action="hideAiPromptEditor">取消</button>
+                <button class="btn btn-sm ${btnStyle}" id="ai-prompt-confirm-btn" data-action="confirmAiPromptEditor" data-args='["${mode}"]'>
                     <i class="fa-solid ${confirmIcon}"></i> ${confirmText}
                 </button>
             </div>

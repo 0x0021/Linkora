@@ -88,7 +88,7 @@ function renderMsgContent(raw, imagePathMap) {
                 cardCheckHtml = CardValidator.renderWarnings(allWarns);
             }
         } catch (e) {
-            console.debug('CardValidator 自检异常:', e);
+            logger.debug('CardValidator 自检异常:', e);
         }
     }
 
@@ -110,7 +110,7 @@ function _cardSelfCheck(s) {
         });
         return CardValidator.renderWarnings(allWarns);
     } catch (e) {
-        console.debug('CardValidator 自检异常:', e);
+        logger.debug('CardValidator 自检异常:', e);
         return '';
     }
 }
@@ -141,7 +141,7 @@ function _renderCardBody(body, imagePathMap) {
             const t1 = base + '?w=200&fmt=webp';
             const t2 = base + '?w=400&fmt=webp';
             // F-H3：卡片缩略图走 WebP(?w=&fmt=webp)+srcset(1x/2x)，灯箱打开原图(base)
-            return `<img src="${escapeHtml(t1)}" srcset="${escapeHtml(t1)} 200w, ${escapeHtml(t2)} 400w" sizes="200px" class="msg-card-img" alt="卡片图片" loading="lazy" decoding="async" onclick="openImageLightbox('${escapeHtml(base)}')">`;
+            return `<img src="${escapeHtml(t1)}" srcset="${escapeHtml(t1)} 200w, ${escapeHtml(t2)} 400w" sizes="200px" class="msg-card-img" alt="卡片图片" loading="lazy" decoding="async" data-action="openImageLightbox" data-args='["${escapeHtml(base)}"]'>`;
         }
         return imgPlaceholder;
     };
@@ -262,9 +262,9 @@ async function loadMessages() {
     } catch (e) {
         console.error('获取会话列表失败:', e);
         document.getElementById('msg-conversation-list').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">&#x26A0;</div><p>加载会话失败，请检查网络连接</p></div>';
+            renderErrorState('加载会话失败，请检查网络连接');
         document.getElementById('msg-thread').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">&#x26A0;</div><p>无法加载消息列表</p></div>';
+            renderErrorState('无法加载消息列表');
         return;
     }
 
@@ -299,8 +299,8 @@ async function loadMessages() {
     });
 
     if (filteredConversations.length === 0) {
-        listContainer.innerHTML = `<div class="empty-state"><div class="empty-icon">💬</div><p>暂无匹配会话</p></div>`;
-        thread.innerHTML = `<div class="empty-state"><div class="empty-icon">💬</div><p>选择一个会话查看消息</p></div>`;
+        listContainer.innerHTML = renderEmptyState('暂无匹配会话');
+        thread.innerHTML = renderEmptyState('选择一个会话查看消息');
         setThreadHeader(null, 0);
         return;
     }
@@ -351,12 +351,13 @@ async function loadMessages() {
                 const preview = truncateText(c.last_message_preview || '（无消息内容）', 22);
                 const isOther = c.chat_type !== 'single' && c.chat_type !== 'group';
                 const checkedAttr = _msgBatchMode && _msgSelected[c.chat_id] ? ' checked' : '';
-                const batchCb = _msgBatchMode ? '<input type="checkbox" class="batch-checkbox" style="flex-shrink:0;margin-right:8px;" data-msg-chat-id="' + escapeHtml(c.chat_id) + '"' + checkedAttr + ' onclick="event.stopPropagation();_msgOnCheck(this)">' : '';
-                const clickHandler = _msgBatchMode ? '_msgOnCheckCb(this)' : 'selectMessageConversation(this.dataset.chatId)';
+                const batchCb = _msgBatchMode ? '<input type="checkbox" class="batch-checkbox" style="flex-shrink:0;margin-right:8px;" data-msg-chat-id="' + escapeHtml(c.chat_id) + '"' + checkedAttr + ' data-action="_msgOnCheck" data-args=\'["@el"]\' data-stop-propagation>' : '';
+                const msgRowAction = _msgBatchMode ? '_msgOnCheckCb' : 'selectMessageConversation';
+                const msgRowArgs = _msgBatchMode ? '["@el"]' : '["@attr:chat-id"]';
                 const avatarHtml = isOther
                     ? '<div class="conv-avatar conv-avatar-other"><i class="fa-solid fa-bell"></i></div>'
                     : `<div class="conv-avatar" style="background:${color}">${escapeHtml(initial)}</div>`;
-                return `<div class="conversation-item ${c.chat_id === activeChatId ? 'active' : ''}" role="button" tabindex="0" data-chat-id="${escapeHtml(c.chat_id)}" onclick="${clickHandler}">
+                return `<div class="conversation-item ${c.chat_id === activeChatId ? 'active' : ''}" role="button" tabindex="0" data-chat-id="${escapeHtml(c.chat_id)}" data-action="${msgRowAction}" data-args='${msgRowArgs}'>
                     ${batchCb}${avatarHtml}
                     <div class="conv-main">
                         <div class="conv-row1">
@@ -380,16 +381,7 @@ async function renderThread(chatId, conversations) {
     const thread = document.getElementById('msg-thread');
     const selectedChat = conversations.find(c => c.chat_id === chatId) || null;
     // 先显示骨架
-    thread.innerHTML = `<div class="thread-skeleton">
-        ${Array.from({ length: 6 }).map(() => `
-            <div class="sk-msg-row">
-                <div class="skeleton skeleton-avatar"></div>
-                <div class="skeleton-bubble">
-                    <div class="skeleton skeleton-line" style="width:30%"></div>
-                    <div class="skeleton skeleton-line" style="width:70%"></div>
-                </div>
-            </div>`).join('')}
-    </div>`;
+    thread.innerHTML = renderThreadSkeleton(6);
 
     try {
     const data = await api.getMessages(chatId);
@@ -397,7 +389,7 @@ async function renderThread(chatId, conversations) {
     setThreadHeader(selectedChat, messages.length);
 
     if (!messages.length) {
-        thread.innerHTML = `<div class="empty-state"><div class="empty-icon">💬</div><p>暂无消息</p></div>`;
+        thread.innerHTML = renderEmptyState('暂无消息');
         return;
     }
 
@@ -489,7 +481,7 @@ async function renderThread(chatId, conversations) {
                 const imgBase = imgUrl;
                 const c1 = imgBase + '?w=320&fmt=webp';
                 const c2 = imgBase + '?w=640&fmt=webp';
-                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(c1)}" srcset="${escapeHtml(c1)} 320w, ${escapeHtml(c2)} 640w" sizes="320px" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox('${escapeHtml(imgBase)}')"/></div>`;
+                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(c1)}" srcset="${escapeHtml(c1)} 320w, ${escapeHtml(c2)} 640w" sizes="320px" class="chat-image" alt="对话图片" loading="lazy" decoding="async" data-action="openImageLightbox" data-args='["${escapeHtml(imgBase)}"]'/></div>`;
             } else {
                 // 无 image_url 时用优雅占位提示（后端 OCR 可能未回写 path）
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
@@ -509,7 +501,7 @@ async function renderThread(chatId, conversations) {
                 const imgBase2 = m.image_url;
                 const c1b = imgBase2 + '?w=320&fmt=webp';
                 const c2b = imgBase2 + '?w=640&fmt=webp';
-                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(c1b)}" srcset="${escapeHtml(c1b)} 320w, ${escapeHtml(c2b)} 640w" sizes="320px" class="chat-image" alt="对话图片" loading="lazy" decoding="async" onclick="openImageLightbox('${escapeHtml(imgBase2)}')"/></div>`;
+                imageHtml = `<div class="chat-image-wrap"><img src="${escapeHtml(c1b)}" srcset="${escapeHtml(c1b)} 320w, ${escapeHtml(c2b)} 640w" sizes="320px" class="chat-image" alt="对话图片" loading="lazy" decoding="async" data-action="openImageLightbox" data-args='["${escapeHtml(imgBase2)}"]'/></div>`;
             } else if (m.msg_type === 'image') {
                 // image 类型但没有 image_url 的兜底
                 mediaBadge = '<span class="media-badge">📷 图片</span> ';
@@ -544,7 +536,7 @@ async function renderThread(chatId, conversations) {
     filterThread();
     } catch (e) {
         console.error('renderThread failed:', e);
-        thread.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x26A0;</div><p>消息加载失败，请稍后重试</p></div>';
+        thread.innerHTML = renderErrorState('消息加载失败，请稍后重试');
     }
 }
 
@@ -1016,7 +1008,7 @@ function _msgRenderTopSenders(senders) {
     const container = document.getElementById('msg-top-senders-list');
     if (!container) return;
     if (!senders || senders.length === 0) {
-        container.innerHTML = '<div class="empty-state" style="padding: 24px;"><p>暂无数据</p></div>';
+        container.innerHTML = renderEmptyState('暂无数据', { style: 'padding: 24px;', noIcon: true });
         return;
     }
     const topSenders = senders.slice(0, 5);
@@ -1058,7 +1050,7 @@ async function loadMessagesAnalytics() {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
-        const emptyHtml = '<div class="empty-state" style="padding: 24px;"><div class="empty-icon" style="font-size:2rem;">&#x26A0;</div><p>数据加载失败</p></div>';
+        const emptyHtml = renderErrorState('数据加载失败', { style: 'padding: 24px;', iconStyle: 'font-size:2rem;' });
         ['msg-word-cloud-container', 'msg-msgtype-chart-wrap', 'msg-top-senders-list'].forEach(id => {
             const el = document.getElementById(id);
             if (el) { el.innerHTML = emptyHtml; el.style.display = 'block'; }

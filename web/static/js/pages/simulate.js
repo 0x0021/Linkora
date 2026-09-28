@@ -41,7 +41,7 @@ function renderMarkdown(text) {
     html = html.replace(/^# (.*$)/gim, '<h1 class="md-h">$1</h1>');
 
     // 加粗 **text** 或 __text__
-    html = html.replace(/\*\*([^\*\n]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
 
     // 斜体 *text* 或 _text_（不与加粗重叠）
@@ -234,7 +234,7 @@ function renderSampleMessages() {
     container.innerHTML = _simulateSamples.map((sample, idx) => {
         const icon = icons[sample.name] || 'fa-play';
         return `
-            <button class="sim-sample-btn" onclick="useSample(${idx})">
+            <button class="sim-sample-btn" data-action="useSample" data-args='[${idx}]'>
                 <i class="fa-solid ${icon}"></i> ${escapeHtml(sample.name)}
             </button>
         `;
@@ -267,7 +267,7 @@ function renderSimHistory(history) {
     container.innerHTML = items.map(item => {
         const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN') : '';
         return `
-            <div class="sim-history-item" onclick="useHistory('${escapeHtml(item.content)}', '${escapeHtml(item.sender_name || '')}')">
+            <div class="sim-history-item" data-action="useHistory" data-args='["${escapeHtml(item.content)}", "${escapeHtml(item.sender_name || '')}"]'>
                 <div class="sim-history-content">${escapeHtml(item.content)}</div>
                 <div class="sim-history-meta">
                     <span><i class="fa-solid fa-user"></i> ${escapeHtml(item.sender_name || '测试用户')}</span>

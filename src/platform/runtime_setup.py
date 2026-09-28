@@ -255,7 +255,11 @@ class SetupMixin(EngineMixinBase):
             few_shot_examples=self.store._few_shot_repo.get_few_shot_examples(),
         )
         # H2-A：主平台(dingtalk)也在首次装配时接线一个后台异步摘要调度器。
-        dingtalk_scheduler = SummaryScheduler(agent=self.platforms["dingtalk"].llm_agent, store=self.store, platform="dingtalk")
+        dingtalk_scheduler = SummaryScheduler(
+            agent=self.platforms["dingtalk"].llm_agent, store=self.store,
+            platform="dingtalk",
+            max_age_days=self.config.summary_backfill.max_summary_age_days,
+        )
         self.platforms["dingtalk"].llm_agent._summary_scheduler = dingtalk_scheduler
         dingtalk_scheduler.start()
         self.platforms["dingtalk"].summary_scheduler = dingtalk_scheduler

@@ -223,3 +223,29 @@ def test_backfill_clamps_to_max_days():
     # 8/10 超出最近 5 天（8/20..8/24），不应补
     assert agent.calls == []
     assert repo.upserts == []
+
+
+# ── max_summary_age_days 时间上限：跳过更早的旧自然日 ──
+def test_backfill_skips_days_older_than_max_age():
+    now = datetime(2026, 8, 25, 9, 0, 0)
+    last_run = datetime(2026, 8, 20, 9, 0, 0)  # 停机 5 天 → missed_days = 8/21..8/24
+    # 两个会话：c_old 消息在 8/21（早于 2 天上限），c_new 消息在 8/24（在 2 天上限内）
+    old_day = datetime(2026, 8, 21, 12, 0, 0)
+    new_day = datetime(2026, 8, 24, 12, 0, 0)
+    msg_old = {"msg_id": "mo", "chat_id": "c_old", "chat_type": "group",
+               "sender_id": "s1", "sender_name": "张三", "content": "a",
+               "msg_type": "text", "timestamp": _local_iso(old_day)}
+    msg_new = {"msg_id": "mn", "chat_id": "c_new", "chat_type": "group",
+               "sender_id": "s1", "sender_name": "张三", "content": "b",
+               "msg_type": "text", "timestamp": _local_iso(new_day)}
+    repo = _FakeRepo()
+    repo.set_range({"c_old": [msg_old], "c_new": [msg_new]})
+    store = _FakeStore(repo, meta={"last_run_at": _local_iso(last_run)})
+    agent = _FakeAgent()
+    # max_summary_age_days=2 → cutoff_day = 8/23；8/21 跳过，8/24 保留
+    cfg = SummaryBackfillConfig(max_summary_age_days=2, min_messages_per_chat=1)
+    sched = _scheduler(store, agent, cfg)
+    sched.run(now=now)
+    upserted_chat_ids = {c for (c, _s, _n, _p) in repo.upserts}
+    assert "c_new" in upserted_chat_ids, "时间上限内的会话应补生成摘要"
+    assert "c_old" not in upserted_chat_ids, "早于时间上限的旧自然日不应补生成摘要"

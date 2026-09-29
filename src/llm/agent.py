@@ -92,7 +92,8 @@ class LLMAgent:
                  fallback_store=None,
                  few_shot_examples: list[dict] | None = None,
                  im_adapter=None,
-                 summary_scheduler: "SummaryScheduler | None" = None):
+                 summary_scheduler: "SummaryScheduler | None" = None,
+                 available_capabilities: set[str] | None = None):
         self.config = config
         self.client = client
         self.tool_router = tool_router
@@ -109,7 +110,12 @@ class LLMAgent:
         self.fallback_store = fallback_store
         self.skill_manager = skill_manager
         self.skills_config = skills_config or SkillsConfig()
-        self.skill_router = SkillRouter(skill_manager, skills_config=self.skills_config, platform_id=platform_id) if skill_manager else None
+        self.skill_router = SkillRouter(
+            skill_manager,
+            skills_config=self.skills_config,
+            platform_id=platform_id,
+            available_capabilities=available_capabilities,
+        ) if skill_manager else None
         self.im_adapter = im_adapter
         # H2-A 后台异步摘要调度器（可为 None：不接线时降级为同步摘要旧行为）。
         # 注意：SummaryScheduler 与 LLMAgent 互相引用，存在循环依赖，

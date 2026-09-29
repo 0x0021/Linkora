@@ -17,6 +17,9 @@ class RecallMemoryTool(BaseTool):
     short_description = "从长期记忆库中按主题检索相关历史信息，用于补全当前对话上下文"
     description = "从长期记忆中召回与当前话题相关的信息（基于向量相似度，自动按当前对话人过滤）"
     intent_keywords: list[str] = []  # 基础工具，始终包含（帮助 LLM 获取上下文）
+    # 依赖向量召回，需要已启用的 embedding_client；web 模式刻意置 None，
+    # 不满足时由 registry 能力门控跳过注册（而非注册后每轮必失败）。
+    requires_capabilities: list[str] = ["embedding"]
     parameters = {
         "type": "object",
         "properties": {

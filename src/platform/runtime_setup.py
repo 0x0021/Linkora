@@ -106,6 +106,7 @@ class SetupMixin(EngineMixinBase):
             "embedding_config": getattr(self.config, "embedding", None),
             "config": self.config,
         }
+
     def _setup_tools(self) -> None:
         self.tool_router = ToolRouter(self.config.tools)
         # 【护栏 P0-3】传机器人自己的 openDingTalkId 和 userId 作为 self_user_id，
@@ -213,9 +214,21 @@ class SetupMixin(EngineMixinBase):
             # 自动为未声明显式 allowed_tools 的技能生成 Tool 包装器
             # 使 LLM 可通过标准 tool_call 调用技能的 CLI 入口（如 python scripts/search.py "query"）
             from src.skills.tool_wrapper import SkillTool
+            from src.skills.loader import skill_capabilities_satisfied
             auto_wrapped = 0
+            runtime_caps = self.available_capabilities()
             for skill in skill_manager.list_all():
                 if not skill.allowed_tools and skill.enabled:
+                    # 能力门控（P0-2）：技能声明 requires_capabilities 但运行时不满足时，
+                    # 不包装为 Tool（如未装 Playwright 时跳过 web-composite-search），
+                    # 避免 LLM 调用注定失败的技能、浪费 token。其 fallback_tools 仍作兜底。
+                    missing = skill_capabilities_satisfied(skill, runtime_caps)
+                    if missing:
+                        logger.info(
+                            "[Skills] 技能 %s 缺少运行时能力 %s，跳过自动包装为 Tool",
+                            skill.name, missing,
+                        )
+                        continue
                     wrapper = SkillTool(skill)
                     # 跳过纯 Prompt 技能（无 CLI 入口不可执行，保留其 system prompt 注入即可）
                     if not wrapper.has_cli_entry:
@@ -257,6 +270,9 @@ class SetupMixin(EngineMixinBase):
             platform_id="dingtalk",
             # few-shot 按平台隔离：主平台读自身 DB 中的样例（与画像同库）
             few_shot_examples=self.store._few_shot_repo.get_few_shot_examples(),
+            # 能力门控（P0-2）：把运行时可用能力透传给路由，使缺能力的技能
+            # （如未装 Playwright 的 web-composite-search）既不注册为 Tool，也不被路由激活。
+            available_capabilities=self.available_capabilities(),
         )
         # H2-A：主平台(dingtalk)也在首次装配时接线一个后台异步摘要调度器。
         # 防御式读取配置：最小/测试配置可能没有 summary_backfill 段。

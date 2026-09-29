@@ -66,6 +66,21 @@ from src.tools.weather import WeatherTool
 
 logger = logging.getLogger(__name__)
 
+
+def resolve_capabilities(services: dict) -> set[str]:
+    """根据依赖服务表推断当前运行时可用能力（能力门控的单一真源）。
+
+    目前识别：
+    - ``"embedding"``：services 中含**已启用**的 embedding_client。
+      web 模式下 runtime_setup 刻意将 embedding_client 置为 None，此时视为不可用，
+      依赖它的 recall_memory 等工具不应注册。
+    """
+    caps: set[str] = set()
+    ec = services.get("embedding_client")
+    if ec is not None and getattr(ec, "enabled", False):
+        caps.add("embedding")
+    return caps
+
 # 内置工具声明清单（顺序仅供日志/可读性，不影响功能）。
 # 新增工具：在此追加类名即可，依赖注入自动完成。
 BUILTIN_TOOL_MANIFEST: list[type[BaseTool]] = [
@@ -226,11 +241,24 @@ def register_builtin_tools(
         enable_kb_search: 是否注册 kb_search（受 config.tools.kb_search_enabled 控制）。
     """
     registered: list[str] = []
+    caps = resolve_capabilities(services)
     for cls in BUILTIN_TOOL_MANIFEST:
         name = getattr(cls, "name", None) or cls.__name__
         if name == "kb_search" and not enable_kb_search:
             logger.info("[Tools] KB 搜索已禁用，跳过 kb_search 注册")
             continue
+
+        # 能力门控（P0-2）：工具声明 requires_capabilities 时，缺能力则跳过注册，
+        # 避免「注册了但注定失败」的工具占据 LLM 工具清单（如 web 模式无 embedding
+        # 时仍注册 recall_memory，每轮必失败且浪费 token）。
+        required = getattr(cls, "requires_capabilities", []) or []
+        if required:
+            missing = [c for c in required if c not in caps]
+            if missing:
+                logger.info(
+                    "[Tools] 工具 %s 缺少运行时能力 %s，跳过注册", name, missing
+                )
+                continue
 
         tool = build_tool(cls, services)
         if tool is None:

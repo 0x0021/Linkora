@@ -182,6 +182,28 @@ class EngineMixinBase(LinkoraComponentBase):
     def _start_global_tables_cleanup_scheduler(self) -> Any: ...
     def _start_wal_checkpoint_scheduler(self) -> Any: ...
     def _scan_orphan_conversation_dbs(self) -> Any: ...
+
+    def available_capabilities(self) -> set[str]:
+        """返回当前运行时可用能力集合（技能/工具能力门控的单一真源）。
+
+        目前识别：
+        - ``"embedding"``：已加载且启用的 embedding_client（web 模式为 None → 不可用）。
+        - ``"playwright"``：已安装 playwright 包（复合搜索等浏览器渲染类技能依赖）。
+
+        供工具注册（registry.resolve_capabilities 对照）与技能注册/路由门控
+        （runtime_setup 技能包装循环、SkillRouter 候选过滤）共用。
+        """
+        caps: set[str] = set()
+        ec = getattr(self, "embedding_client", None)
+        if ec is not None and getattr(ec, "enabled", False):
+            caps.add("embedding")
+        try:
+            import importlib.util
+            if importlib.util.find_spec("playwright") is not None:
+                caps.add("playwright")
+        except Exception:
+            pass
+        return caps
     @staticmethod
     def _style_profile_days_since(prof) -> Any: ...
     def _throttle_reply_send(self) -> Any: ...

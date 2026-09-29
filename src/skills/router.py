@@ -68,10 +68,16 @@ class SkillRouter:
     # 关键词兜底激活阈值（旧行为的 4 分门槛）
     KEYWORD_THRESHOLD = 4
 
-    def __init__(self, manager: SkillManager, skills_config=None, platform_id: str = ""):
+    def __init__(self, manager: SkillManager, skills_config=None, platform_id: str = "",
+                 available_capabilities: set[str] | None = None):
         self._manager = manager
         self._skills_config = skills_config
         self._platform_id = (platform_id or "").lower()
+        # 运行时可用能力集合（来自 Runtime.available_capabilities）。
+        # 为 None 表示「未知，不做能力过滤」（向后兼容旧调用方）；为非空/空集时，
+        # 凡 requires_capabilities 未满足的技能一律不进入候选，避免「路由激活了
+        # 却无对应 Tool 可调用」的半可用状态（如未装 Playwright 的 web-composite-search）。
+        self._available_caps = available_capabilities
         # 线程级状态隔离：SkillRouter 是 agent 的单实例，但 process_message
         # 可被多线程并发调用（reply_semaphore 允许并发）；若把最近路由结果存在
         # 普通实例属性上，并发请求会互相覆盖（请求 B 的 route_combo 覆盖 A 的
@@ -82,6 +88,13 @@ class SkillRouter:
         self._tl.last_matches = []
         # Phase 4 路由质量数据（给 agent 记录用）
         self._tl.last_routing_detail = {}
+
+    def _capability_ok(self, skill: Skill) -> bool:
+        """技能的能力依赖是否全部满足；_available_caps 为 None 时不强制过滤。"""
+        if self._available_caps is None:
+            return True
+        reqs = getattr(skill, "requires_capabilities", None) or []
+        return all(c in self._available_caps for c in reqs)
 
     def _is_skill_for_platform(self, skill: Skill) -> bool:
         """检查技能是否适用于当前平台。
@@ -241,6 +254,10 @@ class SkillRouter:
         for order, skill in enumerate(self._manager.list_all()):
             if not skill.enabled or not self._is_skill_for_platform(skill):
                 continue
+            # 能力门控（P0-2）：requires_capabilities 未满足的技能不进入候选，
+            # 避免路由激活一个没有对应 Tool 的技能（如未装 Playwright 的复合搜索）。
+            if not self._capability_ok(skill):
+                continue
             # 优先用 effective_intent_keywords（声明 intent_categories 时经注册表解析，
             # 否则回退字面/自动推导词），保证单一真源与向后兼容。
 
@@ -297,6 +314,9 @@ class SkillRouter:
 
         for order, skill in enumerate(self._manager.list_all()):
             if not skill.enabled or not self._is_skill_for_platform(skill):
+                continue
+            # 能力门控（P0-2）：与意图匹配路径一致，缺能力技能不进入候选。
+            if not self._capability_ok(skill):
                 continue
             score = self._score_skill_legacy(skill, text_lower)
             if score >= self.KEYWORD_THRESHOLD:

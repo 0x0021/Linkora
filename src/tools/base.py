@@ -66,6 +66,11 @@ class BaseTool(ABC):
     # 仅返回 confirm_required（含预览与令牌），携有效令牌再次调用才真正执行。
     # 用于不可逆/高责任写操作（如审批转交），防止误解析导致的越权变更。
     require_confirm: bool = False
+    # 运行时能力依赖：声明本工具正常工作所需的运行时能力（如 ["embedding"]）。
+    # register_builtin_tools 会对照运行时可用能力（runtime capabilities）门控，
+    # 能力不满足时该工具不注册，避免「注册了但注定失败」的工具占据 LLM 工具清单
+    # （如 web 模式无 embedding 时仍注册 recall_memory，每轮必失败且浪费 token）。
+    requires_capabilities: list[str] = []
 
     @abstractmethod
     def execute(self, args: dict) -> str | dict:

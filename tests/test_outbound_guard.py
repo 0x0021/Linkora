@@ -133,3 +133,19 @@ def test_confirm_required_instruction_injected_after_refactor():
     results, _ = orch.execute_tool_calls([_tc("confirm_tool", {})], _msg())
     content = _json.loads(results[0]["content"])
     assert "confirm_token=\"TOK123\"" in content["_instruction"]
+
+
+def test_string_result_does_not_crash_orchestrator():
+    """回归：工具返回字符串结果（如 web_composite_search 直接返回搜索输出）时，
+    confirm_required 分支不得对字符串误调 .get 触发
+    'str' object has no attribute 'get'。修复前该异常被静默吞掉，导致结果后处理
+    （注入 _tool/_ts）被跳过，进而破坏 _check_stale_tool_results 的过期检测。
+    """
+    orch, _json = _orch_with_result(
+        success=True, result="珞石机器人 ROEAK 03752 最新股价行情 2026", error="")
+    results, _ = orch.execute_tool_calls([_tc("web_composite_search", {})], _msg())
+    assert len(results) == 1
+    content = _json.loads(results[0]["content"])
+    assert content["_tool"] == "web_composite_search", "后处理须完整跑完，_tool 必须注入"
+    assert content.get("_ts"), "后处理须注入时间戳"
+    assert "珞石机器人" in content["result"]

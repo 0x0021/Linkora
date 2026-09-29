@@ -157,8 +157,11 @@ class ToolOrchestrator:
                     )
                 # confirm_required: 注入确认流程指令，让 LLM 知道如何引导用户
                 # 并提醒用户在用户确认后重新调用工具携带 confirm_token
-                _result = tool_output.get("result") or {}
-                if (_result.get("status") == "confirm_required"):
+                # 工具返回的 result 可能是字符串（如 web_composite_search 直接返回
+                # 搜索输出），仅当其为 dict 时才检查 confirm_required 状态，避免对
+                # 字符串误调 .get() 触发 'str' object has no attribute 'get' 被静默吞掉。
+                _result = tool_output.get("result")
+                if isinstance(_result, dict) and _result.get("status") == "confirm_required":
                     _token = _result.get("confirm_token", "")
                     parsed["_instruction"] = (
                         f"[确认操作] 此操作需要用户确认，"

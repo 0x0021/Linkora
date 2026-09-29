@@ -65,6 +65,14 @@ class TestRecallGuards:
         tool = RecallMemoryTool(store, emb)
         assert tool.execute({"query": "测试"}).get("error")
 
+    def test_embedding_client_none_web_mode(self):
+        """web 模式下 runtime_setup 将 embedding_client 置为 None，execute 必须
+        优雅降级返回错误，而非触发 'NoneType' object has no attribute 'enabled'。"""
+        store = MagicMock()
+        tool = RecallMemoryTool(store, None)
+        r = tool.execute({"query": "测试"})
+        assert r.get("error") == "embedding is not enabled"
+
     def test_embedding_returns_none(self):
         """嵌入返回空/None 时返回明确错误。"""
         store = MagicMock()

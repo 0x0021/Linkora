@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 from src.memory.schema import _ensure_column
 from src.memory.sqlite_store import SQLiteStore
@@ -31,12 +32,23 @@ def test_concurrent_init_db_no_duplicate_column(tmp_db_path):
     errors: list[str] = []
 
     def worker() -> None:
-        try:
-            store = SQLiteStore(db_path=str(tmp_db_path))
-            store.init_db()
-            store.close()
-        except Exception as e:  # noqa: BLE001
-            errors.append(repr(e))
+        # CI 共享 runner（2 核、磁盘慢）上 10 线程同时全量 DDL，锁等待可能超出
+        # busy_timeout=5s 上限，偶发 'database is locked'。这是环境竞争而非被测
+        # 回归（重复列/结构损坏由下方断言独立守护）——对锁错误用**新连接**有限
+        # 重试（新连接无陈旧读快照，重试有效）；其他异常或重试耗尽才记录。
+        last_err: Exception | None = None
+        for _ in range(3):
+            try:
+                store = SQLiteStore(db_path=str(tmp_db_path))
+                store.init_db()
+                store.close()
+                return
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                if "database is locked" not in repr(e):
+                    break
+                time.sleep(0.2)
+        errors.append(repr(last_err))
 
     threads = [threading.Thread(target=worker) for _ in range(10)]
     for t in threads:

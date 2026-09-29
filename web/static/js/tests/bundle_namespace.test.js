@@ -45,6 +45,19 @@ describe('生产 bundle 包含 Phase 0 解锁机制', () => {
     expect(bundle).toContain('pager-go');
   });
 
+  it('技能权重滑块 data-args 含 @el（修复参数错位导致滑块假死）', () => {
+    // 回归：updateSkillWeight 动作签名 (el, name)，runAction 经 fn.apply(el, args)
+    // 传参，data-args 必须以 @el 把 DOM 元素作为首参传入；否则 el 会拿到技能名字符串、
+    // name 为 undefined → Number("名字".value)/100 = NaN → PUT {weight:null} 被拒 → 滑块假死。
+    if (!bundle) return;
+    expect(bundle).toContain('updateSkillWeight" data-args=\'["@el"');
+  });
+
+  it('技能开关 data-args 含 @el（与滑块同一参数错位根因）', () => {
+    if (!bundle) return;
+    expect(bundle).toContain('toggleSkillEnabled" data-args=\'["@el"');
+  });
+
   it('产物附 sourcemap（Phase 1 调试增强）', () => {
     if (!bundle) return;
     expect(bundle).toContain('sourceMappingURL');

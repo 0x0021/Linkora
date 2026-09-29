@@ -571,7 +571,7 @@ async function loadSkillsPage() {
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <label title="${s.enabled !== false ? '已启用，点击禁用' : '已禁用，点击启用'}" style="display:flex;align-items:center;cursor:pointer;">
-                                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} data-action="toggleSkillEnabled" data-args='["${escapeHtml(s.name)}"]' style="display:none;">
+                                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} data-action="toggleSkillEnabled" data-args='["@el", "${escapeHtml(s.name)}"]' style="display:none;">
                                 <span style="display:inline-block;width:40px;height:22px;background:${s.enabled !== false ? '#2563eb' : '#cbd5e1'};border-radius:11px;position:relative;transition:background 0.2s;">
                                     <span style="display:inline-block;width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:${s.enabled !== false ? '20px' : '2px'};transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></span>
                                 </span>
@@ -585,7 +585,7 @@ async function loadSkillsPage() {
                     <p style="color:#666;margin:0 0 10px 0;font-size:13px;">${escapeHtml(s.description)}</p>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">
                         <span style="color:#999;white-space:nowrap;">权重：</span>
-                        <input type="range" min="0" max="100" value="${pct}" data-action="updateSkillWeight" data-args='["${escapeHtml(s.name)}"]' 
+                        <input type="range" min="0" max="100" value="${pct}" data-old-weight="${pct}" data-action="updateSkillWeight" data-args='["@el", "${escapeHtml(s.name)}"]' 
                             style="flex:1;max-width:120px;height:6px;accent-color:#2563eb;cursor:pointer;">
                         <span class="skill-weight-val" style="min-width:36px;text-align:right;font-weight:600;color:#16a34a;">${pct}%</span>
                     </div>

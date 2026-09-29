@@ -559,7 +559,7 @@
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <label title="${i.enabled!==!1?"\u5DF2\u542F\u7528\uFF0C\u70B9\u51FB\u7981\u7528":"\u5DF2\u7981\u7528\uFF0C\u70B9\u51FB\u542F\u7528"}" style="display:flex;align-items:center;cursor:pointer;">
-                                <input type="checkbox" ${i.enabled!==!1?"checked":""} data-action="toggleSkillEnabled" data-args='["${escapeHtml(i.name)}"]' style="display:none;">
+                                <input type="checkbox" ${i.enabled!==!1?"checked":""} data-action="toggleSkillEnabled" data-args='["@el", "${escapeHtml(i.name)}"]' style="display:none;">
                                 <span style="display:inline-block;width:40px;height:22px;background:${i.enabled!==!1?"#2563eb":"#cbd5e1"};border-radius:11px;position:relative;transition:background 0.2s;">
                                     <span style="display:inline-block;width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:${i.enabled!==!1?"20px":"2px"};transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></span>
                                 </span>
@@ -573,7 +573,7 @@
                     <p style="color:#666;margin:0 0 10px 0;font-size:13px;">${escapeHtml(i.description)}</p>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">
                         <span style="color:#999;white-space:nowrap;">\u6743\u91CD\uFF1A</span>
-                        <input type="range" min="0" max="100" value="${c}" data-action="updateSkillWeight" data-args='["${escapeHtml(i.name)}"]' 
+                        <input type="range" min="0" max="100" value="${c}" data-old-weight="${c}" data-action="updateSkillWeight" data-args='["@el", "${escapeHtml(i.name)}"]' 
                             style="flex:1;max-width:120px;height:6px;accent-color:#2563eb;cursor:pointer;">
                         <span class="skill-weight-val" style="min-width:36px;text-align:right;font-weight:600;color:#16a34a;">${c}%</span>
                     </div>
@@ -1268,4 +1268,4 @@
                 <div class="sim-alert-text">\u6B64\u6D88\u606F\u5DF2\u88AB\u5904\u7406\u8FC7\uFF08\u53BB\u91CD\u547D\u4E2D\uFF09</div>
             </div>
         `),s+=_buildReplyCardHtml(e),_setSimulateBanner(s),_setCardBody("route",_buildRouteCardBody(e)),_setCardBody("tools",_buildToolsCardBody(e)),_setCardBody("evidence",_buildEvidenceCardBody(e));const n=document.querySelector(".sim-card-tools .sim-card-header");if(n){const a=n.querySelector(".sim-card-badge");if(a&&a.remove(),e.routed_tools&&e.routed_tools.length>0){const i=document.createElement("div");i.className="sim-card-badge",i.textContent=e.routed_tools.length,n.appendChild(i)}}t.innerHTML=""}
-//# sourceMappingURL=bundle.12ff067d568e.js.map
+//# sourceMappingURL=bundle.2169f7dfaeca.js.map

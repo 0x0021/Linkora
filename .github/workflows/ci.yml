@@ -113,3 +113,25 @@ jobs:
 
     - name: Frontend tests
       run: npm run test:frontend
+
+  # 分支保护的 required status check 就是「CI 汇总」，此前没有对应 job →
+  # 该 check 永远 pending，每次合入都只能 bypass。此 job 汇聚 test/frontend
+  # 结果给出真实结论：任一失败/被取消则汇总红，全部通过则绿。
+  summary:
+    name: CI 汇总
+    needs: [test, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: 汇总判定
+        run: |
+          echo "test=${{ needs.test.result }}"
+          echo "frontend=${{ needs.frontend.result }}"
+          if [[ "${{ needs.test.result }}" != "success" \
+             || "${{ needs.frontend.result }}" != "success" ]]; then
+            echo "::error::存在未通过的 job，CI 汇总失败"
+            exit 1
+          fi
+          echo "全部 job 通过，CI 汇总绿"

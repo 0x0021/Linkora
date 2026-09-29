@@ -71,6 +71,19 @@ def is_skill_dir_candidate(name: str) -> bool:
     return not name.endswith((".egg-info", ".dist-info"))
 
 
+def skill_capabilities_satisfied(skill: "Skill", available: set[str]) -> list[str]:
+    """返回 skill.requires_capabilities 中**未被满足**的能力；空列表表示可注册。
+
+    Args:
+        skill: 待注册的技能对象。
+        available: 运行时可用能力集合（来自 Runtime.available_capabilities）。
+
+    用于技能自动包装为 Tool 前的门控：能力缺失的技能（如未装 Playwright 的
+    web-composite-search）直接跳过，避免 LLM 调用注定失败的技能、浪费 token。
+    """
+    return [c for c in (skill.requires_capabilities or []) if c not in available]
+
+
 def iter_skill_files(skill_dir: str | Path) -> Iterator[Path]:
     """遍历技能目录下的有效文件（跳过隐藏项与工具链产物子目录）。
 
@@ -103,6 +116,7 @@ class Skill:
     has_config: bool = False           # 是否存在 config.yaml
     composable: bool = False           # 是否允许与其他 composable 技能组合激活（Phase 3）
     platforms: list[str] = field(default_factory=list)  # 适用平台列表（空=通用）
+    requires_capabilities: list[str] = field(default_factory=list)  # 运行时能力依赖（如 ["playwright"]）
 
     def prompt_section(self) -> str:
         """生成注入到 system prompt 的技能简介片段。"""
@@ -272,6 +286,16 @@ class SkillLoader:
         else:
             platforms = []
 
+        # 解析 requires_capabilities（运行时能力依赖，如 ["playwright"]）
+        # 能力不满足时技能不被包装为 Tool（见 runtime_setup 注册门控）。
+        raw_req = meta.get("requires_capabilities", [])
+        if isinstance(raw_req, list):
+            requires_capabilities = [str(c).strip() for c in raw_req if str(c).strip()]
+        elif isinstance(raw_req, str):
+            requires_capabilities = [c.strip() for c in raw_req.split(",") if c.strip()]
+        else:
+            requires_capabilities = []
+
         return Skill(
             name=name,
             description=meta.get("description", "").strip(),
@@ -285,6 +309,7 @@ class SkillLoader:
             fallback_tools=fallback_tools,
             composable=composable,
             platforms=platforms,
+            requires_capabilities=requires_capabilities,
             config=self._load_config(skill_dir),
             has_config=(Path(skill_dir) / "config.yaml").is_file(),
         )

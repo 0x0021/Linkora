@@ -411,6 +411,8 @@ class PrimaryMixin(EngineMixinBase):
             platform_id=pcfg.id,
             # 跨平台画像隔离：非主平台无画像时回退到主平台(dingtalk)底模
             fallback_store=self.store,
+            # 能力门控（P0-2）：透传运行时可用能力，使缺能力技能不被路由激活。
+            available_capabilities=self.available_capabilities(),
             # few-shot 按平台隔离：读取本平台 DB 中的样例（与画像同库）
             few_shot_examples=store._few_shot_repo.get_few_shot_examples(),
         )

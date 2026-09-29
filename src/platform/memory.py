@@ -354,10 +354,16 @@ class MemoryMixin(EngineMixinBase):
                         n_logs = store._tool_execution_repo.cleanup_old_logs(retention_days)
                         n_feedback = store._feedback_repo.cleanup_old_feedback(retention_days)
                         n_drafts = store._draft_repo.cleanup_old_drafts(retention_days)
-                        if n_logs or n_feedback or n_drafts:
+                        # D7 延伸：llm_usage（全口径用量台账）此前漏清理，主库会无限膨胀
+                        try:
+                            from src.llm.usage_ledger import cleanup_old_usage
+                            n_usage = cleanup_old_usage()
+                        except Exception:
+                            n_usage = 0
+                        if n_logs or n_feedback or n_drafts or n_usage:
                             logger.info(
-                                "[全局表清理] 已清理 tool_logs=%d feedback=%d drafts=%d（保留 %d 天前）",
-                                n_logs, n_feedback, n_drafts, retention_days,
+                                "[全局表清理] 已清理 tool_logs=%d feedback=%d drafts=%d llm_usage=%d（保留 %d 天前）",
+                                n_logs, n_feedback, n_drafts, n_usage, retention_days,
                             )
                     except Exception as e:
                         logger.error("[全局表清理] 定时清理失败: %s", e)

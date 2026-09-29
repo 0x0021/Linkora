@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS llm_usage (
 # 测试钩子：重定向台账库路径（默认主库 data/linkora.db；单测指向 tmp 文件避免污染真实库）
 _db_path_override: str | None = None
 
+# 用量记录保留期（天）。成本台账需支撑年度对账（成本页趋势最大窗口 365 天），
+# 故默认 365 天，长于消息保留期；与 messages_retention_days 解耦，避免成本记录
+# 因消息清理策略被误删。清理经全局表清理调度器周期性执行（见 src/platform/memory.py）。
+USAGE_RETENTION_DAYS = 365
+
 
 def _db_file() -> str:
     if _db_path_override:
@@ -92,6 +97,11 @@ def _connect() -> sqlite3.Connection:
 
 def _ensure_table(conn: sqlite3.Connection) -> None:
     conn.execute(_DDL)
+    # 时间索引：get_stats / get_daily_cost_usd 按 ts 范围查询。llm_usage 随 LLM 调用
+    # 持续增长，无索引会退化为全表扫描。IF NOT EXISTS 对「已建表无索引」的旧库幂等。
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_llm_usage_ts ON llm_usage(ts)"
+    )
 
 
 def _current_platform() -> str:
@@ -230,3 +240,27 @@ def get_daily_cost_usd(day: str) -> float:
         return float(row[0] or 0.0)
     except Exception:
         return 0.0
+
+
+def cleanup_old_usage(retention_days: int | None = None) -> int:
+    """删除超过保留期的用量记录，返回删除条数。任何失败返回 0（不阻塞调度器）。
+
+    必要性：llm_usage 随每次 LLM 调用增长，且存于主库 linkora.db。全局表清理调度器
+    （D7）原本只清 tool_execution_logs/feedback/drafts 三张表，漏了它，长期运行会
+    令主库无限膨胀。此处补齐（与 D7 同款短连接 + busy_timeout 模型）。
+    """
+    try:
+        days = int(retention_days if retention_days is not None else USAGE_RETENTION_DAYS)
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        conn = _connect()
+        try:
+            _ensure_table(conn)
+            cur = conn.execute("DELETE FROM llm_usage WHERE ts < ?", [cutoff])
+            n = cur.rowcount or 0
+            conn.commit()
+            return n
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("[usage_ledger] 清理旧用量记录失败", exc_info=True)
+        return 0

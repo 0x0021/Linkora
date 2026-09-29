@@ -15,6 +15,7 @@ from src.llm.usage_ledger import (
     PURPOSE_MEMORY,
     PURPOSE_REPLY,
     PURPOSE_SUMMARY,
+    cleanup_old_usage,
     get_daily_cost_usd,
     get_stats,
     record_usage,
@@ -111,6 +112,40 @@ def test_stats_on_missing_table(tmp_ledger):
     stats = get_stats(hours=None)
     assert stats["available"] is True
     assert stats["totals"]["calls"] == 0
+
+
+def test_ts_index_created(tmp_ledger):
+    """D7 延伸修复：时间范围查询必须走索引，否则 llm_usage 长大后全表扫描。"""
+    record_usage(PURPOSE_REPLY, "m", input_tokens=1, output_tokens=1)
+    conn = sqlite3.connect(tmp_ledger)
+    names = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='llm_usage'")]
+    conn.close()
+    assert "idx_llm_usage_ts" in names
+
+
+def test_cleanup_old_usage(tmp_ledger):
+    """保留期清理：超期记录被删、近期内记录保留（防主库无限膨胀）。"""
+    from datetime import datetime, timedelta
+    old = (datetime.now() - timedelta(days=400)).strftime("%Y-%m-%d %H:%M:%S")
+    new = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = sqlite3.connect(tmp_ledger)
+    conn.execute(usage_ledger._DDL)
+    conn.execute(
+        "INSERT INTO llm_usage (ts,purpose,platform,model,input_tokens,output_tokens,"
+        "total_tokens,cost_usd,is_estimated) VALUES (?,?,?,?,?,?,?,?,?)",
+        (old, "reply", "", "m", 10, 5, 15, 0.0, 0))
+    conn.execute(
+        "INSERT INTO llm_usage (ts,purpose,platform,model,input_tokens,output_tokens,"
+        "total_tokens,cost_usd,is_estimated) VALUES (?,?,?,?,?,?,?,?,?)",
+        (new, "reply", "", "m", 10, 5, 15, 0.0, 0))
+    conn.commit()
+    conn.close()
+
+    deleted = cleanup_old_usage(365)
+    assert deleted == 1
+    stats = get_stats(hours=None)
+    assert stats["totals"]["calls"] == 1  # 仅保留最近一条
 
 
 # ---------------------------------------------------------------------------

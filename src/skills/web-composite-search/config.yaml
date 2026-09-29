@@ -1,0 +1,65 @@
+# web复合搜索配置文件
+# 结果数量配置
+results_per_engine: 20      # 每个引擎抓取结果数（范围10-30）
+max_results_limit: 50       # 单次查询最大返回数
+default_max_results: 10     # 默认返回给用户的结果数
+
+# 网络超时（秒）
+timeout:
+  domestic: 3       # 百度/搜狗/360等
+  international: 5  # Bing国际/Yandex等
+  academic: 5       # 学术引擎可能较慢
+  metaso: 8         # 秘塔AI较慢
+
+# 并发控制
+max_concurrent_engines: 5   # 单次查询最大并行引擎数
+rate_limit_per_minute: 30   # 全局速率限制
+
+# 缓存配置
+cache:
+  enabled: true
+  ttl_seconds: 300    # 5分钟缓存
+
+# 国内特化：自动降级
+china_mode:
+  enabled: true
+  health_check_interval: 180  # 3分钟健康检查
+  auto_fallback: true
+
+# 引擎权重（用于结果排序）
+engine_weights:
+  bing_intl: 1.0
+  yandex: 0.95
+  arxiv: 0.95
+  baidu_xueshu: 0.9
+  stackoverflow: 0.9
+  eastmoney: 0.9
+  sogou_wechat: 0.85
+  brave: 0.85
+  baidu: 0.85
+  semantic_scholar: 0.85
+  ddg: 0.8
+  others: 0.75
+
+# 去重配置
+deduplication:
+  enabled: true
+  
+  # URL去重 - 最严格的去重，相同URL只保留一个
+  url_canonicalization: true
+  
+  # 标题相似度去重 - 防止不同来源的相同内容
+  # 阈值范围: 0.0-1.0，越高越严格 (0.85=85%相似度即认为是重复)
+  # 建议值: 0.75(宽松) / 0.85(标准) / 0.92(严格)
+  title_similarity_threshold: 0.82
+  
+  # 内容指纹去重 - 基于正文内容的相似度
+  # 阈值范围: 0.0-1.0
+  # 建议值: 0.70(宽松) / 0.80(标准) / 0.88(严格)
+  content_similarity_threshold: 0.78
+  
+  # 最短标题长度 - 低于此长度的标题不参与相似度比较（避免误判）
+  min_title_length: 8
+  
+  # 片段长度权重 - 决定是否使用摘要进行内容比对
+  use_snippet_for_fingerprint: true

@@ -1,0 +1,38 @@
+{
+  "name": "web-composite-search",
+  "version": "1.1.0",
+  "description": "智能多引擎聚合搜索工具，专为国内网络优化。融合中文深度搜索（公众号/学术/财经）与高级搜索能力（Bing/Yandex/site语法），零Google依赖。",
+  "main": "scripts/search.py",
+  "scripts": {
+    "test": "python scripts/search.py --test"
+  },
+  "keywords": [
+    "search",
+    "web",
+    "aggregate",
+    "中文搜索",
+    "多引擎",
+    "国内优化",
+    "学术搜索"
+  ],
+  "author": "user",
+  "license": "MIT",
+  "dependencies": {
+    "requests": ">=2.28.0",
+    "beautifulsoup4": ">=4.11.0",
+    "lxml": ">=4.9.0",
+    "pyyaml": ">=6.0",
+    "urllib3": ">=1.26.0"
+  },
+  "engines": {
+    "python": ">=3.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/web-composite-search"
+  },
+  "bugs": {
+    "url": "https://github.com/user/web-composite-search/issues"
+  },
+  "homepage": "https://github.com/user/web-composite-search#readme"
+}

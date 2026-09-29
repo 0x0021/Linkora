@@ -124,3 +124,7 @@ upload_*.jpeg
 upload_*.gif
 upload_*.webp
 tmp_images/
+
+# 内置技能(src/skills)自带的 config.yaml 随源码分发（纯技能参数、无密钥；
+# 上方裸 config.yaml 规则本意是保护根目录 live 配置，误伤了技能目录）
+!src/skills/**/config.yaml

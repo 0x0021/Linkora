@@ -144,19 +144,15 @@ def test_loader_parses_requires_capabilities(tmp_path: Path):
 
 _SEARCH_PATH = (
     Path(__file__).resolve().parent.parent
-    / "data/skills/web-composite-search/scripts/search.py"
+    / "src/skills/web-composite-search/scripts/search.py"
 )
 
 
 def _load_search_module():
-    # data/ 被 .gitignore 排除，CI 干净克隆里不存在 web-composite-search 技能脚本。
-    # 该脚本本身是运行时/用户数据，不纳入版本控制（项目约定），故这里在文件
-    # 缺失时优雅 skip，而非失败——回归仅在本机有该技能时实际运行。
+    # 技能已迁至 src/skills（随源码分发，CI 可覆盖）。若未来被移走则优雅 skip，
+    # 避免重演「测试依赖未版本化文件导致 CI 红」。
     if not _SEARCH_PATH.is_file():
-        pytest.skip(
-            f"web-composite-search 技能脚本未找到（{_SEARCH_PATH}），"
-            f"data/ 不纳入版本控制，CI 环境跳过"
-        )
+        pytest.skip(f"web-composite-search 技能脚本未找到（{_SEARCH_PATH}），跳过")
     spec = importlib.util.spec_from_file_location("linkora_test_websearch", _SEARCH_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

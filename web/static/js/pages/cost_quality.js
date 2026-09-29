@@ -102,11 +102,29 @@ function cqRenderUsageTable(llmUsage) {
             { key: "input_tokens", label: "输入", render: r => metricsFmtTokens(r.input_tokens) },
             { key: "output_tokens", label: "输出", render: r => metricsFmtTokens(r.output_tokens) },
             { key: "total_tokens", label: "合计", render: r => metricsFmtTokens(r.total_tokens) },
-            { key: "cost", label: "成本", render: r => escapeHtml(r.cost) + escapeHtml(r.est) },
+            { key: "cost", label: "成本", render: r => {
+                // 透明化：本地/未计价模型成本记为 ¥0，标注「不计费」避免误读为真实零花费
+                if ((r.cost_cny || 0) === 0 && (r.total_tokens || 0) > 0) {
+                    return '<span style="color:#64748b;font-size:11px;" title="该用途使用本地或未计价模型，不计入 API 成本；Token 为真实全口径统计">不计费</span>' + escapeHtml(r.est);
+                }
+                return escapeHtml(r.cost) + escapeHtml(r.est);
+            } },
         ],
         rows,
         emptyText: "暂无用量记录",
     });
+    // 成本透明化：全口径有真实 Token 消耗但成本恒 ¥0 → 提示用户这是本地/未计价模型
+    const noteEl = document.getElementById("cq-usage-cost-note");
+    if (noteEl) {
+        const totTokens = order.reduce((s, p) => s + (byPurpose[p].total_tokens || 0), 0);
+        const totCost = order.reduce((s, p) => s + (byPurpose[p].cost_cny || 0), 0);
+        if (totTokens > 0 && totCost === 0) {
+            noteEl.textContent = "⚠️ 当前全部 LLM 调用使用本地 / 未计价模型，成本显示为 ¥0（不计费）；Token 消耗为真实全口径统计。如需折算本地算力成本，可在 config.llm.model_pricing 配置名义单价。";
+            noteEl.style.display = "";
+        } else {
+            noteEl.style.display = "none";
+        }
+    }
 }
 
 function cqChartsEmpty() {

@@ -36,24 +36,30 @@
 
 **现象**：`usage_ledger._current_platform()` 调用 `get_current_platform()`，其兜底读到 `base.py:67` 的 `_active_platform_ctx` 默认值 `"dingtalk"`。因此 **web 后台触发的 LLM 调用**（主人画像 `persona.py:217`、知识库 `kb.py:588` 仅包了 `purpose_scope`，未设平台作用域）会被记成 `platform="dingtalk"`。
 
-**为何暂不修**：
-- **单平台（钉钉）部署下这是正确行为**——所有调用（含后台操作）本就属钉钉。`tests/test_usage_ledger.py::test_by_platform_aggregation` 明确断言并守护该兜底；改动会破坏该测试与单平台正确性。
-- 真正的歧义只在**多平台**部署下：无法区分「后台管理操作」与「某平台会话」。
-
-**改进方案（待决策，不擅自改）**：多平台场景下，由 web 路由在 `purpose_scope` 之外显式打平台标记——例如在 `persona.py` / `kb.py` 的 LLM 调用处包 `with with_platform(get_current_platform() or "web")` 或显式传 `platform="web"` 哨兵值。当前用户主部署为钉钉单平台，**无紧迫性**，列为已知限制。
+**裁决（2026-09-29 宇坤授权「判断裁决」）：非缺陷，维持现状。**
+- **单平台（钉钉）部署下这是正确行为**——所有调用（含后台操作）本就属钉钉。`tests/test_usage_ledger.py::test_by_platform_aggregation` 明确断言并守护该兜底；改动会破坏该测试与单平台正确性，得不偿失。
+- `by_purpose` 维度已把画像/摘要/技能等对话外消耗清晰分开（原始诉求核心），`by_platform` 仅为次要视图。
+- 真正的歧义只在**多平台**部署下；当前主部署为钉钉单平台，**无紧迫性**，列为已知限制，不在本轮改动。
 
 ---
 
-## 🟠 Defect C（MEDIUM，方案）：本地模型成本恒为 $0，成本被低估
+## 🟠 Defect C（MEDIUM，已落地）：本地模型成本恒为 $0 的透明化标注
 
-**现象**：`history.estimate_cost` / `get_model_price` 只认内置 `_MODEL_PRICING` 与 `config.llm.model_pricing`（按模型名子串匹配）。本地模型（bge-m3 嵌入、rerank/CrossEncoder、本地 Ollama/qwen 服务等）不匹配 → 单价 `{"input":0,"output":0}` → **成本恒为 $0**。用户本次特别点名的「技能提示词生成 / 主人画像生成」若走云端模型则正常计费；但若任一层路由到本地模型，其 token 计入而成本记为 0，成本页 `cost_cny` 系统性低估。
+**现象**：`history.estimate_cost` / `get_model_price` 只认内置 `_MODEL_PRICING` 与 `config.llm.model_pricing`（按模型名子串匹配）。本地模型（bge-m3 嵌入、rerank/CrossEncoder、本地 Ollama/qwen 服务等）不匹配 → 单价 `{"input":0,"output":0}` → **成本恒为 $0**。用户特别点名的「技能提示词生成 / 主人画像生成」若走云端模型则正常计费；若任一层路由到本地模型，其 token 计入而成本记为 0，成本页 `cost_cny` 系统性低估。
 
-**影响**：对「成本/质量」页的成本口径准确性有持续偏倚，但不影响 token 计数与用途分布（那些是真实的）。
+**裁决（2026-09-29 宇坤授权「判断裁决」）：不往 config 注入任意价格（违反配置红线且会反向误导），改为前端透明标注「不计费」。**
 
-**改进方案（待决策）**：
-1. **最简**：在 `config.yaml`（live）的 `llm.model_pricing` 中为本地模型补名义单价（即便 $0 也显式写出，语义明确），或按本地推理的电费/折算填一个近似 $/M token；
-2. **展示侧**：对 `is_estimated` 或本地模型行在成本页标注「本地模型不计费 / 估算未含」，避免误导；
-3. 不擅自改计价默认值——这是配置决策，需你拍板。
+**修复（已落地，commit 待提交）**：
+- `web/static/js/pages/cost_quality.js`：
+  - 用途分布表「成本」列：当 `cost_cny===0` 但 `total_tokens>0` 时，单元格渲染灰色「不计费」标签（原 `¥0.00` 易误读为真实零花费）；
+  - 表格下方动态提示行 `#cq-usage-cost-note`：全口径有真实 Token 但成本恒 ¥0 时显示「⚠️ 当前全部 LLM 调用使用本地 / 未计价模型，成本显示为 ¥0（不计费）；Token 消耗为真实全口径统计。如需折算本地算力成本，可在 config.llm.model_pricing 配置名义单价。」
+- `web/static/js/pages/metrics.js`：
+  - 全口径简报行：成本 ¥0 时显示「成本不计费（本地/未计价模型）」而非 `¥0.0000`；
+  - 用途分布图 tooltip：成本 ¥0 时显示「不计费」。
+- `web/templates/index.html`：成本页用途分布卡新增 `<p id="cq-usage-cost-note">` 提示容器。
+- 重建 `web/static/dist` bundle（`node scripts/build_frontend.mjs`，中文经 `--charset=ascii` 转义进 bundle，已核验）。
+
+**未做（保持开放，待你后续拍板）**：若希望成本页显示本地算力折算值，可在 `config.yaml` 的 `llm.model_pricing` 为本地模型补名义单价；当前展示侧标注已消除误导，不强制改配置。
 
 ---
 
@@ -65,10 +71,14 @@
 
 ---
 
-## 改动文件清单（本轮）
+## 改动文件清单（两轮累计）
 
 | 文件 | 改动 |
 |------|------|
 | `src/llm/usage_ledger.py` | +`ts` 索引、`USAGE_RETENTION_DAYS`、`cleanup_old_usage()` |
 | `src/platform/memory.py` | 全局清理调度器接入 `cleanup_old_usage()` |
 | `tests/test_usage_ledger.py` | +索引测试、+保留期清理测试（16 passed） |
+| `web/static/js/pages/cost_quality.js` | 成本列「不计费」标签 + 动态提示行 |
+| `web/static/js/pages/metrics.js` | 全口径简报/tooltip 的「不计费」标注 |
+| `web/templates/index.html` | 成本页新增 `#cq-usage-cost-note` 提示容器 |
+| `web/static/dist/*` | 重建前端 bundle |

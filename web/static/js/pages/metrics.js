@@ -89,7 +89,7 @@ async function renderUsageDistribution(usage) {
             const t = usage.totals;
             note.textContent = "全口径（含对话外消耗，近 24h）："
                 + metricsFmtTokens(t.total_tokens || 0) + " tokens · "
-                + "¥" + (t.cost_cny || 0).toFixed(4)
+                + ((t.cost_cny || 0) > 0 ? "¥" + (t.cost_cny || 0).toFixed(4) : "成本不计费（本地/未计价模型）")
                 + " · " + (t.calls || 0) + " 次调用"
                 + ((t.estimated_calls || 0) > 0 ? `（${t.estimated_calls} 次估算）` : "");
         } else {
@@ -129,7 +129,7 @@ async function renderUsageDistribution(usage) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: ctx2 => metricsFmtTokens(ctx2.parsed.x) + " tokens · ¥" + ((byPurpose[keys[ctx2.dataIndex]] || {}).cost_cny || 0).toFixed(4) } },
+                tooltip: { callbacks: { label: ctx2 => metricsFmtTokens(ctx2.parsed.x) + " tokens · " + (((byPurpose[keys[ctx2.dataIndex]] || {}).cost_cny || 0) > 0 ? "¥" + ((byPurpose[keys[ctx2.dataIndex]] || {}).cost_cny || 0).toFixed(4) : "不计费") } },
             },
             scales: {
                 x: { beginAtZero: true, ticks: { color: ct.tick, callback: v => metricsFmtTokens(v) }, grid: { color: ct.grid } },

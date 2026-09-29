@@ -49,7 +49,9 @@ class RecallMemoryTool(BaseTool):
         if not query:
             return {"error": "query is required"}
 
-        if not self.embedding_client.enabled:
+        # web 模式下 embedding_client 被刻意置为 None（runtime_setup.py），
+        # 必须先判空再判 enabled，否则会触发 'NoneType' object has no attribute 'enabled'。
+        if self.embedding_client is None or not self.embedding_client.enabled:
             return {"error": "embedding is not enabled"}
 
         try:

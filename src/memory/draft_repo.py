@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import uuid
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -23,13 +24,21 @@ class DraftRepo:
 
     def __init__(self, store: "SQLiteStore") -> None:
         self.store = store
-        # 向后兼容：老库可能无 read_at 列，懒追加（幂等，列已存在则忽略）
+        # 向后兼容：老库可能无 read_at 列，懒追加。
+        # 【修复】先探测列是否存在再 ALTER——原先无条件 ADD COLUMN，列已存在时
+        # 必抛 `duplicate column name: read_at`，每次启动都刷一条 WARNING +
+        # 大段 Traceback（噪音掩盖真实告警）。**无条件 DDL 试错是项目铁律禁止的**，
+        # 正确做法是只读探针（PRAGMA table_info）判定后再决定是否迁移。
         try:
-            self.store.conn.execute("ALTER TABLE message_drafts ADD COLUMN read_at TEXT")
-            self.store.conn.commit()
-        except Exception:  # noqa: BLE001 - 列已存在属预期
-            logger.warning("broad except swallowed in __init__() @ src/memory/draft_repo.py:30, see exc_info", exc_info=True)
-            pass
+            cur = self.store.conn.cursor()
+            cols = {row[1] for row in cur.execute("PRAGMA table_info(message_drafts)")}
+            if "read_at" not in cols:
+                self.store.conn.execute("ALTER TABLE message_drafts ADD COLUMN read_at TEXT")
+                self.store.conn.commit()
+                logger.info("[迁移] message_drafts 追加 read_at 列完成")
+        except sqlite3.Error as e:
+            # 只捕获 SQLite 错误（迁移失败属真实问题，需留痕）；不吞其它异常。
+            logger.warning("message_drafts read_at 列迁移失败: %s", e, exc_info=True)
 
     def add_dead_letter(self, *, msg_id: str | None, chat_id: str, chat_name: str,
                         sender_id: str | None, sender_name: str | None,

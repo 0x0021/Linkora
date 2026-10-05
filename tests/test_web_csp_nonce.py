@@ -95,9 +95,13 @@ class TestNoInlineEventHandlersRegression:
 
     def _iter_files(self):
         templates = (_FRONTEND_DIR / "templates").glob("*.html")
+        # 排除 tests/ 目录：XSS 回归测试**必须**在用例里写出真实攻击载荷
+        # （如 '<img src=x onerror="alert(1)">'）才能验证渲染层确实做了转义，
+        # 那类字符串是测试数据而非页面里真实存在的事件属性。
+        # 门禁只针对会被浏览器加载的生产脚本。
         js_files = [
             p for p in (_FRONTEND_DIR / "static" / "js").rglob("*.js")
-            if "vendor" not in p.parts
+            if "vendor" not in p.parts and "tests" not in p.parts
         ]
         return list(templates) + js_files
 

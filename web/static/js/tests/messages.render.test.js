@@ -82,3 +82,114 @@ describe('renderMsgContent 富文本渲染', () => {
     expect(html).toContain('/api/image/local/abc.jpg');
   });
 });
+
+// ============================================================================
+// P0 存储型 XSS 回归护栏（2026-10-04 审计发现）
+//
+// 漏洞：_renderCardBody 收到的是**未转义**的原始消息正文，而下游
+// _renderInline 只做加粗/标签替换、不转义 → 外部群成员发一条带 <card> 的
+// 消息即可在管理员浏览器执行脚本，窃取 localStorage 中的 jwt_token。
+// 本组用例把当时的真实 PoC 载荷固化为断言，任何回归都会立即变红。
+// ============================================================================
+describe('P0 存储型 XSS 回归（卡片正文）', () => {
+  it('卡片正文内的 <img onerror> 被转义，不可执行', () => {
+    const payload = '<card title="公告">重要通知\n<img src=x onerror="alert(document.cookie)">\n</card>';
+    const html = R(payload);
+    // 关键断言：绝不能出现可执行的原始标签
+    expect(html).not.toMatch(/<img[^>]*onerror/i);
+    expect(html).not.toContain('onerror="alert');
+    // 应当以转义形态出现（内容仍可见）
+    expect(html).toContain('&lt;img');
+  });
+
+  it('卡片正文内的 <script> 被转义', () => {
+    const html = R('<card title="t"><script>alert(1)</script></card>');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('卡片正文内 <svg onload> 被转义', () => {
+    const html = R('<card title="t"><svg onload=alert(1)></svg></card>');
+    expect(html).not.toMatch(/<svg/i);
+    expect(html).toContain('&lt;svg');
+  });
+
+  it('卡片内 <clickable url="javascript:..."> 降级为不可点击（不生成 href）', () => {
+    const html = R('<card title="t"><clickable url="javascript:alert(1)">点我</clickable></card>');
+    expect(html).not.toContain('href="javascript:');
+    expect(html).not.toMatch(/<a[^>]*href="javascript:/i);
+    // 文字内容保留可见
+    expect(html).toContain('点我');
+  });
+
+  it('卡片内 [text](javascript:...) 链接被拦截', () => {
+    const html = R('<card title="t">[点我](javascript:alert(1))</card>');
+    expect(html).not.toMatch(/href="javascript:/i);
+  });
+
+  it('卡片内 [text](data:text/html,...) 链接被拦截', () => {
+    const html = R('<card title="t">[x](data:text/html;base64,PHNjcmlwdD4=)</card>');
+    expect(html).not.toMatch(/href="data:/i);
+  });
+
+  it('折行空格不得用于绕过协议白名单（java\\nscript:）', () => {
+    // 钉钉/飞书长 URL 常被折行插入空白；若在去空格**之前**验协议，
+    // "java\nscript:alert(1)" 会被拼成合法 javascript: 绕过白名单
+    const html = R('<card title="t">[x](java\nscript:alert(1))</card>');
+    expect(html).not.toMatch(/href="javascript:/i);
+  });
+
+  it('合法 https clickable 仍正常渲染为可点击链接（防过度拦截）', () => {
+    const html = R('<card title="t"><clickable url="https://example.com/a">文档</clickable></card>');
+    expect(html).toContain('href="https://example.com/a"');
+    expect(html).toContain('msg-link-btn');
+  });
+
+  it('合法 https 卡片链接仍可点击（防过度拦截）', () => {
+    const html = R('<card title="t">[文档](https://example.com/doc)</card>');
+    expect(html).toContain('href="https://example.com/doc"');
+  });
+
+  it('卡片标题同样被转义（标题来自外部）', () => {
+    const html = R('<card title="<img src=x onerror=alert(1)>">正文</card>');
+    expect(html).not.toMatch(/<img[^>]*onerror/i);
+  });
+});
+
+describe('sanitizeUrl 协议白名单（单一真源）', () => {
+  // 惰性取值：util.js 的 import 发生在 beforeAll（晚于 describe 回调执行），
+  // 故不能在 describe 体内直接 const S = window.sanitizeUrl
+  const S = () => window.sanitizeUrl;
+
+  it('sanitizeUrl 已挂载到 window', () => {
+    expect(typeof window.sanitizeUrl).toBe('function');
+  });
+
+  it('放行 http/https/mailto', () => {
+    expect(S()('https://example.com')).toBe('https://example.com');
+    expect(S()('http://example.com')).toBe('http://example.com');
+    expect(S()('mailto:a@b.com')).toBe('mailto:a@b.com');
+    expect(S()('HTTPS://EXAMPLE.COM')).toBe('HTTPS://EXAMPLE.COM');
+  });
+
+  it('阻断 javascript:/data:/vbscript:/file:', () => {
+    expect(S()('javascript:alert(1)')).toBeNull();
+    expect(S()('data:text/html,<script>alert(1)</script>')).toBeNull();
+    expect(S()('vbscript:msgbox(1)')).toBeNull();
+    expect(S()('file:///etc/passwd')).toBeNull();
+  });
+
+  it('阻断无协议相对 URL（避免被解析为同源相对路径）', () => {
+    expect(S()('/api/image/x.jpg')).toBeNull();
+    expect(S()('//evil.com/x')).toBeNull();
+    expect(S()('example.com')).toBeNull();
+  });
+
+  it('非字符串与空值安全返回 null', () => {
+    expect(S()('')).toBeNull();
+    expect(S()('   ')).toBeNull();
+    expect(S()(null)).toBeNull();
+    expect(S()(undefined)).toBeNull();
+    expect(S()(123)).toBeNull();
+  });
+});

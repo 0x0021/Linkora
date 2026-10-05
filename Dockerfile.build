@@ -20,7 +20,11 @@ RUN pip install --no-cache-dir -r requirements.txt pyinstaller
 # 再拷源码与打包配置（.dockerignore 已排除 .venv/node_modules/data/dist 等）
 COPY . .
 # 备份一份配置模板（首次运行无 config 时由二进制复制）
-RUN test -f config.yaml && cp config.yaml config.example.yaml || true
+# 【安全 P0】必须用**已入库的** config.yaml.example，绝不能用 live config.yaml：
+# 原实现 `cp config.yaml config.example.yaml` 会把含明文 jwt_secret /
+# auth_password / api_key 的真实配置额外复制一份打进二进制镜像层。
+# .dockerignore 现已排除 config.yaml，故此处直接取 example。
+RUN cp config.yaml.example config.example.yaml
 
 # 打 Linux 二进制（linkora.spec 在 P1 阶段生成；--onefile）
 RUN pyinstaller linkora.spec --clean --noconfirm

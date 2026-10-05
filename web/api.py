@@ -374,11 +374,22 @@ def _auth_record_fail(key: str) -> None:
 
 
 def _auth_check(username: str, password: str, cfg) -> bool:
-    """恒定时间比对，避免时序侧信道。"""
-    expected_u = (cfg.web.auth_username or "").encode("utf-8")
-    expected_p = (cfg.web.auth_password or "").encode("utf-8")
-    return hmac.compare_digest(username.encode("utf-8"), expected_u) and \
-        hmac.compare_digest(password.encode("utf-8"), expected_p)
+    """校验用户名与密码，恒定时间比对避免时序侧信道。
+
+    【安全 P0 修复】密码走 verify_password()，从而真正支持 PBKDF2 哈希。
+    历史实现直接 compare_digest(明文, 配置值)，导致 config.yaml.example
+    里「建议改用 PBKDF2」的指引**一旦照做就会永久无法登录**
+    （compare_digest(明文, "pbkdf2_sha256$...") 恒为 False），唯一出路是
+    改回明文——等于把部署事实钉在明文存储上。
+    verify_password() 对明文格式保持向后兼容（legacy），存量配置无需迁移即可
+    继续登录；一旦把 auth_password 换成 hash_password() 的输出即自动走 PBKDF2。
+    """
+    from web.auth_middleware import verify_password
+
+    ok_u = hmac.compare_digest(username.encode("utf-8"),
+                               (cfg.web.auth_username or "").encode("utf-8"))
+    ok_p = verify_password(password, cfg.web.auth_password or "")
+    return ok_u and ok_p
 
 
 # 敏感端点：即便全局 auth_enabled=False，也强制要求凭据（纵深防御）。
@@ -663,12 +674,30 @@ async def login(request: Request):
                     content={"detail": "username and password are required"}
                 )
 
+            # 【安全 P0】登录爆破限流：与上方 Basic 分支保持一致的双维度检查。
+            # 历史缺陷：本分支只做 _auth_check 后直接 401，既不查限流也不记失败，
+            # 而 /api/auth/login 在 _AUTH_WHITELIST 内（中间件限流不覆盖），
+            # 且 auth_middleware.login() 的限流只在密码**通过后**才被调用——
+            # 于是攻击者可用 JSON 体对同一账号无限速猜测，永不触发封锁。
+            # 账号维度（IP|username）用于防「固定 IP 轮询多账号」。
+            ip = _client_ip(request)
+            account_key = f"{ip}|{username}"
+            if not _auth_rate_allowed(ip) or not _auth_rate_allowed(account_key):
+                logger.warning("登录限流触发 ip=%s username=%s", ip, username)
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many failed login attempts. Try again later."},
+                )
+
             # 使用基本认证验证
             config = _get_cfg()
             if config is None:
                 return JSONResponse(status_code=500, content={"detail": "Configuration unavailable"})
 
             if not _auth_check(username, password, config):
+                # 失败必须记账，否则限流形同虚设（与 Basic 分支一致）
+                _auth_record_fail(ip)
+                _auth_record_fail(account_key)
                 return JSONResponse(status_code=401, content={"detail": "Invalid username or password"})
 
             # 登录成功，生成 JWT

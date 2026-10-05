@@ -916,19 +916,61 @@ class WebConfig(BaseModel):
         """
         # 已知弱/默认口令：恢复出厂或遗漏配置时会写死这些值，等同公开，必须拒绝。
         # 注意：先 strip() 再判定，空白口令（"   "）与空口令同等视为未配置。
-        _KNOWN_DEFAULT_PASSWORDS = (
+        #
+        # 【分级策略】弱口令（admin/password/changeme/…）在任何绑定下都拒绝启动；
+        # 而「出厂默认口令」是 v0.5.4 刻意设计的开箱即用默认值（见
+        # docs/CHANGELOG.md v0.5.4）——它保证 cp 模板即可登录，不因默认拒绝
+        # 造成「没默认密码、登不进去」。但该值公开在 git 跟踪的 example 里，
+        # 因此仅在**服务对外暴露**时（host 非回环/非私网）才 fail-closed：
+        # 本地/内网使用保留开箱体验，公网暴露则强制先改密码。
+        _WEAK_DEFAULT_PASSWORDS = (
             "please-change-me", "changeme", "admin", "password",
-            # config.yaml.example 的占位密码：用户抄模板后若未替换即等同公开口令，
-            # 必须 fail-closed 拒绝启动，强制其设置真实密码。
             "REPLACE_WITH_YOUR_STRONG_PASSWORD",
         )
+        # config.yaml.example 随附的出厂默认口令（公开入库，仅本地/内网放行）
+        _FACTORY_DEFAULT_PASSWORD = "Admin@P0sw0rd"
         _pw = (self.auth_password or "").strip()
-        if self.auth_enabled and (not _pw or _pw in _KNOWN_DEFAULT_PASSWORDS):
-            raise ValueError(
-                "auth_enabled=True 但 auth_password 为空/空白或为已知默认值，拒绝启动（安全默认）："
-                "请在 config.yaml 的 web.auth_password 设置高强度密码（建议 PBKDF2 哈希）"
-            ) from None
+        if self.auth_enabled:
+            if not _pw or _pw in _WEAK_DEFAULT_PASSWORDS:
+                raise ValueError(
+                    "auth_enabled=True 但 auth_password 为空/空白或为已知弱口令，拒绝启动（安全默认）："
+                    "请在 config.yaml 的 web.auth_password 设置高强度密码（建议 PBKDF2 哈希，"
+                    "生成：python -c \"from web.auth_middleware import hash_password; "
+                    "print(hash_password('你的密码'))\"）"
+                ) from None
+            if _pw == _FACTORY_DEFAULT_PASSWORD and self._is_publicly_exposed():
+                raise ValueError(
+                    "web.host 绑定到对外可路由地址（当前 "
+                    f"{self.host}）但 web.auth_password 仍为公开在 "
+                    "config.yaml.example 中的出厂默认口令，拒绝启动：任何人都能登录管理后台。"
+                    "请改为自有强密码（推荐 PBKDF2 哈希：python -c \"from web.auth_middleware "
+                    "import hash_password; print(hash_password('你的密码'))\"）；"
+                    "若仅本机/内网使用，请把 web.host 保持为 127.0.0.1"
+                ) from None
         return self
+
+    def _is_publicly_exposed(self) -> bool:
+        """判断 web.host 是否为对外可路由地址（回环/私网/本地名视为本地或内网使用）。
+
+        空 host 由运行期按 127.0.0.1 处理（见 web 启动），等同仅本地。
+        """
+        host = (self.host or "").strip()
+        if not host:
+            return False
+        # 显式「监听所有网卡」= 对外暴露
+        if host in ("0.0.0.0", "::", "*"):  # noqa: S104 — 显式通配绑定
+            return True
+        # 本地主机名：解析到回环，与 127.0.0.1 等价
+        if host.lower() in ("localhost", "localhost.localdomain", "ip6-localhost"):
+            return False
+        try:
+            import ipaddress
+
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            # 其余主机名（含 bind.example.com 等）：无法静态判定，一律按暴露处理
+            return True
+        return not (ip.is_loopback or ip.is_private)
 
 
 class OaApprovalConfig(BaseModel):

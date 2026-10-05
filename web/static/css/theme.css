@@ -2696,6 +2696,16 @@ html {
     font-size: 0.7rem;
     opacity: 0.7;
 }
+/* 协议未过白名单（javascript:/data: 等）的链接降级为不可点击外观。
+   保留文字内容可见，只是不再是链接——安全降级优于静默丢弃。 */
+.msg-link-btn--blocked,
+.msg-link-btn--blocked:hover {
+    color: var(--gray-500, #6b7280);
+    background: var(--gray-50, #f9fafb);
+    border-color: var(--gray-200, #e5e7eb);
+    cursor: not-allowed;
+    box-shadow: none;
+}
 
 /* 卡片内键值对 key:value */
 .msg-kv {

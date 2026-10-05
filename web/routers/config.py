@@ -538,8 +538,10 @@ async def restore_default_config():
             logger.warning("[config] 读取当前配置失败，按纯出厂默认骨架恢复: %s", e)
         # 若合并后密码仍为空或已知默认值（例如原配置未设密码），强制用本次生成的随机
         # 强口令，保证重启后能用该口令登录，且不落公开默认口令。
+        # 含出厂默认口令 Admin@P0sw0rd：它公开在 config.yaml.example 中，「恢复默认」
+        # 等于把公开口令写回配置，故一并视为未配置并替换为随机强口令。
         _known = ("please-change-me", "changeme", "admin", "password",
-                  "REPLACE_WITH_YOUR_STRONG_PASSWORD", "")
+                  "REPLACE_WITH_YOUR_STRONG_PASSWORD", "Admin@P0sw0rd", "")
         _web = merged.setdefault("web", {})
         _pw_applied = False
         if _web.get("auth_enabled") and (_web.get("auth_password") or "") in _known:

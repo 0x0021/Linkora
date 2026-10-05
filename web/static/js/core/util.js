@@ -18,8 +18,35 @@
         if (el) el.textContent = text;
     }
 
+    // ============ URL 协议白名单（XSS 防护单一真源） ============
+    // escapeHtml 只转义 & < > " '，冒号与 ASCII 字母原样保留，因此
+    // `javascript:alert(1)` 会被原样写入 href="..." —— 浏览器在 href 属性
+    // 中会执行 javascript: URL，导致存储型 XSS（可窃取 localStorage 的
+    // jwt_token）。因此凡是把外部数据拼进 href/src 的地方，都必须先过
+    // 本函数做协议白名单，再 escapeHtml。
+    //
+    // 放行：http / https / mailto（mailto: 供卡片里的邮箱链接）。
+    // 阻断：javascript: / data: / vbscript: / file: 及一切相对/无协议 URL。
+    const SAFE_URL_SCHEME_RE = /^(https?:|mailto:)/i;
+
+    /**
+     * 清洗 href/src 用 URL：去折行空格 + 协议白名单。
+     * @param {string} url - 原始 URL
+     * @returns {string|null} 安全 URL（已去空格、已验证协议）；不通过白名单返回 null
+     */
+    function sanitizeUrl(url) {
+        if (typeof url !== 'string') return null;
+        // 折行空格/换行是钉钉飞书长 URL 的常见污染，需先剔除再验协议，
+        // 否则 "java\nscript:" 会被拼成合法 javascript: 绕过白名单
+        const clean = url.replace(/\s+/g, '');
+        if (!clean) return null;
+        if (!SAFE_URL_SCHEME_RE.test(clean)) return null;
+        return clean;
+    }
+
     global.escapeHtml = escapeHtml;
     global.setText = setText;
+    global.sanitizeUrl = sanitizeUrl;
 
     // ============ 消息内容纯文本清洗（仪表盘紧凑列表预览） ============
     // 钉钉/飞书落库的原始 content 混着大量机器占位符：mediaId、本地缓存路径、

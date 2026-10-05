@@ -62,6 +62,17 @@ jobs:
     - name: Run Ruff
       run: uv run ruff check src/
 
+    - name: Verify dependency consistency
+      # 四源一致（requirements.txt / requirements.lock / uv.lock / pyproject）
+      # 此前 check_deps.py 只在注释与 DEV_GUIDE 里承诺「CI 会跑」，实际从未接线。
+      run: uv run python scripts/check_deps.py --strict
+
+    - name: Verify frontend manifest
+      # 前端有三份手工同步的清单（build_frontend.mjs JS_ORDER/CSS_ORDER、
+      # index.html 开发态 script 标签）。新增文件漏登记时生产 bundle 正常、
+      # 开发态直接 ReferenceError 白屏，且线上无任何报错——此门禁使其在 CI 暴露。
+      run: uv run python scripts/check_frontend_manifest.py
+
     - name: Run Pyright
       # 不要传路径参数：pyproject 的 [tool.pyright] include = ["src", "web"] 才是门禁范围，
       # 传路径会覆盖 include。早期写成 `pyright src/` 导致 web/ 从未被类型门禁覆盖，

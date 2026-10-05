@@ -120,12 +120,58 @@ function _renderCardBody(body, imagePathMap) {
     if (!body) return '';
     imagePathMap = imagePathMap || null;
 
-    // ---- Pass 0: 飞书消息卡片内嵌图片占位 + clickable 转链接 ----
+    // ---- 安全前置：对白名单外的一切标记做转义（P0 存储型 XSS 修复） ----
+    // 本函数的输入是**来自钉钉/飞书的原始消息正文**，任何群成员都可完全控制。
+    // 历史实现直接对未转义文本做正则替换再拼进 innerHTML，而下游
+    // _renderInline 只做加粗/标签替换、不转义 → 攻击者发一条
+    //   <card title="x">…<img src=x onerror="alert(1)">…</card>
+    // 即可在管理员浏览器执行脚本，窃取 localStorage 中的 jwt_token。
+    //
+    // 这里的处理顺序很关键：先把 <clickable> 容器「摘出来」暂存（它需要被
+    // 识别并转成 <a>，若先整体转义则标签结构被破坏），对**剩余正文**整体
+    // escapeHtml，最后再把 clickable 渲染结果贴回。这样：
+    //   - 用户注入的 <img onerror> → &lt;img onerror&gt;，不可执行
+    //   - (img_key:xxx) / **bold** / [标签] 标记不含 & < > " ' ，转义后仍存活
+    //   - clickable 的 url 走 sanitizeUrl() 协议白名单，阻断 javascript:
+    const _cbSlots = [];
+    let _raw = String(body).replace(
+        /<clickable[^>]*\burl\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/clickable>/g,
+        (_m, _url, _inner) => {
+            _cbSlots.push({ url: _url, inner: _inner });
+            // 占位符用 NUL 包裹 + 序号，用户正文无法构造（转义不产生 NUL）
+            return '\u0000CB' + (_cbSlots.length - 1) + '\u0000';
+        }
+    );
+    // 孤立的 clickable 开始/结束标签（无 url 或解析失败）：转义前先剔除，
+    // 否则它们会被 escapeHtml 变成可见的 &lt;clickable&gt; 噪声文本
+    _raw = _raw.replace(/<\/?clickable[^>]*>/g, '');
+    // 关键转义：此后所有正文均已转义，_renderInline 的「输入已转义」契约才成立
+    let html = escapeHtml(_raw);
+
+    // ---- 还原 clickable（url 已过协议白名单，label/inner 已转义） ----
+    if (_cbSlots.length) {
+        html = html.replace(/\u0000CB(\d+)\u0000/g, (_m, _i) => {
+            const slot = _cbSlots[Number(_i)];
+            if (!slot) return '';
+            const cleanUrl = sanitizeUrl(slot.url);
+            // 协议不在白名单（javascript:/data: 等）→ 不生成可点击链接，
+            // 只把文字内容降级为纯文本，避免整个按钮消失
+            const label = escapeHtml(
+                String(slot.inner).replace(/\S*\((?:img_key|file_key|IMG_KEY)[^)]*\)/g, '')
+                    .replace(/\s+/g, ' ').trim()
+            ) || '打开链接';
+            if (!cleanUrl) {
+                return `<span class="msg-link-btn msg-link-btn--blocked"><i class="fa-solid fa-link-slash"></i> ${label}</span>`;
+            }
+            return `<a class="msg-link-btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> ${label}</a>`;
+        });
+    }
+
+    // ---- Pass 0: 飞书消息卡片内嵌图片占位 ----
     // 飞书第三方 bot（飞书智能助手、飞行社等）发的图受飞书 IM 资源隔离限制：
     // image_key 归属 bot 自己的 app，linkora 的 app 凭证无法跨 app 下载
-    // （错误码 99992361 open_id cross app，永久不可达）。统一渲染为带说明的
+    // （错误码 99992361 open app，永久不可达）。统一渲染为带说明的
     // 占位符，让用户一眼知道"图存在但 linkora 拉不到"，不是 linkora 的 bug。
-    // clickable 是带 url 的容器，转成 <a> 按钮保留跳转语义。
     const imgPlaceholder =
         '<div class="msg-img-placeholder msg-img-unavailable">' +
         '<i class="fa-solid fa-image"></i>' +
@@ -145,18 +191,7 @@ function _renderCardBody(body, imagePathMap) {
         }
         return imgPlaceholder;
     };
-    let html = body
-        // clickable url="..." → <a>，保留跳转语义（属性可有可无、顺序不固定）
-        .replace(/<clickable[^>]*\burl\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/clickable>/g,
-            (_m, url, inner) => {
-                const cleanUrl = escapeHtml(url.replace(/\s+/g, ''));
-                // 提取 clickable 内部纯文本（去除 img_key 等标签），作为按钮文字
-                const label = inner.replace(/\S*\((?:img_key|file_key|IMG_KEY)[^)]*\)/g, '')
-                                   .replace(/\s+/g, ' ').trim() || '打开链接';
-                return `<a class="msg-link-btn" href="${cleanUrl}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> ${escapeHtml(label)}</a>`;
-            })
-        // 兜底：清理孤立的 clickable 开始/结束标签（无 url 或解析失败）
-        .replace(/<\/?clickable[^>]*>/g, '')
+    html = html
         // 任意 emoji/img 标记后接 (img_key|file_key|IMG_KEY:xxx) → 命中映射渲染 <img>，否则占位
         .replace(/\S*\s*\((img_key|file_key|IMG_KEY):([^\s)]+)\)/g, (_m, _kind, key) => renderImg(key));
 
@@ -164,21 +199,30 @@ function _renderCardBody(body, imagePathMap) {
     // 飞书/钉钉长 URL 常被折行插入空白，用回调清洗
     html = html.replace(/\[([^\]]*)\]\(([^)]*?)\)/g, (_match, label, url) => {
         const cleanLabel = label.trim();
-        let cleanUrl = url.replace(/\s+/g, '');   // 去除折行空格
-        if (!cleanUrl || !cleanLabel) return _match;  // 格式不对就原样保留
+        // 协议白名单：仅 http/https/mailto，阻断 javascript:/data: 注入
+        const cleanUrl = sanitizeUrl(url);
+        if (!cleanUrl || !cleanLabel) return _match;  // 格式不对或协议不安全 → 原样保留
         return `<a class="msg-link-btn" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square"></i> ${escapeHtml(cleanLabel)}</a>`;
     });
 
     // ---- Pass 2: 按行处理结构（KV 对 / 普通文本行）----
     // 此时链接已变成 <a> 标签，安全地 split 而不会破坏它们
+    //
+    // 【安全】由于正文已在上方整体 escapeHtml，用户注入的裸标签早已变成
+    // &lt;...&gt;，因此这里出现的 '<' 只可能来自**本函数自己**渲染出的受控
+    // 片段（<a> / <img> / <span> / <i> / <hr> / <div>）。判定「该行含受控
+    // 标签」必须匹配白名单标签表，而不能沿用历史的 `line.includes('<')`——
+    // 后者恰好放行含 '<' 的攻击行（KV 分支被跳过 → 落到 _renderInline
+    // 直接把已转义文本拼进 innerHTML，绕过 KV 保护路径）。
+    const SAFE_HTML_TAG_RE = /<\/?(?:a|img|span|i|hr|div|small|br)\b[^>]*>/i;
     const lines = html.split('\n').map(l => l.trim()).filter(Boolean);
     html = lines.map(line => {
         // 已渲染的图片占位符直接透传，避免再套一层 text-line
         if (line.includes('msg-img-placeholder')) return line;
         // 水平线 --- → <hr>
         if (/^---+$/.test(line)) return '<hr class="msg-hr">';
-        // key:value 对（跳过已含 HTML 标签的行）
-        if (!line.includes('<') && /^([^:：]{2,})[:：](.+)$/.test(line)) {
+        // key:value 对（跳过含受控 HTML 标签的行，避免拆坏已渲染的 <a>/<img>）
+        if (!SAFE_HTML_TAG_RE.test(line) && /^([^:：]{2,})[:：](.+)$/.test(line)) {
             const m = line.match(/^([^:：]{2,})[:：](.+)$/);
             return `<div class="msg-kv"><span class="msg-kv-key">${escapeHtml(m[1])}</span><span class="msg-kv-val">${_renderInline(m[2])}</span></div>`;
         }
@@ -203,11 +247,11 @@ function _renderText(text) {
     let s = escapeHtml(text);
     // [text](url) → <a>；URL 可能含换行空格（源数据折行），清洗之
     s = s.replace(/\[([^\]]*)\]\(([^)]*?)\)/g, (_match, label, url) => {
-        const cleanUrl = url.replace(/\s+/g, '');
+        // 协议白名单（sanitizeUrl 为单一真源）：仅 http/https/mailto，
+        // 阻断 javascript:/data: 等 XSS 注入
+        const cleanUrl = sanitizeUrl(url);
         if (!cleanUrl) return _match;
-        // 协议白名单：仅允许 http/https/mailto，阻断 javascript:/data: 等 XSS 注入
-        if (!/^(https?:|mailto:)/i.test(cleanUrl)) return _match;
-        return `<a class="msg-inline-link" href="${cleanUrl}" target="_blank" rel="noopener">${label}</a>`;
+        return `<a class="msg-inline-link" href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener">${label}</a>`;
     });
     // **加粗**
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');

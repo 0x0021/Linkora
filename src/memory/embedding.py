@@ -184,12 +184,23 @@ class EmbeddingClient:
 
         if config.provider == "local":
             offline = bool(getattr(config, "offline", False))
-            if background and not offline:
-                # 后台下载：不阻塞启动，Web 先起，进度可经 get_load_status() 轮询
-                self._load_status["state"] = "downloading"
+            # 【修复】background=True 一律后台加载，**不因 offline 而改走同步**。
+            # offline 只应决定"是否联网"（_init_local 内 local_files_only=True），
+            # 与"是否阻塞启动"无关。此前 `background and not offline` 的写法让
+            # offline=True（用本地缓存、不联网的常见配置）命中 else 分支同步直载，
+            # 而 SentenceTransformer 即使 local_files_only 也要读盘 + 反序列化权重
+            # （本机实测 >50s），**把主线程整个卡死**在 _init_tools_and_llm 里——
+            # 表现为启动停在「步骤 4/8」永不完成、web 端口也不监听。
+            # 单测/热重载等显式 background=False 的调用方仍走同步直载。
+            if background:
+                # 后台加载：不阻塞启动，Web 先起，进度可经 get_load_status() 轮询
+                self._load_status["state"] = "downloading" if not offline else "loading"
+                self._load_status["message"] = (
+                    "正在从本地加载模型文件…" if offline else "正在下载模型文件…"
+                )
                 _persist_status(self)
                 threading.Thread(
-                    target=self._init_local, args=(config, True), daemon=True
+                    target=self._init_local, args=(config, not offline), daemon=True
                 ).start()
             else:
                 # 同步直载（离线 / 单测 / 热重载同步分支）

@@ -146,13 +146,22 @@ class TestPrimaryDbInitTimeout:
         primary.config_path = str(cfg_dst)
 
         class _FakeStore:
+            # 【回归要点】必须同时具备**实例字段**与**类级** `_schema_initialized_paths`：
+            # conn 属性的 lazy-init 门控早已改为读类级集合（为修跨实例并发 ALTER 撞
+            # duplicate column 而引入的改造）。历史本测试只定义实例字段，于是
+            # `assert store._schema_initialized is False` 断言的是一个**死变量**，
+            # 让「超时自愈失效 → 全接口 500」这个 P0 缺陷长期未被测出。
             _schema_initialized = True
+            db_path = "/tmp/_fake_store_test.db"
 
             def init_db(self):
                 pass
 
             def set_decisions_retention_days(self, days):
                 pass
+
+        # 类级门控集合：模拟「该 db_path 已被标记为初始化完成」
+        _FakeStore._schema_initialized_paths = {_FakeStore.db_path}
 
         # get_store 在方法内以 `from ... import get_store` 形式于调用时绑定，
         # 故在调用前 patch 模块属性即可生效。
@@ -170,3 +179,8 @@ class TestPrimaryDbInitTimeout:
         primary._init_primary_components()
 
         assert primary.platforms["dingtalk"].store._schema_initialized is False
+        # 关键断言：类级门控标记也必须被清除，否则 lazy-init 永不重试、
+        # schema 永久不自愈（表现为未建表查询抛 no such table → 所有接口 500）
+        assert _FakeStore.db_path not in _FakeStore._schema_initialized_paths, (
+            "超时后未清除类级 _schema_initialized_paths，lazy-init 重试仍会失效"
+        )

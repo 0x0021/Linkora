@@ -467,6 +467,19 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     _ensure_column(cur, "routing_quality", "output_tokens", "INTEGER DEFAULT 0")
     _ensure_column(cur, "routing_quality", "total_tokens", "INTEGER DEFAULT 0")
     _ensure_column(cur, "routing_quality", "cost_usd", "REAL DEFAULT 0.0")
+    # 工具执行结果与失败归因（2026-10-05）：此前 6 个 stage 中无 tool_execution，
+    # 也没有任何 error 分类列 → 排查「AI 答得不对」时无法区分
+    # 「工具根本没返回数据」（kb_search 空结果 / web_search 失败）与
+    # 「数据拿到了但模型表达错」，而这两者的修复方向完全相反。
+    # tool_results_json: [{tool, success, duration_ms, error_class, result_count}]
+    # failure_class: tool_error / tool_empty_result / no_tool_selected /
+    #                llm_error / prompt_truncated / ''（成功）
+    _ensure_column(cur, "routing_quality", "tool_results_json", "TEXT DEFAULT '[]'")
+    _ensure_column(cur, "routing_quality", "failure_class", "TEXT DEFAULT ''")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_routing_quality_failure "
+        "ON routing_quality(failure_class)"
+    )
 
     # ── 风格画像表 ─────────────────────────────────────────────────────
     cur.execute("""
@@ -583,6 +596,19 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     _ensure_column(cur, "routing_quality", "output_tokens", "INTEGER DEFAULT 0")
     _ensure_column(cur, "routing_quality", "total_tokens", "INTEGER DEFAULT 0")
     _ensure_column(cur, "routing_quality", "cost_usd", "REAL DEFAULT 0.0")
+    # 工具执行结果与失败归因（2026-10-05）：此前 6 个 stage 中无 tool_execution，
+    # 也没有任何 error 分类列 → 排查「AI 答得不对」时无法区分
+    # 「工具根本没返回数据」（kb_search 空结果 / web_search 失败）与
+    # 「数据拿到了但模型表达错」，而这两者的修复方向完全相反。
+    # tool_results_json: [{tool, success, duration_ms, error_class, result_count}]
+    # failure_class: tool_error / tool_empty_result / no_tool_selected /
+    #                llm_error / prompt_truncated / ''（成功）
+    _ensure_column(cur, "routing_quality", "tool_results_json", "TEXT DEFAULT '[]'")
+    _ensure_column(cur, "routing_quality", "failure_class", "TEXT DEFAULT ''")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_routing_quality_failure "
+        "ON routing_quality(failure_class)"
+    )
 
     # ── 版本表回填 ─────────────────────────────────────────────────────
     try:

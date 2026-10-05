@@ -7,7 +7,7 @@ import threading
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 from openai import (
     OpenAI,
@@ -142,6 +142,23 @@ class _RetryState:
             raise RuntimeError(
                 f"LLM 全局最大尝试次数 ({self.global_max_attempts}) 已达，最后错误: {cause}"
             ) from cause
+
+
+def _prepend_chunk(
+    first: "LLMStreamChunk | None",
+    rest: Iterator["LLMStreamChunk"],
+) -> Iterator["LLMStreamChunk"]:
+    """把已消费的首帧放回迭代器头部。
+
+    流式建连与迭代被拆成两段后（见 chat() 的 ``next(gen, None)``），首帧已经提前
+    被取走，这里负责无损拼回，避免丢掉第一个 token chunk。
+    """
+    def _gen() -> Iterator["LLMStreamChunk"]:
+        if first is not None:
+            yield first
+        yield from rest
+
+    return _gen()
 
 
 def _classify_failure(e: Exception) -> tuple[bool, bool, bool]:
@@ -544,7 +561,23 @@ class LLMClient:
                 model_kwargs = dict(kwargs)
                 model_kwargs["model"] = model
                 try:
-                    return self._do_chat(client, model_kwargs, stream=True)
+                    # 【P0-2026-10-05】_do_chat_stream 是生成器函数，调用它**只创建
+                    # 生成器对象、不执行任何请求**（实测 inspect.isgeneratorfunction
+                    # 为 True，且调用后 client.last_calls 仍为空）。故历史代码
+                    # `return self._do_chat(...)` 写在 try 里看着能兜住异常，实际
+                    # 真正的网络异常发生在**调用方迭代生成器时**，早已跳出本 try —
+                    # 所谓「流式失败降级为非流式」从未生效过。
+                    # 这里显式 next() 触发建连（首帧），使 try/except 真正覆盖
+                    # 建连阶段；已产出的首帧塞回生成器头部，不丢数据。
+                    #
+                    # 类型收窄：_do_chat 的返回签名是联合类型（流式/非流式由
+                    # stream 参数分派），此处 stream=True 恒走生成器分支，
+                    # 故用 cast 显式收窄，避免联合类型污染下游 next()/参数类型。
+                    gen = cast(
+                        "Iterator[LLMStreamChunk]",
+                        self._do_chat(client, model_kwargs, stream=True),
+                    )
+                    first = next(gen, None)
                 except (APIConnectionError, APITimeoutError) as e:
                     state.last_err = e
                     logger.warning("LLM(%s) 流式网络错误，降级为非流式: %s", model, e)
@@ -555,6 +588,7 @@ class LLMClient:
                     logger.warning("LLM(%s) 流式调用失败，降级为非流式: %s", model, e)
                     stream = False
                     break
+                return _prepend_chunk(first, gen)
 
         for client, model in attempts:
             if self._is_in_cooldown(model):
@@ -587,7 +621,22 @@ class LLMClient:
                 raise LLMRateLimitExhaustedError(
                     f"主模型池全部因限流(429)失败，且无备用模型池。最后错误: {state.last_err}"
                 ) from state.last_err
-            raise state.last_err  # type: ignore[misc]
+            # 【P0】last_err 为 None 说明**一个模型都没真正尝试过**——全部都在冷却期
+            # 里被 continue 跳过，于是 _retry_primary_model 从未被调用，last_err 保持初值。
+            # 历史代码在此 `raise state.last_err` 即 `raise None` →
+            # TypeError: exceptions must derive from BaseException，把真实原因
+            # （模型全在冷却）彻底掩盖，且 agent_steps/reply.py 的
+            # isinstance(e, LLMRateLimitExhaustedError) 分支不会命中、错误分类失效。
+            # 触发条件很现实：一次限频风暴后 rate_limit_cooldown 秒内的任何重入请求
+            # 都会踩中——而这恰恰是系统最需要优雅降级的时刻。
+            if state.last_err is None:
+                cooled = [m for _, m in attempts if self._is_in_cooldown(m)]
+                raise LLMRateLimitExhaustedError(
+                    f"全部 {len(attempts)} 个主模型均处于冷却期（{', '.join(cooled) or '未知'}），"
+                    f"无可用模型；未配置 fallback_model。请稍后重试或调大 "
+                    f"rate_limit_cooldown / timeout_cooldown 配置。"
+                ) from None
+            raise state.last_err
 
         fb = self._try_fallback_pool(
             self.fallback_order, self.fallback_clients, kwargs, messages, state, label="跨服务商备用"
@@ -784,7 +833,15 @@ class LLMClient:
         # 请求服务端回传 usage（OpenAI 协议 stream_options.include_usage，usage 在
         # 末尾独立帧、choices 为空）。部分兼容网关不支持该参数（400/TypeError），
         # 去掉重试一次——此时 token 由结束后的启发式估算兜底（is_estimated=1）。
+        #
+        # 【P0-2026-10-05】首次请求**必须**带 stream=True。历史缺陷：这里只加了
+        # stream_options 没加 stream=True，于是服务端返回的是**非流式**响应对象，
+        # 下游按迭代器消费时抛「'_Resp' object is not iterable」——表现为
+        # 「回复生成中断」。降级分支虽写了 stream=True，但它只在首次请求抛异常时
+        # 才到达，而缺 stream=True 的首次请求通常**不抛异常**（直接返回非流式对象），
+        # 故该分支形同虚设。
         create_kwargs = dict(kwargs)
+        create_kwargs["stream"] = True
         create_kwargs["stream_options"] = {"include_usage": True}
         try:
             if self._concurrency_semaphore:
@@ -793,12 +850,15 @@ class LLMClient:
             else:
                 response = client.chat.completions.create(**create_kwargs)
         except Exception as e:
+            # 仅去掉 stream_options 重试，**stream=True 必须保留**（否则拿到非流式对象）
             logger.debug("流式请求带 stream_options 失败，降级为不带 usage: %s", e)
+            retry_kwargs = dict(kwargs)
+            retry_kwargs["stream"] = True
             if self._concurrency_semaphore:
                 with self._concurrency_semaphore:
-                    response = client.chat.completions.create(**kwargs, stream=True)
+                    response = client.chat.completions.create(**retry_kwargs)
             else:
-                response = client.chat.completions.create(**kwargs, stream=True)
+                response = client.chat.completions.create(**retry_kwargs)
         tools = kwargs.get("tools") or []
         valid_names = {t.get("function", {}).get("name") for t in tools if isinstance(t, dict)}
         model = kwargs.get("model", "?")

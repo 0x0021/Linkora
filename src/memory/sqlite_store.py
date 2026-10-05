@@ -443,11 +443,14 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
                                      total_latency_ms: float = 0.0, reply_len: int = 0,
                                      reply_text: str = "", stages_json: str = "[]",
                                      input_tokens: int = 0, output_tokens: int = 0,
-                                     total_tokens: int = 0, cost_usd: float = 0.0) -> None:
+                                     total_tokens: int = 0, cost_usd: float = 0.0,
+                                     tool_results_json: str | None = None,
+                                     failure_class: str | None = None) -> None:
         self._routing_quality_repo.update_routing_quality_trace(
             rq_id, llm_latency_ms, llm_rounds, llm_model, total_latency_ms,
             reply_len, reply_text, stages_json,
-            input_tokens, output_tokens, total_tokens, cost_usd)
+            input_tokens, output_tokens, total_tokens, cost_usd,
+            tool_results_json, failure_class)
 
     def set_rq_retention_days(self, days: int) -> None:
         self._routing_quality_repo.set_rq_retention_days(days)

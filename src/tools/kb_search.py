@@ -406,4 +406,7 @@ class KBSearchTool(BaseTool):
                 "intent_keywords_count": len(self.intent_keywords),
             }
         except Exception as e:
+            # 【可观测性】此前不打日志。健康检查静默降级为 unhealthy 后，
+            # 与 embedding.py 的静默 None 叠加会让「知识库为何不可用」彻底查不到。
+            logger.warning("[kb_search] 健康检查失败，标记为 unhealthy: %s", e, exc_info=True)
             return {"status": "unhealthy", "error": str(e)}

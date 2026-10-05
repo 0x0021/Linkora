@@ -80,6 +80,8 @@ class RoutingQualityRepo:
         output_tokens: int = 0,
         total_tokens: int = 0,
         cost_usd: float = 0.0,
+        tool_results_json: str = "[]",
+        failure_class: str = "",
     ) -> int:
         def js(v: object) -> str | object:
             return json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
@@ -95,8 +97,9 @@ class RoutingQualityRepo:
                 blocked_by_disabled_skill, message_type,
                 llm_model, llm_rounds, llm_latency_ms, total_latency_ms,
                 reply_len, reply_text, stages_json,
-                input_tokens, output_tokens, total_tokens, cost_usd)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                input_tokens, output_tokens, total_tokens, cost_usd,
+                tool_results_json, failure_class)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (sender_id or "", sender_name or "", conversation_id or "",
              content_preview or "",
              primary_skill or "", primary_score, primary_source or "",
@@ -107,7 +110,8 @@ class RoutingQualityRepo:
              js(blocked_by_disabled_skill), message_type or "",
              llm_model or "", llm_rounds, llm_latency_ms, total_latency_ms,
              reply_len, reply_text or "", js(stages_json),
-             input_tokens, output_tokens, total_tokens, cost_usd),
+             input_tokens, output_tokens, total_tokens, cost_usd,
+             js(tool_results_json), failure_class or ""),
         )
         self.store.conn.commit()
         self._insert_count += 1
@@ -131,19 +135,34 @@ class RoutingQualityRepo:
         output_tokens: int = 0,
         total_tokens: int = 0,
         cost_usd: float = 0.0,
+        tool_results_json: str | None = None,
+        failure_class: str | None = None,
     ) -> None:
         def js(v: object) -> str | object:
             return json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
         cur = self.store.conn.cursor()
+        # 工具结果/失败归因可选回填（None = 不覆盖，保持调用方向后兼容）：
+        # 路由阶段先插行、后跑工具与 LLM，故这两列通常在 update 阶段才有值。
+        sets = [
+            "llm_latency_ms=?", "llm_rounds=?", "llm_model=?",
+            "total_latency_ms=?", "reply_len=?", "reply_text=?", "stages_json=?",
+            "input_tokens=?", "output_tokens=?", "total_tokens=?", "cost_usd=?",
+        ]
+        params: list[object] = [
+            llm_latency_ms, llm_rounds, llm_model or "",
+            total_latency_ms, reply_len, reply_text or "", js(stages_json),
+            input_tokens, output_tokens, total_tokens, cost_usd,
+        ]
+        if tool_results_json is not None:
+            sets.append("tool_results_json=?")
+            params.append(js(tool_results_json))
+        if failure_class is not None:
+            sets.append("failure_class=?")
+            params.append(failure_class)
+        params.append(rq_id)
         cur.execute(
-            """UPDATE routing_quality
-               SET llm_latency_ms=?, llm_rounds=?, llm_model=?,
-                   total_latency_ms=?, reply_len=?, reply_text=?, stages_json=?,
-                   input_tokens=?, output_tokens=?, total_tokens=?, cost_usd=?
-               WHERE id=?""",
-            (llm_latency_ms, llm_rounds, llm_model or "",
-             total_latency_ms, reply_len, reply_text or "", js(stages_json),
-             input_tokens, output_tokens, total_tokens, cost_usd, rq_id),
+            f"UPDATE routing_quality SET {', '.join(sets)} WHERE id=?",  # noqa: S608 — 列名固定白名单
+            params,
         )
         self.store.conn.commit()
 
@@ -189,16 +208,17 @@ class RoutingQualityRepo:
         )
         rows = [dict(r) for r in cur.fetchall()]
         for r in rows:
-            for col in ("combo_skills", "goal_fit_details", "tools_exposed", "stages_json"):
+            for col in ("combo_skills", "goal_fit_details", "tools_exposed",
+                        "stages_json", "tool_results_json"):
                 val = r.get(col, "")
                 if isinstance(val, str) and val:
                     try:
                         r[col] = json.loads(val)
                     except Exception as e:
                         logger.debug("列 %s JSON 解析失败: %s", col, e)
-                        if col == "stages_json":
+                        if col in ("stages_json", "tool_results_json"):
                             r[col] = []
-                elif col == "stages_json":
+                elif col in ("stages_json", "tool_results_json"):
                     r[col] = []
         return {"items": rows, "total": total, "page": page, "page_size": page_size}
 

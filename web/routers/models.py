@@ -206,31 +206,46 @@ def _collect_process() -> dict[str, Any]:
 def _collect_gpu() -> dict[str, Any]:
     """GPU 占用探测，按优先级尝试 NVIDIA(pynvml) → CUDA(torch) → Apple MPS，逐级降级。"""
     # 1) NVIDIA via pynvml（最完整：显存 + 利用率）
+    #    注：pynvml 是 NVIDIA 专有库，在 macOS / 无 NVIDIA 显卡的 Linux 上**必然**
+    #    ImportNotFound——这属于本函数的**正常降级路径**（后面还有 CUDA、MPS 两档），
+    #    不是「静默吞噬的错误」。/api/models/status 由前端状态页高频轮询（秒级），
+    #    若在此打 WARNING+exc_info 堆栈会刷爆日志（曾每 2~3s 一条）。
+    #    故：模块缺失 → debug 静默降级；模块存在但 NVML 初始化/查询失败 → 仍告警留痕。
     try:
         import pynvml
+    except ModuleNotFoundError:
+        logger.debug("pynvml 未安装，跳过 NVIDIA GPU 探测（非 NVIDIA 平台属预期）")
+        pynvml = None
+    except ImportError as e:  # pragma: no cover - 残缺安装等非常规情况
+        logger.warning("导入 pynvml 失败，跳过 NVIDIA GPU 探测: %s", e, exc_info=True)
+        pynvml = None
 
-        pynvml.nvmlInit()
+    if pynvml is not None:
         try:
-            count = pynvml.nvmlDeviceGetCount()
-            devices = []
-            for i in range(count):
-                h = pynvml.nvmlDeviceGetHandleByIndex(i)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(h)
-                util = pynvml.nvmlDeviceGetUtilizationRates(h)
-                name = pynvml.nvmlDeviceGetName(h)
-                devices.append({
-                    "index": i,
-                    "name": name,
-                    "memory_used_bytes": int(mem.used),
-                    "memory_total_bytes": int(mem.total),
-                    "utilization_percent": int(util.gpu),
-                })
-            return {"available": True, "backend": "nvidia-nvml", "devices": devices}
-        finally:
-            pynvml.nvmlShutdown()
-    except Exception as _e:
-        logger.warning("broad except swallowed in _collect_gpu() @ web/routers/models.py:229, see exc_info", exc_info=True)
-        _ = _e  # NVML 不可用则尝试其它后端
+            pynvml.nvmlInit()
+            try:
+                count = pynvml.nvmlDeviceGetCount()
+                devices = []
+                for i in range(count):
+                    h = pynvml.nvmlDeviceGetHandleByIndex(i)
+                    mem = pynvml.nvmlDeviceGetMemoryInfo(h)
+                    util = pynvml.nvmlDeviceGetUtilizationRates(h)
+                    name = pynvml.nvmlDeviceGetName(h)
+                    devices.append({
+                        "index": i,
+                        "name": name,
+                        "memory_used_bytes": int(mem.used),
+                        "memory_total_bytes": int(mem.total),
+                        "utilization_percent": int(util.gpu),
+                    })
+                return {"available": True, "backend": "nvidia-nvml", "devices": devices}
+            finally:
+                pynvml.nvmlShutdown()
+        except Exception as e:
+            # NVML 装了但底层库不可用（macOS / 无 NVIDIA 显卡的 Linux 上 pynvml 包存在
+            # 但 `NVML Shared Library Not Found`，**属必然常态**，非 NVIDIA 平台正常如此）
+            # 或驱动未就绪。此时继续降级即可，不必告警——否则秒级轮询会刷爆日志。
+            logger.debug("NVML 不可用（无 NVIDIA 显卡或驱动未就绪），降级: %s", e)
 
     # 2) CUDA via torch（显存分配量，无利用率）
     try:
@@ -248,9 +263,13 @@ def _collect_gpu() -> dict[str, Any]:
                     "utilization_percent": None,
                 })
             return {"available": True, "backend": "cuda-torch", "devices": devices}
-    except Exception as _e:
-        logger.warning("broad except swallowed in _collect_gpu() @ web/routers/models.py:248, see exc_info", exc_info=True)
-        _ = _e  # CUDA 不可用则尝试其它后端
+    except ModuleNotFoundError:
+        # torch 未装 / CUDA 后端缺失：正常降级（macOS 必然走这里）
+        logger.debug("torch 不可用，跳过 CUDA GPU 探测")
+    except Exception as e:
+        # 非 NVIDIA 平台上 torch.cuda 不可用属常态（如 macOS）；仅在 torch 存在却
+        # 抛异常时打印 debug，避免秒级轮询刷屏。
+        logger.debug("CUDA 探测不可用，降级到 MPS/无 GPU: %s", e)
 
     # 3) Apple Silicon MPS（仅能确认存在，无法读取显存/利用率）
     try:
@@ -265,9 +284,10 @@ def _collect_gpu() -> dict[str, Any]:
                 "memory_total_bytes": None,
                 "utilization_percent": None,
             }]}
-    except Exception as _e:
-        logger.warning("broad except swallowed in _collect_gpu() @ web/routers/models.py:264, see exc_info", exc_info=True)
-        _ = _e  # MPS 不可用则回退 none
+    except ModuleNotFoundError:
+        logger.debug("torch 未安装，无 MPS GPU")
+    except Exception as e:
+        logger.debug("MPS 探测失败，按无 GPU 处理: %s", e)
 
     return {"available": False, "backend": "none", "devices": [],
             "reason": "未检测到可用 GPU 库（pynvml / CUDA / MPS 均不可用）"}

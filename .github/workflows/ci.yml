@@ -6,9 +6,17 @@ on:
   pull_request:
     branches: [main, develop]
 
+# 同一分支的旧 run 尚在跑时，新 push 直接取消旧的：既省 runner 又保证
+# 「最新提交的结果」才是最终结论（快速连续 push 不叠加完整作业）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    # 硬超时：任一 job 挂死（测试死锁 / 网络等待）不会永久占用 runner。
+    timeout-minutes: 30
     permissions:
       contents: read
     env:
@@ -66,7 +74,10 @@ jobs:
           -q --tb=short
 
     - name: Run Ruff
-      run: uv run ruff check src/
+      # 覆盖全部生产 + 测试 + 脚本路径。历史上只扫 src/（约 38% 覆盖），
+      # web/ tests/ scripts/ main.py 全在门外——那里曾藏着 web/routers/image.py
+      # 真实崩溃 bug。实测这些路径当前零违规，故一次性纳入门禁。
+      run: uv run ruff check src/ web/ tests/ scripts/ main.py
 
     - name: Verify dependency consistency
       # 四源一致（requirements.txt / requirements.lock / uv.lock / pyproject）
@@ -92,6 +103,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -144,6 +156,7 @@ jobs:
     needs: [test, frontend]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:

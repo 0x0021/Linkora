@@ -205,6 +205,7 @@ def _read_import_status() -> dict:
         with open(_IMPORT_STATUS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:  # noqa: BLE001
+        logger.warning("broad except swallowed in _read_import_status() @ web/routers/departments.py:207, see exc_info", exc_info=True)
         return {}
 
 

@@ -122,6 +122,7 @@ def get_user_data_dir() -> Path:
 
         base = platformdirs.user_data_dir(APP_NAME, APP_AUTHOR, roaming=True)
     except Exception:  # noqa: BLE001
+        logger.warning("broad except swallowed in get_user_data_dir() @ src/paths.py:124, see exc_info", exc_info=True)
         # platformdirs 缺失时退化为 ~/.linkora
         base = os.path.join(os.path.expanduser("~"), f".{APP_NAME}")
     return Path(base)

@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.component_base import LinkoraComponentBase
+import logging
 
 if TYPE_CHECKING:
     from src.config import AppConfig
@@ -202,6 +203,7 @@ class EngineMixinBase(LinkoraComponentBase):
             if importlib.util.find_spec("playwright") is not None:
                 caps.add("playwright")
         except Exception:
+            logging.warning("broad except swallowed in available_capabilities() @ src/platform/engine_mixins_base.py:204, see exc_info", exc_info=True)
             pass
         return caps
     @staticmethod

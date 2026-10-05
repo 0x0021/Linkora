@@ -28,6 +28,7 @@ class DraftRepo:
             self.store.conn.execute("ALTER TABLE message_drafts ADD COLUMN read_at TEXT")
             self.store.conn.commit()
         except Exception:  # noqa: BLE001 - 列已存在属预期
+            logger.warning("broad except swallowed in __init__() @ src/memory/draft_repo.py:30, see exc_info", exc_info=True)
             pass
 
     def add_dead_letter(self, *, msg_id: str | None, chat_id: str, chat_name: str,

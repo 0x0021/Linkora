@@ -65,6 +65,7 @@ async def intent_taxonomy(platform: str = ""):
         try:
             fs = getattr(tools_cfg, "model_fields_set", set()) or set()
         except Exception:
+            logger.warning("broad except swallowed in intent_taxonomy() @ web/routers/intents.py:67, see exc_info", exc_info=True)
             fs = set()
         if tools_cfg is not None and "tool_routing_mode" in fs:
             routing_mode = tools_cfg.tool_routing_mode

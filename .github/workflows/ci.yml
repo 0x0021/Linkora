@@ -85,6 +85,11 @@ jobs:
       # 由此漏掉 web/routers/image.py「在 str 上调 Path 方法」的真实崩溃 bug（2026-08-28）。
       run: uv run pyright
 
+    - name: Verify no broad-except regression
+      # P3 渐进收敛：except Exception / 裸 except 总数「只减不增」。基线 640（src+web，
+      # AST 精确计数）。防止静默吞噬真实错误的宽异常回潮；每收窄一批下调基线。
+      run: uv run python scripts/check_no_bare_except.py
+
   frontend:
     runs-on: ubuntu-latest
     permissions:

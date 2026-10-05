@@ -270,6 +270,7 @@ class DisplaySummaryScheduler:
             cur_row = self._store._conversation_repo.get_display_summary(chat_id)
             expected_gen = cur_row.generation if cur_row is not None else 0
         except Exception:  # noqa: BLE001
+            logger.warning("broad except swallowed in _process_job_inner() @ src/llm/display_summary_scheduler.py:272, see exc_info", exc_info=True)
             expected_gen = 0
         if self._write_with_retry(
             chat_id=chat_id, summary=summary, boundary_msg_id=boundary,

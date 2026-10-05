@@ -97,6 +97,7 @@ def _collect_embedding() -> dict[str, Any]:
             cfg = load_config(str(get_config_path()))
             emb = getattr(cfg, "embedding", None)
         except Exception:  # noqa: BLE001
+            logger.warning("broad except swallowed in _collect_embedding() @ web/routers/models.py:99, see exc_info", exc_info=True)
             pass
 
         enabled = bool(getattr(emb, "enabled", False)) if emb is not None else False
@@ -148,6 +149,7 @@ def _collect_rerank() -> dict[str, Any]:
                 if m is not None:
                     device = str(next(m.parameters()).device)
             except Exception:  # noqa: BLE001 - 设备探测失败不阻塞
+                logger.warning("broad except swallowed in _collect_rerank() @ web/routers/models.py:150, see exc_info", exc_info=True)
                 device = None
 
         if not enabled:
@@ -227,6 +229,7 @@ def _collect_gpu() -> dict[str, Any]:
         finally:
             pynvml.nvmlShutdown()
     except Exception as _e:
+        logger.warning("broad except swallowed in _collect_gpu() @ web/routers/models.py:229, see exc_info", exc_info=True)
         _ = _e  # NVML 不可用则尝试其它后端
 
     # 2) CUDA via torch（显存分配量，无利用率）
@@ -246,6 +249,7 @@ def _collect_gpu() -> dict[str, Any]:
                 })
             return {"available": True, "backend": "cuda-torch", "devices": devices}
     except Exception as _e:
+        logger.warning("broad except swallowed in _collect_gpu() @ web/routers/models.py:248, see exc_info", exc_info=True)
         _ = _e  # CUDA 不可用则尝试其它后端
 
     # 3) Apple Silicon MPS（仅能确认存在，无法读取显存/利用率）
@@ -262,6 +266,7 @@ def _collect_gpu() -> dict[str, Any]:
                 "utilization_percent": None,
             }]}
     except Exception as _e:
+        logger.warning("broad except swallowed in _collect_gpu() @ web/routers/models.py:264, see exc_info", exc_info=True)
         _ = _e  # MPS 不可用则回退 none
 
     return {"available": False, "backend": "none", "devices": [],

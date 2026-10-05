@@ -172,6 +172,7 @@ def _migrate_schemas_on_startup() -> None:
                     try:
                         conn.close()
                     except Exception:  # noqa: BLE001
+                        logger.warning("broad except swallowed in _migrate_schemas_on_startup() @ web/api.py:174, see exc_info", exc_info=True)
                         pass
     except Exception as e:  # noqa: BLE001
         logger.warning("[Web 启动迁移] 遍历分库失败（非致命，查询时自愈）: %s", e)
@@ -1212,6 +1213,7 @@ def run_web(port: int = 8000, host: str | None = None):
             _cfg = get_config()
             host = _cfg.web.host if _cfg is not None else None
         except Exception:
+            logger.warning("broad except swallowed in run_web() @ web/api.py:1214, see exc_info", exc_info=True)
             host = "127.0.0.1"
 
     # 安全告警：绑定 0.0.0.0 且未开启认证时，管理后台可能公网裸奔（不阻断启动）。
@@ -1222,6 +1224,7 @@ def run_web(port: int = 8000, host: str | None = None):
             _cfg = get_config()
             _auth_on = _cfg.web.auth_enabled if _cfg is not None else True
         except Exception:
+            logger.warning("broad except swallowed in run_web() @ web/api.py:1224, see exc_info", exc_info=True)
             _auth_on = True
         if not _auth_on:
             logger.warning(

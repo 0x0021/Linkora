@@ -141,6 +141,7 @@ class SkillTool(BaseTool):
             hint = f" 可尝试回退工具：{', '.join(fb)}" if fb else ""
             return {"error": f"命令未找到: {e}。{hint}"}
         except Exception as e:
+            logger.warning("broad except swallowed in execute() @ src/skills/tool_wrapper.py:143, see exc_info", exc_info=True)
             fb = self._skill.fallback_tools
             hint = f" 可尝试回退工具：{', '.join(fb)}" if fb else ""
             return {"error": f"执行异常: {e}。{hint}"}

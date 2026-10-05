@@ -52,6 +52,7 @@ def _is_same_physical_message(a, b, window_seconds: float = _DUP_CONTENT_WINDOW_
     try:
         return abs((ta - tb).total_seconds()) <= window_seconds
     except Exception:
+        logger.warning("broad except swallowed in _is_same_physical_message() @ src/platform/message_loop.py:54, see exc_info", exc_info=True)
         # tz-aware 与 naive 相减会抛 TypeError，退回保守去重
         return True
 
@@ -146,6 +147,7 @@ class MessageLoopMixin(EngineMixinBase):
                 # 用 Unix 时间戳比较，天然规避 naive/aware 混用相减抛 TypeError
                 return t.timestamp()
             except Exception:
+                logger.warning("broad except swallowed in _drop_stale_messages_in_batch() @ src/platform/message_loop.py:148, see exc_info", exc_info=True)
                 return None
 
         stamps = [_epoch(m) for m in messages]

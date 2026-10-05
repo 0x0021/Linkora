@@ -425,6 +425,25 @@ def _is_sensitive_request(request: Request) -> bool:
     return request.url.path in _SENSITIVE_GET_PATHS
 
 
+def _web_exposed_publicly(config) -> bool:
+    """web.host 是否为对外可路由地址（复用 WebConfig._is_publicly_exposed）。
+
+    供「关闭鉴权 + 未配凭据」时判定是否要 fail-closed 拒绝敏感操作：
+    对外可路由时无认证的写接口等于任意人可改配置/删数据，必须拒绝；本机/私网则
+    维持「由网络边界负责隔离」的既有语义。
+
+    防御式：最小/测试配置（SimpleNamespace 桩）可能没有该方法或调用可能抛错，
+    一律按「非对外暴露」处理（保守放行，不因判定失败阻断正常请求）。
+    """
+    checker = getattr(getattr(config, "web", None), "_is_publicly_exposed", None)
+    if not callable(checker):
+        return False
+    try:
+        return bool(checker())
+    except (TypeError, AttributeError, ValueError):
+        return False
+
+
 def _require_admin_role(request: Request) -> JSONResponse | None:
     """敏感请求的角色二次校验：仅 admin 可访问（RBAC 授权分级）。
 
@@ -602,10 +621,23 @@ async def web_auth_middleware(request: Request, call_next):
                 if auth_err is not None:
                     return auth_err
                 # RBAC 授权分级同样生效：敏感请求仅 admin 放行。
-                # （未配置凭据 → 维持「由网络边界负责隔离」的既有语义，不强制角色。）
                 role_err = _require_admin_role(request)
                 if role_err is not None:
                     return role_err
+            elif _web_exposed_publicly(config):
+                # fail-closed（P1-3）：关闭鉴权 + 未配凭据 + host 对外可路由
+                # → 敏感写接口不得无认证裸奔（否则任何人可改配置→泄漏 api_key、可删数据）。
+                # 仅本机/私网（host 非对外可路由）或无法判定时维持「由网络边界负责隔离」
+                # 的既有信任边界语义，不破坏本地调试 / 内网反代部署。
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": (
+                            "鉴权已关闭且未配置凭据，但服务对外可路由，为安全拒绝敏感操作。"
+                            "请设置 web.auth_enabled=true，或将 web.host 保持 127.0.0.1（仅本机/内网）。"
+                        )
+                    },
+                )
         return await call_next(request)
 
     # 全局鉴权开启：所有非白名单端点强制 Basic Auth

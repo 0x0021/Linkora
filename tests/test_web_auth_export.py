@@ -282,6 +282,30 @@ def test_middleware_auth_disabled_sensitive_no_creds_passthrough():
         assert resp2 == "OK"
 
 
+def test_middleware_auth_disabled_exposed_host_fail_closed():
+    """P1-3 fail-closed：关闭鉴权 + 无凭据 + host 对外可路由 → 敏感操作 503。
+
+    无认证的写接口等于任意人可改配置（泄漏 api_key）/删数据，故对外可路由时
+    必须拒绝；仅本机/私网（host 非对外可路由）才维持放行。
+    """
+    from web.api import web_auth_middleware
+
+    # 真实 WebConfig 带 _is_publicly_exposed()；这里构造一个返回 True 的桩，
+    # 模拟 host 绑定到 0.0.0.0 / 对外地址的情形。
+    web = SimpleNamespace(
+        auth_enabled=False, auth_username="", auth_password="",
+        _is_publicly_exposed=lambda: True,
+    )
+    cfg = SimpleNamespace(web=web)
+    with patch("web.api._get_cfg", return_value=cfg), patch("web.api._AUTH_FAILS", {}):
+        # 敏感写操作 → 拒绝（fail-closed）
+        resp = _run(web_auth_middleware(_fake_request("/api/config", "POST"), _ok_call_next))
+        assert resp != "OK", "对外可路由 + 关闭鉴权 + 无凭据时，敏感写操作不应放行"
+        # 非敏感只读仍放行（不把整个服务打死）
+        ro = _run(web_auth_middleware(_fake_request("/api/some/read", "GET"), _ok_call_next))
+        assert ro == "OK"
+
+
 def test_middleware_auth_disabled_nonsensitive_read_passthrough():
     from web.api import web_auth_middleware
 

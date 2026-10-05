@@ -132,7 +132,11 @@ async def conversations(limit: int = 50):
 
 
 @router.get("/api/messages")
-async def messages(background_tasks: BackgroundTasks = None, chat_id: str = "", limit: int = 50):
+async def messages(
+    background_tasks: BackgroundTasks = None,  # type: ignore[arg-type]
+    chat_id: str = "",
+    limit: int = 50,
+):
     try:
         limit = max(1, min(limit, 500))
         if background_tasks is None:

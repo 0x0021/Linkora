@@ -103,11 +103,12 @@ def test_placeholder_password_rejected_fail_closed():
 
 def test_example_ships_default_password():
     """示例模板须随附「可用」的出厂默认口令 Admin@P0sw0rd（非 fail-closed 占位符），
-    使 cp 模板即可启动并登录；该口令必须不在 fail-closed 黑名单内，否则抄模板后
-    启动即被拒（历史「没默认密码」回归）。
+    使 cp 模板即可启动并登录；该口令在**本地/内网绑定**下必须放行，
+    否则等于没给默认密码（v0.5.4 修复的「没默认密码、登不进去」回归）。
 
     真正的 fail-closed 守卫仍由 test_placeholder_password_rejected_fail_closed 守护：
-    REPLACE_WITH_YOUR_STRONG_PASSWORD 等占位/弱口令依旧被拒。
+    REPLACE_WITH_YOUR_STRONG_PASSWORD 等占位/弱口令依旧被拒（任何绑定下）。
+    公网暴露场景由 test_factory_password_rejected_when_publicly_exposed 守护。
     """
     from src.config_models import WebConfig
 
@@ -116,5 +117,46 @@ def test_example_ships_default_password():
     )
     pw = example["web"]["auth_password"]
     assert pw == "Admin@P0sw0rd"
-    # 出厂默认口令必须可用（不触发 fail-closed），否则等于没给默认密码
-    WebConfig(auth_enabled=True, auth_password=pw)  # 不应抛 ValueError
+    # 出厂默认口令在本地/内网绑定下必须可用（不触发 fail-closed），否则等于没给默认密码
+    for host in ("127.0.0.1", "localhost", "::1", "192.168.1.10", "10.0.0.5", ""):
+        WebConfig(auth_enabled=True, auth_password=pw, host=host)  # 不应抛 ValueError
+
+
+def test_factory_password_rejected_when_publicly_exposed():
+    """公网暴露（host 非回环/非私网）时，出厂默认口令必须 fail-closed 拒绝启动。
+
+    背景：Admin@P0sw0rd 公开在 git 跟踪的 config.yaml.example 中。保留它是为了
+    「cp 模板即可登录」的开箱体验（v0.5.4），但一旦服务对外可路由，任何人都能用
+    这个公开口令登录管理后台——此时必须 fail-closed。
+    """
+    from src.config_models import WebConfig
+
+    # 对外暴露的各种写法：0.0.0.0 / :: / 公网 IP / 主机名，均须拒绝
+    # （203.0.113.x 是 RFC 文档保留段，ipaddress 归为 private，故用真实公网 IP 8.8.8.8）
+    for host in ("0.0.0.0", "::", "8.8.8.8", "linkora.example.com"):
+        with pytest.raises(ValueError, match="出厂默认口令"):
+            WebConfig(auth_enabled=True, auth_password="Admin@P0sw0rd", host=host)
+
+
+def test_strong_password_allowed_when_publicly_exposed():
+    """公网暴露 + 自有强密码（含 PBKDF2 哈希）→ 正常放行（防过度拦截）。"""
+    from src.config_models import WebConfig
+
+    WebConfig(auth_enabled=True, auth_password="my-own-strong-pass-9271", host="0.0.0.0")
+    # PBKDF2 哈希串同样放行
+    WebConfig(
+        auth_enabled=True,
+        auth_password="pbkdf2_sha256$200000$c2FsdA==$aGFzaA==",
+        host="0.0.0.0",
+    )
+
+
+def test_weak_passwords_rejected_on_all_bindings():
+    """弱口令/占位哨兵在任何绑定下都拒绝（不因分级策略而放宽）。"""
+    from src.config_models import WebConfig
+
+    for pw in ("", "   ", "admin", "password", "changeme",
+               "please-change-me", "REPLACE_WITH_YOUR_STRONG_PASSWORD"):
+        for host in ("127.0.0.1", "0.0.0.0"):
+            with pytest.raises(ValueError):
+                WebConfig(auth_enabled=True, auth_password=pw, host=host)

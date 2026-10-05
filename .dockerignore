@@ -1,12 +1,55 @@
 # 容器构建时排除，避免把本地污染/大目录带进镜像
+# ⚠️ Docker 的 COPY 只读本文件，**不读** .gitignore —— 故密钥必须在此显式排除。
+#    改本文件时请与 .gitignore 的密钥段保持一致。
+
+# ---- 依赖与构建缓存 ----
 .venv
+venv
 node_modules
-data
 .git
 .workbuddy
 __pycache__
+**/__pycache__
 *.pyc
-dist
+*.pyo
 build
+
+# ---- 运行时数据（真实会话库 + 图片 + 日志，体积大且含隐私） ----
+data
+logs
+conversations
+dingtalk
+
+# ---- 密钥与凭据（P0：COPY . . 会把 live 配置打进镜像层） ----
+# config.yaml 含明文 jwt_secret / auth_password / api_key，镜像泄露即凭据泄露。
+config.yaml
+config.yaml.bak*
+config.yaml.damaged*
+config.yaml.local*
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# ---- 数据库文件（多账号会话分库，不应入镜像） ----
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*
+
+# ---- 前端产物 ----
+# 注意：`web/static/dist` 是**前端 bundle 产物且已入库**（生产靠它），
+# 因此**绝不能**用裸 `dist` 规则排除（历史上就误排除了它）。
+# 仅排除仓库根的构建中间物目录。
+/dist
+
+# ---- 其它 ----
 *.pid
 .DS_Store
+.idea
+.vscode

@@ -49,6 +49,18 @@ class BlacklistRepo:
         """按当前平台/账号隔离的会话连接（blocked_conversations 属会话数据）。"""
         return self.store.conv_conn(get_current_platform())
 
+    def _write(self, fn) -> None:
+        """执行一次会话库写入：进程内写闸门 + 锁失败自愈重试（委托 store 层）。
+
+        【P0 2026-10-05】``blocked_conversations`` 属**会话数据**，与 messages/
+        conversations 同库，必须走同一个写闸门。此前本 repo 的 5 处写入全部裸写，
+        绕过闸门 → 闸门显示「无持有者」但写库仍 database is locked（实测排障关键证据）。
+
+        热点：``poller_core_access`` 的「黑名单对账」对**每个会话**逐条查+写，
+        写入量与会话数同阶，是持续锁争用的主要来源之一。
+        """
+        self.store.write_with_retry(fn, get_current_platform())
+
     # ──────────────── cache helpers ────────────────
 
     def _ensure_cache_loaded(self) -> None:
@@ -101,63 +113,98 @@ class BlacklistRepo:
         chat_id = (chat_id or "").rstrip("=")
         if not chat_id:
             return
-        cur = self._cc().cursor()
         now = datetime.now().isoformat()
-        # 如果调用方未显式给 failure_count，从表中读出后 +1，保留连续计数
-        if failure_count is None:
-            cur.execute("SELECT failure_count FROM blocked_conversations WHERE chat_id = ?", (chat_id,))
-            row = cur.fetchone()
-            failure_count = (int(row["failure_count"]) + 1) if row and row["failure_count"] is not None else 1
-        # cooldown_until 默认走「1h 冷却」（不传则自动设）。只有 permanent=True
-        # 才表示永久黑名单（cooldown_until=NULL），优先于 1h 默认。保密群等
-        # 永远不可恢复的会话必须走永久，否则 1h 冷却到期后又会被反复重新拉黑。
-        # ON CONFLICT 保留旧 cooldown_until 不被覆盖—— chat.py 会
-        # 读出后 UPDATE 设正确时间，以避免被刚 INSERT 的 NULL 擦掉。
-        if cooldown_until is None and not permanent:
-            cur.execute("SELECT cooldown_until FROM blocked_conversations WHERE chat_id = ?", (chat_id,))
-            existing = cur.fetchone()
-            if existing is None:
-                cooldown_until = (datetime.now() + timedelta(hours=self.DEFAULT_COOLDOWN_HOURS)).isoformat()
-            else:
-                cooldown_until = existing["cooldown_until"]  # 保留旧值
-        if permanent:
-            cooldown_until = None  # 永久黑名单（NULL）
-        cur.execute(
-            """INSERT INTO blocked_conversations
-               (chat_id, chat_name, chat_type, reason, detected_at, source, last_error,
-                cooldown_until, failure_count)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(chat_id) DO UPDATE SET
-                 chat_name=excluded.chat_name,
-                 chat_type=excluded.chat_type,
-                 reason=excluded.reason,
-                 detected_at=excluded.detected_at,
-                 source=excluded.source,
-                 last_error=excluded.last_error,
-                 cooldown_until=excluded.cooldown_until,
-                 failure_count=excluded.failure_count""",
-            (chat_id, chat_name or "", chat_type or "", reason or "",
-             now, source or "", (last_error or "")[:1000],
-             cooldown_until, int(failure_count)),
-        )
-        self._cc().commit()
+        final_cooldown: str | None = cooldown_until
+        # 局部副本：闭包内若对参数直接赋值，Python 会判定为「引用未定义」
+        # （F823），故用独立局部变量承接最终计数。
+        final_failure_count = failure_count
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal final_cooldown, final_failure_count
+            cur = conn.cursor()
+            try:
+                # 如果调用方未显式给 failure_count，从表中读出后 +1，保留连续计数
+                if final_failure_count is None:
+                    cur.execute(
+                        "SELECT failure_count FROM blocked_conversations WHERE chat_id = ?",
+                        (chat_id,),
+                    )
+                    row = cur.fetchone()
+                    final_failure_count = (
+                        (int(row["failure_count"]) + 1)
+                        if row and row["failure_count"] is not None
+                        else 1
+                    )
+                cd = cooldown_until
+                # cooldown_until 默认走「1h 冷却」（不传则自动设）。只有 permanent=True
+                # 才表示永久黑名单（cooldown_until=NULL），优先于 1h 默认。保密群等
+                # 永远不可恢复的会话必须走永久，否则 1h 冷却到期后又会被反复重新拉黑。
+                # ON CONFLICT 保留旧 cooldown_until 不被覆盖—— chat.py 会
+                # 读出后 UPDATE 设正确时间，以避免被刚 INSERT 的 NULL 擦掉。
+                if cd is None and not permanent:
+                    cur.execute(
+                        "SELECT cooldown_until FROM blocked_conversations WHERE chat_id = ?",
+                        (chat_id,),
+                    )
+                    existing = cur.fetchone()
+                    if existing is None:
+                        cd = (datetime.now() + timedelta(
+                            hours=self.DEFAULT_COOLDOWN_HOURS)).isoformat()
+                    else:
+                        cd = existing["cooldown_until"]  # 保留旧值
+                if permanent:
+                    cd = None  # 永久黑名单（NULL）
+                final_cooldown = cd
+                cur.execute(
+                    """INSERT INTO blocked_conversations
+                       (chat_id, chat_name, chat_type, reason, detected_at, source, last_error,
+                        cooldown_until, failure_count)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(chat_id) DO UPDATE SET
+                         chat_name=excluded.chat_name,
+                         chat_type=excluded.chat_type,
+                         reason=excluded.reason,
+                         detected_at=excluded.detected_at,
+                         source=excluded.source,
+                         last_error=excluded.last_error,
+                         cooldown_until=excluded.cooldown_until,
+                         failure_count=excluded.failure_count""",
+                    (chat_id, chat_name or "", chat_type or "", reason or "",
+                     now, source or "", (last_error or "")[:1000],
+                     cd, int(final_failure_count)),
+                )
+            finally:
+                cur.close()
+            conn.commit()
+
+        # 【P0 2026-10-05】经写闸门执行（此前裸写绕过闸门，是持续锁争用来源之一）
+        self._write(_do_write)
         # 同步缓存（写入后最终 cooldown_until 已确定）
-        self._update_cache(chat_id, cooldown_until)
+        self._update_cache(chat_id, final_cooldown)
 
     def upgrade_to_permanent_block(self, chat_id: str) -> bool:
         """把临时冷却升级为永久黑名单（cooldown_until=NULL）。返回是否执行了更新。"""
         chat_id = str(chat_id or "").rstrip("=")
         if not chat_id:
             return False
-        cur = self._cc().cursor()
-        cur.execute(
-            "UPDATE blocked_conversations SET cooldown_until=NULL, "
-            "reason=COALESCE(reason, '') || ' [升级永久黑名单]' "
-            "WHERE chat_id = ?",
-            (chat_id,),
-        )
-        self._cc().commit()
-        updated = cur.rowcount > 0
+        updated = False
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal updated
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE blocked_conversations SET cooldown_until=NULL, "
+                    "reason=COALESCE(reason, '') || ' [升级永久黑名单]' "
+                    "WHERE chat_id = ?",
+                    (chat_id,),
+                )
+                updated = cur.rowcount > 0
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
         if updated:
             self._update_cache(chat_id, None)  # 永久黑名单
         return updated
@@ -173,14 +220,23 @@ class BlacklistRepo:
         chat_id = str(chat_id or "").rstrip("=")
         if not chat_id:
             return False
-        cur = self._cc().cursor()
-        cur.execute(
-            "UPDATE blocked_conversations SET cooldown_until=NULL "
-            "WHERE chat_id = ? AND cooldown_until IS NOT NULL",
-            (chat_id,),
-        )
-        self._cc().commit()
-        updated = cur.rowcount > 0
+        updated = False
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal updated
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE blocked_conversations SET cooldown_until=NULL "
+                    "WHERE chat_id = ? AND cooldown_until IS NOT NULL",
+                    (chat_id,),
+                )
+                updated = cur.rowcount > 0
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
         if updated:
             self._update_cache(chat_id, None)  # 永久黑名单
         return updated
@@ -242,9 +298,18 @@ class BlacklistRepo:
 
     def remove_blocked_conversation(self, chat_id: str) -> None:
         chat_id = str(chat_id).rstrip("=")
-        cur = self._cc().cursor()
-        cur.execute("DELETE FROM blocked_conversations WHERE chat_id = ?", (chat_id,))
-        self._cc().commit()
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "DELETE FROM blocked_conversations WHERE chat_id = ?", (chat_id,)
+                )
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
         self._remove_from_cache(chat_id)
 
     def list_blocked_conversations(self) -> list[dict]:
@@ -253,12 +318,21 @@ class BlacklistRepo:
 
     def clear_blocked_conversations(self) -> int:
         """清空黑名单表，返回清除数量。"""
-        cur = self._cc().cursor()
-        cur.execute("SELECT COUNT(*) AS cnt FROM blocked_conversations")
-        row = cur.fetchone()
-        count = row["cnt"] if row else 0
-        cur.execute("DELETE FROM blocked_conversations")
-        self._cc().commit()
+        count = 0
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal count
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT COUNT(*) AS cnt FROM blocked_conversations")
+                row = cur.fetchone()
+                count = row["cnt"] if row else 0
+                cur.execute("DELETE FROM blocked_conversations")
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
         with self._cache_lock:
             self._cache.clear()
         return count

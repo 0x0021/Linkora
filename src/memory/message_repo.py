@@ -127,6 +127,25 @@ class MessageRepo:
     def __init__(self, store: "SQLiteStore") -> None:
         self.store = store
 
+    def _write(self, fn, platform: str = "") -> None:
+        """执行一次写操作：进程内写闸门 + 锁失败自愈重试（委托 store 层）。
+
+        【P0 2026-10-05】**所有**写路径必须走本方法，不得直接 ``self._cc().execute(...)``。
+
+        事故背景：``e2997cb``(2026-09-18) 之前读游标从不关闭，悬着的 WAL 读事务
+        **意外充当了写入闸门**，所以从不报 database is locked。该提交修好游标泄漏后
+        闸门被拆除，而写入侧未同步补上闸门 → 跨线程/跨进程写锁争用全面爆发。
+
+        本项目此后的写入侧闸门由两层构成，**缺一不可**：
+          1. ``store._write_gate()``  进程内写串行化（SQLite 同时只允许一个写者）
+          2. ``store.write_with_retry()``  闸门 + 锁失败丢连接重建 + 退避重试
+
+        历史教训：首次修复只包了 ``conversation_repo`` 的 3 个写方法，漏掉本类
+        全部 13 个，导致 ``cleanup_old_messages`` 等仍在闸门外并发写 → 单进程下
+        依然撞锁（2026-10-05 10:52 现场）。**收口必须做全，不是挑几个高频点。**
+        """
+        self.store.write_with_retry(fn, platform or get_current_platform())
+
     def _cc(self) -> sqlite3.Connection:
         """会话库连接：平台取自当前平台上下文（contextvar）。
 
@@ -149,13 +168,19 @@ class MessageRepo:
         return cur.fetchone() is not None
 
     def mark_message_processed(self, msg_id: str, chat_id: str) -> None:
-        cur = self._cc().cursor()
-        now = datetime.now().isoformat()
-        cur.execute(
-            "INSERT OR IGNORE INTO dedup_messages (msg_id, chat_id, processed_at) VALUES (?, ?, ?)",
-            (msg_id, chat_id, now)
-        )
-        self._cc().commit()
+        def _do_write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                now = datetime.now().isoformat()
+                cur.execute(
+                    "INSERT OR IGNORE INTO dedup_messages (msg_id, chat_id, processed_at) VALUES (?, ?, ?)",
+                    (msg_id, chat_id, now),
+                )
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
 
     def load_recent_processed_msg_ids(self, hours: int = 24) -> set[str]:
         """启动时从 DB 加载最近 N 小时的已处理消息 ID，避免重启后重复处理。"""
@@ -169,10 +194,17 @@ class MessageRepo:
 
     def cleanup_processed_msgs(self, hours: int = 72) -> None:
         """清理 N 小时前的已处理记录（释放空间）。"""
-        cur = self._cc().cursor()
-        before = (datetime.now() - timedelta(hours=hours)).isoformat()
-        cur.execute("DELETE FROM dedup_messages WHERE processed_at < ?", (before,))
-        self._cc().commit()
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                before = (datetime.now() - timedelta(hours=hours)).isoformat()
+                cur.execute("DELETE FROM dedup_messages WHERE processed_at < ?", (before,))
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
 
     def cleanup_old_messages(self, retention_days: int = 90) -> dict:
         """清理超过保留期的旧消息记录，防止 messages 表无限增长。
@@ -185,26 +217,46 @@ class MessageRepo:
         """
         before = (datetime.now() - timedelta(days=retention_days)).isoformat()
         # P0-1: 使用 store 级锁保证清理操作原子性，避免与其他清理线程竞态
+        # 【P0 2026-10-05】写入走 _write（进程内写闸门 + 锁失败自愈）。
+        #
+        # 关键修复：**磁盘 IO 必须移出事务**。原实现在 DELETE + commit 之前就调用
+        # purge_orphan_images（扫描并 unlink 文件），整个磁盘操作期间 SQLite 写锁
+        # 一直被持有；images 目录大时可达数秒，期间所有其他写者全部撞锁
+        # （2026-10-05 10:52 现场：消息清理直接抛 database is locked）。
+        # 改为：闸门内只做「查 → 删 → commit」，commit 之后闸门释放再做磁盘清理。
+        image_paths: list[str] = []
+        count = 0
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal count, image_paths
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT COUNT(*) FROM messages WHERE created_at < ?", (before,))
+                count = cur.fetchone()[0]
+                if count > 0:
+                    # 收集待删消息引用的本地图片（相对 data/tmp_images 的 POSIX 路径），
+                    # 删行后一并清理磁盘文件，避免「消息已删、图片成孤儿文件永久累积」的磁盘泄漏。
+                    # 文件名含 msg_id（ocr_<msg_id>.png / card_<key>.png），与消息 1:1，可直接删除。
+                    cur.execute(
+                        "SELECT image_path FROM messages WHERE created_at < ? AND image_path != ''",
+                        (before,),
+                    )
+                    image_paths = [r[0] for r in cur.fetchall()]
+                    cur.execute("DELETE FROM messages WHERE created_at < ?", (before,))
+            finally:
+                cur.close()
+            conn.commit()
+
         with self.store._lock:
-            cur = self._cc().cursor()
-            cur.execute("SELECT COUNT(*) FROM messages WHERE created_at < ?", (before,))
-            count = cur.fetchone()[0]
-            if count > 0:
-                # 收集待删消息引用的本地图片（相对 data/tmp_images 的 POSIX 路径），
-                # 删行后一并清理磁盘文件，避免「消息已删、图片成孤儿文件永久累积」的磁盘泄漏。
-                # 文件名含 msg_id（ocr_<msg_id>.png / card_<key>.png），与消息 1:1，可直接删除。
-                cur.execute(
-                    "SELECT image_path FROM messages WHERE created_at < ? AND image_path != ''",
-                    (before,),
-                )
-                image_paths = [r[0] for r in cur.fetchall()]
-                cur.execute("DELETE FROM messages WHERE created_at < ?", (before,))
-                self._cc().commit()
-                removed_files = purge_orphan_images(
-                    self.store.db_path, image_paths, base_dir=str(data_path("tmp_images"))
-                )
-                logger.info("清理 %d 条旧消息记录（%s 天前），删除孤儿图片 %d 个",
-                            count, retention_days, removed_files)
+            self._write(_do_write)
+
+        # 闸门外做磁盘 IO：不持 SQLite 写锁
+        if count > 0 and image_paths:
+            removed_files = purge_orphan_images(
+                self.store.db_path, image_paths, base_dir=str(data_path("tmp_images"))
+            )
+            logger.info("清理 %d 条旧消息记录（%s 天前），删除孤儿图片 %d 个",
+                        count, retention_days, removed_files)
         return {"deleted_count": count, "before_ts": before}
 
     # ============ 死信队列（P0-2）============
@@ -212,13 +264,17 @@ class MessageRepo:
     def save_message(self, message: Message, role: str = "user", skip_reason: str = "") -> None:
         """保存一条消息，同时更新会话统计（写 messages + conversations 跨表事务）。
 
-        使用 with self._cc() as _conn: 确保两表写入原子性：任一失败则全部回滚。
+        两表写入在**同一事务**内完成：任一失败则全部回滚。
 
         OA审批系统推送消息使用独立会话（chat_id = 'system:oa_approval'），
         避免与"工作通知"群混在一起。
+
+        【P0 2026-10-05】写入走 ``_write``（进程内写闸门 + 锁失败自愈重试）。
+        本方法是**全仓最高频的写入口**（每条落库消息都调），此前用
+        ``with self._cc() as _conn`` 事务上下文绕过闸门，是锁争用的主要来源之一。
         """
-        with self._cc() as _conn:
-            cur = self._cc().cursor()
+        def _do_write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
             now = datetime.now().isoformat()
             chat_name = message.chat_name.strip() if message.chat_name else ""
 
@@ -231,49 +287,57 @@ class MessageRepo:
                 effective_chat_id = message.chat_id
                 effective_chat_name = chat_name
                 effective_chat_type = message.chat_type or "single"
-            cur.execute(
-                """INSERT OR IGNORE INTO messages
-                   (chat_id, chat_type, msg_id, sender_id, sender_name, content, msg_type, timestamp, role, image_path, is_bot, skip_reason, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    effective_chat_id,
-                    effective_chat_type,
-                    message.msg_id,
-                    message.sender_id,
-                    message.sender_name,
-                    message.content,
-                    message.msg_type,
-                    message.timestamp.isoformat(),
-                    role,
-                    message.image_path or "",
-                    int(message.is_bot),
-                    skip_reason or "",
-                    now,
-                ),
-            )
-            if cur.rowcount > 0:
-                last_message_time = message.timestamp.isoformat() if message.timestamp else now
+            try:
                 cur.execute(
-                    """INSERT INTO conversations
-                       (chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id, last_message_time, message_count, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-                       ON CONFLICT(chat_id) DO UPDATE SET
-                           chat_name = COALESCE(NULLIF(excluded.chat_name, ''), conversations.chat_name),
-                           chat_type = excluded.chat_type,
-                           last_message_time = excluded.last_message_time,
-                           message_count = COALESCE(conversations.message_count, 0) + 1,
-                           updated_at = excluded.updated_at""",
+                    """INSERT OR IGNORE INTO messages
+                       (chat_id, chat_type, msg_id, sender_id, sender_name, content, msg_type, timestamp, role, image_path, is_bot, skip_reason, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         effective_chat_id,
-                        effective_chat_name,
                         effective_chat_type,
-                        "",
-                        "",
-                        last_message_time,
-                        now,
+                        message.msg_id,
+                        message.sender_id,
+                        message.sender_name,
+                        message.content,
+                        message.msg_type,
+                        message.timestamp.isoformat(),
+                        role,
+                        message.image_path or "",
+                        int(message.is_bot),
+                        skip_reason or "",
                         now,
                     ),
                 )
+                if cur.rowcount > 0:
+                    last_message_time = (
+                        message.timestamp.isoformat() if message.timestamp else now
+                    )
+                    cur.execute(
+                        """INSERT INTO conversations
+                           (chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id, last_message_time, message_count, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+                           ON CONFLICT(chat_id) DO UPDATE SET
+                               chat_name = COALESCE(NULLIF(excluded.chat_name, ''), conversations.chat_name),
+                               chat_type = excluded.chat_type,
+                               last_message_time = excluded.last_message_time,
+                               message_count = COALESCE(conversations.message_count, 0) + 1,
+                               updated_at = excluded.updated_at""",
+                        (
+                            effective_chat_id,
+                            effective_chat_name,
+                            effective_chat_type,
+                            "",
+                            "",
+                            last_message_time,
+                            now,
+                            now,
+                        ),
+                    )
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
 
     def update_message_content(self, msg_id: str, content: str) -> None:
         """更新消息内容（用于 OCR 异步识别完成后更新）。"""
@@ -369,27 +433,45 @@ class MessageRepo:
         """
         if not msg_id:
             return False
-        with self.store._lock:
-            cur = self._cc().cursor()
-            # 先查所属会话与图片路径，便于同步扣减 message_count 并清理磁盘孤儿图片
-            cur.execute("SELECT chat_id, image_path FROM messages WHERE msg_id = ?", (msg_id,))
-            row = cur.fetchone()
-            chat_id = row["chat_id"] if row else None
-            image_path = (row["image_path"] or "") if row else ""
-            cur.execute("DELETE FROM messages WHERE msg_id = ?", (msg_id,))
-            deleted = cur.rowcount > 0
-            if deleted and chat_id:
+        # 【P0 2026-10-05】写入走 _write（进程内写闸门 + 锁失败自愈），
+        # 且**磁盘 IO 移出事务**：原实现在 commit 之前调用 purge_orphan_images
+        # （扫描并 unlink 文件），整个磁盘操作期间 SQLite 写锁一直持有。
+        chat_id: str | None = None
+        image_path = ""
+        deleted = False
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal chat_id, image_path, deleted
+            cur = conn.cursor()
+            try:
+                # 先查所属会话与图片路径，便于同步扣减 message_count 并清理磁盘孤儿图片
                 cur.execute(
-                    "UPDATE conversations SET message_count = MAX(0, COALESCE(message_count, 0) - 1) "
-                    "WHERE chat_id = ?",
-                    (str(chat_id),),
+                    "SELECT chat_id, image_path FROM messages WHERE msg_id = ?", (msg_id,)
                 )
-            self._cc().commit()
-            if deleted and image_path:
-                purge_orphan_images(
-                    self.store.db_path, [image_path], base_dir=str(data_path("tmp_images"))
-                )
-            return deleted
+                row = cur.fetchone()
+                chat_id = row["chat_id"] if row else None
+                image_path = (row["image_path"] or "") if row else ""
+                cur.execute("DELETE FROM messages WHERE msg_id = ?", (msg_id,))
+                deleted = cur.rowcount > 0
+                if deleted and chat_id:
+                    cur.execute(
+                        "UPDATE conversations SET message_count = MAX(0, COALESCE(message_count, 0) - 1) "
+                        "WHERE chat_id = ?",
+                        (str(chat_id),),
+                    )
+            finally:
+                cur.close()
+            conn.commit()
+
+        with self.store._lock:
+            self._write(_do_write)
+
+        # 闸门外做磁盘 IO：不持 SQLite 写锁
+        if deleted and image_path:
+            purge_orphan_images(
+                self.store.db_path, [image_path], base_dir=str(data_path("tmp_images"))
+            )
+        return deleted
 
     def mark_message_withdrawn(self, msg_id: str) -> bool:
         """标记消息为已撤回（软删除：保留记录但标记 is_withdrawn=1）。

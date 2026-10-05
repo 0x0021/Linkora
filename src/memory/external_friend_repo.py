@@ -29,25 +29,42 @@ class ExternalFriendRepo:
         """按当前平台/账号隔离的会话连接（external_friends 属会话数据）。"""
         return self.store.conv_conn(get_current_platform())
 
+    def _write(self, fn) -> None:
+        """执行一次会话库写入：进程内写闸门 + 锁失败自愈重试（委托 store 层）。
+
+        【P0 2026-10-05】``external_friends`` 属**会话数据**，与 messages/conversations
+        同库，必须走同一个写闸门。此前裸写绕过闸门。
+        调用方：``poller_strategy`` 每次轮询发现外部好友即写入。
+        """
+        self.store.write_with_retry(fn, get_current_platform())
+
     def add_external_friend(self, name: str, open_dingtalk_id: str,
                             chat_id: str = "", notes: str = "") -> dict:
         """添加外部好友映射。"""
-        cur = self._cc().cursor()
         now = datetime.now().isoformat()
-        try:
-            cur.execute(
-                """INSERT INTO external_friends (name, open_dingtalk_id, chat_id, notes, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (name, open_dingtalk_id, chat_id, notes, now, now),
-            )
-        except sqlite3.IntegrityError:
-            # 已存在则更新
-            cur.execute(
-                """UPDATE external_friends SET name=?, chat_id=?, notes=?, updated_at=?
-                   WHERE open_dingtalk_id=?""",
-                (name, chat_id, notes, now, open_dingtalk_id),
-            )
-        self._cc().commit()
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                try:
+                    cur.execute(
+                        """INSERT INTO external_friends (name, open_dingtalk_id, chat_id, notes, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (name, open_dingtalk_id, chat_id, notes, now, now),
+                    )
+                except sqlite3.IntegrityError:
+                    # 已存在则更新
+                    cur.execute(
+                        """UPDATE external_friends SET name=?, chat_id=?, notes=?, updated_at=?
+                           WHERE open_dingtalk_id=?""",
+                        (name, chat_id, notes, now, open_dingtalk_id),
+                    )
+            finally:
+                cur.close()
+            conn.commit()
+
+        # 【P0 2026-10-05】经写闸门执行（此前裸写绕过闸门）
+        self._write(_do_write)
         row = self.get_external_friend_by_id(open_dingtalk_id)
         assert row is not None
         return row
@@ -74,8 +91,21 @@ class ExternalFriendRepo:
 
     def delete_external_friend(self, open_dingtalk_id: str) -> bool:
         """删除外部好友。"""
-        cur = self._cc().cursor()
-        cur.execute("DELETE FROM external_friends WHERE open_dingtalk_id = ?", (open_dingtalk_id,))
-        self._cc().commit()
-        return cur.rowcount > 0
+        deleted = False
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal deleted
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "DELETE FROM external_friends WHERE open_dingtalk_id = ?",
+                    (open_dingtalk_id,),
+                )
+                deleted = cur.rowcount > 0
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write)
+        return deleted
 

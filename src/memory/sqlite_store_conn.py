@@ -11,6 +11,7 @@ import logging
 import os
 import sqlite3
 import threading
+import traceback
 import time
 from pathlib import Path
 from typing import Optional
@@ -19,6 +20,25 @@ from src.memory import account_identity
 from src.memory.schema import init_conv_schema, init_schema
 
 logger = logging.getLogger(__name__)
+
+
+def _caller_label(skip_files: tuple[str, ...] = ("contextlib.py", "sqlite_store_conn.py")) -> str:
+    """向上穿透 contextlib / 本文件，返回**首个业务调用者**的 ``文件:行:函数``。
+
+    【P0 2026-10-05 排障】``_write_gate`` 是 ``@contextlib.contextmanager``，
+    直接用 ``sys._getframe(1)`` 拿到的是 ``contextlib.py:__enter__`` —— 毫无
+    信息量（实测踩过，输出恒为 ``contextlib.py:141:__enter__``）。故必须跳过
+    框架帧与本文件帧，取第一个业务调用点。
+    """
+    try:
+        for f in reversed(traceback.extract_stack(limit=12)[:-1]):
+            name = Path(f.filename).name
+            if name in skip_files:
+                continue
+            return f"{name}:{f.lineno}:{f.name}"
+    except Exception:  # noqa: BLE001
+        pass
+    return "<unknown>"
 
 
 class SQLiteStoreConnMixin(SQLiteStoreBase):
@@ -57,11 +77,23 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             )
             yield
             return
+        # 【诊断】记录当前持有者：锁争用时「闸门被谁霸着」是唯一关键线索。
+        # ⚠️ 必须**向上穿透 contextlib**：_write_gate 是 @contextlib.contextmanager，
+        #    sys._getframe(1) 拿到的是 contextlib.py 的 __enter__（实测输出
+        #    「持有者=contextlib.py:141:__enter__」毫无信息量）。故从栈里
+        #    找第一个非 contextlib / 非本文件的帧。
+        try:
+            cls._write_gate_holder = _caller_label()
+            cls._write_gate_since = time.monotonic()
+        except Exception:  # noqa: BLE001
+            cls._write_gate_holder = "<unknown>"
+            cls._write_gate_since = time.monotonic()
         cls._write_gate_depth.value = 1
         try:
             yield
         finally:
             cls._write_gate_depth.value = 0
+            cls._write_gate_holder = ""
             cls._write_gate_lock.release()
 
     def _busy_timeout_ms(self) -> int:
@@ -324,21 +356,72 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
 
         判别口诀（实测）：**「立即失败」= 陈旧读快照**（busy_timeout 无效，只能丢连接
         重建）；**「等满 busy_timeout 才失败」= 真锁等待**（靠等待或串行化解）。
+
+        ⚠️ **闸门绝不能被长等待霸占**（2026-10-05 现场教训）：若闸门包住整个
+        「busy_timeout 等待 + 重试」过程，则单次调用最坏耗时
+        ``20s × 3 次 = 60s``，期间**所有其他写线程全部堵在闸门上**，
+        反而放大写堆积（现场日志：「写入闸门等待 60s 超时」）。
+
+        因此本方法的结构是**「每次尝试各取一次闸门，闸门只包住单次 execute+commit」**：
+        等待 busy_timeout 的时间发生在**闸门之外**——等锁的线程不占闸门，
+        让正在写的那一方能尽快完成并释放。
         """
         for attempt in range(1, max_attempts + 1):
+            conn = self.conv_conn(platform)   # 闸门外取连接
             try:
+                # 闸门只包住「execute + commit」，不包住 busy_timeout 等待
                 with self._write_gate():
-                    fn(self.conv_conn(platform))
+                    fn(conn)
                 return
             except sqlite3.OperationalError as e:
                 if "locked" not in str(e).lower() or attempt >= max_attempts:
                     raise
+                # 【诊断】打出调用栈与库路径——锁争用时必须知道「谁在写、写的哪个库」。
+                # ⚠️ 用 WARNING 且**单行**输出：多行栈会被日志格式截断成 "[SQLite] ..."，
+                # 什么也看不到（实测踩过）。压成一行用 " ← " 串联调用者。
+                try:
+                    _stack = " ← ".join(
+                        f"{Path(f.filename).name}:{f.lineno}:{f.name}"
+                        for f in traceback.extract_stack(limit=8)[:-1]
+                        if "sqlite_store" not in f.filename
+                    )
+                except Exception:  # noqa: BLE001
+                    _stack = "<stack unavailable>"
                 logger.warning(
-                    "[SQLite] 写库锁失败，自愈重试 %d/%d（丢弃当前线程会话连接重建）: %s",
-                    attempt, max_attempts, e,
+                    "[SQLite] 写锁来源 self=%s platform=%s db=%s 链路: %s",
+                    id(self), platform or "(ctx)",
+                    Path(self._conv_db_path_safe(platform)).name, _stack,
+                )
+                logger.warning(
+                    "[SQLite] 写库锁失败，自愈重试 %d/%d db=%s 闸门持有者=%s: %s",
+                    attempt, max_attempts,
+                    Path(self._conv_db_path_safe(platform)).name,
+                    self._write_gate_current_holder() or "(无·锁在别处)",
+                    e,
                 )
                 self.discard_conv_conn(platform)
                 time.sleep(0.05 * attempt)  # 轻微退避，给并发写让出窗口
+
+    def _write_gate_current_holder(self) -> str:
+        """诊断用：返回当前持有全局写闸门的线程标识（无持有者则空串）。
+
+        【P0 2026-10-05 排障】锁争用时「谁在持锁」是唯一关键信息。外部工具
+        （py-spy/faulthandler）都不可用时，靠这个自报机制定位。
+        """
+        holder = getattr(type(self), "_write_gate_holder", "")
+        if not holder:
+            return ""
+        import time as _t
+        return f"{holder} (持锁 {_t.monotonic() - getattr(type(self), '_write_gate_since', 0):.1f}s)"
+
+    def _conv_db_path_safe(self, platform: str = "") -> str:
+        """诊断用：取会话库路径，任何失败都降级为占位符（绝不因诊断而抛异常）。"""
+        try:
+            from src.memory import account_identity
+            plat = (platform or "").lower()
+            return self._conv_db_path(plat, account_identity.resolve_account_id(plat))
+        except Exception:  # noqa: BLE001
+            return "<unknown>"
 
     def _migrate_main_to_conv(self, conv: sqlite3.Connection, platform: str) -> None:
         """把主库既有会话数据拷贝进当前账号的会话库（一次性引导迁移）。

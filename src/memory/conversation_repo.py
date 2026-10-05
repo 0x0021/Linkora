@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime, timedelta
-from typing import Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING
 
 from src.memory.sqlite_store import ConversationSummaryRow
 from src.memory.platform_context import get_current_platform
@@ -55,6 +55,31 @@ class ConversationRepo:
 
     def __init__(self, store: "SQLiteStore") -> None:
         self.store = store
+
+    def _write(self, fn, platform: str = "") -> None:
+        """执行一次写操作：进程内写闸门 + 锁失败自愈重试（委托 store 层）。
+
+        【P0 2026-10-05】**所有**写路径必须走本方法，不得直接 ``self._cc().execute(...)``。
+
+        事故背景见 ``MessageRepo._write`` 的说明（同一根因：``e2997cb`` 修好读游标
+        泄漏 = 拆掉了「悬空读事务」这个天然写入闸门，而写入侧未同步补闸门）。
+
+        本类的写方法此前只包了 3 个（upsert_conversation / update_last_reply_time /
+        update_last_replied_msg_id），其余（delete_conversations / batch_update_chat_types /
+        upsert_conversation_summary / upsert_display_summary / update_summary_updated_at）
+        仍在闸门外 → 单进程下依然撞锁。**收口必须做全。**
+        """
+        self.store.write_with_retry(fn, platform or get_current_platform())
+
+    def _write_result(self, fn: Callable[[sqlite3.Connection], bool], platform: str = "") -> bool:
+        """同 :meth:`_write`，但返回 ``fn`` 的 bool 结果（用于需要写成功标志的路径）。"""
+        box: list[bool] = []
+
+        def _wrapped(conn: sqlite3.Connection) -> None:
+            box.append(fn(conn))
+
+        self.store.write_with_retry(_wrapped, platform or get_current_platform())
+        return box[0] if box else False
 
     def _cc(self, platform: str) -> sqlite3.Connection:
         plat = platform or get_current_platform()
@@ -226,26 +251,44 @@ class ConversationRepo:
         chat_ids = [str(c) for c in (chat_ids or []) if str(c).strip()]
         if not chat_ids:
             return 0
-        conn = self._cc(platform)
-        cur = conn.cursor()
-        placeholders = ",".join("?" * len(chat_ids))
-        # 先收集待删消息引用的本地图片，删行后一并清理磁盘，避免整会话图片成孤儿文件累积
-        cur.execute(
-            f"SELECT image_path FROM messages WHERE chat_id IN ({placeholders}) AND image_path != ''",
-            chat_ids,
-        )
-        image_paths = [r[0] for r in cur.fetchall()]
-        cur.execute(f"DELETE FROM messages WHERE chat_id IN ({placeholders})", chat_ids)
-        cur.execute(
-            f"DELETE FROM conversation_summaries WHERE chat_id IN ({placeholders})", chat_ids
-        )
-        cur.execute(
-            f"DELETE FROM conversation_display_summaries WHERE chat_id IN ({placeholders})", chat_ids
-        )
-        cur.execute(f"DELETE FROM dedup_messages WHERE chat_id IN ({placeholders})", chat_ids)
-        cur.execute(f"DELETE FROM conversations WHERE chat_id IN ({placeholders})", chat_ids)
-        deleted = cur.rowcount
-        conn.commit()
+        # 【P0 2026-10-05】写入走 _write（进程内写闸门 + 锁失败自愈），
+        # 且**磁盘 IO 移出事务**：purge_orphan_images 会扫描并 unlink 文件，
+        # 在事务内执行会长时间霸占 SQLite 写锁。
+        image_paths: list[str] = []
+        deleted = 0
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal image_paths, deleted
+            cur = conn.cursor()
+            placeholders = ",".join("?" * len(chat_ids))
+            try:
+                # 先收集待删消息引用的本地图片，删行后一并清理磁盘，避免整会话图片成孤儿文件累积
+                cur.execute(
+                    f"SELECT image_path FROM messages WHERE chat_id IN ({placeholders}) AND image_path != ''",
+                    chat_ids,
+                )
+                image_paths = [r[0] for r in cur.fetchall()]
+                cur.execute(f"DELETE FROM messages WHERE chat_id IN ({placeholders})", chat_ids)
+                cur.execute(
+                    f"DELETE FROM conversation_summaries WHERE chat_id IN ({placeholders})", chat_ids
+                )
+                cur.execute(
+                    f"DELETE FROM conversation_display_summaries WHERE chat_id IN ({placeholders})", chat_ids
+                )
+                cur.execute(
+                    f"DELETE FROM dedup_messages WHERE chat_id IN ({placeholders})", chat_ids
+                )
+                cur.execute(
+                    f"DELETE FROM conversations WHERE chat_id IN ({placeholders})", chat_ids
+                )
+                deleted = cur.rowcount
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write, platform)
+
+        # 闸门外做磁盘 IO：不持 SQLite 写锁
         removed_files = purge_orphan_images(
             self.store.db_path, image_paths, base_dir=str(data_path("tmp_images"))
         )
@@ -335,16 +378,25 @@ class ConversationRepo:
         """批量更新会话的 chat_type 字段。"""
         if not updates:
             return 0
-        cur = self._cc(platform).cursor()
         now = datetime.now().isoformat()
         total_updated = 0
-        for chat_id, chat_type in updates:
-            cur.execute(
-                "UPDATE conversations SET chat_type = ?, updated_at = ? WHERE chat_id = ? AND chat_type != ?",
-                (chat_type, now, chat_id, chat_type),
-            )
-            total_updated += cur.rowcount
-        self._cc(platform).commit()
+
+        def _do_write(conn: sqlite3.Connection) -> None:
+            nonlocal total_updated
+            cur = conn.cursor()
+            try:
+                for chat_id, chat_type in updates:
+                    cur.execute(
+                        "UPDATE conversations SET chat_type = ?, updated_at = ?"
+                        " WHERE chat_id = ? AND chat_type != ?",
+                        (chat_type, now, chat_id, chat_type),
+                    )
+                    total_updated += cur.rowcount
+            finally:
+                cur.close()
+            conn.commit()
+
+        self._write(_do_write, platform)
         return total_updated
 
     # ---- 外部好友映射（非组织内成员） ----
@@ -424,47 +476,49 @@ class ConversationRepo:
         """CAS 写回 H2-A 后台摘要（state machine 边界）。"""
         if not chat_id or not summary:
             return False
-        conn = self._cc(platform)
-        cur = conn.cursor()
+        # 【P0 2026-10-05】写入走 _write_result（进程内写闸门 + 锁失败自愈重试）
         now = datetime.now().isoformat()
         new_gen = expected_generation + 1
-        try:
-            cur.execute(
-                """UPDATE conversation_summaries
-                   SET summary_text = ?, older_boundary_msg_id = ?, covered_count = ?,
-                       generation = ?, updated_at = ?
-                   WHERE chat_id = ? AND generation = ?""",
-                (summary, older_boundary_msg_id, int(covered_count), new_gen, now,
-                 str(chat_id), int(expected_generation)),
-            )
-            if cur.rowcount > 0:
-                conn.commit()
-                return True
-            cur.execute(
-                "SELECT 1 FROM conversation_summaries WHERE chat_id = ?",
-                (str(chat_id),),
-            )
-            if cur.fetchone() is None:
+
+        def _do_write(conn: sqlite3.Connection) -> bool:
+            cur = conn.cursor()
+            try:
                 cur.execute(
-                    """INSERT INTO conversation_summaries
-                           (chat_id, summary_text, older_boundary_msg_id, covered_count,
-                            generation, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (str(chat_id), summary, older_boundary_msg_id, int(covered_count),
-                     new_gen, now, now),
+                    """UPDATE conversation_summaries
+                       SET summary_text = ?, older_boundary_msg_id = ?, covered_count = ?,
+                           generation = ?, updated_at = ?
+                       WHERE chat_id = ? AND generation = ?""",
+                    (summary, older_boundary_msg_id, int(covered_count), new_gen, now,
+                     str(chat_id), int(expected_generation)),
                 )
+                if cur.rowcount > 0:
+                    return True
+                cur.execute(
+                    "SELECT 1 FROM conversation_summaries WHERE chat_id = ?",
+                    (str(chat_id),),
+                )
+                if cur.fetchone() is None:
+                    cur.execute(
+                        """INSERT INTO conversation_summaries
+                               (chat_id, summary_text, older_boundary_msg_id, covered_count,
+                                generation, created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (str(chat_id), summary, older_boundary_msg_id, int(covered_count),
+                         new_gen, now, now),
+                    )
+                    return True
+                logger.debug(
+                    "[摘要] CAS 跳过写回 chat_id=%s（代际不符：期望 %d，库已被更新）",
+                    chat_id, expected_generation,
+                )
+                return False
+            finally:
+                # 【锁争用】本方法有 3 个 return 路径，游标若不 close 会悬在结果集上，
+                # 在长生命周期 worker 线程里累积持锁（CPython 靠 GC 兜底但时机不可控）。
+                cur.close()
                 conn.commit()
-                return True
-            logger.debug(
-                "[摘要] CAS 跳过写回 chat_id=%s（代际不符：期望 %d，库已被更新）",
-                chat_id, expected_generation,
-            )
-            conn.commit()
-            return False
-        finally:
-            # 【锁争用】本方法有 3 个 return 路径，游标若不 close 会悬在结果集上，
-            # 在长生命周期 worker 线程里累积持锁（CPython 靠 GC 兜底但时机不可控）。
-            cur.close()
+
+        return self._write_result(_do_write, platform)
 
     def fetch_messages_in_range(
         self,
@@ -529,14 +583,23 @@ class ConversationRepo:
         """覆盖某会话摘要的 updated_at（供补跑按自然日正确归日）。非致命。"""
         if not chat_id:
             return False
+
+        def _do_write(conn: sqlite3.Connection) -> bool:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE conversation_summaries SET updated_at = ? WHERE chat_id = ?",
+                    (updated_at_iso, str(chat_id)),
+                )
+                ok = cur.rowcount > 0
+            finally:
+                cur.close()
+            conn.commit()
+            return ok
+
         try:
-            cur = self._cc(platform).cursor()
-            cur.execute(
-                "UPDATE conversation_summaries SET updated_at = ? WHERE chat_id = ?",
-                (updated_at_iso, str(chat_id)),
-            )
-            self._cc(platform).commit()
-            return cur.rowcount > 0
+            # 【P0 2026-10-05】走 _write（进程内写闸门 + 锁失败自愈）
+            return self._write_result(_do_write, platform)
         except Exception as e:  # noqa: BLE001
             logger.debug("[摘要补跑] 更新 updated_at 失败 chat_id=%s: %s", chat_id, e)
             return False
@@ -629,43 +692,46 @@ class ConversationRepo:
         """
         if not chat_id or not summary:
             return False
-        # 游标必须显式 close()：本方法运行在调度器长生命周期线程的连接上，未关闭的游标
-        # 会残留 WAL 读锁，导致后续写库 SQLITE_BUSY_SNAPSHOT（"database is locked"）。
-        cur = self._cc(platform).cursor()
-        try:
-            now = datetime.now().isoformat()
-            new_gen = expected_generation + 1
-            cur.execute(
-                """UPDATE conversation_display_summaries
-                   SET summary_text = ?, boundary_msg_id = ?, covered_count = ?,
-                       generation = ?, updated_at = ?, boundary_ts = ?
-                   WHERE chat_id = ? AND generation = ?""",
-                (summary, boundary_msg_id, int(covered_count), new_gen, now,
-                 str(boundary_ts), str(chat_id), int(expected_generation)),
-            )
-            if cur.rowcount > 0:
-                self._cc(platform).commit()
-                return True
-            cur.execute(
-                "SELECT 1 FROM conversation_display_summaries WHERE chat_id = ?",
-                (str(chat_id),),
-            )
-            if cur.fetchone() is None:
-                cur.execute(
-                    """INSERT INTO conversation_display_summaries
-                           (chat_id, summary_text, boundary_msg_id, covered_count,
-                            generation, created_at, updated_at, boundary_ts)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (str(chat_id), summary, boundary_msg_id, int(covered_count),
-                     new_gen, now, now, str(boundary_ts)),
-                )
-                self._cc(platform).commit()
-                return True
-            self._cc(platform).commit()
-            return False
-        finally:
-            cur.close()
+        # 【P0 2026-10-05】写入走 _write_result（进程内写闸门 + 锁失败自愈重试）。
+        # 本方法是展示摘要调度器的写回入口，是 2026-10-05 锁争用事故的主角路径。
+        now = datetime.now().isoformat()
+        new_gen = expected_generation + 1
 
+        def _do_write(conn: sqlite3.Connection) -> bool:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    """UPDATE conversation_display_summaries
+                       SET summary_text = ?, boundary_msg_id = ?, covered_count = ?,
+                           generation = ?, updated_at = ?, boundary_ts = ?
+                       WHERE chat_id = ? AND generation = ?""",
+                    (summary, boundary_msg_id, int(covered_count), new_gen, now,
+                     str(boundary_ts), str(chat_id), int(expected_generation)),
+                )
+                if cur.rowcount > 0:
+                    return True
+                cur.execute(
+                    "SELECT 1 FROM conversation_display_summaries WHERE chat_id = ?",
+                    (str(chat_id),),
+                )
+                if cur.fetchone() is None:
+                    cur.execute(
+                        """INSERT INTO conversation_display_summaries
+                               (chat_id, summary_text, boundary_msg_id, covered_count,
+                                generation, created_at, updated_at, boundary_ts)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (str(chat_id), summary, boundary_msg_id, int(covered_count),
+                         new_gen, now, now, str(boundary_ts)),
+                    )
+                    return True
+                return False
+            finally:
+                cur.close()
+                # 【锁争用】无论走哪条返回路径都要 commit 并 close：
+                # 游标悬在结果集上会残留 WAL 读事务，让本连接此后写库立即失败。
+                conn.commit()
+
+        return self._write_result(_do_write, platform)
     def get_chat_type(self, chat_id: str = "", platform: str = "") -> str:
         """查询会话类型（single/group/...），供范围分类使用；查不到返回空串。"""
         if not chat_id:

@@ -265,6 +265,18 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     _ensure_column(cur, "kb_chunks", "updated_at", "TEXT")
     _ensure_column(cur, "kb_documents", "version", "INTEGER DEFAULT 1")
     _ensure_column(cur, "conversations", "last_summary_at", "TEXT")
+
+    # 【P0 2026-10-05 索引自愈】检测并修复损坏索引。
+    #
+    # 事故：idx_conversations_updated 出现 49 条「row N missing from index」
+    # （integrity_check 可证）。损坏索引会让每次写入都退化为全表扫描重建索引，
+    # 写事务耗时暴涨 → 写锁被长期占用 → 其他写者全部 database is locked。
+    # 表现为「代码怎么改都治不好」，因为病根在数据文件而非代码。
+    # 损坏成因：CREATE INDEX 过程中进程被强杀（--dev 热重载 / 手动重启）。
+    #
+    # 这里用 PRAGMA integrity_check（quick_check 对索引不一致会漏检，实测踩过），
+    # 发现索引类损坏就 DROP + 重建该索引。幂等、无数据损失。
+    _heal_corrupted_indexes(cur, db_path)
     _ensure_column(cur, "conversations", "last_replied_msg_id", "TEXT")
 
     # ── 补充索引 ───────────────────────────────────────────────────────
@@ -685,6 +697,81 @@ _CONV_REQUIRED_COLUMNS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _heal_corrupted_indexes(cur: sqlite3.Cursor, db_path: str) -> None:
+    """检测并重建**损坏的索引**（P0 2026-10-05 事故自愈）。
+
+    ## 为什么需要（真实事故）
+
+    生产库 ``dingtalk__4c11dc67bc0226ad.db`` 的 ``idx_conversations_updated``
+    出现 49 条 ``row N missing from index``（``PRAGMA integrity_check`` 可证）。
+    损坏索引会让每次写入都退化为「全表扫描 + 重建索引」，写事务耗时暴涨 →
+    **写锁被长期占用** → 其他写者全部 ``database is locked``。
+
+    这类故障的特点是**「代码怎么改都治不好」**：闸门、限流、busy_timeout 全都无效，
+    因为病根在**数据文件**而非代码。此前排查耗时极久（先误判为跨进程争用、
+    再误判为未关闭游标），最后靠 ``integrity_check`` 才定位到真因。
+
+    损坏成因：``CREATE INDEX`` 过程中进程被强杀（``--dev`` 热重载 / 手动重启）。
+
+    ## 策略
+
+    - ⚠️ **必须用 ``PRAGMA integrity_check``，不能用 ``quick_check``**：
+      实测 ``quick_check`` 对「row N missing from index」这类**索引与表不一致**
+      返回 ``ok``（漏检），而 ``integrity_check`` 能报出 49 条。用 quick_check 会
+      让本自愈形同虚设（实测踩过：quick_check=ok 但 integrity_check=49 条）。
+    - 只在**检出索引类损坏**时才重建，且**只重建报错的索引**（不重建全库索引）；
+    - 全部走 ``DROP`` + ``CREATE``（幂等、不动数据），索引定义从 sqlite_master
+      读回原 SQL，**不硬编码**——硬编码会与 schema 漂移；
+    - 任何异常都吞掉并降级为 warning：本函数是修复手段，不能自己成为故障源。
+
+    注：``integrity_check`` 在 110MB 库上约 0.3~1s，故只在
+    ``init_conv_schema``（每进程每文件一次）调用，不进每请求路径。
+    """
+    try:
+        rows = cur.execute("PRAGMA integrity_check").fetchall()
+    except sqlite3.Error as e:
+        logger.debug("[schema] integrity_check 失败（跳过索引自愈）%s: %s", db_path, e)
+        return
+    if not rows:
+        return
+    # 正常时返回单行 'ok'；异常时返回逐条问题描述
+    if len(rows) == 1 and str(rows[0][0]).lower() == "ok":
+        return
+
+    # 收集损坏的索引名：形如 "row 43 missing from index idx_xxx"
+    bad: set[str] = set()
+    for r in rows:
+        text = str(r[0]) if r else ""
+        if "index" not in text:
+            continue
+        for part in text.split("from index")[-1:]:
+            name = part.strip().rstrip(".").split()[0] if part.strip() else ""
+            if name:
+                bad.add(name)
+    if not bad:
+        logger.warning("[schema] quick_check 报 %d 个问题（非索引类，跳过自愈）: %s",
+                       len(rows), str(rows[0][0])[:120])
+        return
+
+    logger.warning("[schema] 检测到索引损坏 %d 个: %s（正在重建）", len(bad), sorted(bad))
+    for name in sorted(bad):
+        try:
+            row = cur.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name=?", (name,)
+            ).fetchone()
+            if row is None or not row[0]:
+                # 索引已不存在（可能被并发清掉）→ 跳过
+                continue
+            create_sql = str(row[0])
+            cur.execute(f"DROP INDEX IF EXISTS {name}")
+            cur.execute(create_sql)
+            cur.connection.commit()
+            logger.info("[schema] 索引已重建: %s", name)
+        except sqlite3.Error as e:
+            logger.warning("[schema] 重建索引 %s 失败（忽略）: %s", name, e)
+    logger.info("[schema] 索引自愈完成 %s: %s", db_path, sorted(bad))
+
+
 def conv_schema_needs_migration(db_path: str) -> bool:
     """**只读**探针：该分库是否缺列（只查 sqlite_master，不取写锁）。
 
@@ -879,4 +966,8 @@ def init_conv_schema(conn: sqlite3.Connection, db_path: str) -> None:
     _ensure_column(cur, "conversations", "last_replied_msg_id", "TEXT")
     _ensure_column(cur, "conversations", "last_summary_at", "TEXT")
     conn.commit()
+    # 【P0 2026-10-05 索引自愈】分库路径同样需要：损坏索引 → 写锁被长期占用
+    # → 其他写者 database is locked（详见 _heal_corrupted_indexes docstring）。
+    # 必须在 commit **之后**调用：重建索引是独立写事务，不与建表/补列混在一起。
+    _heal_corrupted_indexes(cur, db_path)
     logger.debug("会话库状态正常：%s", db_path)

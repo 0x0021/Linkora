@@ -250,6 +250,74 @@ def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
         return 0.0
 
 
+class _GatedWriteLock:
+    """写入闸门复合锁（实例 RLock + 进程内全局写闸门）。
+
+    【P0 2026-10-05 事故修复的核心组件】
+
+    全仓 15 处写路径用 ``with store._lock:``，而 SQLite **同时只允许一个写者**。
+    事故根因：``e2997cb``(2026-09-18) 之前读游标从不关闭，悬着的 WAL 读事务
+    **意外充当了写入闸门**，所以从不报 database is locked；该提交修好游标泄漏
+    = 拆掉这个天然闸门，而写入侧限流/自愈没跟上 → 写锁争用全面爆发
+    （实测每分钟 20~44 次，轮询停摆）。
+
+    修复策略：**在锁本身叠加闸门**，而不是逐个改 15 个调用点。首次修复就因为
+    只包了 3 个高频写方法、漏掉另外 17 个，导致单进程下 ``cleanup_old_messages``
+    仍然撞锁（2026-10-05 10:52 现场）。一处改动让所有既有写路径自动受保护。
+
+    行为等价于 ``RLock``（``__enter__`` / ``__exit__``），可重入，故
+    ``write_with_retry`` 内部再取闸门不会自锁。持锁超时只告警不阻塞——宁可放行
+    也不要让整个服务卡死（闸门等不到说明写堆积已异常，阻塞只会雪上加霜）。
+    """
+
+    __slots__ = ("_rlock", "_tls")
+
+    def __init__(self) -> None:
+        self._rlock = threading.RLock()
+        # 【Bug 修复 2026-10-05】原实现用单个实例属性 ``self._gate_cm`` 存闸门
+        # 上下文管理器 → **多线程共享同一实例时后进入者会覆盖先进入者**，
+        # 先进入的线程退出时释放了别人的 cm，导致全局闸门**永久不释放**
+        # （实测 4 线程并发卡死 40s、全部线程堵在闸门上、临界区计数恒为 0）。
+        # 正确做法：上下文栈必须是**线程本地**的，每个线程只看到自己压入的那层。
+        self._tls = threading.local()
+
+    def __enter__(self) -> "_GatedWriteLock":
+        self._rlock.acquire()
+        stack = getattr(self._tls, "stack", None)
+        if stack is None:
+            stack = []
+            self._tls.stack = stack
+        try:
+            # 叠加进程内全局写闸门（类级、所有 store 实例共享）。
+            # 已在闸门内（重入）时 _write_gate 直接放行，不会自锁。
+            cm = SQLiteStoreConnMixin._write_gate(timeout=60.0)
+            cm.__enter__()
+            stack.append(cm)
+        except Exception as e:  # noqa: BLE001 — 闸门异常不得影响主链路
+            logger.warning("[SQLite] 写入闸门获取异常，降级为仅实例锁: %s", e)
+            stack.append(None)  # type: ignore[arg-type]
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        stack = getattr(self._tls, "stack", None)
+        if stack:
+            cm = stack.pop()
+            if cm is not None:
+                try:
+                    cm.__exit__(exc_type, exc, tb)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("[SQLite] 写入闸门释放异常: %s", e)
+        self._rlock.release()
+        return False
+
+    def acquire(self, *a, **k) -> bool:
+        """兼容 RLock 的 acquire/acquire_release 语义（若有外部直接调用）。"""
+        return self._rlock.acquire(*a, **k)
+
+    def release(self) -> None:
+        self._rlock.release()
+
+
 class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
     # 主库→会话库引导迁移时，按 chat_id 前缀归类各平台可见会话。
     # None = 该平台不做前缀过滤（全量拷贝）。未登记的平台跳过迁移。
@@ -281,7 +349,21 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
         # 当前已加载 FAISS 对应的 KB 版本号；每次 KB 写入/重索引自增。
         # 用于替代「仅比 chunk 数量」的同步判据，覆盖「同计数、向量被重索引」场景。
         self._index_revision: int = 0
-        self._lock = threading.RLock()  # 保留：单线程内写操作串行安全网（与 per-thread 连接并存无害）
+        # 【P0 2026-10-05】写入闸门复合锁。
+        #
+        # 事故背景：``e2997cb``(2026-09-18) 之前读游标从不关闭，悬着的 WAL 读事务
+        # **意外充当了写入闸门**，所以从不报 database is locked。该提交修好游标泄漏
+        # （本身正确）= 拆掉天然闸门，而写入侧限流/自愈未同步 → 写锁争用全面爆发。
+        #
+        # 为什么用复合锁而不是逐个改 ``with self._lock`` 的调用点：全仓 15 处写路径
+        # 都在用 ``store._lock``，逐个改成 ``_write(_do_write)`` 极易漏（首次修复就漏了
+        # 20 个写方法中的 17 个，导致单进程下 ``cleanup_old_messages`` 仍撞锁）。
+        # 在锁本身叠加全局闸门，**一处改动让所有既有写路径自动获得保护**，不会漏。
+        #
+        # 语义：先取实例 RLock（同实例串行 + 可重入），再取进程内全局写闸门
+        # （跨实例串行，SQLite 同时只允许一个写者）。RLock 可重入，故
+        # ``write_with_retry`` 内部再取闸门不会自锁。
+        self._lock = _GatedWriteLock()
         self._schema_initialized = False  # 首次 conn 访问时自动 init_db()
         # ── per-account 会话连接（账号隔离）：key=(thread_id, platform)，
         #    value=(db_path, Connection)。每个 (线程×平台) 独立连接，且按当前账号

@@ -163,6 +163,9 @@ def _resolve_wecom() -> str:
     return "wecom"
 
 
+_FORCE_ID_ENV = "LINKORA_FORCE_ACCOUNT_ID"
+
+
 def resolve_account_id(platform: str, fallback_corp_id: Optional[str] = None) -> str:
     """解析某平台「当前登录账号」的稳定身份键。
 
@@ -173,6 +176,20 @@ def resolve_account_id(platform: str, fallback_corp_id: Optional[str] = None) ->
     Returns:
         ``"<platform>:<account>"`` 形式的命名空间键（解析失败也有稳定兜底键）。
     """
+    # 【测试/CI 确定性】账号身份会**探测外部 CLI**（dws / lark-cli）取真实 corpId。
+    # 这让会话库物理路径（``<platform>__<sha256(account_id)[:16]>.db``）随环境漂移：
+    # 本机没装 dws → "dingtalk:unknown"，CI 装了就 → "dingtalk:<真实corpId>"，
+    # 于是同一份代码在两侧跑出不同的库文件，表现为「本地全绿、CI 红」，
+    # 且失败点看起来与身份探测毫无关系（实测：display_summary_scheduler 两条用例）。
+    # 设置 LINKORA_FORCE_ACCOUNT_ID 可强制所有平台用同一固定身份键，
+    # 使库路径在任意环境下稳定。生产环境不要设置（会破坏真实账号隔离）。
+    forced = (os.environ.get(_FORCE_ID_ENV) or "").strip()
+    if forced:
+        platform_key = (platform or "").lower()
+        aid = forced if ":" in forced else f"{platform_key or 'unknown'}:{forced}"
+        logger.debug("[账号身份] %s 被 %s 强制为 %s", platform_key, _FORCE_ID_ENV, aid)
+        return aid
+
     cache_key = f"{platform}:{fallback_corp_id or ''}"
     if cache_key in _CACHE:
         return _CACHE[cache_key]

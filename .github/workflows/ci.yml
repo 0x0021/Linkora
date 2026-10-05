@@ -16,6 +16,12 @@ jobs:
       # "OMP: Error #15: Initializing libomp twice" → SIGABRT。
       # pytest 必须带此变量（本地同理，见项目约定）。
       KMP_DUPLICATE_LIB_OK: "TRUE"
+      # 固定账号身份键，令会话库物理路径在任何环境下稳定。
+      # account_identity 会探测外部 dws/lark-cli 取真实 corpId → 库名 hash 随环境
+      # 漂移，本机无 dws 与 CI 装 dws 得到不同库文件，表现为「本地全绿、CI 红」
+      # 且失败点与身份探测毫无关系（血泪：display_summary_scheduler 两条用例）。
+      # 生产环境切勿设置——会破坏真实账号隔离。
+      LINKORA_FORCE_ACCOUNT_ID: "ci-test"
     steps:
     - uses: actions/checkout@v7
 

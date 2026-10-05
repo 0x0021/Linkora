@@ -15,6 +15,55 @@ from src.llm.client import LLMResponse
 
 logger = logging.getLogger(__name__)
 
+# 失败归因取值（写入 routing_quality.failure_class）：
+#   tool_error        工具执行失败（网络/权限/参数）
+#   tool_empty_result 工具成功但没返回数据 —— 该查知识库/索引，不是 prompt 的锅
+#   no_tool_selected  给了工具能力但模型没调用 —— 该查工具描述/prompt
+#   llm_error         工具有数据但推理失败 —— 该查模型/超时
+#   no_reply          推理完成但没产出回复
+#   ""（空）          一切正常
+FAILURE_TOOL_ERROR = "tool_error"
+FAILURE_TOOL_EMPTY = "tool_empty_result"
+FAILURE_NO_TOOL_SELECTED = "no_tool_selected"
+FAILURE_LLM_ERROR = "llm_error"
+FAILURE_NO_REPLY = "no_reply"
+
+
+def _classify_failure(
+    tool_results: list[dict],
+    reply: Any,
+    exposed_tool_count: int,
+) -> str:
+    """把「这一轮为什么可能答不对」归到一个可查询的标签。
+
+    【为什么需要】排查「AI 答得不对」时，第一个要判断的是**数据到底有没有到手**：
+    数据没到手就去改 prompt 是白费功夫，数据到手了才轮到查表达/模型。
+    此前 routing_quality 只记 token/cost/耗时，6 个 stage 里也没有 tool_execution，
+    这个问题在库里**根本无法回答**——只能靠翻日志人工推断。
+
+    归因优先级按「离根因远近」排：工具层 → 推理层 → 输出层。
+    """
+    reply_text = (getattr(reply, "text", "") or "").strip()
+
+    if tool_results:
+        if not any(t.get("success") for t in tool_results):
+            # 全部工具执行失败
+            return FAILURE_TOOL_ERROR
+        if not any(t.get("success") and not t.get("empty") for t in tool_results):
+            # 工具都成功但没有任何数据回来（知识库无命中 / 搜索无结果）
+            return FAILURE_TOOL_EMPTY
+        # 数据到手了；此时若没回复，问题在推理/输出侧
+        if not reply_text:
+            return FAILURE_LLM_ERROR
+        return ""
+    # 一次工具都没调
+    if exposed_tool_count > 0:
+        return FAILURE_NO_TOOL_SELECTED
+    # 压根没给模型工具能力（纯闲聊场景），不归因
+    if not reply_text:
+        return FAILURE_NO_REPLY
+    return ""
+
 # 工具收敛护栏中应撤下的"继续检索"工具（保留 send_message/save_memory 等动作类工具）。
 _RETRIEVAL_TOOLS = {"web_search", "kb_search", "search_doc"}
 
@@ -127,6 +176,44 @@ def finalize_trace(
         output_t = last_usage.get("completion_tokens", 0) if isinstance(last_usage, dict) else 0
         total_t = input_t + output_t
         cost_est = agent._estimate_cost(input_t, output_t, agent.config.model)
+
+        # 【可观测性】补 tool_execution stage 与失败归因。排查「AI 答得不对」时，
+        # 最关键的判断是「工具到底有没有给数据」——此前 6 个 stage 里没有
+        # tool_execution，也没有 error 分类，无法回答这个问题。
+        tool_results = list(getattr(agent, "_rq_tool_results", None) or [])
+        # 本轮暴露给模型的工具数（记录在 tool_exposure stage 的 detail.count），
+        # 用于区分「没给工具」与「给了但模型没调」
+        _exposed = 0
+        for _s in stages:
+            if isinstance(_s, dict) and _s.get("stage") == "tool_exposure":
+                _exposed = int((_s.get("detail") or {}).get("count") or 0)
+                break
+        if tool_results:
+            t_tools = sum(int(t.get("duration_ms") or 0) for t in tool_results)
+            any_ok = any(t.get("success") for t in tool_results)
+            any_data = any(t.get("success") and not t.get("empty") for t in tool_results)
+            if any_data:
+                tool_status = "ok"
+            elif any_ok:
+                tool_status = "empty"      # 跑了但没数据
+            else:
+                tool_status = "fail"
+            stages.append({
+                "stage": "tool_execution", "ms": float(t_tools),
+                "status": tool_status,
+                "detail": {"count": len(tool_results),
+                           "tools": [t.get("tool") for t in tool_results],
+                           "data_returned": any_data},
+            })
+        else:
+            # 未暴露任何工具能力，或模型未发起工具调用
+            stages.append({
+                "stage": "tool_execution", "ms": 0.0,
+                "status": "no_tool" if _exposed else "skip",
+                "detail": {"count": 0, "tools": [], "data_returned": False},
+            })
+
+        failure_class = _classify_failure(tool_results, reply, _exposed)
         agent.store.update_routing_quality_trace(
             agent._rq_id,
             llm_latency_ms=llm_ms,
@@ -140,6 +227,8 @@ def finalize_trace(
             output_tokens=output_t,
             total_tokens=total_t,
             cost_usd=cost_est,
+            tool_results_json=json.dumps(tool_results, ensure_ascii=False),
+            failure_class=failure_class,
         )
     except Exception:
         logger.warning("路由质量补全失败", exc_info=True)

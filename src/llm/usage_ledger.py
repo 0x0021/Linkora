@@ -109,7 +109,11 @@ def _current_platform() -> str:
     try:
         from src.memory.platform_context import get_current_platform
         return get_current_platform() or ""
-    except Exception:
+    except Exception as e:
+        # 【可观测性】此前静默返回空串。llm_usage 是**全仓唯一的成本真相源**，
+        # 平台取不到时该笔 usage 仍会入库、但 platform 维度为空 → 按平台拆分的
+        # 成本报表静默失真，且事后无从判断是「真没花」还是「探测失败」。
+        logger.warning("[usage] 读取平台上下文失败，该笔用量 platform 记为空: %s", e)
         return ""
 
 
@@ -238,7 +242,11 @@ def get_daily_cost_usd(day: str) -> float:
         finally:
             conn.close()
         return float(row[0] or 0.0)
-    except Exception:
+    except Exception as e:
+        # 【可观测性】此前静默返回 0.0。查询失败与「当天真没花钱」在返回值上
+        # 完全不可区分 → 成本趋势图**静默归零**，看板上像"今天没开销"实则是查询报错，
+        # 是最难察觉的一类数据失真。行为仍返回 0.0（不阻塞调用方），但必须留痕。
+        logger.warning("[usage] 查询 %s 的日成本失败，返回 0.0（注意：非真实零开销）: %s", day, e)
         return 0.0
 
 

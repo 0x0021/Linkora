@@ -144,8 +144,19 @@ class PrimaryMixin(EngineMixinBase):
                 "[启动] Step 3/6 超时/失败: SQLiteStore 初始化跳过"
                 "（后续首次访问 conn 时将 lazy-init 重试）"
             )
-            # 重置标志位以便主线程 lazy-init 重试
-            primary.store._schema_initialized = False
+            # 【P0-2026-10-05】重置**类级**初始化标记，让主线程的 lazy-init 真正重试。
+            # 历史缺陷：此处只重置了实例字段 `_schema_initialized`，但 conn 属性的
+            # 门控早已改为读类级 `_schema_initialized_paths`（见 sqlite_store_conn.py
+            # 的「类级、按 db_path 串行去重」改造，为修跨实例并发 ALTER 撞 duplicate
+            # column 而引入）。类级集合仅在 init_db 抛 sqlite3.Error 时才 discard，
+            # 而**超时路径不走异常分支**，路径早已留在集合中 → need_init 恒为 False
+            # → init_db 永不重试 → schema 永久不自愈 → 未建表的查询抛
+            # no such table → 所有接口 500（与历史迁移顺序事故表现完全一致），
+            # 而日志却写着「将 lazy-init 重试」，把排查引向错误方向。
+            # 实例字段一并重置：保持对旧版门控的兼容，且它是死变量、无副作用。
+            store = primary.store
+            store._schema_initialized = False
+            type(store)._schema_initialized_paths.discard(store.db_path)
         else:
             logger.info("[启动] Step 3/6 完成: SQLiteStore 初始化成功")
 

@@ -12,6 +12,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_empty_tool_result(result: object) -> bool:
+    """判断工具是否「执行成功但没返回任何数据」。
+
+    这是排查「AI 答得不对」最关键的区分点：
+      - ``success=False``            → 工具执行失败（网络/权限/参数）
+      - ``success=True`` 且结果为空    → 工具跑了但没数据（如知识库无匹配）
+      - ``success=True`` 且结果非空    → 数据拿到了，答不对就要查 prompt/模型
+
+    三者修复方向完全不同，此前 routing_quality 只记 success，缺少「空结果」这一态。
+    """
+    if result is None:
+        return True
+    if isinstance(result, (str, bytes, list, tuple, set, dict)):
+        return len(result) == 0
+    return False
+
+
 class ToolOrchestrator:
     """负责工具调用编排：tool_call 解析、执行、结果注入、防双重回复标记。"""
 
@@ -23,6 +40,12 @@ class ToolOrchestrator:
     ) -> tuple[list[dict], bool]:
         agent = self._agent
         results = []
+        # 【可观测性】本轮工具执行摘要：供 routing_trace 写入 routing_quality 的
+        # tool_results_json / failure_class。此前工具执行结果只进 tool_execution_logs，
+        # 与「这一轮为什么答错」不在同一条记录里，导致排查时无法区分
+        # 「工具没返回数据」与「数据拿到了但模型表达错」——而这两者修复方向完全相反。
+        # 每次进入本函数重置（agent 可跨轮复用工具编排器）。
+        agent._rq_tool_results = []
         # 标记本轮是否有 send_message 成功发往【当前会话】——用于防双重回复
         self_sent_to_current_chat = False
         # 外联拦截开关（默认开启）：禁止 AI 主动联系当前对话之外的第三方。
@@ -114,6 +137,18 @@ class ToolOrchestrator:
 
             logger.info("工具结果: %s -> 成功=%s (耗时 %d 毫秒)",
                         tool_name, result.success, result.duration_ms)
+
+            # 记录执行摘要（成功/失败/空结果三态），供 routing_trace 归因
+            _rq_results = getattr(agent, "_rq_tool_results", None)
+            if _rq_results is None:
+                _rq_results = agent._rq_tool_results = []
+            _rq_results.append({
+                "tool": tool_name,
+                "success": bool(result.success),
+                "duration_ms": int(result.duration_ms or 0),
+                "error_class": "" if result.success else "tool_error",
+                "empty": _is_empty_tool_result(result.result) if result.success else False,
+            })
 
             # 记录工具调用日志到数据库
             try:

@@ -78,6 +78,8 @@ class _AgentThreadState(threading.local):
     last_rag_empty: bool
     rag_empty_fallback_level: int
     rq_id: int | None
+    # 本轮工具执行摘要（写 routing_quality.tool_results_json，见 _rq_tool_results 属性）
+    rq_tool_results: list[dict]
 
 
 class LLMAgent:
@@ -282,6 +284,23 @@ class LLMAgent:
     @_rq_id.setter
     def _rq_id(self, val: int | None) -> None:
         self._tl.rq_id = val
+
+    @property
+    def _rq_tool_results(self) -> list[dict]:
+        """本轮工具执行摘要（写入 routing_quality.tool_results_json）。
+
+        每次进入 ToolOrchestrator.execute_tool_calls 时重置；用 thread-local 存与
+        _rq_id 同理——agent 可被多线程（轮询 worker）复用，实例级列表会串轮。
+        """
+        val = getattr(self._tl, "rq_tool_results", None)
+        if val is None:
+            val = []
+            self._tl.rq_tool_results = val
+        return val
+
+    @_rq_tool_results.setter
+    def _rq_tool_results(self, val: list[dict]) -> None:
+        self._tl.rq_tool_results = val
 
     def _build_system_prompt_core(self, sender_name: str | None = None) -> str:
         # 实际逻辑已拆到 src/llm/system_prompt.py；此处保留 thin wrapper 以兼容测试

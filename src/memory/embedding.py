@@ -93,7 +93,13 @@ def load_persisted_embedding_status(stale_ms: int = 30000) -> dict | None:
         if int(time.time() * 1000) - ts > effective_stale_ms:
             return None
         return payload
-    except Exception:
+    except Exception as e:
+        # 【可观测性】此前此处静默 return None（无任何日志）。而 embedding 状态文件
+        # 损坏 / json 解析失败时，返回值直接驱动上游分支：resolve_capabilities 判定
+        # 「无 embedding」→ recall_memory / kb_search 工具**不再注册** → LLM 工具清单
+        # 突然缩水。这正是「AI 突然不查知识库了」的头号嫌疑，却不留任何线索。
+        # 这里降级为「无状态缓存」（return None，行为不变），但必须留痕。
+        logger.warning("[embedding] 读取状态文件失败，按无缓存处理 %s: %s", _status_path(), e)
         return None
 
 

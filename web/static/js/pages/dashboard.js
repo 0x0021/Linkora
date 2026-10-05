@@ -568,8 +568,10 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
             try {
                 const decData = await api.fetch('/api/decisions?n=2');
                 if (currentPage !== 'dashboard') return;
-                // 取最新的 2 条并倒序（最新在上）：API 返回时间正序，故 slice(-2).reverse()
-                const decisions = (decData && decData.decisions || []).slice(-2).reverse();
+                // 排序与截取统一交给 renderDecisionFeed（组件内按 ts 倒序，最新在前）。
+                // 此处**不要**再 slice().reverse()——那会与组件内倒序叠加成双重倒序，
+                // 反而让最旧的排到最前（2026-10-05 首页决策追踪不显示最新消息的根因）。
+                const decisions = (decData && decData.decisions || []);
                 const decContainer = document.getElementById('decisions-top-list');
                 if (!decContainer) return;
                 if (decisions.length === 0) {

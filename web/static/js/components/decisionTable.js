@@ -72,7 +72,17 @@
     if (!el) return null;
     const list = Array.isArray(decisions) ? decisions : [];
     const max = opts && opts.max ? opts.max : 0;
-    const shown = max > 0 ? list.slice(0, max) : list;
+    // 后端 tracker.recent() 返回**时间正序**（旧→新）。渲染一律要「最新在前」，
+    // 故此处按 ts 倒序后再截取 max——否则 slice(0,max) 取到的是**最旧**几条
+    // （2026-10-05：首页「决策追踪」不显示最新消息，轮询路径漏了倒序导致）。
+    // 统一在组件内倒序，调用方无需各自记得 reverse。
+    const sorted = list.slice().sort((a, b) => {
+      const ta = Date.parse(a && (a.ts || a.created_at) || '') || 0;
+      const tb = Date.parse(b && (b.ts || b.created_at) || '') || 0;
+      if (ta !== tb) return tb - ta;            // 时间倒序：新的在前
+      return (b && b.id || 0) - (a && a.id || 0); // 同秒时按 id 倒序兜底
+    });
+    const shown = max > 0 ? sorted.slice(0, max) : sorted;
     if (shown.length === 0) {
       el.innerHTML = `<div class="empty-state" style="padding:16px;text-align:center;color:var(--text-tertiary);">
         <i class="fa-solid fa-message" style="font-size:1.5rem;opacity:.4;"></i>

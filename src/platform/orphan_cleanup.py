@@ -27,6 +27,26 @@ logger = logging.getLogger(__name__)
 _BACKUP_TOKENS = ("bak", "backup", ".bak_", "_pre_cleanup", "_full_bak")
 
 
+def _busy_timeout_s() -> float:
+    """SQLite busy_timeout（秒），与 ``SQLiteStore._busy_timeout_ms`` 同一配置项。
+
+    本模块是启动期扫描器、手上没有 store 实例，故独立解析 ``storage.busy_timeout_ms``
+    （缺省 20s，与 store 侧一致）。缺 busy_timeout 时撞锁会**立即**抛
+    ``database is locked``（不等），导致本轮孤儿扫描静默漏掉图片回收；
+    设了则短时锁竞争「等过去」。
+    """
+    try:
+        from src.config import load_config
+
+        storage = getattr(load_config(), "storage", None)
+        ms = getattr(storage, "busy_timeout_ms", None)
+        if isinstance(ms, int) and ms > 0:
+            return ms / 1000.0
+    except Exception:  # noqa: BLE001 - 配置不可用时用缺省值，绝不阻断扫描
+        pass
+    return 20.0
+
+
 def _is_backup_name(name: str) -> bool:
     low = name.lower()
     return any(tok in low for tok in _BACKUP_TOKENS)
@@ -41,9 +61,12 @@ def collect_orphan_image_paths(db_path: Path) -> list[str]:
     conn = None
     try:
         try:
-            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            conn = sqlite3.connect(
+                f"file:{db_path}?mode=ro", uri=True, timeout=_busy_timeout_s()
+            )
         except (sqlite3.Error, OSError):
-            conn = sqlite3.connect(str(db_path))
+            # 兜底为可写打开：同样要 busy_timeout，否则撞写锁立即失败
+            conn = sqlite3.connect(str(db_path), timeout=_busy_timeout_s())
         cur = conn.execute(
             "SELECT DISTINCT image_path FROM messages "
             "WHERE image_path IS NOT NULL AND image_path <> ''"

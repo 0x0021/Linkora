@@ -42,8 +42,11 @@ def _busy_timeout_s() -> float:
         ms = getattr(storage, "busy_timeout_ms", None)
         if isinstance(ms, int) and ms > 0:
             return ms / 1000.0
-    except Exception:  # noqa: BLE001 - 配置不可用时用缺省值，绝不阻断扫描
-        pass
+    except (ImportError, AttributeError, TypeError, ValueError) as e:
+        # 配置不可用/结构异常时用缺省值，绝不阻断扫描。
+        # 刻意**不**用宽 except：本模块读配置只可能抛这几类（导入失败、属性缺失、
+        # 类型不符），收窄可让真实异常（如 DB 损坏）不被掩盖。
+        logger.debug("[孤儿扫描] 读取 busy_timeout 配置失败，用缺省 20s: %s", e)
     return 20.0
 
 

@@ -274,6 +274,7 @@ def import_kb_from_url(body: dict | None = None):
         except HTTPException:
             raise
         except Exception:
+            logger.warning("broad except swallowed in import_kb_from_url() @ web/routers/kb.py:276, see exc_info", exc_info=True)
             use_playwright = True
 
         # 如果需要 JS 渲染，用 Playwright
@@ -298,6 +299,7 @@ def import_kb_from_url(body: dict | None = None):
                     try:
                         page.wait_for_load_state('networkidle', timeout=10000)
                     except Exception as _e:
+                        logger.warning("broad except swallowed in import_kb_from_url() @ web/routers/kb.py:300, see exc_info", exc_info=True)
                         _ = _e  # 超时也没关系，继续
                     import time
                     time.sleep(2)  # 多等 2 秒让 JS 渲染

@@ -127,6 +127,7 @@ class DwsAdapterOaApprovalMixin(DwsAdapterBase):
                 data = self.run(args, operation="oa_approval_list_executed", force_no_dry_run=True)
                 break
             except Exception as e:  # noqa: BLE001 - 瞬态错误重试
+                logger.warning("broad except swallowed in oa_approval_list_executed() @ src/dws_adapter/oa_approval.py:129, see exc_info", exc_info=True)
                 last_exc = e
                 time.sleep(1.0)
         else:

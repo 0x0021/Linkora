@@ -352,6 +352,7 @@ async def tool_staleness():
                         k: v for k, v in agent._TOOL_RESULT_TTL.items() if v > 0
                     }
             except Exception as _e:
+                logger.warning("broad except swallowed in tool_staleness() @ web/routers/metrics.py:354, see exc_info", exc_info=True)
                 _ = _e  # 读取 TTL 配置失败则留空
 
             return {

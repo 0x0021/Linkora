@@ -359,6 +359,7 @@ class MemoryMixin(EngineMixinBase):
                             from src.llm.usage_ledger import cleanup_old_usage
                             n_usage = cleanup_old_usage()
                         except Exception:
+                            logger.warning("broad except swallowed in _start_global_tables_cleanup_scheduler() @ src/platform/memory.py:361, see exc_info", exc_info=True)
                             n_usage = 0
                         if n_logs or n_feedback or n_drafts or n_usage:
                             logger.info(

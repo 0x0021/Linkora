@@ -161,6 +161,7 @@ async def get_skill_detail(skill_name: str):
         try:
             raw_content = Path(skill.source_path).read_text(encoding="utf-8")
         except Exception as _e:
+            logger.warning("broad except swallowed in get_skill_detail() @ web/routers/skills.py:163, see exc_info", exc_info=True)
             _ = _e  # 读取技能源文件失败则返回空内容
 
         return {

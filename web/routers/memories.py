@@ -13,6 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from web.dependencies import get_store
+import logging
 
 router = APIRouter()
 
@@ -84,6 +85,7 @@ async def add_memory(item: MemoryItem):
                     from src.memory.classifier import classify_memory_scope
                     scope, _, _conf = classify_memory_scope(item.content, source="manual")
                 except Exception:
+                    logging.warning("broad except swallowed in add_memory() @ web/routers/memories.py:86, see exc_info", exc_info=True)
                     scope = "personal"
             memory_id = store._memory_repo.save_memory(
                 key=key, content=item.content,

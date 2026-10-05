@@ -169,6 +169,7 @@ class DingTalkApprovalProvider(ApprovalProvider):
             data = self.dws.oa_approval_redirect_task(
                 task_id=task_id, to_actioner_id=target.user_id, remark=remark)
         except Exception as e:  # noqa: BLE001
+            logger.warning("broad except swallowed in transfer_task() @ src/approval/dingtalk.py:171, see exc_info", exc_info=True)
             return False, f"钉钉转交接口调用失败：{e}"
 
         if not isinstance(data, dict):

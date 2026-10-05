@@ -90,6 +90,7 @@ def resolve_strict_mode(agent) -> StrictModeConfig:
     try:
         enabled = bool(getattr(adv, "rag_strict_mode", False))
     except Exception:  # pragma: no cover - 极端 mock 场景
+        logger.warning("broad except swallowed in resolve_strict_mode() @ src/llm/rag_strict.py:92, see exc_info", exc_info=True)
         return StrictModeConfig()
 
     override = getattr(agent, "rag_strict_override", None)
@@ -97,6 +98,7 @@ def resolve_strict_mode(agent) -> StrictModeConfig:
         try:
             enabled = bool(override)
         except Exception:  # pragma: no cover
+            logger.warning("broad except swallowed in resolve_strict_mode() @ src/llm/rag_strict.py:99, see exc_info", exc_info=True)
             pass  # 覆盖值异常时保持配置值
 
     if not enabled:

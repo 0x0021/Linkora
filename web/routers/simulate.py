@@ -217,6 +217,7 @@ async def get_simulate_status():
             )
             status["system"]["version"] = result.stdout.strip() or "unknown"
         except Exception as _e:
+            logger.warning("broad except swallowed in get_simulate_status() @ web/routers/simulate.py:219, see exc_info", exc_info=True)
             _ = _e  # 取版本号失败则留 unknown
 
     except Exception as e:

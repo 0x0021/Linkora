@@ -239,6 +239,7 @@ async def message_stats(days: int = 7):
                     for w in ((_kw_cfg.rules.keyword_denylist if _kw_cfg else None) or [])
                 )
             except Exception:
+                logger.warning("broad except swallowed in message_stats() @ web/routers/stats.py:241, see exc_info", exc_info=True)
                 _keyword_denylist = set()
 
             word_freq = {}

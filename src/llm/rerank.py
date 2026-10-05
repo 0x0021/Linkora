@@ -97,6 +97,7 @@ def _resolve_rerank_device() -> str:
             getattr(load_config().embedding, "device", "auto") or "auto"
         ).strip().lower()
     except Exception:  # noqa: BLE001 - 配置不可用时按历史行为处理，绝不阻断重排
+        logger.warning("broad except swallowed in _resolve_rerank_device() @ src/llm/rerank.py:99, see exc_info", exc_info=True)
         return "auto"
     return device or "auto"
 

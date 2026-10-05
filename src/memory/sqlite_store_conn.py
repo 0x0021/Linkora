@@ -37,6 +37,7 @@ def _caller_label(skip_files: tuple[str, ...] = ("contextlib.py", "sqlite_store_
                 continue
             return f"{name}:{f.lineno}:{f.name}"
     except Exception:  # noqa: BLE001
+        logger.warning("broad except swallowed in _caller_label() @ src/memory/sqlite_store_conn.py:39, see exc_info", exc_info=True)
         pass
     return "<unknown>"
 
@@ -86,6 +87,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             cls._write_gate_holder = _caller_label()
             cls._write_gate_since = time.monotonic()
         except Exception:  # noqa: BLE001
+            logger.warning("broad except swallowed in _write_gate() @ src/memory/sqlite_store_conn.py:88, see exc_info", exc_info=True)
             cls._write_gate_holder = "<unknown>"
             cls._write_gate_since = time.monotonic()
         cls._write_gate_depth.value = 1
@@ -386,6 +388,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                         if "sqlite_store" not in f.filename
                     )
                 except Exception:  # noqa: BLE001
+                    logger.warning("broad except swallowed in write_with_retry() @ src/memory/sqlite_store_conn.py:388, see exc_info", exc_info=True)
                     _stack = "<stack unavailable>"
                 logger.warning(
                     "[SQLite] 写锁来源 self=%s platform=%s db=%s 链路: %s",
@@ -421,6 +424,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             plat = (platform or "").lower()
             return self._conv_db_path(plat, account_identity.resolve_account_id(plat))
         except Exception:  # noqa: BLE001
+            logger.warning("broad except swallowed in _conv_db_path_safe() @ src/memory/sqlite_store_conn.py:423, see exc_info", exc_info=True)
             return "<unknown>"
 
     def _migrate_main_to_conv(self, conv: sqlite3.Connection, platform: str) -> None:

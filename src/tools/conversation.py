@@ -197,6 +197,7 @@ class SearchMessagesTool(BaseTool):
                     group=chat_id, time_str=time_str, limit=limit
                 )
         except Exception as e:
+            logger.warning("broad except swallowed in execute() @ src/tools/conversation.py:199, see exc_info", exc_info=True)
             return {"error": f"获取消息失败: {e}"}
 
         messages = []

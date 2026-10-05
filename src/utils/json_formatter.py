@@ -70,6 +70,7 @@ class JSONFormatter(logging.Formatter):
             if caller:
                 log_entry["caller"] = caller
         except Exception as _e:
+            logging.warning("broad except swallowed in format() @ src/utils/json_formatter.py:72, see exc_info", exc_info=True)
             logging.getLogger(__name__).debug("提取 caller 字段失败，忽略: %s", _e)
 
         return json.dumps(log_entry, ensure_ascii=False, default=str)

@@ -38,6 +38,7 @@ def _get_git_info() -> dict:
             .strip()
         )
     except Exception:
+        logger.warning("broad except swallowed in _get_git_info() @ web/routers/status.py:40, see exc_info", exc_info=True)
         commit = "unknown"
     try:
         branch = (
@@ -50,6 +51,7 @@ def _get_git_info() -> dict:
             .strip()
         )
     except Exception:
+        logger.warning("broad except swallowed in _get_git_info() @ web/routers/status.py:52, see exc_info", exc_info=True)
         branch = "unknown"
     return {"commit": commit, "branch": branch}
 
@@ -81,6 +83,7 @@ def _resolve_user_name() -> str:
                             user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "") or \
                                         user.get("name", "N/A")
                 except Exception as _e:
+                    logger.warning("broad except swallowed in _resolve_user_name() @ web/routers/status.py:83, see exc_info", exc_info=True)
                     _ = _e  # 取当前用户名失败则保留 N/A
         else:
             dws = _api.get_dws()
@@ -91,6 +94,7 @@ def _resolve_user_name() -> str:
                 user = dws.contact_user_get_self()
                 user_name = (user.get("orgEmployeeModel") or {}).get("orgUserName", "N/A")
     except Exception as e:
+        logger.warning("broad except swallowed in _resolve_user_name() @ web/routers/status.py:93, see exc_info", exc_info=True)
         err_str = str(e)
         if "TOKEN_VERIFIED_FAILED" in err_str or "Token 验证失败" in err_str:
             user_name = "个人用户"
@@ -116,6 +120,7 @@ async def status():
             try:
                 dd_count = store._docs_repo.count_dingtalk_docs()
             except Exception:
+                logger.warning("broad except swallowed in status() @ web/routers/status.py:118, see exc_info", exc_info=True)
                 dd_count = 0
             dl_count = store._draft_repo.count_dead_letters(status="pending")
             return msg_count, conv_count, mem_count, kw_count, kb_count, dd_count, dl_count

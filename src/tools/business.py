@@ -196,6 +196,7 @@ class GetAttendanceTool(BaseTool):
         try:
             me = self.dws.contact_user_get_self()
         except Exception as e:
+            logger.warning("broad except swallowed in execute() @ src/tools/business.py:198, see exc_info", exc_info=True)
             return {"error": f"获取当前用户失败: {e}"}
         if not isinstance(me, dict) or not me:
             return {"error": "无法获取当前用户（个人钉钉模式或未开通 CLI 权限），无法查询考勤"}
@@ -213,6 +214,7 @@ class GetAttendanceTool(BaseTool):
                 "--limit", str(limit),
             ])
         except Exception as e:
+            logger.warning("broad except swallowed in execute() @ src/tools/business.py:215, see exc_info", exc_info=True)
             return {"error": f"获取考勤打卡记录失败: {e}"}
         return _to_items(_unwrap(data), limit=limit)
 

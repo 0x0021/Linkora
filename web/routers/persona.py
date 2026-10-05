@@ -884,6 +884,7 @@ async def recommend_few_shot(limit: int = 6):
             try:
                 platform = get_current_platform()
             except Exception as _e:
+                logger.warning("broad except swallowed in recommend_few_shot() @ web/routers/persona.py:886, see exc_info", exc_info=True)
                 _ = _e  # 取当前平台失败则回退 dingtalk
             # 排除已采纳样例，避免推荐列表中重复出现用户已采纳的 pair
             cfg = _load_config()

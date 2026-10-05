@@ -23,6 +23,7 @@ try:
     import httpx
     _HAS_HTTPX = True
 except Exception:
+    logging.warning("broad except swallowed in <module>() @ src/llm/client.py:25, see exc_info", exc_info=True)
     _HAS_HTTPX = False
 
 from src.config import LlmConfig
@@ -814,6 +815,7 @@ class LLMClient:
                 try:
                     prompt_text = _json.dumps(kwargs.get("messages") or [], ensure_ascii=False)
                 except Exception:
+                    logger.warning("broad except swallowed in _record_usage() @ src/llm/client.py:816, see exc_info", exc_info=True)
                     prompt_text = ""
                 in_t = estimate_tokens(prompt_text)
                 out_t = estimate_tokens(generated_text or "")

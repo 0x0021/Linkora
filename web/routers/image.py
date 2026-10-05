@@ -99,6 +99,7 @@ def _make_thumb(orig: Path, thumb: Path, width: int, fmt: str | None, accept_web
                 im.save(thumb, "PNG", optimize=True)
             return (str(thumb), _THUMB_MEDIA_BY_FMT[out_fmt])
     except Exception:
+        logger.warning("broad except swallowed in _make_thumb() @ web/routers/image.py:101, see exc_info", exc_info=True)
         # 不支持的格式/损坏文件 → 回退原图直出
         ext = orig.suffix.lstrip(".").lower()
         return (str(orig), _THUMB_MEDIA_BY_FMT.get(ext, "image/png"))

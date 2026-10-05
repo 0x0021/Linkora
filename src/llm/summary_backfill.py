@@ -120,6 +120,7 @@ class SummaryBackfill:
             try:
                 self._store.set_meta(META_LAST_RUN_AT, datetime.now().isoformat())
             except Exception:  # noqa: BLE001
+                logger.warning("broad except swallowed in _loop() @ src/llm/summary_backfill.py:122, see exc_info", exc_info=True)
                 pass
 
     # ------------------------------------------------------------------ 核心

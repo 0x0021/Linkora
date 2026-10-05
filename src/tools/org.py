@@ -132,6 +132,7 @@ class GetCurrentOrgTool(BaseTool):
         try:
             org = self.dws.get_current_org()
         except Exception as e:
+            logger.warning("broad except swallowed in execute() @ src/tools/org.py:134, see exc_info", exc_info=True)
             return {"error": f"获取当前组织失败: {e}"}
 
         if not isinstance(org, dict):

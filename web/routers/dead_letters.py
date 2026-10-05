@@ -69,6 +69,7 @@ async def batch_replay_dead_letters():
                     fail_count += 1
                     detail.append({"id": dl_id, "status": "failed", "error": result.get("error", "")})
             except Exception as e:
+                logger.warning("broad except swallowed in batch_replay_dead_letters() @ web/routers/dead_letters.py:71, see exc_info", exc_info=True)
                 fail_count += 1
                 # 【P1-2026-08-08】不再把异常文本回传响应体（绕过全局 5xx 脱敏），
                 # 改用 safe_detail 返回常量文案，复用 web/errors.py 的脱敏 helper。

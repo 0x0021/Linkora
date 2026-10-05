@@ -105,11 +105,13 @@ def _resolve_platform_path(platform: str) -> str:
         if inst is not None:
             cfg = inst.config
     except Exception:
+        logger.warning("broad except swallowed in _resolve_platform_path() @ web/dependencies.py:107, see exc_info", exc_info=True)
         cfg = None
     if cfg is None:
         try:
             cfg = load_config()
         except Exception:
+            logger.warning("broad except swallowed in _resolve_platform_path() @ web/dependencies.py:112, see exc_info", exc_info=True)
             cfg = None
     if cfg is not None:
         for p in cfg.platforms:
@@ -155,11 +157,13 @@ def get_platforms() -> list[dict]:
         if inst is not None:
             cfg = inst.config
     except Exception:
+        logger.warning("broad except swallowed in get_platforms() @ web/dependencies.py:157, see exc_info", exc_info=True)
         cfg = None
     if cfg is None:
         try:
             cfg = load_config()
         except Exception:
+            logger.warning("broad except swallowed in get_platforms() @ web/dependencies.py:162, see exc_info", exc_info=True)
             cfg = None
     if cfg is None:
         return []
@@ -187,11 +191,13 @@ def get_rag_config() -> dict:
         if inst is not None:
             cfg = inst.config
     except Exception:
+        logger.warning("broad except swallowed in get_rag_config() @ web/dependencies.py:189, see exc_info", exc_info=True)
         cfg = None
     if cfg is None:
         try:
             cfg = load_config()
         except Exception:
+            logger.warning("broad except swallowed in get_rag_config() @ web/dependencies.py:194, see exc_info", exc_info=True)
             cfg = None
     result = {
         "chunk_size": cfg.rag.chunk_size if cfg else 800,
@@ -250,6 +256,7 @@ def _skillhub_install_url_allowed(url: str) -> bool:
     try:
         host = urllib.parse.urlparse(url).netloc
     except Exception:  # noqa: BLE001
+        logger.warning("broad except swallowed in _skillhub_install_url_allowed() @ web/dependencies.py:252, see exc_info", exc_info=True)
         return False
     return host in allowed_hosts
 
@@ -289,6 +296,7 @@ def _ensure_skillhub_cli() -> tuple[bool, str]:
         from web.api import _get_cfg
         cfg = _get_cfg()
     except Exception:  # noqa: BLE001
+        logger.warning("broad except swallowed in _ensure_skillhub_cli() @ web/dependencies.py:291, see exc_info", exc_info=True)
         cfg = None
     auto_install = bool(
         getattr(cfg, "skillhub", None) and getattr(cfg.skillhub, "auto_install", False)
@@ -326,6 +334,7 @@ def _ensure_skillhub_cli() -> tuple[bool, str]:
     except subprocess.TimeoutExpired:
         return False, "skillhub CLI 安装超时，请手动执行安装命令"
     except Exception as e:  # noqa: BLE001
+        logger.warning("broad except swallowed in _ensure_skillhub_cli() @ web/dependencies.py:328, see exc_info", exc_info=True)
         return False, f"skillhub CLI 自动安装异常: {e}"
     finally:
         if tmp_path is not None:
@@ -405,6 +414,7 @@ async def _trigger_icon_prefetch(icon_url_map: dict[str, str]) -> None:
         from web.routers.image import prefetch_all_skill_icons
         await prefetch_all_skill_icons(icon_url_map)
     except Exception as _e:
+        logger.warning("broad except swallowed in _trigger_icon_prefetch() @ web/dependencies.py:407, see exc_info", exc_info=True)
         logging.getLogger(__name__).debug("_trigger_icon_prefetch 失败，忽略: %s", _e)
 
 

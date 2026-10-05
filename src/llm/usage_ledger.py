@@ -162,6 +162,7 @@ def get_stats(hours: int | None = None) -> dict:
     try:
         from src.metrics.collector import USD_CNY_RATE
     except Exception:
+        logger.warning("broad except swallowed in get_stats() @ src/llm/usage_ledger.py:164, see exc_info", exc_info=True)
         USD_CNY_RATE = 7.2
     try:
         conn = _connect()

@@ -14,7 +14,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
@@ -132,9 +132,11 @@ async def conversations(limit: int = 50):
 
 
 @router.get("/api/messages")
-async def messages(chat_id: str = "", limit: int = 50):
+async def messages(background_tasks: BackgroundTasks = None, chat_id: str = "", limit: int = 50):
     try:
         limit = max(1, min(limit, 500))
+        if background_tasks is None:
+            background_tasks = BackgroundTasks()
 
         # H1-2026-08-08：DWS 身份解析涉及 subprocess CLI，移出事件循环到 worker 线程
         current_user_id, current_user_name = await run_in_threadpool(_resolve_current_user)
@@ -149,6 +151,7 @@ async def messages(chat_id: str = "", limit: int = 50):
                 chat_id=chat_id, limit=limit, platform=get_current_platform()
             )
             messages = []
+            pending_backfills: list[tuple[str, str, str]] = []
             for d in rows:
                 chat_name = d.get('chat_name') or ''
                 # ★ P-1 修复：方向判断 (sender_name OR sender_id 都对得上 → out)
@@ -187,23 +190,13 @@ async def messages(chat_id: str = "", limit: int = 50):
                     # 尝试按发送者名称 + 时间戳从磁盘匹配最近的图片文件
                     fallback_path = _resolve_missing_image_path(d)
                     d['image_url'] = f"/api/image/{fallback_path}" if fallback_path else ""
-                    # 顺手回填 DB（幂等，只写一次）：经 repo 落到正确的 conv_conn 会话库，
-                    # 主键用 msg_id（与全代码库一致），失败留痕而非静默吞掉
+                    # 收集待回填：写动作延迟到请求返回后由后台线程执行
+                    # （见 _flush_image_backfills），读路径不同步写会话库，
+                    # 避免争用写锁、阻塞响应。回填本身幂等（只写一次、走写闸门）。
                     if fallback_path:
-                        try:
-                            n = store._message_repo.backfill_missing_image_path(
-                                d.get('msg_id') or "", fallback_path, get_current_platform()
-                            )
-                        except Exception as e:  # noqa: BLE001
-                            logger.warning(
-                                "图片路径磁盘兜底回填失败 msg_id=%s: %s", d.get('msg_id'), e
-                            )
-                        else:
-                            if n == 0:
-                                logger.debug(
-                                    "图片路径磁盘兜底未写入（已存在 image_path 或消息不存在）msg_id=%s",
-                                    d.get('msg_id'),
-                                )
+                        pending_backfills.append(
+                            (d.get('msg_id') or "", fallback_path, get_current_platform())
+                        )
                 else:
                     d['image_url'] = ""
                 messages.append(d)
@@ -212,8 +205,12 @@ async def messages(chat_id: str = "", limit: int = 50):
                 "messages": messages,
                 "current_user_name": current_user_name,
                 "current_user_id": current_user_id,  # ★ P-1 顺手回传，前端可双保险
-            }
-        return await run_in_threadpool(_work)
+            }, pending_backfills
+        result, pending = await run_in_threadpool(_work)
+        # GET 读路径不同步写库：请求返回后由后台线程回填图片路径（幂等、走写闸门）
+        if pending:
+            background_tasks.add_task(_flush_image_backfills, pending)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=SAFE_OPERATION_FAILED) from e
 
@@ -243,6 +240,28 @@ async def batch_delete_messages(payload: dict):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=SAFE_OPERATION_FAILED) from e
+
+
+def _flush_image_backfills(pending: list[tuple[str, str, str]]) -> None:
+    """读路径图片路径回填的收尾：请求返回后在后台线程写库。
+
+    ``/api/messages`` 是 GET 读路径，不应在请求关键路径内同步写会话库
+    （争用写锁 + 阻塞响应）。此处把回填动作延迟到响应返回后由 FastAPI
+    BackgroundTasks 在后台线程执行。回填本身经 ``store._lock``（叠加全局写闸门），
+    幂等（仅当 image_path 为空才写入），失败留痕而非静默吞掉。
+    """
+    if not pending:
+        return
+    try:
+        store = _api.get_store()
+        repo = store._message_repo
+        for msg_id, image_path, platform in pending:
+            try:
+                repo.backfill_missing_image_path(msg_id, image_path, platform)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("图片路径后台回填失败 msg_id=%s: %s", msg_id, e)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("图片路径后台回填初始化失败: %s", e)
 
 
 def _resolve_missing_image_path(msg: dict) -> str:

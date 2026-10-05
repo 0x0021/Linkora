@@ -88,40 +88,59 @@ class ConversationRepo:
                                platform: str = "") -> None:
         """更新某个会话的最后回复时间为现在。"""
         now = datetime.now().isoformat()
-        cur = self._cc(platform).cursor()
-        cur.execute(
-            "UPDATE conversations SET last_reply_time = ?, updated_at = ? WHERE chat_id = ?",
-            (now, now, chat_id)
-        )
-        if cur.rowcount == 0:
-            cur.execute(
-                "INSERT OR IGNORE INTO conversations (chat_id, chat_type, last_reply_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (chat_id, chat_type, now, now, now)
-            )
-        self._cc(platform).commit()
+        plat = platform or get_current_platform()
+
+        def _write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE conversations SET last_reply_time = ?, updated_at = ? WHERE chat_id = ?",
+                    (now, now, chat_id)
+                )
+                if cur.rowcount == 0:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO conversations (chat_id, chat_type, last_reply_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                        (chat_id, chat_type, now, now, now)
+                    )
+            finally:
+                cur.close()
+            conn.commit()
+
+        self.store.write_with_retry(_write, plat)
 
     def get_last_replied_msg_id(self, chat_id: str, platform: str = "") -> Optional[str]:
         """获取会话最后回复过的用户消息 msg_id（用于基于消息 ID 的防重复回复）。"""
         cur = self._cc(platform).cursor()
-        cur.execute("SELECT last_replied_msg_id FROM conversations WHERE chat_id = ?", (chat_id,))
-        row = cur.fetchone()
-        return row[0] if row and row[0] else None
+        try:
+            cur.execute("SELECT last_replied_msg_id FROM conversations WHERE chat_id = ?", (chat_id,))
+            row = cur.fetchone()
+            return row[0] if row and row[0] else None
+        finally:
+            cur.close()
 
     def update_last_replied_msg_id(self, chat_id: str, msg_id: str,
                                    chat_type: str = "unknown", platform: str = "") -> None:
         """记录会话最后回复过的用户消息 msg_id。"""
         now = datetime.now().isoformat()
-        cur = self._cc(platform).cursor()
-        cur.execute(
-            "UPDATE conversations SET last_replied_msg_id = ?, updated_at = ? WHERE chat_id = ?",
-            (msg_id, now, chat_id),
-        )
-        if cur.rowcount == 0:
-            cur.execute(
-                "INSERT OR IGNORE INTO conversations (chat_id, chat_type, last_replied_msg_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (chat_id, chat_type, msg_id, now, now)
-            )
-        self._cc(platform).commit()
+        plat = platform or get_current_platform()
+
+        def _write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE conversations SET last_replied_msg_id = ?, updated_at = ? WHERE chat_id = ?",
+                    (msg_id, now, chat_id),
+                )
+                if cur.rowcount == 0:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO conversations (chat_id, chat_type, last_replied_msg_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                        (chat_id, chat_type, msg_id, now, now)
+                    )
+            finally:
+                cur.close()
+            conn.commit()
+
+        self.store.write_with_retry(_write, plat)
 
     def has_user_message_from(self, chat_id: str, since_iso_ts: str,
                               sender_ids: list[str],
@@ -156,24 +175,36 @@ class ConversationRepo:
                 chat_id, chat_name or "(未知)", chat_type,
             )
             return
-        cur = self._cc(platform).cursor()
+        plat = platform or get_current_platform()
         now = datetime.now().isoformat()
         # last_message_time 优先用调用方传入的真实最后消息时间（如轮询器从消息时间戳推算），
         # 缺省回落到当前时间，保持历史行为一致。
         lmt = last_message_time or now
-        cur.execute(
-            """INSERT INTO conversations (chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id, last_message_time, message_count, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
-               ON CONFLICT(chat_id) DO UPDATE SET
-                   chat_name = COALESCE(NULLIF(excluded.chat_name, ''), conversations.chat_name),
-                   chat_type = excluded.chat_type,
-                   peer_user_id = CASE WHEN excluded.peer_user_id != '' THEN excluded.peer_user_id ELSE conversations.peer_user_id END,
-                   peer_open_dingtalk_id = CASE WHEN excluded.peer_open_dingtalk_id != '' THEN excluded.peer_open_dingtalk_id ELSE conversations.peer_open_dingtalk_id END,
-                   last_message_time = excluded.last_message_time,
-                   updated_at = excluded.updated_at""",
-            (chat_id, chat_name or "", chat_type, peer_user_id, peer_open_dingtalk_id, lmt, now, now),
-        )
-        self._cc(platform).commit()
+        # 【锁自愈】经 write_with_retry 包装：SQLITE_BUSY_SNAPSHOT（陈旧读快照）下
+        # 本连接写库立即失败且 busy_timeout 无效，唯一可靠恢复是丢弃连接重建。
+        # 2026-10-05 线上事故：本方法是轮询器每轮必调的写点，锁失败时整个会话被跳过
+        # （155 次/持续），根因就是这里没有自愈。语义与重构前完全一致。
+        def _write(conn: sqlite3.Connection) -> None:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    """INSERT INTO conversations (chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id, last_message_time, message_count, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+                       ON CONFLICT(chat_id) DO UPDATE SET
+                           chat_name = COALESCE(NULLIF(excluded.chat_name, ''), conversations.chat_name),
+                           chat_type = excluded.chat_type,
+                           peer_user_id = CASE WHEN excluded.peer_user_id != '' THEN excluded.peer_user_id ELSE conversations.peer_user_id END,
+                           peer_open_dingtalk_id = CASE WHEN excluded.peer_open_dingtalk_id != '' THEN excluded.peer_open_dingtalk_id ELSE conversations.peer_open_dingtalk_id END,
+                           last_message_time = excluded.last_message_time,
+                           updated_at = excluded.updated_at""",
+                    (chat_id, chat_name or "", chat_type, peer_user_id,
+                     peer_open_dingtalk_id, lmt, now, now),
+                )
+            finally:
+                cur.close()
+            conn.commit()
+
+        self.store.write_with_retry(_write, plat)
 
     def delete_conversation(self, chat_id: str, platform: str = "") -> None:
         """删除单个会话（遇权限错误时调用，避免反复重试）。
@@ -393,41 +424,47 @@ class ConversationRepo:
         """CAS 写回 H2-A 后台摘要（state machine 边界）。"""
         if not chat_id or not summary:
             return False
-        cur = self._cc(platform).cursor()
+        conn = self._cc(platform)
+        cur = conn.cursor()
         now = datetime.now().isoformat()
         new_gen = expected_generation + 1
-        cur.execute(
-            """UPDATE conversation_summaries
-               SET summary_text = ?, older_boundary_msg_id = ?, covered_count = ?,
-                   generation = ?, updated_at = ?
-               WHERE chat_id = ? AND generation = ?""",
-            (summary, older_boundary_msg_id, int(covered_count), new_gen, now,
-             str(chat_id), int(expected_generation)),
-        )
-        if cur.rowcount > 0:
-            self._cc(platform).commit()
-            return True
-        cur.execute(
-            "SELECT 1 FROM conversation_summaries WHERE chat_id = ?",
-            (str(chat_id),),
-        )
-        if cur.fetchone() is None:
+        try:
             cur.execute(
-                """INSERT INTO conversation_summaries
-                       (chat_id, summary_text, older_boundary_msg_id, covered_count,
-                        generation, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (str(chat_id), summary, older_boundary_msg_id, int(covered_count),
-                 new_gen, now, now),
+                """UPDATE conversation_summaries
+                   SET summary_text = ?, older_boundary_msg_id = ?, covered_count = ?,
+                       generation = ?, updated_at = ?
+                   WHERE chat_id = ? AND generation = ?""",
+                (summary, older_boundary_msg_id, int(covered_count), new_gen, now,
+                 str(chat_id), int(expected_generation)),
             )
-            self._cc(platform).commit()
-            return True
-        logger.debug(
-            "[摘要] CAS 跳过写回 chat_id=%s（代际不符：期望 %d，库已被更新）",
-            chat_id, expected_generation,
-        )
-        self._cc(platform).commit()
-        return False
+            if cur.rowcount > 0:
+                conn.commit()
+                return True
+            cur.execute(
+                "SELECT 1 FROM conversation_summaries WHERE chat_id = ?",
+                (str(chat_id),),
+            )
+            if cur.fetchone() is None:
+                cur.execute(
+                    """INSERT INTO conversation_summaries
+                           (chat_id, summary_text, older_boundary_msg_id, covered_count,
+                            generation, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (str(chat_id), summary, older_boundary_msg_id, int(covered_count),
+                     new_gen, now, now),
+                )
+                conn.commit()
+                return True
+            logger.debug(
+                "[摘要] CAS 跳过写回 chat_id=%s（代际不符：期望 %d，库已被更新）",
+                chat_id, expected_generation,
+            )
+            conn.commit()
+            return False
+        finally:
+            # 【锁争用】本方法有 3 个 return 路径，游标若不 close 会悬在结果集上，
+            # 在长生命周期 worker 线程里累积持锁（CPython 靠 GC 兜底但时机不可控）。
+            cur.close()
 
     def fetch_messages_in_range(
         self,
@@ -444,6 +481,7 @@ class ConversationRepo:
         """
         skip = set(skip_msg_types or [])
         skip.add("system")  # 系统通知永远不进摘要
+        cur = None
         try:
             cur = self._cc(platform).cursor()
             placeholders = ",".join("?" for _ in skip)
@@ -461,6 +499,12 @@ class ConversationRepo:
         except Exception as e:  # noqa: BLE001
             logger.warning("[摘要补跑] 查询窗口消息失败: %s", e)
             return {}
+        finally:
+            # 【锁争用】本查询是全表扫描（无 LIMIT），游标悬在结果集上会一直持有
+            # WAL 读事务；异常路径若不显式 close，连接在该线程内长期带快照，
+            # 后续写库将立即报 database is locked（SQLITE_BUSY_SNAPSHOT）。
+            if cur is not None:
+                cur.close()
 
         grouped: "dict[str, list[dict]]" = {}
         for r in rows:

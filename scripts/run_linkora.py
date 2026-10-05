@@ -184,6 +184,9 @@ def main() -> None:
     ap.add_argument("--dev", action="store_true", help="dev 模式（文件变更热重启，both 模式）")
     ap.add_argument("--no-dedup", action="store_true",
                     help="关闭跨进程日志去重，恢复 web/worker 逐行双显（调试两进程差异用）")
+    ap.add_argument("--single-process", action="store_true",
+                    help="单进程模式（both）：Web 与后台轮询跑在同一进程，"
+                         "从根本上消除跨进程 SQLite 写锁争用")
     args = ap.parse_args()
 
     extra = ["--dev"] if args.dev else []
@@ -191,14 +194,35 @@ def main() -> None:
     procs: list[tuple[str, subprocess.Popen]] = []
     pumps: list[threading.Thread] = []
     dedup = not args.no_dedup
-    if not args.worker_only:
-        p = spawn("web", args.web_port, extra)
-        procs.append(("web", p))
-        pumps.append(threading.Thread(target=_pump, args=("web", _CYAN, p.stdout, dedup), daemon=True))
-    if not args.no_worker:
-        p = spawn("worker", 0, extra)
-        procs.append(("worker", p))
-        pumps.append(threading.Thread(target=_pump, args=("worker", _YELLOW, p.stdout, dedup), daemon=True))
+
+    # 【P0 2026-10-05 锁争用根治】单进程模式：只 spawn 一个 both 进程。
+    #
+    # 背景（生产事故）：双进程架构下 web 与 worker **同时**打开同一批 SQLite 库
+    # （实测 110MB 分库：web 进程 15 个连接、worker 进程 23 个连接），
+    # 跨进程写锁争用使轮询器大量报 "database is locked"。关键结论：
+    # **本进程内的自愈（discard_conn / write_with_retry）对跨进程锁完全无效**——
+    # 锁在另一个进程手里，丢弃自己的连接无用。
+    #
+    # both 模式已在 lifecycle.py:115 完备支持（start_web 与 start_ingestion 同时为真），
+    # 故此处零业务改动即可消除跨进程争用。代价：改 Web 代码会连带重启 worker
+    # （--dev 热重载），这正是 --single-process 的取舍。
+    if args.single_process:
+        print(f"{_CYAN}[run_linkora]{_RESET} "
+              f"单进程模式（both）：Web(端口 {args.web_port}) 与后台轮询同进程，"
+              f"避免跨进程 SQLite 锁争用", flush=True)
+        p = spawn("both", args.web_port, extra)
+        procs.append(("both", p))
+        pumps.append(threading.Thread(target=_pump, args=("web+worker", _GRAY, p.stdout, False),
+                                      daemon=True))
+    else:
+        if not args.worker_only:
+            p = spawn("web", args.web_port, extra)
+            procs.append(("web", p))
+            pumps.append(threading.Thread(target=_pump, args=("web", _CYAN, p.stdout, dedup), daemon=True))
+        if not args.no_worker:
+            p = spawn("worker", 0, extra)
+            procs.append(("worker", p))
+            pumps.append(threading.Thread(target=_pump, args=("worker", _YELLOW, p.stdout, dedup), daemon=True))
 
     for t in pumps:
         t.start()

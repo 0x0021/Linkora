@@ -317,6 +317,15 @@ class StorageConfig(BaseModel):
     decisions_retention_days: int = 30  # 决策追踪表留存天数（0/负数视为不清理）
     messages_retention_days: int = 90  # 消息记录留存天数（0/负数视为不清理）
     doc_sync_interval_hours: int = 1  # 钉钉文档自动同步间隔（小时），0/负数禁用
+    # SQLite busy_timeout（毫秒）。写库撞锁时的等待窗口。
+    # 【P0 2026-10-05】此前硬编码 5000，在双进程架构（web + worker 同时写同一批库）
+    # 下实测每分钟 20~44 次 "database is locked"，轮询器大量丢会话。
+    # 调到 20s 让短时锁竞争「等过去」而不是直接失败。
+    # ⚠️ 治标不治本：跨进程锁等待再久也是等待。根治须用
+    #    `scripts/run_linkora.py --single-process` 合并为单进程（both 模式）。
+    # ⚠️ 注意：对 SQLITE_BUSY_SNAPSHOT（陈旧读快照）**无效**，那是立即失败的，
+    #    只能靠丢弃连接重建（store.write_with_retry）恢复。
+    busy_timeout_ms: int = 20000
 
 
 class PlatformRagConfig(BaseModel):

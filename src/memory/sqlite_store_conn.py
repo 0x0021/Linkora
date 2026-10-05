@@ -5,11 +5,13 @@
 from __future__ import annotations
 from .sqlite_store_mixins_base import SQLiteStoreBase
 
+import contextlib
 import hashlib
 import logging
 import os
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +22,69 @@ logger = logging.getLogger(__name__)
 
 
 class SQLiteStoreConnMixin(SQLiteStoreBase):
+    # 【P0 2026-10-05】写入走 :meth:`_write_gate` 进程内串行化闸门。
+    # 锁与深度计数的定义与「为何需要」详见 SQLiteStoreBase 同名类变量注释。
+    # 教训：e2997cb(2026-09-18) 修好读游标泄漏 = 拆掉了「读事务挡住写入」的天然
+    # 闸门，若不同步给写入侧加限流与自愈，跨进程争用会立即爆发（该日之前日志零锁错误）。
+
+    @classmethod
+    @contextlib.contextmanager
+    def _write_gate(cls, timeout: float = 60.0):
+        """进程内写入串行化闸门（可重入，避免同一线程嵌套自锁）。
+
+        用 threading.local 记深度：``write_with_retry`` 内部可能再调用
+        ``write_with_retry``（例如 repo 方法互相包装），重入时直接放行以免自锁。
+        """
+        # 惰性初始化（与 _conv_schema_init_lock 同一模式）：基类只做类型声明，
+        # 值在此首次使用时创建，所有实例共享同一把锁。
+        if not hasattr(cls, "_write_gate_lock"):
+            cls._write_gate_lock = threading.Lock()
+        if not hasattr(cls, "_write_gate_depth"):
+            cls._write_gate_depth = threading.local()
+        depth = getattr(cls._write_gate_depth, "value", 0)
+        if depth > 0:
+            # 已在本线程的闸门内（嵌套调用）→ 直接放行
+            cls._write_gate_depth.value = depth + 1
+            try:
+                yield
+            finally:
+                cls._write_gate_depth.value = depth
+            return
+        if not cls._write_gate_lock.acquire(timeout=timeout):
+            # 闸门等不到（写入堆积过久）→ 不静默阻塞主流程，告警后放行
+            logger.warning(
+                "[SQLite] 写入闸门等待 %.0fs 超时（写堆积过多），本次放行", timeout
+            )
+            yield
+            return
+        cls._write_gate_depth.value = 1
+        try:
+            yield
+        finally:
+            cls._write_gate_depth.value = 0
+            cls._write_gate_lock.release()
+
+    def _busy_timeout_ms(self) -> int:
+        """解析 SQLite busy_timeout（毫秒），缺省 20000。
+
+        单一真源：主库 ``conn`` 与会话库 ``conv_conn`` 两处 PRAGMA 共用本方法，
+        避免同一参数在两处漂移。配置项 ``storage.busy_timeout_ms``。
+
+        【为什么调大到 20s】2026-10-05 生产事故：硬编码 5000 时，双进程架构
+        （web + worker 同时写同一 110MB 分库）下每分钟 20~44 次
+        "database is locked"，轮询器大量丢会话。加长等待窗口让短时锁竞争
+        「等过去」而非直接失败。
+        ⚠️ 对 SQLITE_BUSY_SNAPSHOT（陈旧读快照）**无效**——那种是 0.0000s 立即
+        失败，只能靠丢弃连接重建（``write_with_retry``）。
+        """
+        # 防御式 getattr：最小/测试配置（SimpleNamespace 桩）可能没有 storage 段
+        storage = getattr(self, "config", None)
+        storage = getattr(storage, "storage", None)
+        raw = getattr(storage, "busy_timeout_ms", None)
+        if not isinstance(raw, int) or raw <= 0:
+            return 20000
+        return raw
+
     @property
     def conn(self) -> sqlite3.Connection:
         """返回【当前线程】独立的 SQLite 连接（懒创建 + 缓存）。
@@ -39,7 +104,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             c = sqlite3.connect(self.db_path)
             c.row_factory = sqlite3.Row
             # 并发写等待窗口：WAL 下仍可能短暂锁，设置 5s 避免直接抛 database is locked
-            c.execute("PRAGMA busy_timeout=5000")
+            c.execute(f"PRAGMA busy_timeout={self._busy_timeout_ms()}")
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("PRAGMA synchronous=NORMAL")
             # 页面缓存：默认 2MB 太小，这里设 ~8MB（-8000 页 × 1KB/页 ≈ 8MB）。
@@ -164,7 +229,7 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
             existed = os.path.exists(path)
             c = sqlite3.connect(path)
             c.row_factory = sqlite3.Row
-            c.execute("PRAGMA busy_timeout=5000")
+            c.execute(f"PRAGMA busy_timeout={self._busy_timeout_ms()}")
             c.execute("PRAGMA journal_mode=WAL")
             c.execute("PRAGMA synchronous=NORMAL")
             c.execute("PRAGMA cache_size=-8000")  # 与主库一致（每连接上限，见上方实测依据）
@@ -234,6 +299,46 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                 entry[1].close()
             except sqlite3.Error as e:
                 logger.debug("丢弃会话连接失败（可忽略）: %s", e)
+
+    def write_with_retry(self, fn, platform: str = "", *, max_attempts: int = 3) -> None:
+        """执行一次会话库写操作，**进程内串行化** + 遇锁失败自动自愈重试。
+
+        【P0 2026-10-05 事故根因与本方法的由来】
+
+        git 溯源：``e2997cb``（2026-09-18）之前**从不报** database is locked。原因是
+        当时读游标从不关闭 → WAL 读事务一直悬着 → **写入被 SQLite 自然挡在门外**。
+        该提交「修好」了游标泄漏（本身正确），闸门被拆除，而配套的写入限流与自愈
+        并未同步，于是写入开始真枪实弹抢锁，跨进程争用立即爆发。
+        铁证：``logs/linkora.log.1 5``（09-06，21747 行、已有展示摘要）锁错误 0 条。
+
+        **教训：修掉读游标泄漏 = 解除写入的天然闸门，必须同步重建写入侧闸门。**
+        本方法就是那个闸门——用**显式串行化**替代「靠 bug 挡写入」：
+
+        - ``_write_gate`` 是**进程内**的全局写锁，把本进程内所有 ``write_with_retry``
+          写入排成队列。SQLite 同一时刻只允许一个写者，串行化后本进程不再自己撞自己。
+        - ⚠️ **无法解决跨进程争用**：web 与 worker 是两个进程，各有自己的闸门。
+          跨进程仍须靠 busy_timeout 等待 + ``scripts/run_linkora.py --single-process``
+          合并为单进程才能根治。
+        - 闸门只包住「拿到连接 → 执行写入 → commit」这一段，读操作不受影响，
+          故不会把读路径拖慢。
+
+        判别口诀（实测）：**「立即失败」= 陈旧读快照**（busy_timeout 无效，只能丢连接
+        重建）；**「等满 busy_timeout 才失败」= 真锁等待**（靠等待或串行化解）。
+        """
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with self._write_gate():
+                    fn(self.conv_conn(platform))
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e).lower() or attempt >= max_attempts:
+                    raise
+                logger.warning(
+                    "[SQLite] 写库锁失败，自愈重试 %d/%d（丢弃当前线程会话连接重建）: %s",
+                    attempt, max_attempts, e,
+                )
+                self.discard_conv_conn(platform)
+                time.sleep(0.05 * attempt)  # 轻微退避，给并发写让出窗口
 
     def _migrate_main_to_conv(self, conv: sqlite3.Connection, platform: str) -> None:
         """把主库既有会话数据拷贝进当前账号的会话库（一次性引导迁移）。

@@ -548,22 +548,38 @@ class MessageRepo:
             return messages
 
     def get_conversations_needing_summary(self, max_messages: int = 50,
-                                          summary_interval_hours: int = 24) -> list[dict]:
+                                          summary_interval_hours: int = 24,
+                                          only_recent_days: int | None = 0) -> list[dict]:
         """获取需要摘要的会话列表（消息数超过阈值，且不在近期已摘要名单内）。
 
         通过 last_summary_at 过滤，避免同一批超长会话每轮/每次重启被反复全量重摘要
         （原实现 message_count 不减，导致永续心跳式轰炸免费 LLM 接口）。
+
+        【P0 2026-10-05 锁争用止血】``only_recent_days``（0 = 仅今日）：
+        额外要求 ``last_message_time`` 在最近 N 天内。展示摘要的取材窗口本就只取
+        **今天 00:00 起**的消息（``_collect_window_messages``），对「今天没消息」的
+        会话重摘必然取不到素材——实测真实库 942 个候选里**今日有消息的仅 4 个**
+        （7 天内 89 个）。不收紧则每轮为 938 个注定空转的会话白跑「读窗口 + 读摘要」，
+        长期持有 WAL 读事务，与轮询器争写锁（2026-10-05 事故：5 分钟 382 次
+        database is locked，轮询停摆）。
+
+        传 ``None`` 关闭该过滤（恢复旧的全量行为），供需要全量回溯的场景使用。
         """
         cur = self._cc().cursor()
         try:
-            cur.execute(
+            sql = (
                 "SELECT chat_id, chat_name, chat_type, message_count FROM conversations "
                 "WHERE message_count >= ? "
                 "AND (last_summary_at IS NULL "
                 "     OR last_summary_at < datetime('now', ?)) "
-                "ORDER BY message_count DESC",
-                (max_messages, f"-{summary_interval_hours} hours"),
             )
+            params: list = [max_messages, f"-{summary_interval_hours} hours"]
+            if only_recent_days is not None:
+                # 用 localtime 与取材窗口（当天 00:00 起）对齐，避免时区错位
+                sql += "AND last_message_time >= datetime('now', 'localtime', ?) "
+                params.append(f"-{int(only_recent_days)} days")
+            sql += "ORDER BY message_count DESC"
+            cur.execute(sql, params)
             return [dict(row) for row in cur.fetchall()]
         finally:
             cur.close()

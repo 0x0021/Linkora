@@ -1,5 +1,23 @@
 """展示用全量会话摘要调度器（信号驱动，写入独立的 conversation_display_summaries 表）。
 
+【P0 2026-10-05 锁争用事故复盘 —— 为什么 9 月前没有这个问题】
+
+git 溯源结论：本文件由 ``e2997cb``（2026-09-18）引入，而**该提交同时做了两件
+方向相反的事**：
+  1. 给所有读方法加 ``finally: cur.close()`` —— 修掉了游标泄漏（本身是对的），
+     但副作用是**WAL 读事务真正结束**，写操作不再被读快照挡在门外；
+  2. 新增了本调度器（260 行）—— 一个高频写入源。
+
+结果：(1) 让写操作真的开始抢锁，(2) 带来 910 个候选会话的持续写压力，而当时
+**既没有入队上限、也没有任何锁自愈** → 跨进程争用立即爆发。
+
+铁证：``logs/linkora.log.1 5``（2026-09-06，21747 行、已含 19 条展示摘要日志）
+里 ``database is locked`` **0 条**；``e2997cb`` 之后开始持续出现。
+
+**教训：修掉「读游标泄漏」解除了写入的天然闸门，必须同步给写入侧加限流与自愈。**
+本模块的 ``_max_enqueue_per_round``（入队上限）、``_recent_days``（候选收窄到今日）
+与 store 的 ``write_with_retry``（锁失败丢连接重试）三者共同构成该闸门，缺一不可。
+
 设计要点（详见用户报告「摘要只取了一部分聊天记录」根因）：
 - Web「对话摘要」页原本直接读 H2-A/动态摘要表（conversation_summaries），而那份摘要
   的定位是「LLM 上下文压缩记忆」——它只覆盖 history_window - tiering_recent 的 older 段，
@@ -51,7 +69,9 @@ class DisplaySummaryScheduler:
                  interval_hours: int = 2,
                  freshness_seconds: int = 1800,
                  scan_days: int = 7,
-                 job_interval_seconds: float = 0.5) -> None:
+                 job_interval_seconds: float = 0.5,
+                 max_enqueue_per_round: int = 20,
+                 recent_days: int = 0) -> None:
         self._agent = agent
         self._store = store
         self._platform = platform
@@ -64,6 +84,18 @@ class DisplaySummaryScheduler:
         # 任务间隔节流：首轮可能积压上百个「尚无展示摘要」的会话，若不节流会形成
         # 持续的 LLM+写库洪峰，与轮询器抢写锁。留最小间隔让写入平滑。
         self._job_interval = max(0.0, float(job_interval_seconds))
+        # 单轮入队上限（2026-10-05 锁争用止血）：_job_interval 只在 worker 消费端
+        # 限速，但入队端**无上限**——真实库 910 个会话一次性全入队，worker 消费不及，
+        # 队列持续积压并长期持有 WAL 读事务，与轮询器争写锁致其停摆。
+        # 限流后每轮只入队 N 个，其余留待下一轮（pending 去重保证不重复）。
+        self._max_enqueue_per_round = max(1, int(max_enqueue_per_round))
+        # 候选会话的时间收窄：0 = 仅今日有消息的会话（与取材窗口对齐）。
+        # 取材窗口只取今天 00:00 起的消息，故「今天没消息」的会话重摘必然空转；
+        # 实测真实库 942 个候选里今日仅 4 个，不收窄则 99% 是无效读+持锁。
+        # 传 None 可退回全量（供回溯场景）。
+        self._recent_days: int | None = (
+            None if recent_days is None else max(0, int(recent_days))
+        )
         self._queue: "queue.Queue[DisplaySummaryJob | None]" = queue.Queue()
         self._pending: set[str] = set()
         self._pending_lock = threading.Lock()
@@ -144,12 +176,28 @@ class DisplaySummaryScheduler:
             chats = self._store._message_repo.get_conversations_needing_summary(
                 max_messages=self._min_messages,
                 summary_interval_hours=self._interval_hours,
+                only_recent_days=self._recent_days,
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("[展示摘要] 查询需摘要会话失败: %s", e)
             return
         if not chats:
             return
+        # 【P0 2026-10-05 锁争用止血】限制单轮入队量。
+        # 事故：真实库有 910 个会话满足条件，此前一次性全部入队，worker 串行处理
+        # 每条都要「读窗口 + 读摘要 + 写回」，读事务全程持有 WAL 读快照 →
+        # 与轮询器/摘要调度器/消息清理争抢写锁，日志里 5 分钟内 382 次
+        # "database is locked"，轮询实质停摆。而 worker 单条处理耗时（含 LLM 调用），
+        # 队列根本消费不完，下一轮又重新发现同一批 910 个 → 永久高压。
+        # 限流后每轮只处理 _max_enqueue_per_round 个，其余留待下一轮，
+        # 让出写锁窗口给轮询器等对时延敏感的链路。
+        if len(chats) > self._max_enqueue_per_round:
+            logger.info(
+                "[展示摘要] 本轮发现 %d 个待摘要会话，超出单轮上限 %d，本轮只入队 %d 个"
+                "（其余留待下一轮，避免写锁争用导致轮询器停摆）",
+                len(chats), self._max_enqueue_per_round, self._max_enqueue_per_round,
+            )
+            chats = chats[: self._max_enqueue_per_round]
         for chat in chats:
             if self._stop_event.is_set():
                 break

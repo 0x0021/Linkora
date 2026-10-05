@@ -809,6 +809,11 @@ storage:
   decisions_retention_days: 14                     # 决策追踪表留存天数（≤0 表示不按时间清理）
   messages_retention_days: 90                      # 消息记录留存天数（≤0 表示不清理）
   doc_sync_interval_hours: 1                       # 钉钉文档自动同步间隔（小时），≤0 禁用
+  busy_timeout_ms: 20000                           # SQLite 写锁等待窗口（毫秒）
+  # 双进程架构（run_linkora.py 默认拉起 web + worker）下 web 与 worker 会同时写
+  # 同一批库，跨进程写锁争用会报 "database is locked"。本值让短时锁竞争等过去。
+  # ⚠️ 治标不治本：根治请用 `scripts/run_linkora.py --single-process` 合并为单进程。
+  # ⚠️ 对「陈旧读快照」类立即失败无效（那种只能丢弃连接重建，见 write_with_retry）。
 
 # ============================================================
 # 配置文件结束

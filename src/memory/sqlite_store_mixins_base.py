@@ -36,6 +36,14 @@ class SQLiteStoreBase(LinkoraComponentBase):
     # 会话库 schema 初始化去重（每物理文件每进程一次，避免每连接 DDL 抢写锁）
     _conv_schema_init_lock: ClassVar[Any]
     _conv_schema_initialized_paths: ClassVar[set[str]]
+    # === 进程内全局写闸门（P0 2026-10-05）===
+    # 类级锁 + thread-local 深度计数，所有 SQLiteStore 实例共享。
+    # 背景：e2997cb(2026-09-18) 之前读游标从不关闭，悬着的 WAL 读事务意外地把
+    # 写入挡在门外，故从不报 database is locked；该提交修好游标泄漏后闸门消失，
+    # 而写入侧限流/自愈未同步 → 跨进程争用爆发。用显式串行化替代「靠 bug 挡写入」。
+    # ⚠️ 仅对本进程有效；跨进程须用 run_linkora.py --single-process 根治。
+    _write_gate_lock: ClassVar[Any]
+    _write_gate_depth: ClassVar[Any]
     # 标成 Any/object 会丢掉 kb_repo 里 vi.remove/.save/.count/.search 的成员检查
     _vector_index: VectorIndex | None
 

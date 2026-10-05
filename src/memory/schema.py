@@ -6,6 +6,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 
 logger = logging.getLogger(__name__)
@@ -664,6 +665,74 @@ def _try_create_index(cursor: sqlite3.Cursor, index_def: str) -> None:
         cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_def}")
     except sqlite3.OperationalError as e:
         logger.debug("创建索引 %s 失败: %s", index_def.split(" ON ")[0], e)
+
+
+# 会话分库需要「确保存在」的列。与 init_conv_schema 内的 _ensure_column 调用
+# 保持同源（新增列时在此登记一处即可），供只读探针 conv_schema_needs_migration()
+# 判断是否真有缺列——web 启动据此跳过无谓的 DDL，避免对 110MB 分库取写锁。
+_CONV_REQUIRED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("conversation_display_summaries", "boundary_ts"),
+    ("messages", "image_path"),
+    ("messages", "is_bot"),
+    ("messages", "is_archived"),
+    ("messages", "skip_reason"),
+    ("messages", "is_withdrawn"),
+    ("conversations", "peer_user_id"),
+    ("conversations", "peer_open_dingtalk_id"),
+    ("conversations", "last_reply_time"),
+    ("conversations", "last_replied_msg_id"),
+    ("conversations", "last_summary_at"),
+)
+
+
+def conv_schema_needs_migration(db_path: str) -> bool:
+    """**只读**探针：该分库是否缺列（只查 sqlite_master，不取写锁）。
+
+    2026-10-05 锁争用止血：web 启动曾对**所有**分库无条件跑 ``init_conv_schema``
+    （含 CREATE INDEX / ALTER / 回填 UPDATE），对 110MB 真实分库取写锁；而
+    ``run_linkora.py --dev`` 在文件变更时重启 web，于是「改一行代码」=「对全部库
+    做一次 DDL 风暴」，实测 6 次重载对应 6 轮 database is locked 洪峰、轮询停摆。
+
+    本函数用只读 URI 连接（``mode=ro``）查询列是否存在：
+      - 库文件不存在 / 打不开 → 返回 True（交给调用方走完整迁移兜底）
+      - 任一登记列缺失      → True
+      - 全部齐备            → False，调用方可安全跳过 DDL
+
+    注意：``init_conv_schema`` 里的 ``_ensure_column`` 仍是最终自愈兜底，本函数
+    只是「先问一句要不要 DDL」的前置判断，不替代它。
+    """
+    if not os.path.exists(db_path):
+        return True
+    try:
+        uri = f"file:{db_path}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=2.0)
+    except sqlite3.Error as e:
+        logger.debug("[schema] 只读探针无法打开 %s: %s", db_path, e)
+        return True
+    try:
+        # 按表缓存现有列，避免对每列重复查 sqlite_master
+        table_cols: dict[str, set[str]] = {}
+        for table, column in _CONV_REQUIRED_COLUMNS:
+            cols = table_cols.get(table)
+            if cols is None:
+                cur = conn.execute(f"PRAGMA table_info({table})")
+                cols = {row[1] for row in cur.fetchall()}
+                cur.close()
+                table_cols[table] = cols
+                if not cols:
+                    # 表本身不存在 → 属于「缺结构」，需要迁移
+                    return True
+            if column not in cols:
+                return True
+        return False
+    except sqlite3.Error as e:
+        logger.debug("[schema] 只读探针查询 %s 失败，按需要迁移处理: %s", db_path, e)
+        return True
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
 
 
 def init_conv_schema(conn: sqlite3.Connection, db_path: str) -> None:

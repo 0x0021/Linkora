@@ -129,11 +129,24 @@ def _migrate_schemas_on_startup() -> None:
     1. ``init_conv_schema`` 末尾已加 ``_ensure_column`` 兜底（每次连分库自动自愈）；
     2. 此处主动遍历 ``conversations/`` 下所有存量分库，启动时一并迁移，
        不等首次查询触发（主库由 ``get_store().init_db()`` 在首次请求时自愈）。
+
+    【P0 2026-10-05 锁争用止血】改为**两阶段**：
+      1) 先用**只读连接**探该库是否缺列（查询 sqlite_master，不取写锁）；
+      2) 仅当确实缺列时，才升级为写连接跑 ``init_conv_schema``。
+
+    改前无条件对**每个**分库跑 DDL（CREATE INDEX / ALTER / 回填 UPDATE），
+    对 110MB 的真实分库取写锁；而 ``run_linkora.py --dev`` 在文件变更时会重启
+    web，于是「改一行代码」= 「对全部库做一次 DDL 风暴」。日志实证：6 次重载
+    对应 6 轮 "database is locked" 洪峰（5 分钟内 382 次），轮询实质停摆。
+    另外原先 ``sqlite3.connect`` 未设 ``busy_timeout``，撞锁立即失败（不等重试）。
+
+    更彻底的方案是让 worker 独占 schema 迁移、web 只读；此处先把「稳态无 DDL」
+    做到，web 重启不再取写锁。
     """
     try:
         import sqlite3
 
-        from src.memory.schema import init_conv_schema
+        from src.memory.schema import conv_schema_needs_migration, init_conv_schema
 
         conv_dir = os.path.join(get_data_dir(), "conversations")
         if not os.path.isdir(conv_dir):
@@ -142,17 +155,24 @@ def _migrate_schemas_on_startup() -> None:
             if not name.endswith(".db"):
                 continue
             path = os.path.join(conv_dir, name)
+            # 【关键】先只读探针：齐备则完全跳过 DDL，web 重启不再对分库取写锁
+            if not conv_schema_needs_migration(path):
+                continue
+            conn = None
             try:
                 conn = sqlite3.connect(path)
                 conn.row_factory = sqlite3.Row
+                # 撞锁时等待而非立即失败
+                conn.execute("PRAGMA busy_timeout=8000")
                 init_conv_schema(conn, path)
             except Exception as e:  # noqa: BLE001
                 logger.warning("[Web 启动迁移] 分库迁移失败，将在查询时自愈: %s (%s)", path, e)
             finally:
-                try:
-                    conn.close()
-                except Exception:  # noqa: BLE001
-                    pass
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:  # noqa: BLE001
+                        pass
     except Exception as e:  # noqa: BLE001
         logger.warning("[Web 启动迁移] 遍历分库失败（非致命，查询时自愈）: %s", e)
 

@@ -10,14 +10,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
+import threading
 import time as _time
+import uuid
 
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from web.dependencies import _get_project_root, logger
+from web.dependencies import get_app_instance, get_current_platform, logger
 from web.errors import SAFE_OPERATION_FAILED
+from src.paths import data_path, get_config_path
+from src.constants import SUPPORTED_PLATFORMS
 
 router = APIRouter()
 
@@ -187,73 +192,135 @@ async def clear_department_cache():
     return {"success": True, "message": "部门缓存已清除"}
 
 
+# 状态文件与 src/platform/sync_history.py、web/routers/sync.py 保持一致
+# （旧实现另写 import_history_state.json 的脚本已被移除，此处统一复用同步任务状态文件）
+_IMPORT_STATUS_FILE = str(data_path("sync_history_status.json"))
+
+
+def _read_import_status() -> dict:
+    """读取导入/同步任务状态文件（在同步上下文中调用，由端点经 run_in_threadpool 包装）。"""
+    try:
+        if not os.path.exists(_IMPORT_STATUS_FILE):
+            return {}
+        with open(_IMPORT_STATUS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _is_import_status_stale(s: dict) -> bool:
+    """状态仍 running/starting 但超过 2 小时未更新 → 视为 stale（线程已死却未刷新状态）。"""
+    started = s.get("started_at")
+    if not isinstance(started, (int, float)):
+        return False
+    return (_time.time() - started) > 7200
+
+
 @router.post("/api/history/import")
 async def import_history_messages(full: bool = False):
     """触发历史消息导入（增量或全量）。
 
-    - full=False: 增量导入（从上次导入时间开始）
-    - full=True: 全量导入（拉取过去 90 天）
+    复用 ``src.platform.sync_history.run_sync_history``（与 ``/api/messages/sync-history``
+    同一套机制），在**进程内后台线程**执行，不再 spawn 独立子进程。旧实现引用的
+    ``import_history.py`` 已被移除（且该子进程方案在 PyInstaller 冻结态不可用）。
+
+    写库走 Web 进程内 SQLiteStore，与 worker 共享写闸门；单进程部署下完全同进程，
+    不再引入第三个独立写进程，消除跨进程写锁争用。
+
+    - full=False: 增量导入（最近 30 天）
+    - full=True: 全量导入（逐 30 天窗拉取全部历史）
     """
-    try:
-        import subprocess
+    request_platform = (get_current_platform() or "dingtalk").strip() or "dingtalk"
+    if request_platform not in SUPPORTED_PLATFORMS:
+        raise HTTPException(status_code=400, detail=f"未知平台: {request_platform}")
 
-        project_root = _get_project_root()
-        script_path = project_root / "import_history.py"
-        venv_python = project_root / ".venv" / "bin" / "python"
-
-        if full:
-            cmd = [str(venv_python), str(script_path), "--full"]
-        else:
-            cmd = [str(venv_python), str(script_path)]
-
-        # 异步执行（不阻塞 API 响应）
-        import asyncio
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            lambda: subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=str(project_root),
-                timeout=300  # 5 分钟超时
-            )
-        )
-
-        if result.returncode == 0:
-            return {
-                "success": True,
-                "message": "历史消息导入完成",
-                "output": result.stdout[-500:]  # 只返回最后 500 字符
-            }
-        else:
+    # 轻量前置校验：平台是否启用（真正的适配器错误由 worker 回报状态文件）
+    app_instance = get_app_instance()
+    if app_instance is not None and hasattr(app_instance, "platforms"):
+        ctx = app_instance.platforms.get(request_platform)
+        if ctx is None:
             raise HTTPException(
-                status_code=500,
-                detail=f"导入失败: {result.stderr[-500:]}"
+                status_code=400,
+                detail=f"平台 {request_platform} 未启用或未配置，请在 config.yaml 的 platforms 段中添加",
             ) from None
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="导入超时（超过 5 分钟）") from None
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        if not getattr(ctx, "enabled", True):
+            raise HTTPException(
+                status_code=400,
+                detail=f"平台 {request_platform} 已禁用",
+            ) from None
+
+    # 并发护栏：已有进行中的导入/同步（且未 stale）时拒绝重复启动
+    _cur = await run_in_threadpool(_read_import_status)
+    if _cur.get("status") in ("running", "starting") and not _is_import_status_stale(_cur):
+        raise HTTPException(
+            status_code=409,
+            detail=f"已有导入/同步任务进行中（job_id={_cur.get('job_id')}），请等待完成或先取消",
+        ) from None
+
+    days = 30
+    range_label = "全部历史" if full else "最近30天"
+    job_id = f"import_{uuid.uuid4().hex[:12]}"
+    resolved_config_path = str(get_config_path())
+
+    # 写初始状态，保证前端首轮轮询就能读到 starting
+    try:
+        os.makedirs(os.path.dirname(_IMPORT_STATUS_FILE), exist_ok=True)
+
+        def _write_initial_status() -> None:
+            with open(_IMPORT_STATUS_FILE, "w", encoding="utf-8") as f:
+                json.dump({
+                    "job_id": job_id, "status": "starting", "platform": request_platform,
+                    "days": days, "scope": "global", "range": range_label,
+                    "progress": "排队中", "result": None,
+                    "error": None, "started_at": _time.time(),
+                }, f, ensure_ascii=False, indent=2)
+
+        await run_in_threadpool(_write_initial_status)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[导入] 写入初始状态失败（不影响启动）: %s", e)
+
+    # 延迟 import 避免 web 启动时无谓加载 dws / sqlite / poller
+    from src.platform.sync_history import run_sync_history
+
+    def _runner() -> None:
+        try:
+            run_sync_history(
+                days=days,
+                platform=request_platform,
+                job_id=job_id,
+                scope="global",
+                range_label=range_label,
+                full=full,
+                conversation_id="",
+                chat_types=None,
+                config_path=resolved_config_path,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.error("[导入] worker 线程异常: %s", e, exc_info=True)
+
+    t = threading.Thread(target=_runner, name=f"import-history-{job_id}", daemon=False)
+    t.start()
+    logger.info(
+        "[导入] 启动历史消息导入 job_id=%s platform=%s range=%s full=%s",
+        job_id, request_platform, range_label, full,
+    )
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "started",
+        "platform": request_platform,
+        "range": range_label,
+        "full": full,
+    }
 
 
 @router.get("/api/history/import/status")
 async def get_import_status():
-    """获取历史消息导入状态。"""
+    """获取历史消息导入状态（与同步任务同源，读 sync_history_status.json）。"""
     try:
-        import json
-        from pathlib import Path
-
-        from src.config import DEFAULT_DATA_DIR
-
-        state_file = Path(DEFAULT_DATA_DIR) / "import_history_state.json"
-        if state_file.exists():
-            def _read_state():
-                with open(state_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            state = await run_in_threadpool(_read_state)
+        state = await run_in_threadpool(_read_import_status)
+        if state:
             return {"success": True, "state": state}
-        else:
-            return {"success": True, "state": None, "message": "尚未导入历史消息"}
+        return {"success": True, "state": None, "message": "尚未导入历史消息"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -132,13 +132,25 @@ class TestClearCache:
 
 class TestImportStatus:
     def test_no_state_file(self, client):
-        with patch("web.routers.departments._get_project_root") as mock_root:
-            import tempfile
-            tmp = tempfile.mkdtemp()
-            mock_root.return_value = __import__("pathlib").Path(tmp)
-            with patch("src.config.DEFAULT_DATA_DIR", tmp):
-                resp = client.get("/api/history/import/status")
+        import pathlib
+        import tempfile
+
+        tmp = pathlib.Path(tempfile.mkdtemp()) / "sync_history_status.json"
+        with patch("web.routers.departments._IMPORT_STATUS_FILE", str(tmp)):
+            resp = client.get("/api/history/import/status")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
         assert data["state"] is None
+
+    def test_reads_status_file(self, client):
+        import json
+        import pathlib
+        import tempfile
+
+        tmp = pathlib.Path(tempfile.mkdtemp()) / "sync_history_status.json"
+        tmp.write_text(json.dumps({"status": "running", "job_id": "x"}), encoding="utf-8")
+        with patch("web.routers.departments._IMPORT_STATUS_FILE", str(tmp)):
+            resp = client.get("/api/history/import/status")
+        assert resp.status_code == 200
+        assert resp.json()["state"]["status"] == "running"

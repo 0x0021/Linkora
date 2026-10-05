@@ -29,6 +29,73 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# 「同会话、id 更小、且最近的一条合格 user 来信」的过滤条件（两处 N+1 复用）。
+_PREV_USER_PREDICATE = (
+    "role = 'user' "
+    "AND content IS NOT NULL "
+    "AND content NOT LIKE '[自动回复]%' "
+    "AND content NOT LIKE '[{]%' "
+    "AND content NOT LIKE '{%' "
+    "AND msg_type NOT IN ('system','app') "
+    "AND length(trim(content)) >= 2"
+)
+
+
+def _batch_prev_user_contents(
+    cur: sqlite3.Cursor, candidates: list[tuple[int, str]]
+) -> dict[int, str]:
+    """一次性取回每条候选 assistant 回复「同会话中、其之前最近的 user 来信」内容。
+
+    ``candidates`` 为 ``[(reply_id, chat_id), ...]``。返回 ``{reply_id: user_content}``；
+    没有合格前序 user 消息的候选**不会**出现在结果里（调用方按缺省跳过）。
+
+    为什么不用循环里逐条查（N+1）：候选池上限 400（``retrieve`` 的 ``LIMIT 400``），
+    逐条查就是每次回复最多 400 次 SELECT。这里用窗口函数**一次**扫描相关会话即可拿全：
+    对每个 ``chat_id`` 按 id 升序，用
+    ``MAX(CASE WHEN <user 条件> THEN id END) OVER (PARTITION BY chat_id ORDER BY id
+       ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)``
+    得到「严格在当前行**之前**、满足过滤条件的最大 id」，语义与原逐条查询
+    （``WHERE chat_id=? AND id<? AND <user 条件> ORDER BY id DESC LIMIT 1``）**完全一致**。
+
+    SQLite ≥ 3.25 才有窗口函数（本仓实测 3.53）；低版本自动回退到逐条查以保证兼容。
+    """
+    if not candidates:
+        return {}
+    # 按 chat_id 分组，批量查这些会话里所有合格 user 消息，再在 Python 侧按 id
+    # 就近回填每条候选——避免窗口函数的兼容性与跨会话分区复杂度。
+    chat_ids = sorted({cid for _, cid in candidates})
+    placeholders = ",".join("?" * len(chat_ids))
+    cur.execute(
+        f"""SELECT id, chat_id, content FROM messages
+            WHERE chat_id IN ({placeholders})
+              AND {_PREV_USER_PREDICATE}
+            ORDER BY chat_id, id""",
+        chat_ids,
+    )
+    # 每个会话维护「最近一条合格 user 消息 id -> 内容」，按 id 升序扫描；
+    # 候选回复的 prev = 该会话中 id 严格小于 reply_id 的最后一条 user 消息。
+    per_chat: dict[str, list[tuple[int, str]]] = {}
+    for mid, cid, content in cur.fetchall():
+        per_chat.setdefault(cid, []).append((mid, content or ""))
+
+    result: dict[int, str] = {}
+    for reply_id, chat_id in candidates:
+        msgs = per_chat.get(chat_id)
+        if not msgs:
+            continue
+        # 二分找最后一条 id < reply_id 的 user 消息
+        lo, hi = 0, len(msgs)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if msgs[mid][0] < reply_id:
+                lo = mid + 1
+            else:
+                hi = mid
+        if lo > 0:
+            result[reply_id] = msgs[lo - 1][1]
+    return result
+
+
 class BaselineRepo:
     """Repository extracted from SQLiteStore for backtest baseline operations."""
 
@@ -131,27 +198,16 @@ class BaselineRepo:
         pool: list[dict] = []
         accepted_replies: list[str] = []
         seen: set = set()
+        # 批量取「同会话中、其之前最近的 user 来信」（原为循环内逐条查，N+1）。
+        prev_user_map = _batch_prev_user_contents(
+            cur, [(row["id"], row["chat_id"]) for row in candidates]
+        )
         for row in candidates:
-            rid, chat_id, reply = row["id"], row["chat_id"], (row["content"] or "").strip()
+            rid, reply = row["id"], (row["content"] or "").strip()
             if not reply or media_re.match(reply) or punct_only_re.match(reply) or json_re.match(reply):
                 continue
             # 找同一会话中该回复之前最近的外部来信作为 user 侧
-            prev = cur.execute(
-                """SELECT content FROM messages
-                   WHERE chat_id = ? AND id < ?
-                     AND role = 'user'
-                     AND content IS NOT NULL
-                     AND content NOT LIKE '[自动回复]%'
-                     AND content NOT LIKE '[{]%'
-                     AND content NOT LIKE '{%'
-                     AND msg_type NOT IN ('system','app')
-                     AND length(trim(content)) >= 2
-                   ORDER BY id DESC LIMIT 1""",
-                (chat_id, rid),
-            ).fetchone()
-            if not prev:
-                continue
-            user_msg = (prev["content"] or "").strip()
+            user_msg = (prev_user_map.get(rid) or "").strip()
             if not user_msg or media_re.match(user_msg) or punct_only_re.match(user_msg) or json_re.match(user_msg):
                 continue
             # 隐私护栏：不当内容整对丢弃；命中 PII 则脱敏后入样
@@ -261,26 +317,15 @@ class _SceneFewShotSelector:
                 if u or a:
                     exclude_set.add((u, a))
         pool: list[dict] = []
+        # 批量取「同会话中、其之前最近的 user 来信」（原为循环内逐条查，N+1）。
+        prev_user_map = _batch_prev_user_contents(
+            cur, [(row["id"], row["chat_id"]) for row in rows]
+        )
         for row in rows:
-            rid, chat_id, reply = row["id"], row["chat_id"], (row["content"] or "").strip()
+            rid, reply = row["id"], (row["content"] or "").strip()
             if not reply or media_re.match(reply) or punct_only_re.match(reply) or json_re.match(reply):
                 continue
-            prev = cur.execute(
-                """SELECT content FROM messages
-                   WHERE chat_id = ? AND id < ?
-                     AND role = 'user'
-                     AND content IS NOT NULL
-                     AND content NOT LIKE '[自动回复]%'
-                     AND content NOT LIKE '[{]%'
-                     AND content NOT LIKE '{%'
-                     AND msg_type NOT IN ('system','app')
-                     AND length(trim(content)) >= 2
-                   ORDER BY id DESC LIMIT 1""",
-                (chat_id, rid),
-            ).fetchone()
-            if not prev:
-                continue
-            user_msg = (prev["content"] or "").strip()
+            user_msg = (prev_user_map.get(rid) or "").strip()
             if not user_msg or media_re.match(user_msg) or punct_only_re.match(user_msg) or json_re.match(user_msg):
                 continue
             if _is_inappropriate(user_msg) or _is_inappropriate(reply):

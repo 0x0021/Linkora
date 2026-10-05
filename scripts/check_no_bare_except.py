@@ -40,8 +40,9 @@ ROOT = Path(__file__).resolve().parents[1]
 # 锁定基线：在 main 实测 src+web 的宽异常总数（640，AST 权威计数；早先用 grep
 # 粗数得 647 含 HTTPException 等具体异常，已排除）。这是「只减不增」的起点；
 # 每收敛一批（收窄异常类型 / 删除冗余捕获）后下调此值，使门禁逐步收紧。
-# 历次基线：647（grep 粗数，含具体异常虚高）→ 640（AST 精确，2026-10-05）。
-BARE_EXCEPT_BASELINE = 640
+# 历次基线：647（grep 粗数，含具体异常虚高）→ 640（AST 精确，2026-10-05）→
+# 639（draft_repo 收窄 except Exception 为 sqlite3.Error，2026-10-05）。
+BARE_EXCEPT_BASELINE = 639
 
 # 扫描范围（生产代码；测试可另行评估，先不纳入防止误伤测试桩）
 SCAN_DIRS = ("src", "web")

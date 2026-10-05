@@ -52,6 +52,27 @@ python main.py --mode worker
 python main.py --test-rule "在吗"
 ```
 
+### 单进程模式（推荐用于生产）
+
+```bash
+python scripts/run_linkora.py --single-process
+```
+
+**为什么推荐**：SQLite 同一时刻只允许一个写者。默认模式下 Web 与后台轮询分属两个
+进程，会同时打开同一个数据库文件，跨进程写锁竞争可能表现为日志里持续的
+`database is locked`、消息轮询丢会话、索引写入退化等问题（2026-10-05 生产事故即由
+此引发，详见更新日志 v0.6.0）。
+
+单进程让 Web 与后台轮询同驻一个进程、共用同一把写锁，从根上消除跨进程争用，
+不改变任何业务行为。停止：
+
+```bash
+pkill -f run_linkora.py
+```
+
+排查写锁问题时，可先确认是不是多进程部署造成的：进程列表里若同时存在 `main.py
+--mode web` 与 `--mode worker` 两个进程，即为双进程模式。
+
 ## macOS 后台服务（launchctl）
 
 ```bash

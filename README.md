@@ -155,12 +155,23 @@ dws auth login
 # 前端资源改动后需重新构建（vitest 单测见 npm run test:frontend）：
 npm run build:frontend
 
-# 4. 启动（双进程：web + worker）
+# 4. 启动
 .venv/bin/python scripts/run_linkora.py
 #    Web 管理台 → http://localhost:8080
 ```
 
 后台常驻：`nohup .venv/bin/python scripts/run_linkora.py > logs/$(date +%Y%m%d).log 2>&1 &`
+
+> **推荐：单进程模式**（`--single-process`）。默认的双进程模式（web + worker 分属两个
+> 进程）会同时打开同一个数据库文件，SQLite 只允许单写者，跨进程写锁竞争可能表现为
+> `database is locked`、轮询丢会话。单进程让 Web 与后台轮询同驻一个进程、共用同一把
+> 写锁，从根上消除这类争用：
+>
+> ```bash
+> .venv/bin/python scripts/run_linkora.py --single-process
+> ```
+>
+> 停止：`pkill -f run_linkora.py`
 
 更多启动形态（指定端口、`--no-worker` / `--worker-only` / `--dev` 等）见 `scripts/run_linkora.py --help`。
 

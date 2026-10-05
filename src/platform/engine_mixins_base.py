@@ -202,9 +202,10 @@ class EngineMixinBase(LinkoraComponentBase):
             import importlib.util
             if importlib.util.find_spec("playwright") is not None:
                 caps.add("playwright")
-        except Exception:
-            logging.warning("broad except swallowed in available_capabilities() @ src/platform/engine_mixins_base.py:204, see exc_info", exc_info=True)
-            pass
+        except (ImportError, ValueError):
+            # playwright 是**可选依赖**，未安装属正常（该能力就是不提供，不是故障）。
+            # 本方法在工具注册/技能路由中被频繁调用，打 WARNING+堆栈会刷爆日志。
+            logging.debug("playwright 未安装，不提供该能力（可选依赖，属预期）")
         return caps
     @staticmethod
     def _style_profile_days_since(prof) -> Any: ...

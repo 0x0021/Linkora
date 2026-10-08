@@ -680,8 +680,9 @@ class PollerStrategyMixin(PollerMixinBase):
         # 包一层会话级 try/except：异常时记录并前移轮询游标（等同空轮保护），跳过该会话。
         try:
             # 如果是单聊，从消息里提取对方 openDingTalkId 并更新会话缓存
+            # 注：peer 已在上方 line 645 解析（is_single 分支的 list-direct 取信前），
+            # 此处无需重复调用 _resolve_single_chat_peer（避免每轮每单聊多打一次 DWS/DB）。
             if is_single and raw_msgs:
-                peer = self._resolve_single_chat_peer(open_id, title)
                 peer_oid_from_msgs = ""
                 for raw_msg in raw_msgs:
                     candidate_oid = raw_msg.get("senderOpenDingTalkId") or raw_msg.get("senderId") or ""

@@ -537,7 +537,10 @@ class ParseMixin(PollerMixinBase):
 
         # 把已下载媒体的本地绝对路径追加到正文，便于分身引用/转发
         # （图片路径来自 image_path 相对路径，需还原为绝对路径）
-        if image_path:
+        # 仅单图下载分支（msg_type=='image'）的 image_path 是相对文件路径；
+        # 卡片/图文混排分支的 image_path 是 {key: rel_path} 的 JSON 映射（供前端解析），
+        # 不应在此拼成假路径注入正文（否则飞书卡片图会在正文混入一条含 JSON 的假 [本地图片] 行）。
+        if image_path and msg_type == "image":
             try:
                 abs_img = str(Path(self.config.image_temp_dir).expanduser() / image_path)
                 content = f"{content}\n[本地图片] {abs_img}"

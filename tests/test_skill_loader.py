@@ -445,6 +445,39 @@ class TestSplitFrontmatter:
         assert "Body" in body
 
 
+# ── save_intent（与 _split_frontmatter 行级解析统一）──────────────
+
+class TestSaveIntentFrontmatterSplit:
+    """save_intent 回写时须与读取路径的 _split_frontmatter 行级解析保持一致，
+    避免 frontmatter 值或正文中含 '---' 时被子串匹配误拆（回归）。"""
+
+    def test_value_and_body_containing_hr_not_mis_split(self, tmp_path, monkeypatch):
+        _patch_skill_dirs(monkeypatch, str(tmp_path))
+        # 值内嵌 '---'（如代码片段/URL）+ 正文含 Markdown 分隔线 '---'
+        d = _write_skill(
+            tmp_path, "demo",
+            "name: demo\ndescription: 示例 a---b",
+            body="# 天气\n\n---\n\n## 指标\n温度\n",
+        )
+        loader = SkillLoader(str(tmp_path))
+        skill = loader.load(str(d))
+        assert skill is not None
+
+        ok = loader.save_intent(skill, ["domain.weather"], ["今天天气", "气象"])
+        assert ok is True
+
+        content = (d / "SKILL.md").read_text(encoding="utf-8")
+        # frontmatter 已写入意图词
+        assert "intent_keywords" in content
+        assert "今天天气" in content
+        # 值内嵌的 '---' 必须完整保留，未被当作分隔符截断
+        assert "示例 a---b" in content
+        # 正文中的分隔线必须完整保留且位于 frontmatter 之外
+        assert "\n---\n\n## 指标" in content
+        # 分隔线之后内容未丢失
+        assert "温度" in content
+
+
 # ── _derive_keywords ────────────────────────────────────────
 
 class TestDeriveKeywords:

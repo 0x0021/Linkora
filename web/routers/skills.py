@@ -21,7 +21,7 @@ from web.dependencies import logger
 from web.errors import SAFE_OPERATION_FAILED
 from src.shared_state import get_config as _get_shared_config
 from src.paths import data_path
-from src.skills.loader import is_skill_dir_candidate
+from src.skills.loader import SkillLoader, is_skill_dir_candidate
 
 
 def _project_root() -> Path:
@@ -348,11 +348,10 @@ def _write_platforms_to_skill_md(skill_md_path: Path, platform: str) -> None:
         content = skill_md_path.read_text(encoding="utf-8")
         if not content.startswith("---"):
             return
-        second_delim = content.find("---", 3)
-        if second_delim == -1:
+        # 统一使用行级 _split_frontmatter 解析，避免正文含 "---" 时被子串匹配误拆
+        frontmatter_str, body = SkillLoader._split_frontmatter(content)
+        if not frontmatter_str:
             return
-        frontmatter_str = content[3:second_delim]
-        body = content[second_delim + 3:]
         fm = _yaml.safe_load(frontmatter_str) or {}
         if not isinstance(fm, dict):
             return
@@ -545,12 +544,11 @@ async def update_skill_meta(skill_name: str, data: dict):
         content = skill_md_path.read_text(encoding="utf-8")
         if not content.startswith("---"):
             raise HTTPException(status_code=400, detail="SKILL.md 缺少 frontmatter")
-        # 找到 frontmatter 边界
-        second_delim = content.find("---", 3)
-        if second_delim == -1:
+        # 统一使用行级 _split_frontmatter 解析，与读取路径单一真源一致，
+        # 避免正文含 "---"（如 Markdown 分隔线）时被子串匹配误拆。
+        frontmatter_str, body = SkillLoader._split_frontmatter(content)
+        if not frontmatter_str:
             raise HTTPException(status_code=400, detail="SKILL.md frontmatter 格式异常")
-        frontmatter_str = content[3:second_delim]
-        body = content[second_delim + 3:]
 
         # 解析 frontmatter YAML
         try:

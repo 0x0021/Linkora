@@ -250,6 +250,7 @@ summary_backfill:
 - **后台 LLM 限速（`llm_throttle`）**：对话摘要与记忆提取属于后台 LLM 任务。免费 LLM 额度有严格频次限制，`llm_throttle` 对其实行节流——`background_min_interval_seconds`（活跃最小间隔）/ `idle_min_interval_seconds`（空闲降频间隔）/ `rate_limit_backoff_seconds`（触发 429 后暂停时长），并设有 `extract_memory_cooldown_seconds`（同会话记忆提取冷却）与 `max_summaries_per_cycle`（单周期摘要上限）。主模型触发 429/超时后后台任务自动暂停，保护免费额度。
 - **技能引擎（`skills`）**：技能文件位于 `data/skills/{name}/SKILL.md`，声明 `intent_keywords` 与 `weight`，由智能引擎按意图自动调度激活。`auto_activate` 控制关键词自动激活；`semantic_routing` + `semantic_skill_threshold` 启用语义路由覆盖口语/同义改写；`combo_enabled` + `combo_gap` 支持复合意图组合激活多个 `composable` 技能；`hot_reload` 热加载新技能无需重启；`ai_intent_generation_enabled` 默认关闭（避免意外消耗 LLM 额度）。
 - **死信队列（`dead_letter`）**：当主模型重试耗尽且备用模型也失败时，原始消息落库（而非静默丢弃），管理台可查看并重放（replay），避免消息石沉大海。关闭则退回旧行为（仅回 fallback 文本）。
+- **工具执行超时（`tools.max_tool_seconds`）**：单次工具调用的统一外层超时（秒，默认 `120`），防止某个工具卡死时永久占住共享线程。注意工具是并发共享的，一个卡死的工具会连带拖慢其它会话。超时值应大于最长合法工具的耗时（例如内部技能子进程的 60 秒硬超时），设为 `0` 或负数则不启用该护栏。
 
 ## OA 审批 / OCR 后处理 / SkillHub / 向量索引（进阶配置组）
 

@@ -10,6 +10,9 @@
     "prettier": "^3.3.3",
     "vitest": "^4.1.11"
   },
+  "overrides": {
+    "source-map-js": "1.2.2"
+  },
   "scripts": {
     "test:frontend": "vitest run",
     "test:frontend:watch": "vitest",

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -117,9 +117,8 @@ class RoutingQualityRepo:
         self._insert_count += 1
         if self._insert_count % 200 == 0:
             self._prune_routing_quality()
-        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
-        assert cur.lastrowid is not None
-        return cur.lastrowid
+        # 插入后 lastrowid 必然存在（自增主键）
+        return cast(int, cur.lastrowid)
 
     def update_routing_quality_trace(
         self,

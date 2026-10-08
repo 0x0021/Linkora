@@ -10,7 +10,7 @@ import json
 import logging
 import math
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, cast
 
 from src.memory.sqlite_store import cosine_similarity
 
@@ -368,9 +368,8 @@ class MemoryRepo:
             (key, content, source, chat_id, sender_id, sender_name, emb_str, datetime.now().isoformat(), scope),
         )
         self.store.conn.commit()
-        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
-        assert cur.lastrowid is not None
-        memory_id = cur.lastrowid
+        # 插入后 lastrowid 必然存在（自增主键）
+        memory_id = cast(int, cur.lastrowid)
 
         # 注意：记忆向量【不】写入共享的 faiss 索引（_vector_index）。
         # 该 faiss 索引专供知识库(kb_chunks)使用，其 id 空间是 kb_chunks.id；

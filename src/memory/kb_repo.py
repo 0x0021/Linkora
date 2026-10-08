@@ -12,7 +12,7 @@ import math
 import re
 import sqlite3
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from src.memory.index_lock import with_index_lock
 from src.memory.sqlite_store import cosine_similarity
@@ -136,9 +136,8 @@ class KbRepo:
                 (title, doc_type, source, source_id, url, meta_str, now, now),
             )
             self.store.conn.commit()
-            # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
-            assert cur.lastrowid is not None
-            return cur.lastrowid
+            # 插入后 lastrowid 必然存在（自增主键）
+            return cast(int, cur.lastrowid)
         except sqlite3.Error:
             logger.warning("[resilience] silent exception in add_kb_document", exc_info=True)
             self.store.conn.rollback()

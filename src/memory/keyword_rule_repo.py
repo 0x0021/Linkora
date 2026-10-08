@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     import sqlite3
@@ -51,9 +51,8 @@ class KeywordRuleRepo:
             (category, match_pattern, reply_text, match_type, priority, enabled, now, now),
         )
         self.conn.commit()
-        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
-        assert cur.lastrowid is not None
-        return cur.lastrowid
+        # 插入后 lastrowid 必然存在（自增主键）
+        return cast(int, cur.lastrowid)
 
     def list(
         self,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, cast
 
 from src.memory.platform_context import get_current_platform
 
@@ -65,9 +65,7 @@ class ExternalFriendRepo:
 
         # 【P0 2026-10-05】经写闸门执行（此前裸写绕过闸门）
         self._write(_do_write)
-        row = self.get_external_friend_by_id(open_dingtalk_id)
-        assert row is not None
-        return row
+        return cast(dict, self.get_external_friend_by_id(open_dingtalk_id))
 
     def get_external_friend_by_name(self, name: str) -> Optional[dict]:
         """按姓名查找外部好友。"""

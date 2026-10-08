@@ -88,25 +88,31 @@ class ConversationRepo:
     def get_last_reply_time(self, chat_id: str, platform: str = "") -> Optional[str]:
         """获取某个会话最后回复时间（ISO 格式），用于回复冷却。"""
         cur = self._cc(platform).cursor()
-        cur.execute("SELECT last_reply_time FROM conversations WHERE chat_id = ?", (chat_id,))
-        row = cur.fetchone()
+        try:
+            cur.execute("SELECT last_reply_time FROM conversations WHERE chat_id = ?", (chat_id,))
+            row = cur.fetchone()
+        finally:
+            cur.close()
         return row[0] if row else None
 
     def get_latest_user_message_time(self, chat_id: str, exclude_msg_id: str | None = None,
                                      platform: str = "") -> Optional[str]:
         """获取会话中最新用户消息的时间戳（可排除指定 msg_id）。"""
         cur = self._cc(platform).cursor()
-        if exclude_msg_id:
-            cur.execute(
-                "SELECT MAX(timestamp) FROM messages WHERE chat_id = ? AND role = 'user' AND msg_id != ?",
-                (chat_id, exclude_msg_id),
-            )
-        else:
-            cur.execute(
-                "SELECT MAX(timestamp) FROM messages WHERE chat_id = ? AND role = 'user'",
-                (chat_id,),
-            )
-        row = cur.fetchone()
+        try:
+            if exclude_msg_id:
+                cur.execute(
+                    "SELECT MAX(timestamp) FROM messages WHERE chat_id = ? AND role = 'user' AND msg_id != ?",
+                    (chat_id, exclude_msg_id),
+                )
+            else:
+                cur.execute(
+                    "SELECT MAX(timestamp) FROM messages WHERE chat_id = ? AND role = 'user'",
+                    (chat_id,),
+                )
+            row = cur.fetchone()
+        finally:
+            cur.close()
         return row[0] if row and row[0] else None
 
     def update_last_reply_time(self, chat_id: str, chat_type: str = "unknown",
@@ -183,9 +189,12 @@ class ConversationRepo:
             f" AND is_bot = 0"
             f" LIMIT 1"
         )
-        cur.execute(sql, (str(chat_id), *sender_ids, since_iso_ts,
-                          f"-{max_age_days} days"))
-        return cur.fetchone() is not None
+        try:
+            cur.execute(sql, (str(chat_id), *sender_ids, since_iso_ts,
+                              f"-{max_age_days} days"))
+            return cur.fetchone() is not None
+        finally:
+            cur.close()
 
     def upsert_conversation(self, chat_id: str, chat_name: Optional[str],
                             chat_type: str,

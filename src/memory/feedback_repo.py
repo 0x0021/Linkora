@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -32,9 +32,8 @@ class FeedbackRepo:
             (message_id, conversation_id, sender_id, rating, correction or "", note or "", datetime.now().isoformat()),
         )
         self.store.conn.commit()
-        # 插入后 lastrowid 必然存在（自增主键），None 实际不可能。
-        assert cur.lastrowid is not None
-        return cur.lastrowid
+        # 插入后 lastrowid 必然存在（自增主键）
+        return cast(int, cur.lastrowid)
 
     def cleanup_old_feedback(self, retention_days: int) -> int:
         """删除超过保留期的用户反馈（feedback），返回删除条数。

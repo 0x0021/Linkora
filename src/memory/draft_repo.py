@@ -11,7 +11,7 @@ import logging
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -74,8 +74,7 @@ class DraftRepo:
              msg_type, stage, error, raw_json, now, now),
         )
         self.store.conn.commit()
-        assert cur.lastrowid is not None
-        return int(cur.lastrowid)
+        return cast(int, cur.lastrowid)
 
     def list_dead_letters(self, status: str = "pending", limit: int = 100,
                              offset: int = 0) -> tuple[list[dict], int]:

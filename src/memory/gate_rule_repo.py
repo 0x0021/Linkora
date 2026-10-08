@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     import sqlite3
@@ -61,8 +61,7 @@ class GateRuleRepo:
              priority, enabled, now, now),
         )
         self.conn.commit()
-        assert cur.lastrowid is not None
-        return cur.lastrowid
+        return cast(int, cur.lastrowid)
 
     def list(
         self,

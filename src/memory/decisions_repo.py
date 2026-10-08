@@ -10,7 +10,7 @@ import json
 import logging
 import sqlite3
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from src.memory.sqlite_store import SQLiteStore
@@ -103,30 +103,32 @@ class DecisionsRepo:
         import json as _json
         tools_json = _json.dumps(routed_tools) if isinstance(routed_tools, list) else (routed_tools or "")
         cur = self.store.conn.cursor()
-        cur.execute(
-            """INSERT INTO decisions
-               (sender_id, sender_name, conversation_id, conversation_name,
-                content_preview, intent, action, routing_mode, routed_tools,
-                skill_name, skill_source, reply_preview,
-                request_id, platform_id, llm_calls, fallback_used, tool_calls, total_latency_ms,
-                handoff, rag_grounded, cited)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sender_id or "", sender_name or "", conversation_id or "", conversation_name or "",
-             content_preview or "", intent or "", action or "",
-             routing_mode or "", tools_json,
-             skill_name or "", skill_source or "", reply_preview or "",
-             request_id or "", platform_id or "",
-             int(llm_calls or 0), int(fallback_used or 0),
-             int(tool_calls or 0), int(total_latency_ms or 0),
-             int(handoff or 0), int(rag_grounded or 0), int(cited or 0)),
-        )
-        self.store.conn.commit()
+        try:
+            cur.execute(
+                """INSERT INTO decisions
+                   (sender_id, sender_name, conversation_id, conversation_name,
+                    content_preview, intent, action, routing_mode, routed_tools,
+                    skill_name, skill_source, reply_preview,
+                    request_id, platform_id, llm_calls, fallback_used, tool_calls, total_latency_ms,
+                    handoff, rag_grounded, cited)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (sender_id or "", sender_name or "", conversation_id or "", conversation_name or "",
+                 content_preview or "", intent or "", action or "",
+                 routing_mode or "", tools_json,
+                 skill_name or "", skill_source or "", reply_preview or "",
+                 request_id or "", platform_id or "",
+                 int(llm_calls or 0), int(fallback_used or 0),
+                 int(tool_calls or 0), int(total_latency_ms or 0),
+                 int(handoff or 0), int(rag_grounded or 0), int(cited or 0)),
+            )
+            self.store.conn.commit()
+        finally:
+            cur.close()
         self._insert_count += 1
         if self._insert_count % 200 == 0:
             self._prune_decisions()
-        # 插入后 lastrowid 必然存在（AUTOINCREMENT 主键），None 实际不可能。
-        assert cur.lastrowid is not None
-        return cur.lastrowid
+        # 插入后 lastrowid 必然存在（AUTOINCREMENT 主键）；不用 assert（生产 -O 下被剥离）。
+        return cast(int, cur.lastrowid)
 
     def mark_cited(self, *, request_id: str = "", platform_id: str = "",
                    conversation_id: str = "", cited: int = 0) -> int:

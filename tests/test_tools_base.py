@@ -267,6 +267,64 @@ class TestToolRouter:
         assert r.duration_ms >= 0
 
 
+class _RequiredTool(BaseTool):
+    name = "req"
+    description = "A tool with a required param"
+    parameters = {
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+        "required": ["query"],
+    }
+
+    def execute(self, args):
+        return {"echo": args.get("query")}
+
+
+class TestToolRouterInputValidation:
+    """P1-12：边界层入参校验，失败时返回清晰错误而非把内部异常泄漏给 LLM。"""
+
+    def test_missing_required_param_rejected(self):
+        cfg = _make_config(available=["req"])
+        router = ToolRouter(cfg)
+        router.register(_RequiredTool())
+        r = router.execute("req", {})
+        assert r.success is False
+        assert "缺少必填参数" in r.error
+        assert "query" in r.error
+
+    def test_none_args_with_required_rejected(self):
+        cfg = _make_config(available=["req"])
+        router = ToolRouter(cfg)
+        router.register(_RequiredTool())
+        r = router.execute("req", None)
+        assert r.success is False
+        assert "缺少必填参数" in r.error
+
+    def test_non_dict_args_rejected(self):
+        cfg = _make_config(available=["req"])
+        router = ToolRouter(cfg)
+        router.register(_RequiredTool())
+        r = router.execute("req", ["not", "a", "dict"])
+        assert r.success is False
+        assert "必须是 JSON 对象" in r.error
+
+    def test_valid_args_passes_through(self):
+        cfg = _make_config(available=["req"])
+        router = ToolRouter(cfg)
+        router.register(_RequiredTool())
+        r = router.execute("req", {"query": "hi"})
+        assert r.success is True
+        assert r.result == {"echo": "hi"}
+
+    def test_none_args_tolerated_when_no_required(self):
+        """无必填参数的工具（如 dummy）应容忍 None 入参，后续按空对象处理。"""
+        cfg = _make_config(available=["dummy"])
+        router = ToolRouter(cfg)
+        router.register(_DummyTool())
+        r = router.execute("dummy", None)
+        assert r.success is True
+
+
 class TestToolAvailabilityAudit:
     """F2/F5 收口：受控可审计的工具放行 + 白名单漂移排除技能工具。"""
 
@@ -330,3 +388,52 @@ class _SkillProxyTool(BaseTool):
     description = "技能包装工具"
     parameters = {}
     def execute(self, args): pass
+
+
+# ============================================================================
+# 外层执行超时护栏（P1-11 回归）
+# ============================================================================
+class _HangTool(BaseTool):
+    name = "hang"
+    description = "卡死工具"
+    parameters = {}
+    def execute(self, args):
+        time.sleep(30)  # 远超任何合理超时，用于触发护栏
+        return "never"
+
+
+class _SlowButOkTool(BaseTool):
+    name = "slow_ok"
+    description = "在超时内完成的工具"
+    parameters = {}
+    def execute(self, args):
+        time.sleep(0.05)
+        return {"result": "done"}
+
+
+class TestToolRouterTimeout:
+    def test_normal_execution_within_timeout(self):
+        """启用超时护栏时，正常完成的工具仍返回正确结果（不误杀）。"""
+        cfg = _make_config(available=["slow_ok"], max_tool_seconds=5.0)
+        router = ToolRouter(cfg)
+        router.register(_SlowButOkTool())
+        res = router.execute("slow_ok", {})
+        assert res.success is True
+        assert res.result == {"result": "done"}
+
+    def test_hanging_tool_times_out(self):
+        """卡死工具超过 max_tool_seconds 被记为失败，错误文案明确。"""
+        cfg = _make_config(available=["hang"], max_tool_seconds=0.3)
+        router = ToolRouter(cfg)
+        router.register(_HangTool())
+        res = router.execute("hang", {})
+        assert res.success is False
+        assert res.error == "工具执行超时"
+
+    def test_timeout_disabled_runs_without_guard(self):
+        """max_tool_seconds<=0 时退回无护栏路径（不报错，正常执行）。"""
+        cfg = _make_config(available=["slow_ok"], max_tool_seconds=0)
+        router = ToolRouter(cfg)
+        router.register(_SlowButOkTool())
+        res = router.execute("slow_ok", {})
+        assert res.success is True

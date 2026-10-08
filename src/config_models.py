@@ -702,6 +702,13 @@ class ToolsConfig(BaseModel):
     # 告知模型"不要主动联系第三方"，避免浪费一轮工具调用。
     # 注意：不做白名单（用户明确不要联系第三方），因此无例外列表。
     block_outbound_to_third_party: bool = True
+    # 工具执行的统一外层超时（秒）：防止单个工具卡死（无限循环 / 无超时的网络调用 /
+    # 子进程挂起）永久阻塞 ToolRouter 共享线程（轮询主线程或 Web worker），进而拖垮
+    # 整条消息处理链路。0/负数表示不启用外层护栏（退回各工具自带超时，如 SkillTool 的
+    # 60s 子进程超时）。实现上在 daemon 子线程中执行并用 join(timeout) 等待；超时仅停止
+    # 等待、不真正中断同步调用，故阈值应远大于正常耗时（默认 120s，留出子进程超时余量）。
+    # 用 contextvars 把调用方平台隔离上下文带入子线程，避免超时执行丢失平台上下文。
+    max_tool_seconds: float = 120.0
 
 
 class EmbeddingConfig(BaseModel):

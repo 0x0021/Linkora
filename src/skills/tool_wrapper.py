@@ -216,11 +216,15 @@ class SkillTool(BaseTool):
         # 纵深防御：任何 bash/sh -c 模板都拒绝执行（query 会被 -c 当作 shell 命令）
         if re.match(r"^(bash|sh)\s+-c\b", self._cli_template):
             raise ValueError("拒绝执行 bash/sh -c 模板：存在命令注入风险")
-        # 用 query 替换模板中第一个引号参数
+        # 用 query 替换模板中第一个引号参数（即技能声明的 query 槽位）。
+        # 始终使用 shlex.quote 做 shell 安全转义：subprocess 以列表形式（无 shell=True）
+        # 执行，shlex.split 解出的即字面 query，无命令注入风险。旧实现的三元回退会在
+        # query 含双引号（如 'say "hi"'）时退化为 "say "hi""，被 shlex.split 二次解析成
+        # 两个参数（'say' + 'hi"'），导致参数损坏（正确应为单个字面 'say "hi"'）。
         template = self._cli_template
         replaced = re.sub(
             r"""["']([^"']*)["']""",
-            lambda m: shlex.quote(query) if shlex.quote(query) != f"'{query}'" else f'"{query}"',
+            lambda m: shlex.quote(query),
             template,
             count=1,
         )

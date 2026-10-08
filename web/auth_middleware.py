@@ -28,12 +28,33 @@ _TOKEN_EXPIRE_SECONDS = 3600 * 24  # 24 小时
 # 运行期解析出的 JWT 签名密钥（进程内缓存，保证签发与校验使用同一密钥）。
 _runtime_jwt_secret: str | None = None
 
-# 登出令牌黑名单（内存集合，存令牌的 SHA-256）。verify_token 校验时拒绝命中者。
+# 登出令牌黑名单：{token_sha256: expire_at(epoch秒)}。verify_token 校验时拒绝命中者，
+# 并惰性清理已过期项，使集合有界——最坏随「在线且已登出」的令牌数增长，令牌自然过期
+# （≤24h）后自动回收，不再随运行时间无限膨胀（原实现为无界 set，存在内存泄漏）。
 # 说明：单进程内有效；多 worker 部署时各 worker 独立（登出仅本 worker 生效），
 # 对本地管理工具可接受（令牌本身 24h 过期，重启进程也会清空）。如需跨 worker 一致，
 # 需外接共享存储（如 Redis），当前不引入以控制复杂度。
-_revoked_token_hashes: set[str] = set()
+_revoked_token_hashes: dict[str, float] = {}
 _revoked_lock = threading.Lock()
+
+
+def _revoke_token(token: str, expire_at: float) -> None:
+    """将令牌加入黑名单，记录其失效时刻（通常取令牌本身 exp，最长 _TOKEN_EXPIRE_SECONDS）。"""
+    with _revoked_lock:
+        _revoked_token_hashes[_hash_token(token)] = float(expire_at)
+
+
+def _is_token_revoked(token: str, now: float | None = None) -> bool:
+    """令牌是否已登出且未过期；命中过期项时顺手清理（惰性回收，保证集合有界）。"""
+    h = _hash_token(token)
+    with _revoked_lock:
+        exp = _revoked_token_hashes.get(h)
+        if exp is None:
+            return False
+        if (now if now is not None else time.time()) >= exp:
+            _revoked_token_hashes.pop(h, None)
+            return False
+        return True
 
 
 def _hash_token(token: str) -> str:
@@ -118,7 +139,7 @@ class TokenManager:
             raise HTTPException(status_code=401, detail="Token expired") from exc
         except _pyjwt.InvalidTokenError as exc:
             raise HTTPException(status_code=401, detail=f"Token verification failed: {exc}") from exc
-        if _hash_token(token) in _revoked_token_hashes:
+        if _is_token_revoked(token):
             raise HTTPException(status_code=401, detail="Token revoked")
         return payload
 
@@ -247,16 +268,20 @@ def logout(token: str) -> bool:
     """用户登出：将当前令牌加入黑名单，使其立即失效（verify_token 后续拒绝）。
 
     仅对合法（可解析）的令牌生效；非法/空令牌返回 False（无可吊销对象）。
-    黑名单为进程内内存集合，多 worker 部署下仅本 worker 生效。
+    黑名单为进程内内存结构（token_hash → 失效时刻），多 worker 部署下仅本 worker 生效。
     """
     if not token:
         return False
     try:
-        _token_manager.verify_token(token)
+        payload = _token_manager.verify_token(token)
     except HTTPException:
         return False
-    with _revoked_lock:
-        _revoked_token_hashes.add(_hash_token(token))
+    # 失效时刻取令牌本身 exp；缺失时回退到「现在 + 最大有效期」上界，保证迟早回收。
+    exp = payload.get("exp")
+    expire_at = float(exp) if isinstance(exp, (int, float)) else (
+        time.time() + _TOKEN_EXPIRE_SECONDS
+    )
+    _revoke_token(token, expire_at)
     return True
 
 

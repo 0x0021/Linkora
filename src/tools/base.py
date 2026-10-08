@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 import logging
 import secrets
 import threading
@@ -16,6 +17,10 @@ from src.tools.idempotency import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _ToolTimeout(Exception):
+    """工具执行超过 max_tool_seconds 仍未返回（仅作内部信号，不对外抛出）。"""
 
 
 @dataclass
@@ -312,7 +317,7 @@ class ToolRouter:
 
         # —— 确认令牌路径：携有效令牌才真正执行写操作 ——
         # 用 session_key（通常为 chat_id）隔离，避免跨会话令牌串用。
-        confirm_token = (args or {}).get("confirm_token")
+        confirm_token = (args.get("confirm_token") if isinstance(args, dict) else None)
         if confirm_token:
             pending = self._take_pending(session_key or "", confirm_token, tool_name)
             if pending is None:
@@ -322,6 +327,19 @@ class ToolRouter:
                 )
             # 用确认时锁定的原始参数执行，避免确认后被篡改（令牌路径不二次触发门控）
             return self._run_tool(tool_name, tool, pending.args, session_key)
+
+        # —— 入参校验（P1-12）：边界层数据校验 ——
+        # 确认令牌路径已在上方提前返回（用 pending 锁定的原始参数执行），此处只对首次
+        # 调用校验。校验失败返回清晰错误，避免工具内部 KeyError/TypeError 把内部路径
+        # 泄漏给 LLM；schema 自检异常时降级为不校验，护栏本身不打断执行。
+        args_err = self._validate_args(tool, args)
+        if args_err:
+            return ToolCallResult(
+                tool_name=tool_name, args=(args if isinstance(args, dict) else {}),
+                success=False, result=None, error=args_err,
+            )
+        if not isinstance(args, dict):
+            args = {}
 
         rate_cfg = self.config.rate_limit.get(tool_name, {})
         if rate_cfg:
@@ -358,6 +376,71 @@ class ToolRouter:
 
         return self._run_tool(tool_name, tool, args, session_key)
 
+    def _timeout_seconds(self) -> float:
+        """返回工具外层超时（秒）；非法/缺省值按 0（不启用护栏）处理。"""
+        try:
+            return float(getattr(self.config, "max_tool_seconds", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _invoke_with_timeout(self, tool_name: str, tool: BaseTool, args: dict) -> Any:
+        """在带超时的子线程中执行工具，避免单工具卡死永久阻塞 ToolRouter 共享线程。
+
+        - timeout<=0：直接在当前线程执行（无外层护栏）。
+        - 超时：无法真正中断同步调用，仅停止等待并抛出 _ToolTimeout，由 _run_tool
+          记为失败；后台 daemon 线程继续跑完（副作用可能稍后落地），故超时阈值应远大于
+          正常耗时。副作用工具有重放护栏兜底重复触发。
+        - 用 contextvars.copy_context() 把调用方线程的 ContextVar（如平台隔离上下文）
+          带入子线程，避免超时执行丢失平台上下文导致跨库/默认平台错误。
+        """
+        timeout = self._timeout_seconds()
+        if timeout <= 0:
+            return tool.safe_execute(args)
+
+        result_holder: dict[str, Any] = {}
+        exc_holder: dict[str, BaseException] = {}
+        ctx = contextvars.copy_context()
+
+        def _target() -> None:
+            try:
+                result_holder["result"] = tool.safe_execute(args)
+            except BaseException as _exc:  # noqa: BLE001 - safe_execute 已兜底，此为最后防线
+                exc_holder["exc"] = _exc
+
+        worker = threading.Thread(target=ctx.run, args=(_target,), daemon=True)
+        worker.start()
+        worker.join(timeout)
+        if worker.is_alive():
+            raise _ToolTimeout()
+        if "exc" in exc_holder:
+            raise exc_holder["exc"]
+        return result_holder.get("result")
+
+    @staticmethod
+    def _validate_args(tool: "BaseTool", args: object) -> str | None:
+        """校验工具入参（P1-12）：边界层数据校验，失败返回清晰错误而非把内部异常泄漏给 LLM。
+
+        - args 必须为 dict（None 仅在工具无必填参数时容忍为空对象）；
+        - 工具声明了 parameters.required 时，缺任一必填参数即拒绝。
+        全程不抛异常（schema 自检均在类型守卫内完成），护栏本身不会打断执行。
+        """
+        schema = getattr(tool, "parameters", None)
+        if not isinstance(schema, dict):
+            schema = {}
+        required = schema.get("required") or []
+        if not isinstance(required, (list, tuple)):
+            required = []
+        if not isinstance(args, dict):
+            if args is None and not required:
+                return None  # 容忍无参调用，下游按空对象处理
+            if args is None:
+                return f"缺少必填参数: {', '.join(str(k) for k in required)}"
+            return "工具调用参数必须是 JSON 对象"
+        missing = [str(k) for k in required if args.get(k) is None]
+        if missing:
+            return f"缺少必填参数: {', '.join(missing)}"
+        return None
+
     def _run_tool(self, tool_name: str, tool: BaseTool, args: dict,
                   session_key: str | None = None) -> ToolCallResult:
         """真正执行工具并构建 ToolCallResult（含连续失败计数与耗时）。
@@ -381,7 +464,7 @@ class ToolRouter:
                     result=cached, error="", duration_ms=0,
                 )
         try:
-            result: Any = tool.safe_execute(args)
+            result: Any = self._invoke_with_timeout(tool_name, tool, args)
             duration = int((time.time() - start) * 1000)
             # 检查工具自身是否通过返回 dict 中的 error 字段报告失败
             # 仅当 error 字段存在且值为非空字符串时才判定失败
@@ -416,6 +499,24 @@ class ToolRouter:
                 result=result if not is_error else None,
                 error=result.get("error", "") if is_error else "",
                 duration_ms=duration
+            )
+        except _ToolTimeout:
+            # 超过 max_tool_seconds 仍未返回：停止等待并记录为超时失败。
+            # 注意：daemon 子线程仍在后台运行其副作用，可能稍后落地；副作用工具有
+            # 重放护栏兜底重复触发，且超时阈值远大于正常耗时，正常调用不会命中此分支。
+            duration = int((time.time() - start) * 1000)
+            self._consecutive_failures[tool_name] = self._consecutive_failures.get(tool_name, 0) + 1
+            timeout_s = self._timeout_seconds()
+            logger.error(
+                "工具 %s 执行超时（超过 %.1fs，已停止等待；后台线程可能仍在运行其副作用）",
+                tool_name, timeout_s,
+            )
+            audit("tool_execution", tool_name, "timeout",
+                  session_key=session_key, target=tool_name,
+                  detail=f"duration_ms={duration} timeout_s={timeout_s}")
+            return ToolCallResult(
+                tool_name=tool_name, args=args, success=False,
+                result=None, error="工具执行超时", duration_ms=duration
             )
         except Exception as e:
             duration = int((time.time() - start) * 1000)

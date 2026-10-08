@@ -268,7 +268,7 @@ class TestLoginLogout:
         try:
             assert logout(token) is True
         finally:
-            _revoked_token_hashes.discard(_hash_token(token))
+            _revoked_token_hashes.pop(_hash_token(token), None)
         # 非法/空令牌无可吊销对象，返回 False
         assert logout("not-a-valid-jwt") is False
         assert logout("") is False
@@ -299,13 +299,13 @@ class TestRBAC:
 class TestTokenRevocation:
     """2026-08-31 修复回归：logout 真正吊销令牌，verify_token 拒绝已吊销令牌。
 
-    黑名单为模块级全局集合，测试后清理本测试的令牌哈希，避免污染其他用例。
+    黑名单为模块级全局 dict（token_hash → 失效时刻），测试后清理本测试的令牌哈希，避免污染其他用例。
     """
 
     def _cleanup(self, token: str) -> None:
         from web.auth_middleware import _revoked_token_hashes, _hash_token
 
-        _revoked_token_hashes.discard(_hash_token(token))
+        _revoked_token_hashes.pop(_hash_token(token), None)
 
     def test_logout_revokes_token(self):
         """登出后该令牌立即被 verify_token 拒绝（401）。"""
@@ -331,3 +331,29 @@ class TestTokenRevocation:
             assert logout(token) is False
         finally:
             self._cleanup(token)
+
+    def test_revoked_entry_expires_and_purged(self):
+        """黑名单条目带失效时刻，过期后不再拦截且惰性回收（有界，防内存泄漏）。
+
+        回归：原实现为无 TTL 无上限 set，每次登出泄漏约 64B 且永不回收。
+        """
+        import time
+
+        from web.auth_middleware import (
+            TokenManager,
+            _hash_token,
+            _is_token_revoked,
+            _revoked_token_hashes,
+        )
+
+        mgr = TokenManager()
+        token = mgr.generate_token("expired_entry", "admin")
+        h = _hash_token(token)
+        # 模拟一条「已过期」的黑名单记录
+        _revoked_token_hashes[h] = time.time() - 1.0
+        try:
+            # 过期项：视为未吊销，且惰性清理回收该条目
+            assert _is_token_revoked(token) is False
+            assert h not in _revoked_token_hashes
+        finally:
+            _revoked_token_hashes.pop(h, None)

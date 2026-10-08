@@ -24,12 +24,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF_NAME}"
-          # 若 release 已存在（例如本地先用 gh release create 创建后，再 push tag），跳过以免 422 冲突。
+
+          # 已有 Release 且带手写说明（如本地 `gh release create` 先建好的）时直接跳过，
+          # 既保留人工说明，又顺带解决「先查再建」的竞态：查不到就创建，若因索引
+          # 延迟而实际已存在，则下面的创建会失败并落到 fallback 分支，不产生红灯。
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::notice::Release $TAG 已存在，跳过自动创建"
+            echo "::notice::Release $TAG 已存在，跳过自动创建（保留现有说明）"
             exit 0
           fi
-          gh release create "$TAG" \
+
+          if ! gh release create "$TAG" \
             --title "$TAG" \
             --generate-notes \
-            --latest
+            --latest; then
+            # 竞态兜底：Release 实际已存在（查询时索引未就绪）则不算失败。
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "::notice::Release $TAG 已存在（创建竞态），跳过"
+              exit 0
+            fi
+            echo "::error::创建 Release $TAG 失败"
+            exit 1
+          fi

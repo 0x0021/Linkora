@@ -153,11 +153,14 @@ class DedupMixin(PollerMixinBase):
         if msg.msg_id:
             try:
                 cur = self.store.conv_conn(get_current_platform()).cursor()
-                cur.execute(
-                    "SELECT role, is_bot FROM messages WHERE msg_id = ?",
-                    (msg.msg_id,),
-                )
-                row = cur.fetchone()
+                try:
+                    cur.execute(
+                        "SELECT role, is_bot FROM messages WHERE msg_id = ?",
+                        (msg.msg_id,),
+                    )
+                    row = cur.fetchone()
+                finally:
+                    cur.close()
                 if row:
                     return row["role"] == "assistant" or row["is_bot"] == 1
             except sqlite3.Error as e:
@@ -169,19 +172,22 @@ class DedupMixin(PollerMixinBase):
         if msg.content and msg.chat_id:
             try:
                 cur = self.store.conv_conn(get_current_platform()).cursor()
-                ts_str = msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
-                cur.execute(
-                    "SELECT role, is_bot, content FROM messages "
-                    "WHERE chat_id = ? AND role = 'assistant' "
-                    "  AND ABS(julianday(timestamp) - julianday(?)) < 0.00139",
-                    (msg.chat_id, ts_str),
-                )
-                msg_norm = _norm_ws(msg.content)
-                for row in cur.fetchall():
-                    cand_norm = _norm_ws(row["content"])
-                    # 双向前缀匹配（取前 60 归一化字符），兼容截断/格式差异
-                    if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
-                        return True
+                try:
+                    ts_str = msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
+                    cur.execute(
+                        "SELECT role, is_bot, content FROM messages "
+                        "WHERE chat_id = ? AND role = 'assistant' "
+                        "  AND ABS(julianday(timestamp) - julianday(?)) < 0.00139",
+                        (msg.chat_id, ts_str),
+                    )
+                    msg_norm = _norm_ws(msg.content)
+                    for row in cur.fetchall():
+                        cand_norm = _norm_ws(row["content"])
+                        # 双向前缀匹配（取前 60 归一化字符），兼容截断/格式差异
+                        if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
+                            return True
+                finally:
+                    cur.close()
             except sqlite3.Error as e:
                 logger.debug("[轮询器] 内容匹配去重查询失败: %s", e)
 
@@ -198,23 +204,26 @@ class DedupMixin(PollerMixinBase):
             return False
         try:
             cur = self.store.conv_conn(get_current_platform()).cursor()
-            # 用时间窗口缩小匹配范围，避免误杀不同时间的相似回复
-            ts_str = msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
-            cur.execute(
-                """SELECT content FROM messages
-                   WHERE chat_id = ? AND role = 'assistant'
-                     AND ABS(julianday(timestamp) - julianday(?)) < 0.00139""",
-                (msg.chat_id, ts_str),
-            )
-            # 0.00139 ≈ 120 秒 / 86400
-            # 空白归一化比较，兼容 AI 回复发出(\n)与钉钉抓回(空格)的格式差异，
-            # 否则 LIKE 失配会导致 AI 回复被重复入库（is_bot=1 + is_bot=0 两条）。
-            msg_norm = _norm_ws(msg.content)
-            for row in cur.fetchall():
-                cand_norm = _norm_ws(row["content"])
-                if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
-                    return True
-            return False
+            try:
+                # 用时间窗口缩小匹配范围，避免误杀不同时间的相似回复
+                ts_str = msg.timestamp.isoformat() if hasattr(msg.timestamp, 'isoformat') else str(msg.timestamp)
+                cur.execute(
+                    """SELECT content FROM messages
+                       WHERE chat_id = ? AND role = 'assistant'
+                         AND ABS(julianday(timestamp) - julianday(?)) < 0.00139""",
+                    (msg.chat_id, ts_str),
+                )
+                # 0.00139 ≈ 120 秒 / 86400
+                # 空白归一化比较，兼容 AI 回复发出(\n)与钉钉抓回(空格)的格式差异，
+                # 否则 LIKE 失配会导致 AI 回复被重复入库（is_bot=1 + is_bot=0 两条）。
+                msg_norm = _norm_ws(msg.content)
+                for row in cur.fetchall():
+                    cand_norm = _norm_ws(row["content"])
+                    if cand_norm.startswith(msg_norm[:60]) or msg_norm.startswith(cand_norm[:60]):
+                        return True
+                return False
+            finally:
+                cur.close()
         except sqlite3.Error as e:
             logger.debug("[轮询器] 重复消息检查失败: %s", e)
             return False

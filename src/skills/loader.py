@@ -335,12 +335,12 @@ class SkillLoader:
             if not content.startswith("---"):
                 logger.warning("[IntentGen] SKILL.md 缺少 frontmatter: %s", skill_md_path)
                 return False
-            second_delim = content.find("---", 3)
-            if second_delim == -1:
+            # 统一使用行级 _split_frontmatter 解析，与读取路径单一真源一致，
+            # 避免正文含 "---"（如 Markdown 分隔线）时被子串匹配误拆。
+            frontmatter_str, body = self._split_frontmatter(content)
+            if not frontmatter_str:
                 logger.warning("[IntentGen] SKILL.md frontmatter 格式异常: %s", skill_md_path)
                 return False
-            frontmatter_str = content[3:second_delim]
-            body = content[second_delim + 3:]
 
             fm = yaml.safe_load(frontmatter_str) or {}
             if not isinstance(fm, dict):

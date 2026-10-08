@@ -542,8 +542,11 @@ class AccessControlMixin(PollerMixinBase):
         try:
             plat = platform or get_current_platform()
             cur = self.store.conv_conn(plat).cursor()
-            cur.execute("SELECT chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id FROM conversations")
-            rows = cur.fetchall()
+            try:
+                cur.execute("SELECT chat_id, chat_name, chat_type, peer_user_id, peer_open_dingtalk_id FROM conversations")
+                rows = cur.fetchall()
+            finally:
+                cur.close()
             if not rows:
                 return
 

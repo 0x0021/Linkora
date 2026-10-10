@@ -10,6 +10,7 @@
     --brand-danger-hover: #b91c1c;
     --brand-purple: #8b5cf6;
     --brand-pink: #ec4899;
+    --brand-cyan: #06b6d4;
 
     --gray-50:  #f8fafc;
     --gray-100: #f1f5f9;
@@ -68,6 +69,16 @@
     --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display",
                  "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
     --font-mono: "SF Mono", Monaco, Consolas, monospace;
+
+    /* 图标尺寸刻度：统一 FontAwesome / <i> / 语义 -icon 类 的字体图标大小，
+       消除 0.55→2rem 跨度的同档抖动（仅就近折叠，保留 hero 大图标层级）。 */
+    --icon-xs:  0.625rem;  /* 致密徽章内图标 */
+    --icon-sm:  0.75rem;   /* 按钮 / 导航小图标 */
+    --icon-md:  0.875rem;  /* 面板头 / 卡片默认图标 */
+    --icon-lg:  1rem;      /* 统计 / 区块图标 */
+    --icon-xl:  1.25rem;   /* 强调图标 */
+    --icon-2xl: 1.5rem;    /* 大区图标 */
+    --icon-3xl: 2rem;      /* 英雄 / 空状态大图标 */
 }
 
 [data-theme="dark"] {
@@ -94,4 +105,5 @@
     --brand-danger-hover: #f87171;
     --brand-purple: #a78bfa;
     --brand-pink: #f472b6;
+    --brand-cyan: #22d3ee;
 }

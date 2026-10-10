@@ -23,6 +23,7 @@
     "lint": "eslint web/static/js --ext .js",
     "lint:fix": "eslint web/static/js --ext .js --fix",
     "format": "prettier --write \"web/static/js/**/*.js\"",
-    "verify:frontend": "npm run build:frontend && npm run lint && npm run smoke:bundle && npm run smoke:runtime && npm run test:frontend"
+    "verify:frontend": "npm run build:frontend && npm run lint && npm run lint:data-args && npm run smoke:bundle && npm run smoke:runtime && npm run test:frontend",
+    "lint:data-args": "node scripts/check_data_args_concat.mjs"
   }
 }

@@ -29,7 +29,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0.875rem 1rem;
+    padding: 0.875rem var(--space-lg);
     transition: box-shadow 0.15s;
 }
 
@@ -47,7 +47,7 @@
 }
 
 .metrics-kpi-card .kpi-label i {
-    font-size: 0.7rem;
+    font-size: var(--icon-sm);
     opacity: 0.6;
 }
 
@@ -70,9 +70,9 @@
 .metrics-kpi-card.accent-green { border-left: 3px solid var(--brand-success); }
 .metrics-kpi-card.accent-orange { border-left: 3px solid var(--brand-warning); }
 .metrics-kpi-card.accent-pink { border-left: 3px solid var(--brand-pink); }
-.metrics-kpi-card.accent-cyan { border-left: 3px solid #06b6d4; }
-.metrics-kpi-card.accent-teal { border-left: 3px solid #14b8a6; }
-.metrics-kpi-card.accent-violet { border-left: 3px solid #7c3aed; }
+.metrics-kpi-card.accent-cyan { border-left: 3px solid var(--brand-cyan); }
+.metrics-kpi-card.accent-teal { border-left: 3px solid var(--brand-cyan); }
+.metrics-kpi-card.accent-violet { border-left: 3px solid var(--brand-purple); }
 
 /* 图表区 */
 .metrics-charts-grid {
@@ -92,7 +92,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0.875rem 1rem;
+    padding: 0.875rem var(--space-lg);
     box-shadow: var(--shadow-sm);
 }
 
@@ -107,7 +107,7 @@
 }
 
 .metrics-chart-card .chart-title i {
-    font-size: 0.75rem;
+    font-size: var(--icon-sm);
     opacity: 0.6;
 }
 
@@ -137,7 +137,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0.875rem 1rem;
+    padding: 0.875rem var(--space-lg);
     box-shadow: var(--shadow-sm);
 }
 
@@ -197,7 +197,7 @@
 
 .metrics-table th {
     text-align: left;
-    padding: 0.5rem 0.5rem;
+    padding: var(--space-sm) var(--space-sm);
     color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.72rem;
@@ -206,7 +206,7 @@
 }
 
 .metrics-table td {
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem var(--space-sm);
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
@@ -223,7 +223,7 @@
 /* 平台 ID 徽章 */
 .metrics-pid-badge {
     display: inline-block;
-    padding: 0.0625rem 0.5rem;
+    padding: 0.0625rem var(--space-sm);
     border-radius: var(--radius-sm);
     font-size: 0.7rem;
     font-weight: 600;

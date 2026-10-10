@@ -5,23 +5,23 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    padding: 1.25rem 1.5rem;
+    padding: 1.25rem var(--space-xl);
 }
 
 #page-simulate.active .sim-page-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 0;
+    padding: var(--space-md) 0;
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
-    gap: 1rem;
+    gap: var(--space-lg);
 }
 
 #page-simulate.active .page-header-text {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--space-md);
     flex: 1;
     min-width: 0;
 }
@@ -29,7 +29,7 @@
 #page-simulate.active .page-header-icon {
     width: 28px;
     height: 28px;
-    font-size: 0.875rem;
+    font-size: var(--icon-md);
     flex-shrink: 0;
 }
 
@@ -50,7 +50,7 @@
 .sim-status-bar {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex-wrap: wrap;
     flex-shrink: 0;
 }
@@ -58,8 +58,8 @@
 .sim-status-chip {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
     background: var(--bg-subtle);
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-light);
@@ -73,7 +73,7 @@
 }
 
 .sim-status-chip i {
-    font-size: 0.65rem;
+    font-size: var(--icon-xs);
 }
 
 .sim-status-chip.success {
@@ -119,12 +119,12 @@
 #page-simulate.active .sim-main-layout {
     display: grid;
     grid-template-columns: 380px 1fr;
-    gap: 1.5rem;
+    gap: var(--space-xl);
     flex: 1;
     min-height: 0;
     /* height: 0 让两栏在 flex 容器内能精确撑开，overflow: hidden 避免整页滚动 */
     height: 0;
-    padding: 1.25rem 0 1.5rem;
+    padding: 1.25rem 0 var(--space-xl);
     overflow: hidden;
 }
 
@@ -139,7 +139,7 @@
 .sim-input-panel {
     flex: 1 1 auto;  /* 独占整个左栏高度 */
     min-height: 0;
-    margin-bottom: 0; /* 覆盖 .panel 全局 margin-bottom: 1rem，避免与右栏底部不对齐 */
+    margin-bottom: 0; /* 覆盖 .panel 全局 margin-bottom: var(--space-lg)，避免与右栏底部不对齐 */
 }
 
 /* 让「测试输入」的 .panel-header 与「执行结果」的 .sim-result-header 高度/样式完全一致，
@@ -162,10 +162,10 @@
 }
 
 .sim-input-panel .panel-body {
-    padding: 1rem; /* 覆盖 .panel-body 默认 0.4rem：输入区需更大内边距 */
+    padding: var(--space-lg); /* 覆盖 .panel-body 默认 0.4rem：输入区需更大内边距 */
     display: flex;
     flex-direction: column;
-    gap: 0.75rem; /* 上半输入区与下半历史区分隔 */
+    gap: var(--space-md); /* 上半输入区与下半历史区分隔 */
     overflow: hidden; /* 改为内部分区各自滚动，避免整块溢出 */
 }
 
@@ -174,7 +174,7 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 /* 下半：测试历史 —— 撑满 panel-body 剩余高度，内部列表可滚动 */
@@ -184,8 +184,8 @@
     display: flex;
     flex-direction: column;
     border-top: 1px solid var(--border-color);
-    padding-top: 0.75rem;
-    margin-top: 0.25rem;
+    padding-top: var(--space-md);
+    margin-top: var(--space-xs);
 }
 
 .sim-input-history-header {
@@ -193,7 +193,7 @@
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--space-sm);
 }
 
 .sim-input-history-title {
@@ -206,15 +206,15 @@
 }
 
 .sim-input-history-title i {
-    font-size: 0.7rem;
+    font-size: var(--icon-sm);
     color: var(--text-tertiary);
 }
 
 .sim-sender-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
 }
 
 .sim-sender-row .sim-avatar {
@@ -243,7 +243,7 @@
     color: var(--text-primary);
     font-size: 0.875rem;
     line-height: 1.6;
-    padding: 0.75rem;
+    padding: var(--space-md);
     resize: vertical;
     min-height: 100px;
     max-height: 260px; /* 输入区不超 260px，panel-body 由下半历史区撑满；超出 textarea 自身滚动 */
@@ -262,8 +262,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 0;
-    margin-top: 0.25rem;
+    padding: var(--space-sm) 0;
+    margin-top: var(--space-xs);
 }
 
 .sim-options-hint {
@@ -275,15 +275,15 @@
 .sim-samples {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
 }
 
 .sim-sample-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    padding: 0.375rem 0.75rem;
+    padding: 0.375rem var(--space-md);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-surface);
@@ -301,15 +301,15 @@
 }
 
 .sim-sample-btn i {
-    font-size: 0.625rem;
+    font-size: var(--icon-xs);
 }
 
 /* ---- 发送按钮区 ---- */
 .sim-send-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-top: 1rem;
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
 }
 
 .sim-send-btn {
@@ -323,7 +323,7 @@
 
 /* ---- 测试历史（嵌套在测试输入 panel 内部） ---- */
 .sim-history-list {
-    padding: 0.25rem;
+    padding: var(--space-xs);
     flex: 1 1 0;
     min-height: 0;
     overflow-y: auto;
@@ -331,17 +331,17 @@
 
 .sim-history-empty {
     text-align: center;
-    padding: 1.5rem;
+    padding: var(--space-xl);
     color: var(--text-tertiary);
     font-size: 0.8125rem;
 }
 
 .sim-history-item {
-    padding: 0.5rem;
+    padding: var(--space-sm);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.15s ease;
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--space-xs);
 }
 
 .sim-history-item:hover {
@@ -360,7 +360,7 @@
 .sim-history-meta {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     font-size: 0.7rem;
     color: var(--text-tertiary);
 }
@@ -372,7 +372,7 @@
 }
 
 .sim-history-meta i {
-    font-size: 0.625rem;
+    font-size: var(--icon-xs);
 }
 
 /* ---- 右栏：执行结果控制台 ---- */
@@ -400,7 +400,7 @@
 .sim-result-header-left {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .sim-result-status-dot {
@@ -447,7 +447,7 @@
 .sim-result-header-right {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .sim-result-timing {
@@ -487,8 +487,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 0.75rem;
-    font-size: 1.25rem;
+    margin-bottom: var(--space-md);
+    font-size: var(--icon-xl);
     color: var(--text-disabled);
 }
 
@@ -496,7 +496,7 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-secondary);
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--space-xs);
 }
 
 .sim-result-empty-text {
@@ -511,7 +511,7 @@
     align-items: center;
     justify-content: center;
     padding: 3rem 2rem;
-    gap: 0.75rem;
+    gap: var(--space-md);
 }
 
 .sim-result-loading-spinner {
@@ -534,10 +534,10 @@
 
 /* 结果区域容器：上半部分（banner 或 AI 回复）撑满，下半 3 张固定卡贴底 */
 .sim-result-content {
-    padding: 1rem;
+    padding: var(--space-lg);
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex: 1 1 auto;   /* 撑满父 panel，让 AI 回复卡获得更多垂直空间 */
     min-height: 0;
     overflow: auto;   /* 内容溢出时在自身滚动 */
@@ -559,8 +559,8 @@
 .sim-result-content > #sim-result-banner .sim-result-loading {
     height: auto;
     min-height: 0;
-    padding: 0.5rem 1rem;
-    gap: 0.25rem;
+    padding: var(--space-sm) var(--space-lg);
+    gap: var(--space-xs);
 }
 
 /* banner 内的结果插槽：参与 flex 布局，将 banner 剩余空间下传给 AI 回复卡 */
@@ -585,15 +585,15 @@
     flex: 0 0 auto;
     min-height: 140px;
     height: auto;
-    padding: 1rem 1rem;
+    padding: var(--space-lg) var(--space-lg);
 }
 
 /* 提示框 */
 .sim-alert {
     display: flex;
     align-items: flex-start;
-    gap: 0.5rem;
-    padding: 0.625rem 0.75rem;
+    gap: var(--space-sm);
+    padding: 0.625rem var(--space-md);
     border-radius: var(--radius-md);
     font-size: 0.75rem;
     animation: sim-slideIn 0.3s ease;
@@ -607,7 +607,7 @@
 
 .sim-alert-icon {
     flex-shrink: 0;
-    font-size: 0.75rem;
+    font-size: var(--icon-sm);
     margin-top: 0.0625rem;
 }
 
@@ -652,7 +652,7 @@
 .sim-card-dashboard {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex-shrink: 0;       /* 贴结果区底部，不被压缩 */
     align-items: stretch;
     margin-top: auto;     /* 始终贴 AI 回复卡下方推到面板底部 */
@@ -687,10 +687,10 @@
     height: 3px;
     z-index: 1;
 }
-.sim-card-route::before    { background: linear-gradient(90deg, var(--brand-success), #34d399); }
-.sim-card-tools::before    { background: linear-gradient(90deg, var(--brand-warning), #fb923c); }
-.sim-card-evidence::before { background: linear-gradient(90deg, #818cf8, #6366f1); }
-.sim-card-reply::before    { background: linear-gradient(90deg, var(--brand-primary), #818cf8); }
+.sim-card-route::before    { background: linear-gradient(90deg, var(--brand-success), var(--brand-success)); }
+.sim-card-tools::before    { background: linear-gradient(90deg, var(--brand-warning), var(--brand-warning)); }
+.sim-card-evidence::before { background: linear-gradient(90deg, var(--brand-secondary), var(--brand-secondary)); }
+.sim-card-reply::before    { background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary)); }
 
 .sim-card-kicker {
     display: block;
@@ -720,7 +720,7 @@
     display: flex;
     align-items: center;
     gap: 0.625rem;
-    padding: 0.875rem 0.875rem 0.5rem;
+    padding: 0.875rem 0.875rem var(--space-sm);
 }
 
 .sim-card-icon {
@@ -730,7 +730,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.875rem;
+    font-size: var(--icon-md);
     flex-shrink: 0;
 }
 
@@ -751,7 +751,7 @@
 
 .sim-icon-evidence {
     background: linear-gradient(135deg, rgba(147, 197, 253, 0.2), rgba(139, 92, 246, 0.1));
-    color: #6366f1;
+    color: var(--brand-secondary);
 }
 
 .sim-card-title {
@@ -845,7 +845,7 @@
 }
 
 .md-content .md-h {
-    margin: 0.75rem 0 0.375rem;
+    margin: var(--space-md) 0 0.375rem;
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.4;
@@ -873,8 +873,8 @@
 }
 
 .md-content .md-blockquote {
-    margin: 0.5rem 0;
-    padding: 0.375rem 0.75rem;
+    margin: var(--space-sm) 0;
+    padding: 0.375rem var(--space-md);
     border-left: 3px solid var(--brand-primary);
     background: rgba(59, 130, 246, 0.05);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
@@ -882,8 +882,8 @@
 }
 
 .md-content .md-code-block {
-    margin: 0.5rem 0;
-    padding: 0.625rem 0.75rem;
+    margin: var(--space-sm) 0;
+    padding: 0.625rem var(--space-md);
     background: var(--bg-body);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
@@ -943,7 +943,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.5rem 1rem;
+    padding: var(--space-xl) var(--space-lg);
     color: var(--text-tertiary);
     font-size: 0.75rem;
     min-height: 80px;
@@ -959,14 +959,14 @@
 .sim-route-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .sim-route-item {
     display: flex;
     align-items: flex-start;
-    gap: 0.5rem;
-    padding: 0.5rem 0.625rem;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0.625rem;
     background: var(--bg-subtle);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-light);
@@ -986,7 +986,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.65rem;
+    font-size: var(--icon-xs);
     color: var(--brand-primary);
     flex-shrink: 0;
     margin-top: 0.125rem;
@@ -1039,22 +1039,22 @@
 }
 
 .sim-confidence-fill.high {
-    background: linear-gradient(90deg, var(--brand-success), #4ade80);
+    background: linear-gradient(90deg, var(--brand-success), var(--brand-success));
 }
 
 .sim-confidence-fill.mid {
-    background: linear-gradient(90deg, var(--brand-warning), #fb923c);
+    background: linear-gradient(90deg, var(--brand-warning), var(--brand-warning));
 }
 
 .sim-confidence-fill.low {
-    background: linear-gradient(90deg, var(--brand-danger), #f87171);
+    background: linear-gradient(90deg, var(--brand-danger), var(--brand-danger));
 }
 
 /* ============ 工具调用卡片 ============ */
 .sim-tools-flow {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex-wrap: wrap;
 }
 
@@ -1083,7 +1083,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.625rem;
+    font-size: var(--icon-xs);
     color: var(--brand-warning);
     flex-shrink: 0;
 }
@@ -1114,7 +1114,7 @@
     border: 1px solid rgba(99, 102, 241, 0.15);
     border-radius: var(--radius-md);
     font-size: 0.75rem;
-    color: #6366f1;
+    color: var(--brand-secondary);
     font-weight: 500;
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
@@ -1139,8 +1139,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
+    margin-bottom: var(--space-lg);
+    font-size: var(--icon-2xl);
     color: var(--text-disabled);
 }
 
@@ -1199,8 +1199,8 @@
 .sim-rag-mode-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
     flex-wrap: wrap;
 }
 .sim-rag-mode-row > label {
@@ -1213,7 +1213,7 @@
     width: auto;
     min-width: 190px;
     height: 30px;
-    padding: 0 0.5rem;
+    padding: 0 var(--space-sm);
     font-size: 0.75rem;
 }
 .sim-rag-mode-row .sim-options-hint {
@@ -1237,7 +1237,7 @@
     align-items: center;
     gap: 0.3rem;
     margin-left: auto;
-    padding: 0.15rem 0.5rem;
+    padding: 0.15rem var(--space-sm);
     border-radius: 999px;
     border: 1px solid var(--border-color);
     background: var(--bg-subtle);
@@ -1262,12 +1262,12 @@
 .sim-mode-compare {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
+    gap: var(--space-md);
 }
 .sim-mode-col {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     min-width: 0;
     padding: 0.625rem;
     border: 1px solid var(--border-color);

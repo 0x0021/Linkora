@@ -300,7 +300,7 @@
 }
 
 [data-theme="dark"] .table {
-    color: #e8eef6;
+    color: var(--gray-100);
     border-color: #243044;
 }
 [data-theme="dark"] .table thead th,
@@ -313,26 +313,26 @@
 [data-theme="dark"] .card,
 [data-theme="dark"] .dropdown-menu {
     background: #151e2e;
-    color: #e8eef6;
+    color: var(--gray-100);
     border-color: #243044;
 }
 [data-theme="dark"] .modal-header,
 [data-theme="dark"] .card-header {
     background: #1a2436;
     border-color: #243044;
-    color: #e8eef6;
+    color: var(--gray-100);
 }
 
 [data-theme="dark"] .form-control,
 [data-theme="dark"] .form-select {
     background: #0f172a;
-    color: #e8eef6;
+    color: var(--gray-100);
     border-color: #243044;
 }
 [data-theme="dark"] .form-control:focus,
 [data-theme="dark"] .form-select:focus {
     background: #0f172a;
-    color: #e8eef6;
+    color: var(--gray-100);
     border-color: var(--brand-primary);
 }
 [data-theme="dark"] .form-control::placeholder {

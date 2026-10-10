@@ -18,7 +18,7 @@
 }
 
 #page-keywords > .section-tabs .section-tab {
-    padding: 0.45rem 1rem;
+    padding: 0.45rem var(--space-lg);
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-bottom-color: var(--border-color);
@@ -106,7 +106,7 @@
     width: 30px; height: 30px;
     display: grid; place-items: center;
     border-radius: var(--radius-sm);
-    font-size: .82rem;
+    font-size: var(--icon-md);
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
@@ -123,7 +123,7 @@
     font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -.3px;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary, var(--gray-800));
     font-variant-numeric: tabular-nums;
 }
 #page-keywords .kw-stat-label {
@@ -173,10 +173,10 @@
     flex-shrink: 0;
 }
 :is(#page-keywords, #page-gate-rules) .kw-tophits-title {
-    font-size: .85rem; font-weight: 600; color: var(--text-primary, #1f2937);
+    font-size: .85rem; font-weight: 600; color: var(--text-primary, var(--gray-800));
     display: flex; align-items: center; gap: .4rem;
 }
-:is(#page-keywords, #page-gate-rules) .kw-tophits-title i { color: #f97316; font-size: .82rem; }
+:is(#page-keywords, #page-gate-rules) .kw-tophits-title i { color: var(--brand-warning); font-size: var(--icon-md); }
 :is(#page-keywords, #page-gate-rules) .kw-tophits-sub {
     font-size: .66rem; color: var(--text-tertiary, #94a3b8);
     letter-spacing: .02em;
@@ -214,23 +214,23 @@
     flex-shrink: 0;
 }
 :is(#page-keywords, #page-gate-rules) .kw-bar-rank.top1 {
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
-    color: #78350f;
+    background: linear-gradient(135deg, var(--brand-warning), var(--brand-warning));
+    color: var(--brand-warning);
 }
 :is(#page-keywords, #page-gate-rules) .kw-bar-rank.top2 {
     background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
     color: #475569;
 }
 :is(#page-keywords, #page-gate-rules) .kw-bar-rank.top3 {
-    background: linear-gradient(135deg, #fdba74, #fb923c);
-    color: #9a3412;
+    background: linear-gradient(135deg, #fdba74, var(--brand-warning));
+    color: var(--brand-warning);
 }
 
 :is(#page-keywords, #page-gate-rules) .kw-bar-label {
     flex: 1;
     min-width: 0;
     font-size: .72rem;
-    color: var(--text-secondary, #4b5563);
+    color: var(--text-secondary, var(--gray-600));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -256,7 +256,7 @@
     text-align: right;
     font-size: .72rem;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--text-primary, var(--gray-800));
     flex-shrink: 0;
 }
 
@@ -283,16 +283,16 @@
 #page-keywords .main-panel-header {
     display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: .55rem;
-    padding: .75rem 1rem;
+    padding: .75rem var(--space-lg);
     border-bottom: 1px solid var(--border-color);
     background: color-mix(in srgb, var(--bg-surface) 80%, var(--brand-primary) 2%);
 }
-#page-keywords .main-panel-header h3 { font-size: .9rem; font-weight: 600; color: var(--text-primary, #1f2937); }
+#page-keywords .main-panel-header h3 { font-size: .9rem; font-weight: 600; color: var(--text-primary, var(--gray-800)); }
 #page-keywords .main-panel-header .action-group {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     flex-wrap: wrap;
     width: 100%;
 }
@@ -308,7 +308,7 @@
 #page-keywords .main-panel-header .action-group .form-select {
     flex-shrink: 0;
     width: auto;
-    padding: .35rem 1.5rem .35rem .55rem;
+    padding: .35rem var(--space-xl) .35rem .55rem;
     font-size: .78rem;
     height: auto;
     min-width: 100px;
@@ -330,7 +330,7 @@
 :is(#page-keywords, #page-gate-rules) .kw-table thead { background: var(--bg-subtle); position: sticky; top: 0; z-index: 2; }
 :is(#page-keywords, #page-gate-rules) .kw-table thead th {
     text-align: left;
-    padding: 0.5rem 0.5rem;
+    padding: var(--space-sm) var(--space-sm);
     font-weight: 600;
     font-size: 0.72rem;
     color: var(--text-tertiary);
@@ -340,7 +340,7 @@
     background: var(--bg-subtle);
 }
 :is(#page-keywords, #page-gate-rules) .kw-table tbody td {
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem var(--space-sm);
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-light);
 }
@@ -396,7 +396,7 @@
     width: 100%;
     text-align: center;
     color: var(--text-tertiary);
-    padding: 2rem 0.5rem;
+    padding: 2rem var(--space-sm);
 }
 
 /* 表格区域滚动条：可见、圆角、细条 */

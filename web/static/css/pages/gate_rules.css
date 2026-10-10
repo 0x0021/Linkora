@@ -47,15 +47,15 @@
     background: color-mix(in srgb, var(--gate-cat-color) 14%, transparent);
     border: 1px solid color-mix(in srgb, var(--gate-cat-color) 32%, transparent);
 }
-.gate-cat[data-cat="private_privacy"] { --gate-cat-color: #ec4899; }
-.gate-cat[data-cat="illegal_info"]    { --gate-cat-color: #ef4444; }
-.gate-cat[data-cat="negative_emotion"]{ --gate-cat-color: #f59e0b; }
+.gate-cat[data-cat="private_privacy"] { --gate-cat-color: var(--brand-pink); }
+.gate-cat[data-cat="illegal_info"]    { --gate-cat-color: var(--brand-danger); }
+.gate-cat[data-cat="negative_emotion"]{ --gate-cat-color: var(--brand-warning); }
 .gate-cat[data-cat="other"]           { --gate-cat-color: #64748b; }
 
 /* 规则名称单元格 */
 .gate-name-cell {
     font-weight: 600;
-    color: var(--text-strong, #e6edf3);
+    color: var(--text-strong, var(--gray-100));
     max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -67,7 +67,7 @@
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: var(--accent, #3b82f6);
+    accent-color: var(--accent, var(--brand-primary));
 }
 
 /* ===== 命中测试：结果展示（test-panel / test-input / test-output 已在 theme.css 提供） ===== */
@@ -79,7 +79,7 @@
     height: 100%;
     min-height: 180px;
     text-align: center;
-    color: var(--text-muted, #8b98a5);
+    color: var(--text-muted, var(--gray-400));
 }
 .test-result-none p {
     margin: 0;
@@ -92,8 +92,8 @@
     gap: 12px;
     padding: 12px 14px;
     border-radius: 10px;
-    background: color-mix(in srgb, #ef4444 12%, transparent);
-    border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+    background: color-mix(in srgb, var(--brand-danger) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-danger) 30%, transparent);
     margin-bottom: 12px;
 }
 .test-result-header .match-count {
@@ -102,7 +102,7 @@
 }
 .test-result-header .top-reply {
     font-size: 13px;
-    color: var(--text-muted, #8b98a5);
+    color: var(--text-muted, var(--gray-400));
 }
 
 .test-result-list {
@@ -128,17 +128,17 @@
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.35);
     color: #fca5a5;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     word-break: break-all;
 }
 .test-result-reply {
     font-size: 13px;
-    color: var(--text, #c9d4df);
+    color: var(--text, var(--gray-300));
     line-height: 1.6;
 }
 .test-result-reply b {
-    color: var(--text-strong, #e6edf3);
+    color: var(--text-strong, var(--gray-100));
 }
 
 /* ===== 概览区：横向 KPI 卡 + 高频命中面板 ===== */
@@ -165,7 +165,7 @@
 }
 .gate-kpi:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px color-mix(in srgb, var(--kpi-color, #3b82f6) 16%, transparent);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--kpi-color, var(--brand-primary)) 16%, transparent);
 }
 .gate-kpi-icon {
     flex-shrink: 0;
@@ -175,9 +175,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 17px;
-    color: var(--kpi-color, #3b82f6);
-    background: color-mix(in srgb, var(--kpi-color, #3b82f6) 13%, transparent);
+    font-size: var(--icon-lg);
+    color: var(--kpi-color, var(--brand-primary));
+    background: color-mix(in srgb, var(--kpi-color, var(--brand-primary)) 13%, transparent);
 }
 .gate-kpi-body { min-width: 0; }
 .gate-kpi-value {
@@ -185,12 +185,12 @@
     font-weight: 700;
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
-    color: var(--text-strong, #e6edf3);
+    color: var(--text-strong, var(--gray-100));
 }
 .gate-kpi-label {
     margin-top: 2px;
     font-size: 12.5px;
-    color: var(--text-muted, #8b98a5);
+    color: var(--text-muted, var(--gray-400));
 }
 @media (max-width: 768px) {
     #page-gate-rules .gate-kpi-row { grid-template-columns: 1fr; }

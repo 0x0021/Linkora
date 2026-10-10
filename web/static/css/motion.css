@@ -109,7 +109,7 @@ a, .clickable {
 
 /* ---------- 统一焦点可见性（无障碍 + 精致感） ---------- */
 :focus-visible {
-  outline: 2px solid var(--brand-primary, #2563eb);
+  outline: 2px solid var(--brand-primary, var(--brand-primary));
   outline-offset: 2px;
   border-radius: 4px;
 }

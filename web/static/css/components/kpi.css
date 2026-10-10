@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.75rem 0.875rem;
+  padding: var(--space-md) 0.875rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -12,7 +12,7 @@
 }
 
 .kpi-icon {
-  font-size: 1.25rem;
+  font-size: var(--icon-xl);
   line-height: 1;
   flex-shrink: 0;
   width: 2.25rem;

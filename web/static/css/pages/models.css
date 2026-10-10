@@ -36,7 +36,7 @@
     color: var(--text-primary);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 .mc-title i { color: var(--brand-primary); }
 
@@ -76,7 +76,7 @@
 .status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
     padding: 0.12rem 0.55rem;
     border-radius: 999px;
     font-size: 0.72rem;
@@ -85,9 +85,9 @@
     border: 1px solid transparent;
     white-space: nowrap;
 }
-.status-badge.success { color: #16a34a; background: rgba(22, 163, 74, 0.12); border-color: rgba(22, 163, 74, 0.28); }
-.status-badge.warning { color: #b45309; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.32); }
-.status-badge.error   { color: var(--brand-danger, #dc2626); background: rgba(220, 38, 38, 0.12); border-color: rgba(220, 38, 38, 0.28); }
+.status-badge.success { color: var(--brand-success); background: rgba(22, 163, 74, 0.12); border-color: rgba(22, 163, 74, 0.28); }
+.status-badge.warning { color: var(--brand-warning); background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.32); }
+.status-badge.error   { color: var(--brand-danger, var(--brand-danger)); background: rgba(220, 38, 38, 0.12); border-color: rgba(220, 38, 38, 0.28); }
 .status-badge.muted   { color: var(--text-tertiary); background: var(--bg-subtle); border-color: var(--border-color); }
 
 /* ---- 资源面板 ---- */
@@ -95,7 +95,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0.8rem 1rem 0.9rem;
+    padding: 0.8rem var(--space-lg) 0.9rem;
     box-shadow: var(--shadow-sm);
 }
 .rp-title {
@@ -104,7 +104,7 @@
     color: var(--text-primary);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     margin-bottom: 0.65rem;
 }
 .rp-title i { color: var(--brand-primary); }
@@ -121,7 +121,7 @@
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.6rem 0.75rem;
+    padding: 0.6rem var(--space-md);
 }
 
 .meter { display: flex; flex-direction: column; gap: 0.28rem; }
@@ -147,10 +147,10 @@
     border-radius: 999px;
     transition: width 0.45s ease, background-color 0.3s;
 }
-.meter-fill.lvl-ok        { background: #16a34a; }
-.meter-fill.lvl-mid       { background: #0ea5e9; }
-.meter-fill.lvl-warn      { background: #f59e0b; }
-.meter-fill.lvl-critical  { background: #dc2626; }
+.meter-fill.lvl-ok        { background: var(--brand-success); }
+.meter-fill.lvl-mid       { background: var(--brand-cyan); }
+.meter-fill.lvl-warn      { background: var(--brand-warning); }
+.meter-fill.lvl-critical  { background: var(--brand-danger); }
 .meter-fill.lvl-unknown   { background: #94a3b8; }
 
 /* ---- GPU ---- */
@@ -168,7 +168,7 @@
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.55rem 0.75rem;
+    padding: 0.55rem var(--space-md);
     margin-bottom: 0.45rem;
 }
 .gpu-card:last-child { margin-bottom: 0; }
@@ -206,7 +206,7 @@
 
 /* GPU 设备存在但无占用指标时（如 Apple Silicon MPS），折叠为单行 */
 .gpu-compact {
-    font-size: 0.76rem;
+    font-size: var(--icon-sm);
     color: var(--text-tertiary);
     display: flex;
     align-items: center;
@@ -220,7 +220,7 @@
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.45rem 0.75rem;
+    padding: 0.45rem var(--space-md);
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -231,13 +231,13 @@
 .models-error {
     background: rgba(220, 38, 38, 0.08);
     border: 1px solid rgba(220, 38, 38, 0.25);
-    color: var(--brand-danger, #dc2626);
+    color: var(--brand-danger, var(--brand-danger));
     border-radius: var(--radius-md);
-    padding: 1rem 1.2rem;
+    padding: var(--space-lg) 1.2rem;
     font-size: 0.9rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 .models-foot {
     margin-top: 0.6rem;

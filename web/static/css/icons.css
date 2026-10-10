@@ -57,7 +57,7 @@
 
 /* 空状态图标加大 */
 .empty-icon .icon {
-    font-size: 42px;
+    font-size: var(--icon-3xl);
     color: var(--gray-400);
 }
 .empty-icon .icon.icon-primary { color: var(--brand-primary); }
@@ -65,21 +65,21 @@
 .empty-icon .icon.icon-warning { color: var(--brand-warning); }
 
 /* 部门树图标 */
-.dept-toggle .icon { font-size: 12px; transition: transform 0.2s; }
+.dept-toggle .icon { font-size: var(--icon-sm); transition: transform 0.2s; }
 .dept-toggle .icon.expanded { transform: rotate(90deg); }
-.dept-icon .icon { font-size: 16px; color: var(--brand-primary); }
-.dept-member-avatar .icon { font-size: 14px; color: #fff; }
+.dept-icon .icon { font-size: var(--icon-lg); color: var(--brand-primary); }
+.dept-member-avatar .icon { font-size: var(--icon-md); color: #fff; }
 
 /* 聊天机器人头像 */
-.chat-avatar .icon { font-size: 22px; color: #fff; }
-.user-avatar .icon { font-size: 18px; color: #fff; }
-.logo-icon .icon { font-size: 22px; color: #fff; }
+.chat-avatar .icon { font-size: var(--icon-2xl); color: #fff; }
+.user-avatar .icon { font-size: var(--icon-xl); color: #fff; }
+.logo-icon .icon { font-size: var(--icon-2xl); color: #fff; }
 
 /* 侧边栏导航 */
-.nav-icon .icon { font-size: 18px; }
-.stat-icon .icon { font-size: 26px; color: var(--brand-primary); }
-.onboarding-icon .icon { font-size: 36px; color: var(--brand-primary); }
-.upload-icon .icon { font-size: 38px; color: var(--brand-primary); }
+.nav-icon .icon { font-size: var(--icon-xl); }
+.stat-icon .icon { font-size: var(--icon-3xl); color: var(--brand-primary); }
+.onboarding-icon .icon { font-size: var(--icon-3xl); color: var(--brand-primary); }
+.upload-icon .icon { font-size: var(--icon-3xl); color: var(--brand-primary); }
 
 /* 按钮内 icon 间距 */
 .btn .icon { margin-right: 4px; }

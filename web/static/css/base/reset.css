@@ -74,7 +74,7 @@ a:hover {
     top: -56px;
     z-index: 2000;
     padding: 10px 18px;
-    background: var(--brand-primary, #2563eb);
+    background: var(--brand-primary, var(--brand-primary));
     color: #fff;
     font-size: 0.85rem;
     font-weight: 600;

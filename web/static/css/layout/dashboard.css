@@ -102,7 +102,7 @@
 }
 
 .dashboard-section {
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-lg);
 }
 
 .dashboard-section:last-child {
@@ -126,21 +126,21 @@
 
 /* 新增 section 容器间距 */
 .metrics-section {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
+    margin-top: var(--space-lg);
+    margin-bottom: var(--space-lg);
 }
 
 .tools-stats-section {
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-lg);
 }
 
 /* 消息分析折叠按钮 */
 .msg-stats-toggle {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     width: 100%;
-    padding: 0.75rem 1rem;
+    padding: var(--space-md) var(--space-lg);
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -162,7 +162,7 @@
 .msg-stats-toggle .toggle-icon {
     margin-left: auto;
     transition: transform 0.3s ease;
-    font-size: 0.75rem;
+    font-size: var(--icon-sm);
     color: var(--text-tertiary);
 }
 .msg-stats-toggle.expanded .toggle-icon {
@@ -172,7 +172,7 @@
 /* 消息分析可折叠内容 */
 #msg-stats-content {
     display: none;
-    margin-top: 0.75rem;
+    margin-top: var(--space-md);
 }
 #msg-stats-content.open {
     display: block;
@@ -188,7 +188,7 @@
 .section-actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .system-overview {
@@ -203,8 +203,8 @@
 .stats-row {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
 }
 
 .stat-card {
@@ -231,7 +231,7 @@
     justify-content: center;
     margin: 0 auto 0.35rem;
     color: #fff;
-    font-size: 1rem;
+    font-size: var(--icon-lg);
 }
 
 .stat-value {
@@ -251,7 +251,7 @@
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 0.4rem;
-    padding-top: 0.5rem;
+    padding-top: var(--space-sm);
     border-top: 1px solid var(--border-light);
 }
 
@@ -269,8 +269,8 @@
 }
 
 .status-tile-icon {
-    font-size: 1.1rem;
-    margin-bottom: 0.25rem;
+    font-size: var(--icon-lg);
+    margin-bottom: var(--space-xs);
 }
 
 .status-tile-label {
@@ -298,7 +298,7 @@
 
 /* body 紧凑自然高度 */
 #metrics-reliability-panel .panel-body.rel-body {
-    padding: 0.5rem 0.75rem 0.625rem;
+    padding: var(--space-sm) var(--space-md) 0.625rem;
 }
 /* 面板不拉伸，自然高度 */
 .metrics-charts-grid > #metrics-reliability-panel {
@@ -308,7 +308,7 @@
 /* 三段之间留小间距 */
 #metrics-reliability-panel .metrics-table + .metrics-table,
 #metrics-reliability-panel div + div {
-    margin-top: 0.5rem;
+    margin-top: var(--space-sm);
 }
 
 /* 分组表样式微调 */
@@ -320,7 +320,7 @@
     padding: 0.35rem 0.4rem;
 }
 .metrics-table.rel-tbl thead tr.rel-section-row th {
-    padding: 0.4rem 0.4rem 0.25rem;
+    padding: 0.4rem 0.4rem var(--space-xs);
     background: transparent;
     border-bottom: none;
     text-align: left;
@@ -341,25 +341,25 @@
     margin-right: 0.35rem;
     vertical-align: 1px;
 }
-.rel-dot--bp { background: #6366f1; }
-.rel-dot--db { background: #8b5cf6; }
-.rel-dot--ps { background: #06b6d4; }
+.rel-dot--bp { background: var(--brand-secondary); }
+.rel-dot--db { background: var(--brand-purple); }
+.rel-dot--ps { background: var(--brand-cyan); }
 
 /* 值样式 */
 .rel-v {
     font-weight: 700;
     color: var(--text-primary);
 }
-.rel-v--warn { color: var(--brand-warning, #f59e0b); }
-.rel-v--ok   { color: var(--brand-success, #10b981); }
-.rel-v--bad  { color: var(--brand-danger,  #ef4444); }
+.rel-v--warn { color: var(--brand-warning, var(--brand-warning)); }
+.rel-v--ok   { color: var(--brand-success, var(--brand-success)); }
+.rel-v--bad  { color: var(--brand-danger,  var(--brand-danger)); }
 
 /* JS 会覆写 className 的两个元素，ID 保底着色 */
 #metrics-ps-last-error { font-weight: 700; color: var(--text-primary); }
-#metrics-ps-last-error.warn { color: var(--brand-warning, #f59e0b); }
-#metrics-ps-last-error.ok   { color: var(--brand-success, #10b981); }
+#metrics-ps-last-error.warn { color: var(--brand-warning, var(--brand-warning)); }
+#metrics-ps-last-error.ok   { color: var(--brand-success, var(--brand-success)); }
 #metrics-ps-running        { font-weight: 700; color: var(--text-primary); }
-#metrics-ps-running.ok     { color: var(--brand-success, #10b981); }
+#metrics-ps-running.ok     { color: var(--brand-success, var(--brand-success)); }
 
 /* ═══════════════════ 仪表盘响应式适配 ═══════════════════ */
 

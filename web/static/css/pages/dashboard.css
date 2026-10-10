@@ -2,7 +2,7 @@
     min-height: 120px;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     padding: 0.4rem;
     overflow: hidden;
 }
@@ -12,7 +12,7 @@
     align-items: flex-end;
     justify-content: center;
     gap: 0.35rem;
-    padding: 0.15rem 0 0.25rem;
+    padding: 0.15rem 0 var(--space-xs);
 }
 
 .word-cloud-top3 .top3-item {
@@ -44,9 +44,9 @@
     box-shadow: var(--shadow-sm);
 }
 
-.word-cloud-top3 .top3-item:nth-child(1) .top3-rank { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
-.word-cloud-top3 .top3-item:nth-child(2) .top3-rank { background: linear-gradient(135deg, #9ca3af, #6b7280); }
-.word-cloud-top3 .top3-item:nth-child(3) .top3-rank { background: linear-gradient(135deg, #f59e6b, #d97706); }
+.word-cloud-top3 .top3-item:nth-child(1) .top3-rank { background: linear-gradient(135deg, var(--brand-warning), var(--brand-warning)); }
+.word-cloud-top3 .top3-item:nth-child(2) .top3-rank { background: linear-gradient(135deg, var(--gray-400), var(--gray-500)); }
+.word-cloud-top3 .top3-item:nth-child(3) .top3-rank { background: linear-gradient(135deg, #f59e6b, var(--brand-warning)); }
 
 .word-cloud-top3 .top3-word {
     padding: 0.35rem 0.55rem 0.2rem;
@@ -78,7 +78,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.18rem;
-    padding: 0.18rem 0.5rem;
+    padding: 0.18rem var(--space-sm);
     border-radius: 999px;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
@@ -259,7 +259,7 @@
 .recent-messages {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--space-xs);
 }
 
 .recent-message-item {
@@ -329,7 +329,7 @@
 .reliability-bar {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .reliability-item {
@@ -340,7 +340,7 @@
 }
 
 .reliability-icon {
-    font-size: 0.9rem;
+    font-size: var(--icon-md);
 }
 
 .reliability-label {
@@ -379,7 +379,7 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, transparent 0%, var(--brand-primary) 30%, #8b5cf6 65%, transparent 100%);
+    background: linear-gradient(90deg, transparent 0%, var(--brand-primary) 30%, var(--brand-purple) 65%, transparent 100%);
     opacity: 0.6;
     z-index: 3;
     pointer-events: none;
@@ -395,8 +395,8 @@
 .ov-head {
     align-items: center;
     padding-top: 0.6rem;
-    padding-bottom: 0.5rem;
-    gap: 0.75rem;
+    padding-bottom: var(--space-sm);
+    gap: var(--space-md);
 }
 .ov-head-main {
     display: flex;
@@ -414,12 +414,12 @@
     flex-shrink: 0;
     color: #fff;
     font-size: 0.85rem;
-    background: linear-gradient(135deg, var(--brand-primary) 0%, #6366f1 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
     box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35),
                 inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 [data-theme="dark"] .ov-head-badge {
-    background: linear-gradient(135deg, var(--brand-primary) 0%, #818cf8 100%);
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
     box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4),
                 inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
@@ -448,7 +448,7 @@
     gap: 0.32rem;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0 0.25rem;
+    padding: 0 var(--space-xs);
     /* 隐藏滚动条但保留滚动能力 */
     scrollbar-width: thin;
 }
@@ -461,7 +461,7 @@
 }
 .ov-head-status .ov-chip {
     flex-shrink: 0;
-    padding: 0.22rem 0.5rem;
+    padding: 0.22rem var(--space-sm);
     gap: 0.3rem;
 }
 .ov-head-status .ov-chip-ico {
@@ -511,7 +511,7 @@
     padding: clamp(0.1rem, 0.15rem, 0.2rem) clamp(0.85rem, 1.1rem, 1.25rem) clamp(0.4rem, 0.65rem, 0.8rem);
     display: flex;
     flex-direction: column;
-    gap: clamp(0.25rem, 0.4rem, 0.55rem);
+    gap: clamp(var(--space-xs), 0.4rem, 0.55rem);
 }
 /* 高度不足时禁止压缩卡片：flex 子项默认 flex-shrink:1，
    #page-dashboard 视口受限（height:100% + overflow:hidden + minmax(0,auto) 行高）
@@ -533,8 +533,8 @@
     display: grid;
     grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr);
     align-items: center;
-    gap: clamp(0.5rem, 1rem, 1.25rem);
-    padding: clamp(0.35rem, 0.55rem, 0.75rem) clamp(0.7rem, 1rem, 1.25rem);
+    gap: clamp(var(--space-sm), var(--space-lg), 1.25rem);
+    padding: clamp(0.35rem, 0.55rem, var(--space-md)) clamp(0.7rem, var(--space-lg), 1.25rem);
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid var(--border-light);
@@ -560,7 +560,7 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
+    background: linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-purple) 100%);
 }
 
 .ov-hero-main {
@@ -579,7 +579,7 @@
     color: var(--text-tertiary);
 }
 .ov-hero-label i {
-    font-size: 0.66rem;
+    font-size: var(--icon-sm);
     color: var(--brand-primary);
 }
 .ov-hero-value {
@@ -590,7 +590,7 @@
     line-height: 1.06;
     letter-spacing: -0.025em;
     font-variant-numeric: tabular-nums;
-    background: linear-gradient(120deg, var(--brand-primary) 0%, #6366f1 52%, #8b5cf6 100%);
+    background: linear-gradient(120deg, var(--brand-primary) 0%, var(--brand-secondary) 52%, var(--brand-purple) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -619,7 +619,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.12rem 0.5rem;
+    padding: 0.12rem var(--space-sm);
     font-size: clamp(0.6rem, 0.7rem, 0.78rem);
     font-weight: 700;
     letter-spacing: 0.01em;
@@ -628,7 +628,7 @@
     background: var(--brand-primary-light);
     font-variant-numeric: tabular-nums;
 }
-.ov-hero-delta i { font-size: 0.62rem; }
+.ov-hero-delta i { font-size: var(--icon-xs); }
 .ov-hero-delta.is-up { color: var(--brand-success); background: rgba(16, 185, 129, 0.1); }
 .ov-hero-delta.is-down { color: var(--brand-warning); background: rgba(245, 158, 11, 0.12); }
 .ov-hero-delta.is-flat { color: var(--text-tertiary); background: rgba(148, 163, 184, 0.12); }
@@ -693,7 +693,7 @@
     align-items: center;
     text-align: left;
     gap: clamp(0.35rem, 0.55rem, 0.65rem);
-    padding: clamp(0.3rem, 0.42rem, 0.55rem) clamp(0.5rem, 0.65rem, 0.8rem);
+    padding: clamp(0.3rem, 0.42rem, 0.55rem) clamp(var(--space-sm), 0.65rem, 0.8rem);
     min-width: 0;
     box-sizing: border-box;
     background: var(--bg-surface);
@@ -718,7 +718,7 @@
     right: auto;
     width: 2px;
     height: auto;
-    background: linear-gradient(180deg, var(--brand-primary) 0%, #8b5cf6 100%);
+    background: linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-purple) 100%);
     opacity: 0;
     transition: opacity 0.24s ease;
 }
@@ -781,13 +781,13 @@
         grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
     #panel-overview .stat-card {
-        padding: 0.5rem 0.65rem;
-        gap: 0.5rem;
+        padding: var(--space-sm) 0.65rem;
+        gap: var(--space-sm);
     }
     #panel-overview .stat-icon {
         width: 30px;
         height: 30px;
-        font-size: 0.8rem;
+        font-size: var(--icon-md);
     }
     #panel-overview .stat-value {
         font-size: 1.1rem;
@@ -894,7 +894,7 @@
     .ov-hero {
         grid-template-columns: 1fr;
         gap: 0.7rem;
-        padding: 0.85rem 1rem;
+        padding: 0.85rem var(--space-lg);
     }
     .ov-hero-value { font-size: 1.7rem; min-height: 1.6rem; }
     .ov-hero-chart { height: 50px; }
@@ -922,7 +922,7 @@
 }
 
 #page-dashboard.active #realtime-log-stream {
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem var(--space-sm);
     overflow: auto;
     max-height: 100%;
 }

@@ -135,10 +135,15 @@ jobs:
           exit 1
         fi
 
-    # 三层护栏，缺一不可：
+    # 四层护栏，缺一不可：
+    #   lint:data-args — 禁止用字符串拼接生成 data-* 属性（minify 会错绑变量，
+    #                   曾致草稿/死信过滤器点击后请求 status=undefined → 列表清空）
     #   smoke:bundle  — 产物里有该有的符号（静态）
     #   smoke:runtime — jsdom 真跑一遍 HTML+bundle，抓加载期崩溃（命名空间残缺 / TDZ）
     #   test:frontend — 真实 DOM 渲染断言
+    - name: Frontend guard (data-args concatenation)
+      run: npm run lint:data-args
+
     - name: Frontend smoke (bundle symbols)
       run: npm run smoke:bundle
 

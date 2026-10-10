@@ -5,13 +5,13 @@
     z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .toast {
     background: var(--bg-surface);
     border-radius: var(--radius-md);
-    padding: 0.75rem 1rem;
+    padding: var(--space-md) var(--space-lg);
     box-shadow: var(--shadow-md);
     border-left: 3px solid var(--brand-primary);
     min-width: 280px;
@@ -28,7 +28,7 @@
 .toast-info { border-left-color: var(--brand-primary); }
 
 .toast-icon {
-    font-size: 1rem;
+    font-size: var(--icon-lg);
     flex-shrink: 0;
     margin-top: 2px;
 }

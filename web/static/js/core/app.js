@@ -1001,21 +1001,33 @@ window.doLogout = doLogout;
 window.showLoginOverlay = showLoginOverlay;
 
 // ===== 图片灯箱：当前页弹出查看大图（替代 window.open 跳转新窗口）=====
+let _lbEscBound = false;
 function openImageLightbox(src) {
     const modal = document.getElementById('image-lightbox');
     const img = document.getElementById('image-lightbox-img');
+    if (!modal || !img) return;
     img.src = src;
-    document.getElementById('image-lightbox-open').href = src;
-    document.getElementById('image-lightbox-download').href = src;
+    const openEl = document.getElementById('image-lightbox-open');
+    const dlEl = document.getElementById('image-lightbox-download');
+    if (openEl) openEl.href = src;
+    if (dlEl) dlEl.href = src;
     modal.classList.add('active');
-    document.addEventListener('keydown', _lightboxEscHandler);
+    // 防重复绑定：同一会话多次打开灯箱只挂一个 Esc 监听（closeImageLightbox 负责摘除）
+    if (!_lbEscBound) {
+        document.addEventListener('keydown', _lightboxEscHandler);
+        _lbEscBound = true;
+    }
 }
 
 function closeImageLightbox() {
     const modal = document.getElementById('image-lightbox');
-    modal.classList.remove('active');
-    document.getElementById('image-lightbox-img').src = '';
-    document.removeEventListener('keydown', _lightboxEscHandler);
+    if (modal) modal.classList.remove('active');
+    const img = document.getElementById('image-lightbox-img');
+    if (img) img.src = '';
+    if (_lbEscBound) {
+        document.removeEventListener('keydown', _lightboxEscHandler);
+        _lbEscBound = false;
+    }
 }
 
 function _lightboxEscHandler(e) {
@@ -1153,11 +1165,17 @@ window.debouncedLoadGateRules = debounce(loadGateRules, 300);
                 if (!lastTrigger) lastTrigger = document.activeElement;
                 const f = m.querySelector('input, textarea, select, button:not(.modal-close)');
                 if (f) setTimeout(() => { try { f.focus(); } catch (e) {} }, 30);
+                // 弹窗开启时锁定背景滚动，避免遮罩后页面跟随滚轮滚动
+                document.body.classList.add('modal-open');
             } else {
                 if (lastTrigger && document.contains(lastTrigger)) {
                     try { lastTrigger.focus(); } catch (e) {}
                 }
                 lastTrigger = null;
+                // 仅当没有任何其它模态框仍激活时才解除背景滚动锁
+                if (!modals.some(x => x.classList.contains('active'))) {
+                    document.body.classList.remove('modal-open');
+                }
             }
         });
     });

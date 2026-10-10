@@ -234,7 +234,11 @@ async function loadDraftsPage() {
     // Build tab bar → render into dedicated toolbar container
     var tabsHtml = '';
     ['all', 'pending', 'approved', 'discarded'].forEach(function (s) {
-        tabsHtml += '<button class="draft-tab' + (_draftStatus === s ? ' active' : '') + '" data-status="' + s + '" data-action="_draftSwitchStatus" data-args=\'["\' + s + \'"]\'>' + DRAFT_STATUS_LABELS[s] + '</button>';
+        // 模板字符串：变量在 ${} 内作用域绑定，避免构建 minify 重命名回调参数时漏改拼接中的引用
+        // （曾使 data-args 变成 '["undefined"]'，点击过滤器请求 status=undefined → 后端返回空列表）
+        // 模板字符串：变量在 ${} 内作用域绑定，避免构建 minify 重命名回调参数时漏改拼接中的引用
+        // （曾使 data-args 变成 '["undefined"]'，点击过滤器请求 status=undefined → 后端返回空列表）
+        tabsHtml += `<button class="draft-tab${_draftStatus === s ? ' active' : ''}" data-status="${s}" data-action="_draftSwitchStatus" data-args='["${s}"]'>${DRAFT_STATUS_LABELS[s]}</button>`;
     });
     var tabsContainer = document.getElementById('draft-tabs-container');
     if (tabsContainer) tabsContainer.innerHTML = tabsHtml;
@@ -391,6 +395,20 @@ window._draftDiscard = _draftDiscard;
 window._draftShowEditModal = _draftShowEditModal;
 window.closeDraftEditModal = closeDraftEditModal; // 名字须以 close 开头，见函数上方注释
 window._draftSubmitEdit = _draftSubmitEdit;
+
+// 搜索框（模板 data-action="debouncedLoadDraftsPage"）的处理器：
+// 输入防抖后重置到第一页并重新加载（_draftFilterItems 会按搜索词过滤）。
+// 此前缺失此处理器，导致草稿搜索完全失效；且搜索框一旦残留输入值，
+// 点击过滤器 tab 触发 loadDraftsPage 时会用残留值过滤掉全部数据（表现为“点过滤器就没数据”）。
+let _draftSearchTimer = null;
+function debouncedLoadDraftsPage() {
+    if (_draftSearchTimer) clearTimeout(_draftSearchTimer);
+    _draftSearchTimer = setTimeout(function () {
+        _draftPage = 1;
+        loadDraftsPage();
+    }, 300);
+}
+window.debouncedLoadDraftsPage = debouncedLoadDraftsPage;
 
 // ===================== 批量操作 =====================
 

@@ -10,7 +10,7 @@
 
 .data-table th {
     text-align: left;
-    padding: 0.5rem 0.5rem;
+    padding: var(--space-sm) var(--space-sm);
     font-weight: 600;
     font-size: 0.72rem;
     color: var(--text-tertiary);
@@ -21,7 +21,7 @@
 }
 
 .data-table td {
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem var(--space-sm);
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border-light);
     vertical-align: middle;
@@ -50,7 +50,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem;
+    padding: var(--space-sm);
     border-top: 1px solid var(--border-light);
 }
 
@@ -62,7 +62,7 @@
 .table-pagination-controls {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
 }
 
 .pagination-btn {

@@ -47,8 +47,13 @@ async function loadDeadLettersPage() {
 
     container.innerHTML = '<div class="dlq-empty"><i class="fa-solid fa-spinner fa-spin" style="color:#94a3b8;"></i><p>加载中\u2026</p></div>';
 
-    var tabs = ['pending', 'replayed', 'discarded'].map(function(s) {
-        return '<button class="dlq-tab' + (_dlqStatus === s ? ' active' : '') + '" data-status="' + s + '" data-action="_dlqSwitchStatus" data-args=\'["\' + s + \'"]\'>' + _dlqStatusLabel(s) + '</button>';
+    // 用模板字符串生成 tab：变量在 ${} 内作用域绑定。
+    // 不可写成 '<button ... data-args=\'["' + s + '"]\'>' 这种字符串拼接——
+    // 构建时 esbuild minify 会重命名回调参数（如 s→M）却漏改拼接里的 s，
+    // 使其指向外层同名的 allBtn 变量（var 顺序求值时为 undefined），
+    // 生成 data-args='["undefined"]'，点击后请求 status=undefined → 后端返回空列表。
+    var tabs = ['pending', 'replayed', 'discarded'].map(function (st) {
+        return `<button class="dlq-tab${_dlqStatus === st ? ' active' : ''}" data-status="${st}" data-action="_dlqSwitchStatus" data-args='["${st}"]'>${_dlqStatusLabel(st)}</button>`;
     }).join('');
     var allBtn = '<button class="dlq-tab' + (_dlqStatus === 'all' ? ' active' : '') + '" data-status="all" data-action="_dlqSwitchStatus" data-args=\'["all"]\'>全部</button>';
 
@@ -298,3 +303,14 @@ async function _dlqBatchDiscard() {
     loadDeadLettersPage();
 }
 
+
+// ── 搜索（模板 #dlq-search 的 data-action="debouncedLoadDeadLettersPage"）──
+// 该 data-action 原先无对应处理器，导致搜索框完全失效（死按钮）。
+let _dlqSearchTimer = null;
+function debouncedLoadDeadLettersPage() {
+    if (_dlqSearchTimer) clearTimeout(_dlqSearchTimer);
+    _dlqSearchTimer = setTimeout(function () {
+        _dlqPage = 1;
+        loadDeadLettersPage();
+    }, 300);
+}

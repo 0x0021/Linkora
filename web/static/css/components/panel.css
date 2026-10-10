@@ -38,20 +38,20 @@
 }
 
 .panel-footer {
-    padding: 0.5rem 0.75rem;
+    padding: var(--space-sm) var(--space-md);
     border-top: 1px solid var(--border-light);
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .panel-toolbar {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding-bottom: 0.5rem;
-    margin-bottom: 0.5rem;
+    gap: var(--space-sm);
+    padding-bottom: var(--space-sm);
+    margin-bottom: var(--space-sm);
     border-bottom: 1px solid var(--border-light);
 }
 
@@ -59,7 +59,7 @@
 .panel-toolbar-right {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .panel-toolbar-right {
@@ -69,7 +69,7 @@
 .panel-stats {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-lg);
 }
 
 .panel-stat {

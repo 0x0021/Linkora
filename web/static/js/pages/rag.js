@@ -714,11 +714,11 @@ async function selectDingtalkImportDoc(docId, el) {
                 `<div>${simpleMarkdown(content.substring(0, 500))}${content.length > 500 ? '...' : ''}</div>`;
             document.getElementById('ddoc-import-confirm-btn').disabled = false;
         } else {
-            previewEl.innerHTML = '<span style="color:var(--danger)">无法加载文档内容，请先同步</span>';
+            previewEl.innerHTML = '<span style="color:var(--brand-danger)">无法加载文档内容，请先同步</span>';
             document.getElementById('ddoc-import-confirm-btn').disabled = true;
         }
     } catch (e) {
-        previewEl.innerHTML = '<span style="color:var(--danger)">加载失败</span>';
+        previewEl.innerHTML = '<span style="color:var(--brand-danger)">加载失败</span>';
     }
 }
 
@@ -766,10 +766,10 @@ async function syncAndSelectDingtalkDoc(docId, title) {
                 if (preview) selectDingtalkImportDoc(synced.doc_id, preview);
             }
         } else {
-            previewEl.innerHTML = '<span style="color:var(--danger)">' + (data?.message || '同步失败') + '</span>';
+            previewEl.innerHTML = '<span style="color:var(--brand-danger)">' + (data?.message || '同步失败') + '</span>';
         }
     } catch (e) {
-        previewEl.innerHTML = '<span style="color:var(--danger)">同步失败: ' + escapeHtml(e.message) + '</span>';
+        previewEl.innerHTML = '<span style="color:var(--brand-danger)">同步失败: ' + escapeHtml(e.message) + '</span>';
     }
 }
 

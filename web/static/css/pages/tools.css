@@ -21,11 +21,11 @@
 }
 
 .tools-summary-item.warn strong {
-    color: #ef4444;
+    color: var(--brand-danger);
 }
 
 .tools-summary-item.ok strong {
-    color: #22c55e;
+    color: var(--brand-success);
 }
 
 /* ── 过滤栏 ── */
@@ -52,7 +52,7 @@
     display: grid;
     grid-template-columns: 1.4fr 1.2fr 2.2fr 1.4fr 80px 110px;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--space-md);
     padding: 0.625rem 0.875rem;
     border-bottom: 1px solid var(--border-light);
     transition: background 0.15s;
@@ -117,7 +117,7 @@
 .tool-cats {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--space-xs);
 }
 
 .tool-source {
@@ -137,11 +137,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .tool-empty-placeholder i {
-    font-size: 2rem;
+    font-size: var(--icon-3xl);
     opacity: 0.5;
 }
 
@@ -177,41 +177,41 @@
     padding: 0.125rem 0.4375rem;
     border-radius: var(--radius-sm);
     background: rgba(139, 92, 246, 0.1);
-    color: #7c3aed;
+    color: var(--brand-purple);
     white-space: nowrap;
 }
 
 /* ── 状态徽章 ── */
 .badge-success {
     display: inline-block;
-    padding: 0.1875rem 0.5rem;
+    padding: 0.1875rem var(--space-sm);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     background: #dcfce7;
-    color: #166534;
+    color: var(--brand-success);
 }
 
 .badge-warning {
     display: inline-block;
-    padding: 0.1875rem 0.5rem;
+    padding: 0.1875rem var(--space-sm);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     background: #fef3c7;
-    color: #92400e;
+    color: var(--brand-warning);
 }
 
 .badge-danger {
     display: inline-block;
-    padding: 0.1875rem 0.5rem;
+    padding: 0.1875rem var(--space-sm);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     background: #fee2e2;
-    color: #991b1b;
+    color: var(--brand-danger-hover);
 }
 
 .badge-secondary {
     display: inline-block;
-    padding: 0.1875rem 0.5rem;
+    padding: 0.1875rem var(--space-sm);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     background: var(--bg-subtle);

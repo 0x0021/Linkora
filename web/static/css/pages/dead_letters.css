@@ -4,7 +4,7 @@
 
 .dlq-header-icon {
     background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(234, 88, 12, 0.08));
-    color: #dc2626;
+    color: var(--brand-danger);
     border-radius: var(--radius-md);
 }
 
@@ -101,24 +101,24 @@
 
 .dlq-status-pending {
     background: linear-gradient(135deg, #fef3c7, #fde68a);
-    color: #92400e;
+    color: var(--brand-warning);
     font-weight: 600;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
     padding: 0.1875rem 0.6875rem;
     font-size: 0.72rem;
 }
 
 .dlq-status-replayed {
     background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-    color: #065f46;
+    color: var(--brand-success);
     font-weight: 600;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
     padding: 0.1875rem 0.6875rem;
     font-size: 0.72rem;
 }
@@ -130,7 +130,7 @@
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
     padding: 0.1875rem 0.6875rem;
     font-size: 0.72rem;
 }
@@ -138,7 +138,7 @@
 .dlq-stage-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--space-xs);
     padding: 0.1875rem 0.625rem;
     border-radius: var(--radius-sm);
     font-size: 0.72rem;
@@ -150,25 +150,25 @@
 
 .dlq-stage-badge.stage-error {
     background: rgba(220, 38, 38, 0.06);
-    color: #b91c1c;
+    color: var(--brand-danger-hover);
     border-color: rgba(220, 38, 38, 0.1);
 }
 
 .dlq-stage-badge.stage-warn {
     background: rgba(217, 119, 6, 0.06);
-    color: #b45309;
+    color: var(--brand-warning);
     border-color: rgba(217, 119, 6, 0.1);
 }
 
 .dlq-stage-badge.stage-ok {
     background: rgba(22, 163, 74, 0.06);
-    color: #15803d;
+    color: var(--brand-success);
     border-color: rgba(22, 163, 74, 0.1);
 }
 
 .dlq-error-cell {
     font-size: 0.72rem;
-    color: #dc2626;
+    color: var(--brand-danger);
     background: rgba(220, 38, 38, 0.03);
     border-radius: var(--radius-sm);
     padding: 0.375rem 0.625rem !important;
@@ -177,7 +177,7 @@
 }
 
 .dlq-id-cell {
-    font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 0.72rem;
     color: var(--text-tertiary);
     font-weight: 550;
@@ -192,7 +192,7 @@
 }
 
 .dlq-actions .btn-replay {
-    padding: 0.25rem 0.75rem;
+    padding: var(--space-xs) var(--space-md);
     font-size: 0.72rem;
     border-radius: var(--radius-sm);
     background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
@@ -209,7 +209,7 @@
 }
 
 .dlq-actions .btn-discard {
-    padding: 0.25rem 0.625rem;
+    padding: var(--space-xs) 0.625rem;
     font-size: 0.72rem;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -220,19 +220,19 @@
 }
 
 .dlq-actions .btn-discard:hover {
-    border-color: #ef4444;
-    color: #ef4444;
+    border-color: var(--brand-danger);
+    color: var(--brand-danger);
     background: rgba(239, 68, 68, 0.04);
 }
 
 .dlq-empty {
     text-align: center;
-    padding: 4rem 1rem;
+    padding: 4rem var(--space-lg);
 }
 
 .dlq-empty i {
-    font-size: 3.25rem;
-    color: #16a34a;
+    font-size: var(--icon-3xl);
+    color: var(--brand-success);
     margin-bottom: 0.875rem;
     display: block;
     opacity: 0.85;
@@ -241,11 +241,11 @@
 .dlq-empty p {
     color: var(--text-tertiary);
     font-size: 0.90625rem;
-    margin-top: 0.5rem;
+    margin-top: var(--space-sm);
 }
 
 .dlq-empty-row td {
-    padding: 3rem 1rem !important;
+    padding: 3rem var(--space-lg) !important;
     text-align: center;
     border-bottom: none;
 }
@@ -254,11 +254,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
 }
 
 .dlq-table-empty i {
-    font-size: 2rem;
+    font-size: var(--icon-3xl);
     opacity: 0.7;
 }
 

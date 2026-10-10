@@ -3,7 +3,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    padding: 0.5rem 1rem;
+    padding: var(--space-sm) var(--space-lg);
     border-radius: var(--radius-sm);
     font-size: 0.8125rem;
     font-weight: 500;
@@ -56,7 +56,7 @@
 }
 
 .btn-sm {
-    padding: 0.3125rem 0.75rem;
+    padding: 0.3125rem var(--space-md);
     font-size: 0.75rem;
 }
 
@@ -71,7 +71,7 @@
 }
 
 .btn-icon {
-    padding: 0.5rem;
+    padding: var(--space-sm);
     border-radius: var(--radius-sm);
     color: var(--text-tertiary);
     background: transparent;

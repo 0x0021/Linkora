@@ -28,7 +28,7 @@
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
     font-size: 12.5px;
     line-height: 1.55;
-    background: var(--bg-tertiary, #f6f8fa);
+    background: var(--bg-tertiary, var(--gray-50));
     border-radius: 8px;
     border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
 }
@@ -58,7 +58,7 @@
 
 #logs-stream .rt-log-line.rt-audit {
     background: rgba(45, 164, 78, 0.10);
-    border-left-color: #2ea043;
+    border-left-color: var(--brand-success);
 }
 
 [data-theme="dark"] #logs-stream {

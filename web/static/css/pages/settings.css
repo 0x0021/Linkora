@@ -6,7 +6,7 @@
 .settings-layout {
     display: flex;
     align-items: flex-start;
-    gap: 1.5rem;
+    gap: var(--space-xl);
     margin-top: 1.25rem;
     padding-bottom: 2.5rem;
 }
@@ -22,7 +22,7 @@
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    padding: 0.85rem 0.75rem;
+    padding: 0.85rem var(--space-md);
     box-shadow: var(--shadow-sm);
     scrollbar-width: thin;
 }
@@ -30,9 +30,9 @@
 .settings-nav-search {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.65rem;
-    margin-bottom: 0.75rem;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0.65rem;
+    margin-bottom: var(--space-md);
     background: var(--bg-subtle);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
@@ -44,7 +44,7 @@
     box-shadow: 0 0 0 3px var(--brand-primary-light);
 }
 .settings-nav-search i {
-    font-size: 0.8rem;
+    font-size: var(--icon-md);
     flex-shrink: 0;
 }
 .settings-nav-search-input {
@@ -82,7 +82,7 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0.5rem 0.65rem;
+    padding: var(--space-sm) 0.65rem;
     border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-size: 0.875rem;
@@ -94,7 +94,7 @@
 .settings-nav-item i {
     width: 18px;
     text-align: center;
-    font-size: 0.82rem;
+    font-size: var(--icon-md);
     opacity: 0.8;
     flex-shrink: 0;
 }
@@ -112,7 +112,7 @@
     opacity: 1;
 }
 .settings-nav-empty {
-    padding: 1rem 0.65rem;
+    padding: var(--space-lg) 0.65rem;
     font-size: 0.8rem;
     color: var(--text-tertiary);
     text-align: center;
@@ -212,7 +212,7 @@
 @media (max-width: 980px) {
     .settings-layout {
         flex-direction: column;
-        gap: 1rem;
+        gap: var(--space-lg);
     }
     .settings-nav {
         position: static;
@@ -228,7 +228,7 @@
         flex-wrap: nowrap;
         overflow-x: auto;
         gap: 0.4rem;
-        padding-bottom: 0.25rem;
+        padding-bottom: var(--space-xs);
         scrollbar-width: none;
     }
     .settings-nav-list::-webkit-scrollbar { display: none; }
@@ -260,13 +260,13 @@
 .model-pricing-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     margin-bottom: 0.6rem;
 }
 .model-price-row {
     display: grid;
     grid-template-columns: 1.4fr 1fr 1fr auto;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     align-items: center;
 }
 .model-price-row .form-control {

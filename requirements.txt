@@ -4,19 +4,19 @@
 
 # ---- 配置 / 环境 ----
 PyYAML==6.0.3
-pydantic==2.13.5
+pydantic==2.14.0
 python-dotenv==1.2.4
-platformdirs==4.12.2
+platformdirs==4.12.4
 
 # ---- LLM / 嵌入模型 ----
 openai==2.54.0
 numpy==2.5.3
 sentence-transformers==5.7.0
 huggingface_hub==1.33.0
-tokenizers==0.23.2
+tokenizers==0.23.3
 
 # ---- Web 服务 ----
-fastapi==0.142.2
+fastapi==0.143.0
 uvicorn==0.54.0
 pyjwt==2.15.1
 jinja2==3.1.6
@@ -38,7 +38,7 @@ pdfplumber==0.11.10
 # pypdfium2：扫描版 PDF 的页面渲染（→ RapidOCR）。替代原 PyMuPDF（AGPL-3.0，
 # 对外提供网络服务会触发第 13 条源码提供义务）。它同时是 pdfplumber 的传递
 # 依赖，此处显式钉版，避免上游更换渲染引擎后 src/tools/parse_document.py 静默失效。
-pypdfium2==5.13.0
+pypdfium2==5.14.0
 python-pptx==1.0.2
 python-docx==1.2.0
 pytesseract==0.3.13

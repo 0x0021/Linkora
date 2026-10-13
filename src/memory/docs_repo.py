@@ -26,24 +26,29 @@ class DocsRepo:
                             space_id: str = "", parent_id: str = "",
                             url: str = "", content: str = "",
                             last_modified: str = "") -> None:
-        cur = self.store.conn.cursor()
-        now = datetime.now().isoformat()
-        cur.execute("SELECT id FROM dingtalk_docs WHERE doc_id = ?", (doc_id,))
-        exists = cur.fetchone()
-        if exists:
-            cur.execute(
-                """UPDATE dingtalk_docs SET title=?, doc_type=?, space_id=?, parent_id=?,
-                   url=?, content=?, last_modified=?, synced_at=? WHERE doc_id=?""",
-                (title, doc_type, space_id, parent_id, url, content, last_modified, now, doc_id),
-            )
-        else:
-            cur.execute(
-                """INSERT INTO dingtalk_docs
-                   (doc_id, title, doc_type, space_id, parent_id, url, content, last_modified, synced_at, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (doc_id, title, doc_type, space_id, parent_id, url, content, last_modified, now, now),
-            )
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                now = datetime.now().isoformat()
+                cur.execute("SELECT id FROM dingtalk_docs WHERE doc_id = ?", (doc_id,))
+                exists = cur.fetchone()
+                if exists:
+                    cur.execute(
+                        """UPDATE dingtalk_docs SET title=?, doc_type=?, space_id=?, parent_id=?,
+                           url=?, content=?, last_modified=?, synced_at=? WHERE doc_id=?""",
+                        (title, doc_type, space_id, parent_id, url, content, last_modified, now, doc_id),
+                    )
+                else:
+                    cur.execute(
+                        """INSERT INTO dingtalk_docs
+                           (doc_id, title, doc_type, space_id, parent_id, url, content, last_modified, synced_at, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (doc_id, title, doc_type, space_id, parent_id, url, content, last_modified, now, now),
+                    )
+                conn.commit()
+            finally:
+                cur.close()
+        self.store.write_main_with_retry(_do)
 
     def list_dingtalk_docs(self, keyword: str = "", limit: int = 100) -> list[dict]:
         cur = self.store.conn.cursor()
@@ -69,9 +74,14 @@ class DocsRepo:
         return dict(row) if row else None
 
     def delete_dingtalk_doc(self, doc_id: str) -> None:
-        cur = self.store.conn.cursor()
-        cur.execute("DELETE FROM dingtalk_docs WHERE doc_id = ?", (doc_id,))
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute("DELETE FROM dingtalk_docs WHERE doc_id = ?", (doc_id,))
+                conn.commit()
+            finally:
+                cur.close()
+        self.store.write_main_with_retry(_do)
 
     def update_dingtalk_doc(self, doc_id: str, **kwargs) -> None:
         """更新钉钉文档字段（title, content 等）。"""
@@ -86,18 +96,28 @@ class DocsRepo:
         if not filtered:
             return
         filtered["synced_at"] = datetime.now().isoformat()
-        cur = self.store.conn.cursor()
-        fields = ", ".join(f"{k} = ?" for k in filtered.keys())
-        values = list(filtered.values()) + [doc_id]
-        cur.execute(f"UPDATE dingtalk_docs SET {fields} WHERE doc_id = ?", values)
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                fields = ", ".join(f"{k} = ?" for k in filtered.keys())
+                values = list(filtered.values()) + [doc_id]
+                cur.execute(f"UPDATE dingtalk_docs SET {fields} WHERE doc_id = ?", values)
+                conn.commit()
+            finally:
+                cur.close()
+        self.store.write_main_with_retry(_do)
 
     def set_doc_auto_sync(self, doc_id: str, auto_sync: bool) -> bool:
         """设置钉钉文档的自动同步开关。"""
-        cur = self.store.conn.cursor()
-        cur.execute(
-            "UPDATE dingtalk_docs SET auto_sync = ? WHERE doc_id = ?",
-            (1 if auto_sync else 0, doc_id),
-        )
-        self.store.conn.commit()
-        return cur.rowcount > 0
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE dingtalk_docs SET auto_sync = ? WHERE doc_id = ?",
+                    (1 if auto_sync else 0, doc_id),
+                )
+                conn.commit()
+                return cur.rowcount > 0
+            finally:
+                cur.close()
+        return self.store.write_main_with_retry(_do)

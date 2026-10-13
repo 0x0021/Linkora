@@ -290,9 +290,11 @@ class MemoryRepo:
         }
 
     def delete_memory(self, mem_id: int) -> None:
-        cur = self.store.conn.cursor()
-        cur.execute("DELETE FROM memories WHERE id = ?", (mem_id,))
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute("DELETE FROM memories WHERE id = ?", (mem_id,))
+            conn.commit()
+        self.store.write_main_with_retry(_do)
 
     def update_memory(self, mem_id: int, content: str | None = None,
                       scope: str | None = None) -> None:
@@ -300,12 +302,14 @@ class MemoryRepo:
 
         scope 仅接受 'public' / 'personal'，其他取值忽略（不写库）。
         """
-        cur = self.store.conn.cursor()
-        if content is not None:
-            cur.execute("UPDATE memories SET content = ? WHERE id = ?", (content, mem_id))
-        if scope in ("public", "personal"):
-            cur.execute("UPDATE memories SET scope = ? WHERE id = ?", (scope, mem_id))
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            if content is not None:
+                cur.execute("UPDATE memories SET content = ? WHERE id = ?", (content, mem_id))
+            if scope in ("public", "personal"):
+                cur.execute("UPDATE memories SET scope = ? WHERE id = ?", (scope, mem_id))
+            conn.commit()
+        self.store.write_main_with_retry(_do)
 
     def count_memories(self) -> int:
         """记忆总条数（供状态面板概览）。"""
@@ -360,16 +364,18 @@ class MemoryRepo:
         scope: 'personal'（默认，点对点个人记忆）或 'public'（公共记忆）。
         历史数据 scope 为空时按 'personal' 处理，保持原有 1对1 行为不变。
         """
-        cur = self.store.conn.cursor()
         emb_str = json.dumps(embedding) if embedding else None
-        cur.execute(
-            """INSERT INTO memories (key, content, source, chat_id, sender_id, sender_name, embedding, created_at, scope)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (key, content, source, chat_id, sender_id, sender_name, emb_str, datetime.now().isoformat(), scope),
-        )
-        self.store.conn.commit()
-        # 插入后 lastrowid 必然存在（自增主键）
-        memory_id = cast(int, cur.lastrowid)
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO memories (key, content, source, chat_id, sender_id, sender_name, embedding, created_at, scope)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (key, content, source, chat_id, sender_id, sender_name, emb_str, datetime.now().isoformat(), scope),
+            )
+            conn.commit()
+            # 插入后 lastrowid 必然存在（自增主键）
+            return cast(int, cur.lastrowid)
+        memory_id = self.store.write_main_with_retry(_do)
 
         # 注意：记忆向量【不】写入共享的 faiss 索引（_vector_index）。
         # 该 faiss 索引专供知识库(kb_chunks)使用，其 id 空间是 kb_chunks.id；
@@ -495,13 +501,15 @@ class MemoryRepo:
     def add_pending_fact(self, *, scope: str, group_key: str, content: str,
                          sender_name: str = "", chat_id: str = "") -> None:
         """把一条待整合事实写入 memory_pending 缓冲（持久化，重启不丢）。"""
-        cur = self.store.conn.cursor()
-        cur.execute(
-            "INSERT INTO memory_pending (scope, group_key, content, sender_name, chat_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (scope, group_key, content, sender_name, chat_id, datetime.now().isoformat()),
-        )
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO memory_pending (scope, group_key, content, sender_name, chat_id, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (scope, group_key, content, sender_name, chat_id, datetime.now().isoformat()),
+            )
+            conn.commit()
+        self.store.write_main_with_retry(_do)
 
     def pending_fact_exists(self, *, scope: str, group_key: str, content: str) -> bool:
         """判断某组是否已有完全相同内容的事实（pending 或已整合的摘要），用于去重。"""
@@ -537,14 +545,16 @@ class MemoryRepo:
 
     def delete_pending_for(self, scope: str, group_key: str) -> int:
         """删除某组已被整合的 pending 事实（返回删除条数）。"""
-        cur = self.store.conn.cursor()
-        cur.execute(
-            "DELETE FROM memory_pending WHERE scope = ? AND group_key = ?",
-            (scope, group_key),
-        )
-        n = cur.rowcount
-        self.store.conn.commit()
-        return int(n)
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM memory_pending WHERE scope = ? AND group_key = ?",
+                (scope, group_key),
+            )
+            n = cur.rowcount
+            conn.commit()
+            return int(n)
+        return self.store.write_main_with_retry(_do)
 
     def count_pending(self) -> int:
         cur = self.store.conn.cursor()
@@ -557,27 +567,28 @@ class MemoryRepo:
         摘要行若无 embedding，向量召回(recall_memory)与公共记忆自动注入均无法命中它；
         故在汇总调度器与启动期回填，保证「检索」可用。返回补算条数。
         """
-        cur = self.store.conn.cursor()
-        cur.execute(
+        rows = self.store.conn.execute(
             "SELECT id, content FROM memories WHERE kind = 'summary' "
             "AND (embedding IS NULL OR embedding = '')"
-        )
-        rows = cur.fetchall()
-        done = 0
-        for r in rows:
-            try:
-                emb = embedding_client.embed(str(r["content"]))
-            except Exception as e:  # 防御：单条失败不影响其他
-                logger.warning("[记忆回填] embedding 失败 id=%s: %s", r["id"], e)
-                continue
-            if not emb:
-                continue
-            cur.execute("UPDATE memories SET embedding = ? WHERE id = ?",
-                        (json.dumps(emb), r["id"]))
-            done += 1
-        if done:
-            self.store.conn.commit()
-        return done
+        ).fetchall()
+        def _do(conn):
+            cur = conn.cursor()
+            updated = 0
+            for r in rows:
+                try:
+                    emb = embedding_client.embed(str(r["content"]))
+                except Exception as e:  # 防御：单条失败不影响其他
+                    logger.warning("[记忆回填] embedding 失败 id=%s: %s", r["id"], e)
+                    continue
+                if not emb:
+                    continue
+                cur.execute("UPDATE memories SET embedding = ? WHERE id = ?",
+                            (json.dumps(emb), r["id"]))
+                updated += 1
+            if updated:
+                conn.commit()
+            return updated
+        return self.store.write_main_with_retry(_do)
 
     # ============ 风格 / 人设画像（Feature B） ============
 

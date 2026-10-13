@@ -25,15 +25,17 @@ class FeedbackRepo:
     def save_feedback(self, message_id: str = "", conversation_id: str = "",
                       sender_id: str = "", rating: int = 0,
                       correction: str = "", note: str = "") -> int:
-        cur = self.store.conn.cursor()
-        cur.execute(
-            """INSERT INTO feedback (message_id, conversation_id, sender_id, rating, correction, note, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (message_id, conversation_id, sender_id, rating, correction or "", note or "", datetime.now().isoformat()),
-        )
-        self.store.conn.commit()
-        # 插入后 lastrowid 必然存在（自增主键）
-        return cast(int, cur.lastrowid)
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO feedback (message_id, conversation_id, sender_id, rating, correction, note, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (message_id, conversation_id, sender_id, rating, correction or "", note or "", datetime.now().isoformat()),
+            )
+            conn.commit()
+            # 插入后 lastrowid 必然存在（自增主键）
+            return cast(int, cur.lastrowid)
+        return self.store.write_main_with_retry(_do)
 
     def cleanup_old_feedback(self, retention_days: int) -> int:
         """删除超过保留期的用户反馈（feedback），返回删除条数。
@@ -43,16 +45,19 @@ class FeedbackRepo:
         """
         try:
             cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
-            cur = self.store.conn.cursor()
-            cur.execute(
-                "DELETE FROM feedback WHERE created_at < ?",
-                (cutoff,),
-            )
-            deleted = cur.rowcount
-            self.store.conn.commit()
-            if deleted:
-                logger.info("[反馈清理] 已清理 %d 条超过 %d 天的旧反馈", deleted, retention_days)
-            return deleted
+
+            def _do(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM feedback WHERE created_at < ?",
+                    (cutoff,),
+                )
+                deleted = cur.rowcount
+                conn.commit()
+                if deleted:
+                    logger.info("[反馈清理] 已清理 %d 条超过 %d 天的旧反馈", deleted, retention_days)
+                return deleted
+            return self.store.write_main_with_retry(_do)
         except Exception as e:
             logger.warning("[反馈清理] 清理过期反馈失败: %s", e)
             return 0

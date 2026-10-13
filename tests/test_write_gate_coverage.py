@@ -40,6 +40,29 @@ REPO_FILES = (
     "src/memory/external_friend_repo.py",
 )
 
+# 【P1 2026-10-05 主库写闸门收口】主库 linkora.db 的全部写 repo 也必须过闸。
+# 此前的事故只给会话库加了 write_with_retry，主库 repo 直连 self.store.conn.commit()
+# 绕过闸门，同源缺陷在主库复现。现统一收口到 store.write_main_with_retry（与会话库
+# 同一把进程内全局闸门），用本组 AST 断言兜底，防止回归。
+MAIN_REPO_FILES = (
+    "src/memory/feedback_repo.py",
+    "src/memory/gate_rule_repo.py",
+    "src/memory/baseline_repo.py",
+    "src/memory/decisions_repo.py",
+    "src/memory/keyword_rule_repo.py",
+    "src/memory/docs_repo.py",
+    "src/memory/memory_repo.py",
+    "src/memory/memory_ops_repo.py",
+    "src/memory/draft_repo.py",
+    "src/memory/few_shot_repo.py",
+    "src/memory/tool_execution_repo.py",
+    "src/memory/routing_quality_repo.py",
+    "src/memory/kb_repo.py",
+    "src/memory/sqlite_store_index.py",
+    "src/memory/sqlite_store.py",
+    "src/tools/management.py",
+)
+
 WRITE_SQL = ("INSERT ", "UPDATE ", "DELETE ")
 
 
@@ -62,21 +85,24 @@ def _iter_write_methods(path: Path):
 def _is_gated(body: str) -> bool:
     """该写方法是否经过闸门。
 
-    四种合规写法都算过闸：
-      - ``self._write(_do_write)``         —— repo 的统一入口（首选）
-      - ``self._write_result(_do_write)`` —— 同上，但返回写入结果
-      - ``self.store.write_with_retry(...)`` —— 直接调 store 层
-      - ``with self.store._lock:``         —— 复合锁已内嵌全局闸门
+    五种合规写法都算过闸：
+      - ``self._write(_do_write)``           —— repo 的统一入口（首选）
+      - ``self._write_result(_do_write)``     —— 同上，但返回写入结果
+      - ``self.store.write_with_retry(...)``  —— 会话库直接调 store 层
+      - ``self.store.write_main_with_retry`` / ``self.write_main_with_retry``
+        —— 主库直接调 store 层（对称收口，P1 主库写闸门）
+      - ``with self.store._lock:``            —— 复合锁已内嵌全局闸门
     """
     return (
         "self._write(" in body
         or "self._write_result(" in body
-        or "self.store.write_with_retry" in body
+        or "write_with_retry" in body
+        or "write_main_with_retry" in body
         or "store._lock" in body
     )
 
 
-@pytest.mark.parametrize("rel", REPO_FILES)
+@pytest.mark.parametrize("rel", REPO_FILES + MAIN_REPO_FILES)
 def test_all_write_methods_are_gated(rel):
     """结构性断言：所有写方法都必须经过闸门。"""
     path = ROOT / rel

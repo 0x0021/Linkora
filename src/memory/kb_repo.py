@@ -120,27 +120,34 @@ class KbRepo:
                         metadata: dict | None = None,
                         content: str = "",
                         embedding: list[float] | None = None) -> int:
-        cur = self.store.conn.cursor()
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute("BEGIN IMMEDIATE")
+                now = datetime.now().isoformat()
+                meta = metadata or {}
+                if content:
+                    import hashlib
+                    meta["content_hash"] = hashlib.sha256(content.encode('utf-8')).hexdigest()[:32]
+                meta_str = json.dumps(meta, ensure_ascii=False) if meta else ""
+                cur.execute(
+                    """INSERT INTO kb_documents
+                       (title, doc_type, source, source_id, url, status, metadata, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+                    (title, doc_type, source, source_id, url, meta_str, now, now),
+                )
+                conn.commit()
+                # 插入后 lastrowid 必然存在（自增主键）
+                return cast(int, cur.lastrowid)
+            except sqlite3.Error:
+                conn.rollback()
+                raise
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
         try:
-            cur.execute("BEGIN IMMEDIATE")
-            now = datetime.now().isoformat()
-            meta = metadata or {}
-            if content:
-                import hashlib
-                meta["content_hash"] = hashlib.sha256(content.encode('utf-8')).hexdigest()[:32]
-            meta_str = json.dumps(meta, ensure_ascii=False) if meta else ""
-            cur.execute(
-                """INSERT INTO kb_documents
-                   (title, doc_type, source, source_id, url, status, metadata, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
-                (title, doc_type, source, source_id, url, meta_str, now, now),
-            )
-            self.store.conn.commit()
-            # 插入后 lastrowid 必然存在（自增主键）
-            return cast(int, cur.lastrowid)
+            return self.store.write_main_with_retry(_do)
         except sqlite3.Error:
             logger.warning("[resilience] silent exception in add_kb_document", exc_info=True)
-            self.store.conn.rollback()
             raise
 
     def update_kb_document(self, doc_id: int, **kwargs) -> None:
@@ -155,11 +162,15 @@ class KbRepo:
         if not filtered:
             return
         filtered["updated_at"] = datetime.now().isoformat()
-        cur = self.store.conn.cursor()
-        fields = ", ".join(f"{k} = ?" for k in filtered.keys())
-        values = list(filtered.values()) + [doc_id]
-        cur.execute(f"UPDATE kb_documents SET {fields} WHERE id = ?", values)
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            fields = ", ".join(f"{k} = ?" for k in filtered.keys())
+            values = list(filtered.values()) + [doc_id]
+            cur.execute(f"UPDATE kb_documents SET {fields} WHERE id = ?", values)
+            conn.commit()
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        self.store.write_main_with_retry(_do)
 
     def list_kb_documents(self, status: str = "", doc_type: str = "",
                           limit: int = 100, offset: int = 0,
@@ -208,18 +219,28 @@ class KbRepo:
         return dict(row) if row else None
 
     def delete_kb_document(self, doc_id: int) -> None:
-        cur = self.store.conn.cursor()
+        chunk_ids: list[int] = []
+
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute("BEGIN IMMEDIATE")
+                # 先取出该文档的 chunk_id，用于同步从 faiss 向量索引移除（防止幽灵向量）
+                cur.execute("SELECT id FROM kb_chunks WHERE doc_id = ?", (doc_id,))
+                chunk_ids_local = [row["id"] for row in cur.fetchall()]
+                cur.execute("DELETE FROM kb_chunks WHERE doc_id = ?", (doc_id,))
+                cur.execute("DELETE FROM kb_documents WHERE id = ?", (doc_id,))
+                conn.commit()
+                return chunk_ids_local
+            except sqlite3.Error:
+                conn.rollback()
+                raise
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
         try:
-            cur.execute("BEGIN IMMEDIATE")
-            # 先取出该文档的 chunk_id，用于同步从 faiss 向量索引移除（防止幽灵向量）
-            cur.execute("SELECT id FROM kb_chunks WHERE doc_id = ?", (doc_id,))
-            chunk_ids = [row["id"] for row in cur.fetchall()]
-            cur.execute("DELETE FROM kb_chunks WHERE doc_id = ?", (doc_id,))
-            cur.execute("DELETE FROM kb_documents WHERE id = ?", (doc_id,))
-            self.store.conn.commit()
+            chunk_ids = self.store.write_main_with_retry(_do)
         except sqlite3.Error:
             logger.warning("[resilience] silent exception in delete_kb_document", exc_info=True)
-            self.store.conn.rollback()
             raise
         if chunk_ids:
             self._remove_chunks_from_index(chunk_ids)
@@ -232,24 +253,31 @@ class KbRepo:
         self.store.bump_kb_revision()
 
     def delete_kb_chunk(self, chunk_id: int) -> None:
-        cur = self.store.conn.cursor()
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute("BEGIN IMMEDIATE")
+                # 先查 chunk 所属文档，删除后同步减少 kb_documents.chunk_count
+                cur.execute("SELECT doc_id FROM kb_chunks WHERE id = ?", (chunk_id,))
+                row = cur.fetchone()
+                doc_id = row["doc_id"] if row else None
+                cur.execute("DELETE FROM kb_chunks WHERE id = ?", (chunk_id,))
+                if doc_id is not None and cur.rowcount > 0:
+                    cur.execute(
+                        "UPDATE kb_documents SET chunk_count = MAX(0, COALESCE(chunk_count, 0) - 1) "
+                        "WHERE id = ?",
+                        (doc_id,),
+                    )
+                conn.commit()
+            except sqlite3.Error:
+                conn.rollback()
+                raise
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
         try:
-            cur.execute("BEGIN IMMEDIATE")
-            # 先查 chunk 所属文档，删除后同步减少 kb_documents.chunk_count
-            cur.execute("SELECT doc_id FROM kb_chunks WHERE id = ?", (chunk_id,))
-            row = cur.fetchone()
-            doc_id = row["doc_id"] if row else None
-            cur.execute("DELETE FROM kb_chunks WHERE id = ?", (chunk_id,))
-            if doc_id is not None and cur.rowcount > 0:
-                cur.execute(
-                    "UPDATE kb_documents SET chunk_count = MAX(0, COALESCE(chunk_count, 0) - 1) "
-                    "WHERE id = ?",
-                    (doc_id,),
-                )
-            self.store.conn.commit()
+            self.store.write_main_with_retry(_do)
         except sqlite3.Error:
             logger.warning("[resilience] silent exception in delete_kb_chunk", exc_info=True)
-            self.store.conn.rollback()
             raise
         self._remove_chunks_from_index([chunk_id])
         # KB 内容变更 → 自增版本号，触常驻进程重建 FAISS 索引
@@ -280,26 +308,34 @@ class KbRepo:
                 logger.warning("删除后保存向量索引失败")
 
     def add_kb_chunks(self, doc_id: int, chunks: list[str]) -> None:
-        cur = self.store.conn.cursor()
         now = datetime.now().isoformat()
-        try:
-            for i, content in enumerate(chunks):
+
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                for i, content in enumerate(chunks):
+                    cur.execute(
+                        """INSERT INTO kb_chunks (doc_id, chunk_index, content, embedding, created_at, updated_at, status)
+                           VALUES (?, ?, ?, '', ?, ?, 'active')""",
+                        (doc_id, i, content, now, now),
+                    )
                 cur.execute(
-                    """INSERT INTO kb_chunks (doc_id, chunk_index, content, embedding, created_at, updated_at, status)
-                       VALUES (?, ?, ?, '', ?, ?, 'active')""",
-                    (doc_id, i, content, now, now),
+                    "UPDATE kb_documents SET chunk_count = ?, status = 'indexed', updated_at = ? WHERE id = ?",
+                    (len(chunks), now, doc_id),
                 )
-            cur.execute(
-                "UPDATE kb_documents SET chunk_count = ?, status = 'indexed', updated_at = ? WHERE id = ?",
-                (len(chunks), now, doc_id),
-            )
-            self.store.conn.commit()
-            # KB 内容变更 → 自增版本号，触常驻进程重建 FAISS 索引
-            self.store.bump_kb_revision()
+                conn.commit()
+            except sqlite3.Error:
+                conn.rollback()
+                raise
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        try:
+            self.store.write_main_with_retry(_do)
         except sqlite3.Error:
             # 中途 DB 异常时回滚，避免残留部分 chunk 与 doc 状态不一致（F6）
-            self.store.conn.rollback()
             raise
+        # KB 内容变更 → 自增版本号，触常驻进程重建 FAISS 索引
+        self.store.bump_kb_revision()
 
     def find_existing_kb_document(self, title: str, source_id: str = "", url: str = "",
                                   source: str = "") -> int | None:
@@ -390,12 +426,19 @@ class KbRepo:
             import hashlib
             meta["content_hash"] = hashlib.sha256(content.encode('utf-8')).hexdigest()[:32]
         meta_str = json.dumps(meta, ensure_ascii=False) if meta else ""
-        cur.execute(
-            "UPDATE kb_documents SET updated_at = ?, chunk_count = ?, status = 'indexed', "
-            "metadata = ?, version = COALESCE(version, 0) + 1 WHERE id = ?",
-            (now, len(chunks), meta_str, existing_id),
-        )
-        self.store.conn.commit()
+
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE kb_documents SET updated_at = ?, chunk_count = ?, status = 'indexed', "
+                "metadata = ?, version = COALESCE(version, 0) + 1 WHERE id = ?",
+                (now, len(chunks), meta_str, existing_id),
+            )
+            conn.commit()
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        self.store.write_main_with_retry(_do)
+        # KB 内容变更 → 自增版本号，触常驻进程重建 FAISS 索引
         self.store.bump_kb_revision()
         logger.info("[RAG] 知识库文档 %d 已更新（%d 旧分块替换为 %d 新分块）",
                     existing_id, len(old_chunk_ids), len(chunks))
@@ -422,17 +465,27 @@ class KbRepo:
 
     def mark_chunk_retry_pending(self, chunk_id: int) -> None:
         """标记 chunk 的 embedding 需要重试。"""
-        cur = self.store.conn.cursor()
-        cur.execute("UPDATE kb_chunks SET retry_pending = 1 WHERE id = ?", (chunk_id,))
-        self.store.conn.commit()
+
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute("UPDATE kb_chunks SET retry_pending = 1 WHERE id = ?", (chunk_id,))
+            conn.commit()
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        self.store.write_main_with_retry(_do)
 
     @with_index_lock
 
     def update_chunk_embedding(self, chunk_id: int, embedding: list[float]) -> None:
-        cur = self.store.conn.cursor()
         emb_str = json.dumps(embedding)
-        cur.execute("UPDATE kb_chunks SET embedding = ? WHERE id = ?", (emb_str, chunk_id))
-        self.store.conn.commit()
+
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute("UPDATE kb_chunks SET embedding = ? WHERE id = ?", (emb_str, chunk_id))
+            conn.commit()
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        self.store.write_main_with_retry(_do)
 
         # 同步更新 faiss 索引
         if self.store._vector_index is None and embedding:

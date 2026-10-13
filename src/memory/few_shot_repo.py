@@ -48,13 +48,15 @@ class FewShotRepo:
             a = (e.get("assistant") or "").strip()
             if u and a:
                 cleaned.append({"user": u, "assistant": a})
-        cur = self.store.conn.cursor()
-        cur.execute(
-            """INSERT INTO kv (key, value, updated_at) VALUES ('few_shot_examples', ?, ?)
-               ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
-            (json.dumps(cleaned, ensure_ascii=False), datetime.now().isoformat()),
-        )
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO kv (key, value, updated_at) VALUES ('few_shot_examples', ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+                (json.dumps(cleaned, ensure_ascii=False), datetime.now().isoformat()),
+            )
+            conn.commit()
+        self.store.write_main_with_retry(_do)
 
 
     def append_few_shot_example(self, example: dict) -> int:

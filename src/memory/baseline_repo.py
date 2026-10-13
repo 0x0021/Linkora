@@ -119,13 +119,15 @@ class BaselineRepo:
             })
             if len(history) > limit_keep:
                 history = history[-limit_keep:]
-            cur = self.store.conn.cursor()
-            cur.execute(
-                """INSERT INTO kv (key, value, updated_at) VALUES ('backtest_history', ?, ?)
-                   ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
-                (json.dumps(history, ensure_ascii=False), datetime.now().isoformat()),
-            )
-            self.store.conn.commit()
+            def _do(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    """INSERT INTO kv (key, value, updated_at) VALUES ('backtest_history', ?, ?)
+                       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+                    (json.dumps(history, ensure_ascii=False), datetime.now().isoformat()),
+                )
+                conn.commit()
+            self.store.write_main_with_retry(_do)
         except Exception as e:
             logger.warning("[store] 记录回测基线失败: %s", e)
 

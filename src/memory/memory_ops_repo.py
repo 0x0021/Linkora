@@ -257,68 +257,70 @@ class MemoryOpsRepo:
         max_versions: 画像历史版本最大保留数。> 0 时，写入后滚动删除超量的最旧版本，
           保留最新的 N 个（按 version_no 降序）。默认 0 表示不限制。
         """
-        cur = self.store.conn.cursor()
-        # ---- 归档当前版本（若有）：记录其来源 trigger（取自旧画像的 _save_trigger）----
-        cur.execute("SELECT profile_json, updated_at FROM style_profiles WHERE id = 1")
-        old_row = cur.fetchone()
-        if old_row and old_row["profile_json"]:
-            try:
-                _old = json.loads(old_row["profile_json"])
-            except Exception:
-                logger.warning("[resilience] silent exception in save_style_profile", exc_info=True)
-                _old = {}
-            _old_trigger = _old.get("_save_trigger", "manual")
-            _max = cur.execute(
-                "SELECT COALESCE(MAX(version_no), 0) AS m FROM style_profile_versions"
-            ).fetchone()
-            next_no = (_max["m"] if _max else 0) + 1
-            cur.execute(
-                """INSERT INTO style_profile_versions
-                       (version_no, profile_json, trigger, confidence, cleaned_count, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    next_no,
-                    old_row["profile_json"],
-                    _old_trigger,
-                    _old.get("confidence", ""),
-                    _old.get("cleaned_count", 0),
-                    old_row["updated_at"],
-                ),
-            )
-        # ---- 覆盖为新版本：把 trigger 嵌入画像，便于下次归档时溯源 ----
-        _new = dict(profile)
-        _new["_save_trigger"] = trigger
-        cur.execute(
-            """INSERT INTO style_profiles (id, profile_json, updated_at) VALUES (1, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json, updated_at=excluded.updated_at""",
-            (json.dumps(_new, ensure_ascii=False), datetime.now().isoformat()),
-        )
-        self.store.conn.commit()
-
-        # ---- 滚动清理超量旧版本：保留最新 N 个 ----
-        if max_versions > 0:
-            _count = cur.execute(
-                "SELECT COUNT(*) AS c FROM style_profile_versions"
-            ).fetchone()
-            total = _count["c"] if _count else 0
-            if total > max_versions:
-                cutoff_no = cur.execute(
-                    """SELECT version_no FROM style_profile_versions
-                        ORDER BY version_no DESC LIMIT 1 OFFSET ?""",
-                    (max_versions - 1,),
+        def _do(conn):
+            cur = conn.cursor()
+            # ---- 归档当前版本（若有）：记录其来源 trigger（取自旧画像的 _save_trigger）----
+            cur.execute("SELECT profile_json, updated_at FROM style_profiles WHERE id = 1")
+            old_row = cur.fetchone()
+            if old_row and old_row["profile_json"]:
+                try:
+                    _old = json.loads(old_row["profile_json"])
+                except Exception:
+                    logger.warning("[resilience] silent exception in save_style_profile", exc_info=True)
+                    _old = {}
+                _old_trigger = _old.get("_save_trigger", "manual")
+                _max = cur.execute(
+                    "SELECT COALESCE(MAX(version_no), 0) AS m FROM style_profile_versions"
                 ).fetchone()
-                if cutoff_no:
-                    cur.execute(
-                        "DELETE FROM style_profile_versions WHERE version_no < ?",
-                        (cutoff_no["version_no"],),
-                    )
-                    deleted = cur.rowcount
-                    if deleted > 0:
-                        self.store.conn.commit()
-                        logger.info(
-                            "[cleanup] 画像历史版本：%d -> %d（滚动删除了 %d 个旧版本）",
-                            total, total - deleted, deleted,
+                next_no = (_max["m"] if _max else 0) + 1
+                cur.execute(
+                    """INSERT INTO style_profile_versions
+                           (version_no, profile_json, trigger, confidence, cleaned_count, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        next_no,
+                        old_row["profile_json"],
+                        _old_trigger,
+                        _old.get("confidence", ""),
+                        _old.get("cleaned_count", 0),
+                        old_row["updated_at"],
+                    ),
+                )
+            # ---- 覆盖为新版本：把 trigger 嵌入画像，便于下次归档时溯源 ----
+            _new = dict(profile)
+            _new["_save_trigger"] = trigger
+            cur.execute(
+                """INSERT INTO style_profiles (id, profile_json, updated_at) VALUES (1, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json, updated_at=excluded.updated_at""",
+                (json.dumps(_new, ensure_ascii=False), datetime.now().isoformat()),
+            )
+            conn.commit()
+
+            # ---- 滚动清理超量旧版本：保留最新 N 个 ----
+            if max_versions > 0:
+                _count = cur.execute(
+                    "SELECT COUNT(*) AS c FROM style_profile_versions"
+                ).fetchone()
+                total = _count["c"] if _count else 0
+                if total > max_versions:
+                    cutoff_no = cur.execute(
+                        """SELECT version_no FROM style_profile_versions
+                            ORDER BY version_no DESC LIMIT 1 OFFSET ?""",
+                        (max_versions - 1,),
+                    ).fetchone()
+                    if cutoff_no:
+                        cur.execute(
+                            "DELETE FROM style_profile_versions WHERE version_no < ?",
+                            (cutoff_no["version_no"],),
                         )
+                        deleted = cur.rowcount
+                        if deleted > 0:
+                            conn.commit()
+                            logger.info(
+                                "[cleanup] 画像历史版本：%d -> %d（滚动删除了 %d 个旧版本）",
+                                total, total - deleted, deleted,
+                            )
+        self.store.write_main_with_retry(_do)
 
 
     def list_style_profile_versions(self, limit: int = 20) -> list[dict]:

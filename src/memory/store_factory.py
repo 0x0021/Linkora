@@ -45,6 +45,10 @@ def get_store(db_path: Optional[str] = None) -> SQLiteStore:
         if resolved not in _instances or getattr(_instances[resolved], "_closed", False):
             store = SQLiteStore(resolved)
             _instances[resolved] = store
+            # 【P1 2026-10-05 主库写闸门收口】注册主库 store，供 usage_ledger 等独立
+            # 写模块经 write_main_with_retry 复用同一把进程内写闸门，避免绕过闸门直写主库。
+            from src.memory.sqlite_store_conn import register_main_store
+            register_main_store(store)
         return _instances[resolved]
 
 

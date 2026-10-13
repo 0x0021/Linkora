@@ -117,6 +117,40 @@ def _current_platform() -> str:
         return ""
 
 
+def _write_through_gate(fn):
+    """经主库写闸门落库（与应用内各 repo 写入在同一把进程内闸门串行）。
+
+    【P1 2026-10-05 主库写闸门收口】usage_ledger 此前用独立短连接直写主库 linkora.db，
+    绕过本进程写闸门，是主库写侧未收口的同源缺陷。现复用已注册主库 store 的
+    ``write_main_with_retry``，与主库 repo 写入在同一把全局闸门上串行。
+
+    三种上下文：
+    - 单测（``_db_path_override`` 指向临时库）：退回短连接，**绝不**经由应用 store，
+      保持既有测试隔离约定（不会污染真实主库）。
+    - 应用（override 为空 且 已注册主库 store）：走 ``store.write_main_with_retry``。
+    - 既无 override 也无注册 store：退回短连接（best-effort）。
+    """
+    # 测试钩子优先：override 指向临时库时绝不经过应用 store（避免污染真实库）
+    if _db_path_override:
+        conn = _connect()
+        try:
+            return fn(conn)
+        finally:
+            conn.close()
+    try:
+        from src.memory.sqlite_store_conn import get_main_store
+        store = get_main_store()
+    except Exception:  # noqa: BLE001
+        store = None
+    if store is not None:
+        return store.write_main_with_retry(fn)
+    conn = _connect()
+    try:
+        return fn(conn)
+    finally:
+        conn.close()
+
+
 def record_usage(
     purpose: str,
     model: str,
@@ -134,8 +168,8 @@ def record_usage(
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if platform is None:
             platform = _current_platform()
-        conn = _connect()
-        try:
+
+        def _do(conn):
             _ensure_table(conn)
             conn.execute(
                 "INSERT INTO llm_usage (ts, purpose, platform, model, input_tokens,"
@@ -146,8 +180,9 @@ def record_usage(
                  float(cost_usd or 0.0), 1 if is_estimated else 0),
             )
             conn.commit()
-        finally:
-            conn.close()
+
+        # 【P1 2026-10-05 主库写闸门收口】经全局写闸门落库，复用与主库 repo 同一串行化闸门
+        _write_through_gate(_do)
     except Exception:
         logger.debug("[usage_ledger] 记账失败（不影响主链路）", exc_info=True)
 
@@ -261,15 +296,16 @@ def cleanup_old_usage(retention_days: int | None = None) -> int:
     try:
         days = int(retention_days if retention_days is not None else USAGE_RETENTION_DAYS)
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        conn = _connect()
-        try:
+
+        def _do(conn):
             _ensure_table(conn)
             cur = conn.execute("DELETE FROM llm_usage WHERE ts < ?", [cutoff])
             n = cur.rowcount or 0
             conn.commit()
             return n
-        finally:
-            conn.close()
+
+        # 【P1 2026-10-05 主库写闸门收口】经全局写闸门落库
+        return _write_through_gate(_do)
     except Exception:
         logger.warning("[usage_ledger] 清理旧用量记录失败", exc_info=True)
         return 0

@@ -51,30 +51,32 @@ class DraftRepo:
         """
         now = datetime.now().isoformat()
         raw_json = json.dumps(raw, ensure_ascii=False) if raw else None
-        cur = self.store.conn.cursor()
-        # 幂等：若同一原始消息同阶段已有 pending，直接复用
-        cur.execute(
-            "SELECT id FROM dead_letter_messages WHERE msg_id = ? AND stage = ? AND status = 'pending'",
-            (msg_id, stage),
-        )
-        existing = cur.fetchone()
-        if existing:
+        def _do(conn):
+            cur = conn.cursor()
+            # 幂等：若同一原始消息同阶段已有 pending，直接复用
             cur.execute(
-                "UPDATE dead_letter_messages SET error = ?, updated_at = ? WHERE id = ?",
-                (error, now, existing[0]),
+                "SELECT id FROM dead_letter_messages WHERE msg_id = ? AND stage = ? AND status = 'pending'",
+                (msg_id, stage),
             )
-            self.store.conn.commit()
-            return int(existing[0])
-        cur.execute(
-            """INSERT INTO dead_letter_messages
-               (msg_id, chat_id, chat_name, sender_id, sender_name, content,
-                msg_type, stage, error, raw, status, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
-            (msg_id, chat_id, chat_name, sender_id, sender_name, content,
-             msg_type, stage, error, raw_json, now, now),
-        )
-        self.store.conn.commit()
-        return cast(int, cur.lastrowid)
+            existing = cur.fetchone()
+            if existing:
+                cur.execute(
+                    "UPDATE dead_letter_messages SET error = ?, updated_at = ? WHERE id = ?",
+                    (error, now, existing[0]),
+                )
+                conn.commit()
+                return int(existing[0])
+            cur.execute(
+                """INSERT INTO dead_letter_messages
+                   (msg_id, chat_id, chat_name, sender_id, sender_name, content,
+                    msg_type, stage, error, raw, status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
+                (msg_id, chat_id, chat_name, sender_id, sender_name, content,
+                 msg_type, stage, error, raw_json, now, now),
+            )
+            conn.commit()
+            return cast(int, cur.lastrowid)
+        return self.store.write_main_with_retry(_do)
 
     def list_dead_letters(self, status: str = "pending", limit: int = 100,
                              offset: int = 0) -> tuple[list[dict], int]:
@@ -181,19 +183,21 @@ class DraftRepo:
     def resolve_dead_letter(self, dl_id: int, *, status: str, note: str = "") -> bool:
         """将死信标记为 replayed / discarded（重放或丢弃）。"""
         now = datetime.now().isoformat()
-        cur = self.store.conn.cursor()
-        if status == "replayed":
-            cur.execute(
-                "UPDATE dead_letter_messages SET status = 'replayed', replayed_at = ?, replay_note = ?, updated_at = ? WHERE id = ?",
-                (now, note, now, dl_id),
-            )
-        else:
-            cur.execute(
-                "UPDATE dead_letter_messages SET status = ?, replay_note = ?, updated_at = ? WHERE id = ?",
-                (status, note, now, dl_id),
-            )
-        self.store.conn.commit()
-        return cur.rowcount > 0
+        def _do(conn):
+            cur = conn.cursor()
+            if status == "replayed":
+                cur.execute(
+                    "UPDATE dead_letter_messages SET status = 'replayed', replayed_at = ?, replay_note = ?, updated_at = ? WHERE id = ?",
+                    (now, note, now, dl_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE dead_letter_messages SET status = ?, replay_note = ?, updated_at = ? WHERE id = ?",
+                    (status, note, now, dl_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+        return self.store.write_main_with_retry(_do)
 
     # ============ 草稿管理（低置信度消息审签）============
 
@@ -206,19 +210,21 @@ class DraftRepo:
         """将低置信度草稿写入 message_drafts 表，返回 draft_id（UUID）。"""
         draft_id = uuid.uuid4().hex
         now = datetime.now().isoformat()
-        cur = self.store.conn.cursor()
-        cur.execute(
-            """INSERT INTO message_drafts
-               (draft_id, platform, chat_id, chat_name, chat_type,
-                sender_id, sender_name, user_message, ai_reply,
-                rag_confidence, rag_threshold, rag_best_chunk,
-                status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
-            (draft_id, platform, chat_id, chat_name, chat_type,
-             sender_id, sender_name, user_message, ai_reply,
-             rag_confidence, rag_threshold, rag_best_chunk, now),
-        )
-        self.store.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO message_drafts
+                   (draft_id, platform, chat_id, chat_name, chat_type,
+                    sender_id, sender_name, user_message, ai_reply,
+                    rag_confidence, rag_threshold, rag_best_chunk,
+                    status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
+                (draft_id, platform, chat_id, chat_name, chat_type,
+                 sender_id, sender_name, user_message, ai_reply,
+                 rag_confidence, rag_threshold, rag_best_chunk, now),
+            )
+            conn.commit()
+        self.store.write_main_with_retry(_do)
         logger.info("[草稿] 已落库 draft_id=%s chat=%s", draft_id, chat_id)
         return draft_id
 
@@ -269,20 +275,22 @@ class DraftRepo:
                       notes: str = "") -> bool:
         """处理草稿：approved / discarded / edited。更新 status、processed_at、final_reply。"""
         now = datetime.now().isoformat()
-        cur = self.store.conn.cursor()
         status_map = {"approved": "approved", "discarded": "discarded", "edited": "edited"}
         new_status = status_map.get(action)
         if not new_status:
             logger.warning("[草稿] 未知处理动作: %s", action)
             return False
-        cur.execute(
-            """UPDATE message_drafts
-               SET status = ?, processed_at = ?, final_reply = ?, notes = ?
-               WHERE draft_id = ?""",
-            (new_status, now, final_reply or "", notes, draft_id),
-        )
-        self.store.conn.commit()
-        return cur.rowcount > 0
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE message_drafts
+                   SET status = ?, processed_at = ?, final_reply = ?, notes = ?
+                   WHERE draft_id = ?""",
+                (new_status, now, final_reply or "", notes, draft_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        return self.store.write_main_with_retry(_do)
 
     def count_pending_drafts(self, platform: str | None = None) -> int:
         """返回待处理草稿数量。"""
@@ -307,14 +315,16 @@ class DraftRepo:
         if not draft_ids:
             return 0
         now = datetime.now().isoformat()
-        cur = self.store.conn.cursor()
-        placeholders = ",".join("?" * len(draft_ids))
-        cur.execute(
-            f"UPDATE message_drafts SET read_at = ? WHERE draft_id IN ({placeholders})",
-            (now, *draft_ids),
-        )
-        self.store.conn.commit()
-        return cur.rowcount
+        def _do(conn):
+            cur = conn.cursor()
+            placeholders = ",".join("?" * len(draft_ids))
+            cur.execute(
+                f"UPDATE message_drafts SET read_at = ? WHERE draft_id IN ({placeholders})",
+                (now, *draft_ids),
+            )
+            conn.commit()
+            return cur.rowcount
+        return self.store.write_main_with_retry(_do)
 
     def cleanup_old_drafts(self, retention_days: int) -> int:
         """删除超过保留期的草稿（message_drafts），返回删除条数。
@@ -325,16 +335,18 @@ class DraftRepo:
         """
         try:
             cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
-            cur = self.store.conn.cursor()
-            cur.execute(
-                "DELETE FROM message_drafts WHERE created_at < ?",
-                (cutoff,),
-            )
-            deleted = cur.rowcount
-            self.store.conn.commit()
-            if deleted:
-                logger.info("[草稿清理] 已清理 %d 条超过 %d 天的旧草稿", deleted, retention_days)
-            return deleted
+            def _do(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM message_drafts WHERE created_at < ?",
+                    (cutoff,),
+                )
+                deleted = cur.rowcount
+                conn.commit()
+                if deleted:
+                    logger.info("[草稿清理] 已清理 %d 条超过 %d 天的旧草稿", deleted, retention_days)
+                return deleted
+            return self.store.write_main_with_retry(_do)
         except Exception as e:
             logger.warning("[草稿清理] 清理过期草稿失败: %s", e)
             return 0

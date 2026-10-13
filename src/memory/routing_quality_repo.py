@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, cast
 
@@ -85,40 +86,46 @@ class RoutingQualityRepo:
     ) -> int:
         def js(v: object) -> str | object:
             return json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
-        cur = self.store.conn.cursor()
-        cur.execute(
-            """INSERT INTO routing_quality
-               (sender_id, sender_name, conversation_id, content_preview,
-                primary_skill, primary_score, primary_source,
-                combo_count, combo_skills,
-                convergence_zone_size, convergence_applied, goal_fit_details,
-                tools_exposed, routing_mode, candidates_count,
-                intent_disposition, intent_action, intent_actions,
-                blocked_by_disabled_skill, message_type,
-                llm_model, llm_rounds, llm_latency_ms, total_latency_ms,
-                reply_len, reply_text, stages_json,
-                input_tokens, output_tokens, total_tokens, cost_usd,
-                tool_results_json, failure_class)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (sender_id or "", sender_name or "", conversation_id or "",
-             content_preview or "",
-             primary_skill or "", primary_score, primary_source or "",
-             combo_count, js(combo_skills),
-             convergence_zone_size, convergence_applied, js(goal_fit_details),
-             js(tools_exposed), routing_mode or "", candidates_count,
-             intent_disposition or "", intent_action or "", intent_actions or "",
-             js(blocked_by_disabled_skill), message_type or "",
-             llm_model or "", llm_rounds, llm_latency_ms, total_latency_ms,
-             reply_len, reply_text or "", js(stages_json),
-             input_tokens, output_tokens, total_tokens, cost_usd,
-             js(tool_results_json), failure_class or ""),
-        )
-        self.store.conn.commit()
+
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO routing_quality
+                   (sender_id, sender_name, conversation_id, content_preview,
+                    primary_skill, primary_score, primary_source,
+                    combo_count, combo_skills,
+                    convergence_zone_size, convergence_applied, goal_fit_details,
+                    tools_exposed, routing_mode, candidates_count,
+                    intent_disposition, intent_action, intent_actions,
+                    blocked_by_disabled_skill, message_type,
+                    llm_model, llm_rounds, llm_latency_ms, total_latency_ms,
+                    reply_len, reply_text, stages_json,
+                    input_tokens, output_tokens, total_tokens, cost_usd,
+                    tool_results_json, failure_class)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (sender_id or "", sender_name or "", conversation_id or "",
+                 content_preview or "",
+                 primary_skill or "", primary_score, primary_source or "",
+                 combo_count, js(combo_skills),
+                 convergence_zone_size, convergence_applied, js(goal_fit_details),
+                 js(tools_exposed), routing_mode or "", candidates_count,
+                 intent_disposition or "", intent_action or "", intent_actions or "",
+                 js(blocked_by_disabled_skill), message_type or "",
+                 llm_model or "", llm_rounds, llm_latency_ms, total_latency_ms,
+                 reply_len, reply_text or "", js(stages_json),
+                 input_tokens, output_tokens, total_tokens, cost_usd,
+                 js(tool_results_json), failure_class or ""),
+            )
+            conn.commit()
+            # 插入后 lastrowid 必然存在（自增主键）
+            return cast(int, cur.lastrowid)
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        row_id = self.store.write_main_with_retry(_do)
         self._insert_count += 1
         if self._insert_count % 200 == 0:
             self._prune_routing_quality()
-        # 插入后 lastrowid 必然存在（自增主键）
-        return cast(int, cur.lastrowid)
+        return row_id
 
     def update_routing_quality_trace(
         self,
@@ -139,31 +146,36 @@ class RoutingQualityRepo:
     ) -> None:
         def js(v: object) -> str | object:
             return json.dumps(v) if isinstance(v, (list, dict)) else (v or "")
-        cur = self.store.conn.cursor()
-        # 工具结果/失败归因可选回填（None = 不覆盖，保持调用方向后兼容）：
-        # 路由阶段先插行、后跑工具与 LLM，故这两列通常在 update 阶段才有值。
-        sets = [
-            "llm_latency_ms=?", "llm_rounds=?", "llm_model=?",
-            "total_latency_ms=?", "reply_len=?", "reply_text=?", "stages_json=?",
-            "input_tokens=?", "output_tokens=?", "total_tokens=?", "cost_usd=?",
-        ]
-        params: list[object] = [
-            llm_latency_ms, llm_rounds, llm_model or "",
-            total_latency_ms, reply_len, reply_text or "", js(stages_json),
-            input_tokens, output_tokens, total_tokens, cost_usd,
-        ]
-        if tool_results_json is not None:
-            sets.append("tool_results_json=?")
-            params.append(js(tool_results_json))
-        if failure_class is not None:
-            sets.append("failure_class=?")
-            params.append(failure_class)
-        params.append(rq_id)
-        cur.execute(
-            f"UPDATE routing_quality SET {', '.join(sets)} WHERE id=?",  # noqa: S608 — 列名固定白名单
-            params,
-        )
-        self.store.conn.commit()
+
+        def _do(conn):
+            cur = conn.cursor()
+            # 工具结果/失败归因可选回填（None = 不覆盖，保持调用方向后兼容）：
+            # 路由阶段先插行、后跑工具与 LLM，故这两列通常在 update 阶段才有值。
+            sets = [
+                "llm_latency_ms=?", "llm_rounds=?", "llm_model=?",
+                "total_latency_ms=?", "reply_len=?", "reply_text=?", "stages_json=?",
+                "input_tokens=?", "output_tokens=?", "total_tokens=?", "cost_usd=?",
+            ]
+            params: list[object] = [
+                llm_latency_ms, llm_rounds, llm_model or "",
+                total_latency_ms, reply_len, reply_text or "", js(stages_json),
+                input_tokens, output_tokens, total_tokens, cost_usd,
+            ]
+            if tool_results_json is not None:
+                sets.append("tool_results_json=?")
+                params.append(js(tool_results_json))
+            if failure_class is not None:
+                sets.append("failure_class=?")
+                params.append(failure_class)
+            params.append(rq_id)
+            cur.execute(
+                f"UPDATE routing_quality SET {', '.join(sets)} WHERE id=?",  # noqa: S608 — 列名固定白名单
+                params,
+            )
+            conn.commit()
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        self.store.write_main_with_retry(_do)
 
     def get_routing_quality(
         self,
@@ -510,18 +522,22 @@ class RoutingQualityRepo:
         self._retention_days = int(days)
 
     def _prune_routing_quality(self) -> None:
-        try:
-            cur = self.store.conn.cursor()
-            if self._retention_days > 0:
-                cur.execute(
-                    "DELETE FROM routing_quality WHERE "
-                    "created_at < datetime('now', ?, 'localtime')",
-                    (f"-{self._retention_days} days",),
-                )
-            self.store.conn.commit()
-        except Exception as e:
-            logger.warning("数据库提交失败: %s", e)
+        def _do(conn):
+            cur = conn.cursor()
             try:
-                self.store.conn.rollback()
-            except Exception as re:
-                logger.error("数据库回滚也失败: %s", re)
+                if self._retention_days > 0:
+                    cur.execute(
+                        "DELETE FROM routing_quality WHERE "
+                        "created_at < datetime('now', ?, 'localtime')",
+                        (f"-{self._retention_days} days",),
+                    )
+                conn.commit()
+            except sqlite3.Error:
+                conn.rollback()
+                raise
+
+        # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+        try:
+            self.store.write_main_with_retry(_do)
+        except sqlite3.Error as e:
+            logger.warning("路由质量清理提交失败: %s", e)

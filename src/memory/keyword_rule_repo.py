@@ -42,17 +42,19 @@ class KeywordRuleRepo:
         enabled: int = 1,
     ) -> int:
         """新增关键词规则，返回新行 id。"""
-        cur = self.conn.cursor()
-        now = datetime.now().isoformat()
-        cur.execute(
-            """INSERT INTO keyword_rules
-               (category, match_pattern, reply_text, match_type, priority, enabled, hit_count, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
-            (category, match_pattern, reply_text, match_type, priority, enabled, now, now),
-        )
-        self.conn.commit()
-        # 插入后 lastrowid 必然存在（自增主键）
-        return cast(int, cur.lastrowid)
+        def _do(conn):
+            cur = conn.cursor()
+            now = datetime.now().isoformat()
+            cur.execute(
+                """INSERT INTO keyword_rules
+                   (category, match_pattern, reply_text, match_type, priority, enabled, hit_count, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
+                (category, match_pattern, reply_text, match_type, priority, enabled, now, now),
+            )
+            conn.commit()
+            # 插入后 lastrowid 必然存在（自增主键）
+            return cast(int, cur.lastrowid)
+        return self._store.write_main_with_retry(_do)
 
     def list(
         self,
@@ -91,16 +93,20 @@ class KeywordRuleRepo:
         if not filtered:
             return
         filtered["updated_at"] = datetime.now().isoformat()
-        cur = self.conn.cursor()
-        fields = ", ".join(f"{k} = ?" for k in filtered.keys())
-        values = list(filtered.values()) + [rule_id]
-        cur.execute(f"UPDATE keyword_rules SET {fields} WHERE id = ?", values)
-        self.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            fields = ", ".join(f"{k} = ?" for k in filtered.keys())
+            values = list(filtered.values()) + [rule_id]
+            cur.execute(f"UPDATE keyword_rules SET {fields} WHERE id = ?", values)
+            conn.commit()
+        self._store.write_main_with_retry(_do)
 
     def delete(self, rule_id: int) -> None:
-        cur = self.conn.cursor()
-        cur.execute("DELETE FROM keyword_rules WHERE id = ?", (rule_id,))
-        self.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute("DELETE FROM keyword_rules WHERE id = ?", (rule_id,))
+            conn.commit()
+        self._store.write_main_with_retry(_do)
 
     def categories(self) -> list[str]:
         cur = self.conn.cursor()
@@ -108,9 +114,11 @@ class KeywordRuleRepo:
         return [row["category"] for row in cur.fetchall()]
 
     def increment_hit(self, rule_id: int) -> None:
-        cur = self.conn.cursor()
-        cur.execute("UPDATE keyword_rules SET hit_count = hit_count + 1 WHERE id = ?", (rule_id,))
-        self.conn.commit()
+        def _do(conn):
+            cur = conn.cursor()
+            cur.execute("UPDATE keyword_rules SET hit_count = hit_count + 1 WHERE id = ?", (rule_id,))
+            conn.commit()
+        self._store.write_main_with_retry(_do)
 
     def count(self, enabled: int | None = None) -> int:
         """关键词规则条数；enabled 传 1/0 时只统计对应启用状态，None 表示全部。"""

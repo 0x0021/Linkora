@@ -561,17 +561,25 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
             return default
 
     def set_meta(self, key: str, value: str) -> bool:
-        """写入主库 meta 表（UPSERT）。非致命，异常仅记日志并返回 False。"""
+        """写入主库 meta 表（UPSERT）。非致命，异常仅记日志并返回 False。
+
+        【P1 2026-10-05 主库写闸门收口】原直连 ``self.conn.commit()`` 绕过进程内写闸门，
+        改为经 :meth:`write_main_with_retry` 收口。
+        """
         if not key:
             return False
-        try:
-            cur = self.conn.cursor()
+
+        def _do(conn):
+            cur = conn.cursor()
             cur.execute(
                 """INSERT INTO meta (key, value) VALUES (?, ?)
                    ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
                 (key, value),
             )
-            self.conn.commit()
+            conn.commit()
+
+        try:
+            self.write_main_with_retry(_do)
             return True
         except Exception as e:  # noqa: BLE001
             logger.debug("[meta] 写入 %s 失败: %s", key, e)

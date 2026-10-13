@@ -38,23 +38,25 @@ class ToolExecutionRepo:
     ) -> None:
         """记录工具调用日志到数据库。"""
         try:
-            cur = self.conn.cursor()
-            now = datetime.now().isoformat()
-            cur.execute(
-                """INSERT INTO tool_execution_logs
-                   (tool_name, input_args, output_result, success, duration_ms, error_message, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    tool_name,
-                    input_args,
-                    output_result,
-                    int(success),
-                    duration_ms,
-                    error_message,
-                    now,
-                ),
-            )
-            self.conn.commit()
+            def _do(conn):
+                cur = conn.cursor()
+                now = datetime.now().isoformat()
+                cur.execute(
+                    """INSERT INTO tool_execution_logs
+                       (tool_name, input_args, output_result, success, duration_ms, error_message, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        tool_name,
+                        input_args,
+                        output_result,
+                        int(success),
+                        duration_ms,
+                        error_message,
+                        now,
+                    ),
+                )
+                conn.commit()
+            self._store.write_main_with_retry(_do)
         except Exception as e:
             logger.warning("[ToolLog] 记录工具日志失败: %s", e)
 
@@ -67,16 +69,18 @@ class ToolExecutionRepo:
         """
         try:
             cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
-            cur = self.conn.cursor()
-            cur.execute(
-                "DELETE FROM tool_execution_logs WHERE created_at < ?",
-                (cutoff,),
-            )
-            deleted = cur.rowcount
-            self.conn.commit()
-            if deleted:
-                logger.info("[工具日志清理] 已清理 %d 条超过 %d 天的旧记录", deleted, retention_days)
-            return deleted
+            def _do(conn):
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM tool_execution_logs WHERE created_at < ?",
+                    (cutoff,),
+                )
+                deleted = cur.rowcount
+                conn.commit()
+                if deleted:
+                    logger.info("[工具日志清理] 已清理 %d 条超过 %d 天的旧记录", deleted, retention_days)
+                return deleted
+            return self._store.write_main_with_retry(_do)
         except Exception as e:
             logger.warning("[工具日志清理] 清理过期工具日志失败: %s", e)
             return 0

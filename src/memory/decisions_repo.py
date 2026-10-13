@@ -102,33 +102,37 @@ class DecisionsRepo:
         """
         import json as _json
         tools_json = _json.dumps(routed_tools) if isinstance(routed_tools, list) else (routed_tools or "")
-        cur = self.store.conn.cursor()
-        try:
-            cur.execute(
-                """INSERT INTO decisions
-                   (sender_id, sender_name, conversation_id, conversation_name,
-                    content_preview, intent, action, routing_mode, routed_tools,
-                    skill_name, skill_source, reply_preview,
-                    request_id, platform_id, llm_calls, fallback_used, tool_calls, total_latency_ms,
-                    handoff, rag_grounded, cited)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (sender_id or "", sender_name or "", conversation_id or "", conversation_name or "",
-                 content_preview or "", intent or "", action or "",
-                 routing_mode or "", tools_json,
-                 skill_name or "", skill_source or "", reply_preview or "",
-                 request_id or "", platform_id or "",
-                 int(llm_calls or 0), int(fallback_used or 0),
-                 int(tool_calls or 0), int(total_latency_ms or 0),
-                 int(handoff or 0), int(rag_grounded or 0), int(cited or 0)),
-            )
-            self.store.conn.commit()
-        finally:
-            cur.close()
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    """INSERT INTO decisions
+                       (sender_id, sender_name, conversation_id, conversation_name,
+                        content_preview, intent, action, routing_mode, routed_tools,
+                        skill_name, skill_source, reply_preview,
+                        request_id, platform_id, llm_calls, fallback_used, tool_calls, total_latency_ms,
+                        handoff, rag_grounded, cited)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (sender_id or "", sender_name or "", conversation_id or "", conversation_name or "",
+                     content_preview or "", intent or "", action or "",
+                     routing_mode or "", tools_json,
+                     skill_name or "", skill_source or "", reply_preview or "",
+                     request_id or "", platform_id or "",
+                     int(llm_calls or 0), int(fallback_used or 0),
+                     int(tool_calls or 0), int(total_latency_ms or 0),
+                     int(handoff or 0), int(rag_grounded or 0), int(cited or 0)),
+                )
+                conn.commit()
+                _rid = cur.lastrowid
+            finally:
+                cur.close()
+            return cast(int, _rid)
+        row_id = self.store.write_main_with_retry(_do)
         self._insert_count += 1
         if self._insert_count % 200 == 0:
             self._prune_decisions()
         # 插入后 lastrowid 必然存在（AUTOINCREMENT 主键）；不用 assert（生产 -O 下被剥离）。
-        return cast(int, cur.lastrowid)
+        return row_id
 
     def mark_cited(self, *, request_id: str = "", platform_id: str = "",
                    conversation_id: str = "", cited: int = 0) -> int:
@@ -140,26 +144,31 @@ class DecisionsRepo:
         返回受影响行数；任何异常静默吞掉，绝不影响正常回复。
         """
         try:
-            cur = self.store.conn.cursor()
-            if request_id:
-                cur.execute(
-                    "UPDATE decisions SET cited = ? "
-                    "WHERE id = (SELECT id FROM decisions WHERE request_id = ? "
-                    "ORDER BY id DESC LIMIT 1)",
-                    (int(cited or 0), request_id),
-                )
-            elif conversation_id:
-                cur.execute(
-                    "UPDATE decisions SET cited = ? "
-                    "WHERE id = (SELECT id FROM decisions "
-                    "WHERE platform_id = ? AND conversation_id = ? "
-                    "ORDER BY id DESC LIMIT 1)",
-                    (int(cited or 0), platform_id or "", conversation_id),
-                )
-            else:
-                return 0
-            self.store.conn.commit()
-            return cur.rowcount
+            def _do(conn):
+                cur = conn.cursor()
+                try:
+                    if request_id:
+                        cur.execute(
+                            "UPDATE decisions SET cited = ? "
+                            "WHERE id = (SELECT id FROM decisions WHERE request_id = ? "
+                            "ORDER BY id DESC LIMIT 1)",
+                            (int(cited or 0), request_id),
+                        )
+                    elif conversation_id:
+                        cur.execute(
+                            "UPDATE decisions SET cited = ? "
+                            "WHERE id = (SELECT id FROM decisions "
+                            "WHERE platform_id = ? AND conversation_id = ? "
+                            "ORDER BY id DESC LIMIT 1)",
+                            (int(cited or 0), platform_id or "", conversation_id),
+                        )
+                    else:
+                        return 0
+                    conn.commit()
+                    return cur.rowcount
+                finally:
+                    cur.close()
+            return self.store.write_main_with_retry(_do)
         except sqlite3.Error as e:
             # 仅 DB 层失败兜底（表不存在 / 损坏 / 锁冲突 / 约束违反）
             logger.warning(f"mark_cited: swallowed exception: {e}")
@@ -221,23 +230,28 @@ class DecisionsRepo:
         self.retention_days = int(days)
 
     def _prune_decisions(self) -> None:
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                if self.retention_days > 0:
+                    cur.execute(
+                        "DELETE FROM decisions WHERE created_at < datetime('now', ?, 'localtime')",
+                        (f"-{self.retention_days} days",),
+                    )
+                cur.execute("SELECT COUNT(*) FROM decisions")
+                total = cur.fetchone()[0]
+                if total > self._hard_cap:
+                    excess = total - self._hard_cap
+                    cur.execute(
+                        "DELETE FROM decisions WHERE id IN ("
+                        "SELECT id FROM decisions ORDER BY created_at ASC, id ASC LIMIT ?)",
+                        (excess,),
+                    )
+                conn.commit()
+            finally:
+                cur.close()
         try:
-            cur = self.store.conn.cursor()
-            if self.retention_days > 0:
-                cur.execute(
-                    "DELETE FROM decisions WHERE created_at < datetime('now', ?, 'localtime')",
-                    (f"-{self.retention_days} days",),
-                )
-            cur.execute("SELECT COUNT(*) FROM decisions")
-            total = cur.fetchone()[0]
-            if total > self._hard_cap:
-                excess = total - self._hard_cap
-                cur.execute(
-                    "DELETE FROM decisions WHERE id IN ("
-                    "SELECT id FROM decisions ORDER BY created_at ASC, id ASC LIMIT ?)",
-                    (excess,),
-                )
-            self.store.conn.commit()
+            self.store.write_main_with_retry(_do)
         except sqlite3.Error as e:
             logger.warning("数据库提交失败: %s", e)
             try:
@@ -248,27 +262,32 @@ class DecisionsRepo:
     def cleanup_old_records(self, decisions_retention_days: int | None = None) -> dict:
         days = decisions_retention_days if decisions_retention_days is not None else self.retention_days
         result = {"decisions_deleted": 0, "decisions_remaining": 0}
+        def _do(conn):
+            cur = conn.cursor()
+            try:
+                if days > 0:
+                    cur.execute(
+                        "DELETE FROM decisions WHERE created_at < datetime('now', ?, 'localtime')",
+                        (f"-{days} days",),
+                    )
+                    result["decisions_deleted"] = cur.rowcount
+                cur.execute("SELECT COUNT(*) FROM decisions")
+                total = cur.fetchone()[0]
+                if total > self._hard_cap:
+                    excess = total - self._hard_cap
+                    cur.execute(
+                        "DELETE FROM decisions WHERE id IN ("
+                        "SELECT id FROM decisions ORDER BY created_at ASC, id ASC LIMIT ?)",
+                        (excess,),
+                    )
+                    result["decisions_deleted"] += cur.rowcount
+                cur.execute("SELECT COUNT(*) FROM decisions")
+                result["decisions_remaining"] = cur.fetchone()[0]
+                conn.commit()
+            finally:
+                cur.close()
         try:
-            cur = self.store.conn.cursor()
-            if days > 0:
-                cur.execute(
-                    "DELETE FROM decisions WHERE created_at < datetime('now', ?, 'localtime')",
-                    (f"-{days} days",),
-                )
-                result["decisions_deleted"] = cur.rowcount
-            cur.execute("SELECT COUNT(*) FROM decisions")
-            total = cur.fetchone()[0]
-            if total > self._hard_cap:
-                excess = total - self._hard_cap
-                cur.execute(
-                    "DELETE FROM decisions WHERE id IN ("
-                    "SELECT id FROM decisions ORDER BY created_at ASC, id ASC LIMIT ?)",
-                    (excess,),
-                )
-                result["decisions_deleted"] += cur.rowcount
-            cur.execute("SELECT COUNT(*) FROM decisions")
-            result["decisions_remaining"] = cur.fetchone()[0]
-            self.store.conn.commit()
+            self.store.write_main_with_retry(_do)
         except sqlite3.Error as e:
             logger.warning("数据库提交失败: %s", e)
             try:

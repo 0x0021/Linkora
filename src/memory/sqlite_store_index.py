@@ -149,10 +149,12 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
         常驻 bot 进程据此判定其内存 FAISS 索引已陈旧并触发重建，
         解决「后台能搜到、机器人搜不到」的索引陈旧问题。
         返回自增后的版本号；异常时保守返回 0。
+
+        【P1 2026-10-05 主库写闸门收口】原直连 ``self.conn.commit()`` 绕过进程内写闸门，
+        改为经 :meth:`write_main_with_retry` 收口（与方法所在的 store 同属一个全局闸门）。
         """
-        try:
-            self._ensure_kb_meta()
-            cur = self.conn.cursor()
+        def _do(conn):
+            cur = conn.cursor()
             cur.execute(
                 "UPDATE kb_meta SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) "
                 "WHERE key = 'revision'"
@@ -161,10 +163,14 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
                 cur.execute(
                     "INSERT INTO kb_meta (key, value) VALUES ('revision', '1')"
                 )
-            self.conn.commit()
+            conn.commit()
             cur.execute("SELECT value FROM kb_meta WHERE key = 'revision'")
             row = cur.fetchone()
             return int(row["value"]) if row else 1
+
+        try:
+            self._ensure_kb_meta()
+            return self.write_main_with_retry(_do)
         except sqlite3.Error:
             # 仅 DB 层失败（表不存在 / 损坏 / 锁冲突）才兜底；非 DB 错误仍向上抛
             logger.warning("[resilience] bump_kb_revision failed", exc_info=True)

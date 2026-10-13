@@ -14,12 +14,32 @@ import threading
 import traceback
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional, TypeVar
 
 from src.memory import account_identity
 from src.memory.schema import init_conv_schema, init_schema
 
+# 主库写闸门 write_main_with_retry() 的返回值类型（透传 fn(conn) 的结果）
+R = TypeVar("R")
+
 logger = logging.getLogger(__name__)
+
+# ── 主库写闸门收口：应用级 store 注册表 ──
+# usage_ledger 此前用独立短连接直写主库 linkora.db，绕过本进程写闸门（同源 P1 缺陷）。
+# 注册后其写操作经 store.write_main_with_retry 与主库 repo 写入在同一把全局闸门上串行，
+# 彻底消除「主库写侧未收口」。由 store_factory.get_store() 在构造单例后调用。
+_MAIN_STORE = None
+
+
+def register_main_store(store) -> None:
+    """注册应用的主库 SQLiteStore 单例（供独立写模块复用同一进程内写闸门）。"""
+    global _MAIN_STORE
+    _MAIN_STORE = store
+
+
+def get_main_store():
+    """返回已注册的主库 store；未注册（独立单测 / 非应用上下文）时返回 None。"""
+    return _MAIN_STORE
 
 
 def _caller_label(skip_files: tuple[str, ...] = ("contextlib.py", "sqlite_store_conn.py")) -> str:
@@ -404,6 +424,69 @@ class SQLiteStoreConnMixin(SQLiteStoreBase):
                 )
                 self.discard_conv_conn(platform)
                 time.sleep(0.05 * attempt)  # 轻微退避，给并发写让出窗口
+
+    def discard_conn(self) -> None:
+        """丢弃【当前线程】缓存的主库连接（下次 ``self.conn`` 会重建）。
+
+        与 :meth:`discard_conv_conn` 同理：连接上残留未关闭游标 → 陈旧 WAL 读快照
+        → 写库稳定报 ``SQLITE_BUSY_SNAPSHOT``（busy_timeout 无效），只能丢弃重建连接
+        恢复。仅影响当前线程，不干扰其他线程连接。
+        """
+        tid = threading.get_ident()
+        with self._conns_lock:
+            conn = self._conns.pop(tid, None)
+        if conn is not None:
+            try:
+                conn.close()
+            except sqlite3.Error as e:  # noqa: BLE001
+                logger.debug("丢弃主库连接失败（可忽略）: %s", e)
+
+    def write_main_with_retry(
+        self,
+        fn: Callable[[sqlite3.Connection], R],
+        *,
+        max_attempts: int = 3,
+    ) -> R:
+        """执行一次【主库 linkora.db】写操作，进程内串行化 + 遇锁失败自愈重试。
+
+        与 :meth:`write_with_retry`（会话库）对称，但作用对象是全局主库 ``linkora.db``。
+        同样经过类级全局写闸门 ``_write_gate``，故与会话库写操作在**同一把进程内闸门**
+        上串行——本进程内任意时刻只有一个写者在跑（无论写哪个库），彻底消除
+        「写侧未收口」类事故在主库复现（见 2026-10-05 会话库事故根因）。
+
+        结构同 ``write_with_retry``：闸门只包住「execute + commit」，等待 busy_timeout
+        发生在闸门外；锁失败时丢弃当前线程主库连接重建（清掉陈旧读快照）并退避重试。
+        """
+        for attempt in range(1, max_attempts + 1):
+            conn = self.conn  # 闸门外取连接
+            try:
+                with self._write_gate():
+                    return fn(conn)
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e).lower() or attempt >= max_attempts:
+                    raise
+                try:
+                    _stack = " ← ".join(
+                        f"{Path(f.filename).name}:{f.lineno}:{f.name}"
+                        for f in traceback.extract_stack(limit=8)[:-1]
+                        if "sqlite_store" not in f.filename
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.warning("broad except swallowed in write_main_with_retry() @ src/memory/sqlite_store_conn.py, see exc_info", exc_info=True)
+                    _stack = "<stack unavailable>"
+                logger.warning(
+                    "[SQLite] 主库写锁来源 self=%s db=%s 链路: %s",
+                    id(self), Path(self.db_path).name, _stack,
+                )
+                logger.warning(
+                    "[SQLite] 主库写库锁失败，自愈重试 %d/%d db=%s 闸门持有者=%s: %s",
+                    attempt, max_attempts, Path(self.db_path).name,
+                    self._write_gate_current_holder() or "(无·锁在别处)", e,
+                )
+                self.discard_conn()
+                time.sleep(0.05 * attempt)  # 轻微退避，给并发写让出窗口
+        # 不可达：循环最后一次尝试失败必然 raise（attempt >= max_attempts 分支）
+        raise AssertionError("write_main_with_retry: 不可达分支")
 
     def _write_gate_current_holder(self) -> str:
         """诊断用：返回当前持有全局写闸门的线程标识（无持有者则空串）。

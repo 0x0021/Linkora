@@ -281,9 +281,8 @@ class KeywordRulesTool(BaseTool):
         action = args.get("action", "list")
 
         try:
-            cur = self.store.conn.cursor()
-
             if action == "list":
+                cur = self.store.conn.cursor()
                 cur.execute(
                     "SELECT id, match_pattern, reply_text, category, enabled, hit_count, created_at "
                     "FROM keyword_rules ORDER BY category, priority DESC, hit_count DESC"
@@ -300,13 +299,19 @@ class KeywordRulesTool(BaseTool):
                     return {"error": "match_pattern 和 reply_text 不能为空"}
 
                 now = time.strftime("%Y-%m-%d %H:%M:%S")
-                cur.execute(
-                    "INSERT INTO keyword_rules (match_pattern, reply_text, category, enabled, hit_count, created_at, updated_at) "
-                    "VALUES (?, ?, ?, 1, 0, ?, ?)",
-                    (pattern, reply, category, now, now),
-                )
-                self.store.conn.commit()
-                rule_id = cur.lastrowid
+
+                def _do(conn):
+                    cur = conn.cursor()
+                    cur.execute(
+                        "INSERT INTO keyword_rules (match_pattern, reply_text, category, enabled, hit_count, created_at, updated_at) "
+                        "VALUES (?, ?, ?, 1, 0, ?, ?)",
+                        (pattern, reply, category, now, now),
+                    )
+                    conn.commit()
+                    return cur.lastrowid
+
+                # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+                rule_id = self.store.write_main_with_retry(_do)
                 return {"success": True, "rule_id": rule_id, "message": "规则添加成功"}
 
             elif action in ("enable", "disable"):
@@ -315,13 +320,19 @@ class KeywordRulesTool(BaseTool):
                     return {"error": "rule_id 不能为空"}
 
                 enabled = 1 if action == "enable" else 0
-                cur.execute(
-                    "UPDATE keyword_rules SET enabled = ?, updated_at = ? WHERE id = ?",
-                    (enabled, time.strftime("%Y-%m-%d %H:%M:%S"), rule_id),
-                )
-                self.store.conn.commit()
 
-                if cur.rowcount > 0:
+                def _do(conn):
+                    cur = conn.cursor()
+                    cur.execute(
+                        "UPDATE keyword_rules SET enabled = ?, updated_at = ? WHERE id = ?",
+                        (enabled, time.strftime("%Y-%m-%d %H:%M:%S"), rule_id),
+                    )
+                    conn.commit()
+                    return cur.rowcount
+
+                # 【P1 2026-10-05 主库写闸门收口】原直连 self.store.conn.commit() 绕过闸门
+                affected = self.store.write_main_with_retry(_do)
+                if affected > 0:
                     return {"success": True, "message": "规则已{}".format("启用" if enabled else "禁用")}
                 else:
                     return {"error": "未找到该规则"}

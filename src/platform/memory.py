@@ -639,6 +639,17 @@ class MemoryMixin(EngineMixinBase):
                         logger.debug("[WAL] 平台 %s 存储已关闭，停止 checkpoint: %s", ctx.id, e)
                         return
 
+                # 主库 linkora.db 同样需要周期 checkpoint：承载 memories / decisions /
+                # tool_execution_logs / drafts 等高频写表，漏掉会导致主库 WAL 长期累积
+                # （与当初各分库 WAL 累积的修复初衷一致，只是当初漏了主库）。
+                try:
+                    self.store.conn.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+                except sqlite3.Error as e:
+                    logger.warning("[WAL] 主库 checkpoint 失败（可忽略）: %s", e)
+                except RuntimeError as e:
+                    logger.debug("[WAL] 主库存储已关闭，停止 checkpoint: %s", e)
+                    return
+
                 # 每 30 分钟执行一次（等待期间可被关闭信号立即唤醒）
                 for _ in range(interval_min * 60):
                     if not self._running:

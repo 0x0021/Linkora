@@ -283,7 +283,7 @@ platforms:
   #   adapter_type: feishu
   #   adapter: { cli_path: lark-cli }                # 飞书 CLI（lark-cli v1.0.72+）
   #   rag:                                          # 平台级 KB 覆盖（不配则沿用全局 rag）
-  #     embedding_model: BAAI/bge-base-zh-v1.5
+  #     embedding_model: BAAI/bge-small-zh-v1.5
   #     chunk_size: 800
   #     chunk_overlap: 120
   #     chunk_hard_max: 1600
@@ -322,7 +322,7 @@ embedding:
   base_url: ''                                     # Embedding API Base URL（使用 local 模式时可为空）
   enabled: true                                    # * 是否启用 Embedding（false = 禁用 RAG 知识库检索）
   hf_token: ''                                     # HuggingFace Token（用于下载模型，可选）
-  model: BAAI/bge-base-zh-v1.5                     # * Embedding 模型名称（local 模式自动下载到 ~/.cache/huggingface）
+  model: BAAI/bge-small-zh-v1.5  # * Embedding 模型名称（local 模式自动下载到 ~/.cache/huggingface；须与预建 FAISS 索引维度一致，默认 512 维）
   provider: local                                  # * 提供商类型（local = 本地模型，openai = OpenAI API 等）
   top_k: 5                                         # 向量检索返回的候选数量（top-k）
   offline: false                                   # 是否纯离线（true=禁止联网下载，仅用本地缓存）
@@ -334,13 +334,13 @@ embedding:
 # ============================================================
 llm:
   advanced:                                         # 高级限制参数（防止输出过长或过短）
-    hard_truncation_chars: 800                     # 硬质截断字符数（极端超长安全网）
-    max_chars_daily_chat: 512                      # 日常闲聊场景最大字符数（放宽以保留真人表达习惯）
-    max_chars_tech_issue: 1024                     # 技术问题场景最大字符数
+    hard_truncation_chars: 300                     # 硬质截断字符数（极端超长安全网；与代码默认一致）
+    max_chars_daily_chat: 50                       # 日常闲聊场景最大字符数（代码默认 50，避免过长）
+    max_chars_tech_issue: 100                      # 技术问题场景最大字符数（代码默认 100）
     rag_auto_inject: true                          # 是否自动注入 RAG 相关知识到 system prompt
-    rag_intent_only: false                         # 总是注入 RAG 相关知识（每个问题先查 KB 再答，强抗幻觉；闲聊也会检索，算力略升）
-    rag_min_similarity: 0.30                       # 自动注入最低相似度门槛（v3: 降低门控让更多查询走RAG）
-    rag_max_results: 4                             # 自动注入最多返回几条（v3: 增加上下文给LLM更多知识）
+    rag_intent_only: true                          # 仅当 query 含文档/知识查询意图时才注入（闲聊/天气/问候等不注入；省 token、抗弱相关）
+    rag_min_similarity: 0.6                        # 自动注入最低相似度门槛（收紧召回，避免弱相关内容进 prompt）
+    rag_max_results: 1                             # 自动注入最多返回几条（越少越省 token，关键信息通常在最相关的前 1 条）
     rag_max_content_chars: 1200                    # 单条注入知识展示上限（>= 分块大小，避免答案被切）
     rag_empty_fallback_enabled: true               # 空-RAG 强制兜底：知识库无匹配时，架构层硬编码固定回复（防止 LLM 编造）
     rag_empty_fallback_reply: "知识库中暂未收录相关信息，请联系IT部门或查阅内部文档确认。"  # 空-RAG 兜底回复文案

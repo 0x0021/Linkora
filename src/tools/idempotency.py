@@ -32,6 +32,7 @@ SIDE_EFFECT_TOOLS: frozenset[str] = frozenset(
         "send_ding",  # 发送 DING 强提醒（app 类型免确认、立即执行）
         "create_todo",  # 创建待办
         "save_memory",  # 写入长期记忆
+        "upload_image",  # 上传图片（对外副作用；dws 当前已下线该能力，恢复后需防 at-least-once 重放双发）
     }
 )
 

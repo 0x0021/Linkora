@@ -29,7 +29,7 @@ from PIL import Image
 
 import web.api as _api
 from src.paths import get_skill_icons_dir
-from src.utils.net import is_ssrf_safe
+from src.utils.net import is_ssrf_safe, ssrf_safe_get
 from web.security import resolve_safe_ip  # SSRF 防护：白名单 host 仍可能 DNS 重绑定到内网，需钉公网 IP
 
 logger = logging.getLogger(__name__)
@@ -483,17 +483,15 @@ async def _download_skill_icon(slug: str, icon_url: str) -> bool:
     if os.path.isfile(dest):
         return True  # 已有缓存，幂等跳过
     try:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0),
-            follow_redirects=True,
-        ) as client:
-            r = await client.get(icon_url, headers={"User-Agent": "Linkora-SkillIcon/1.0"})
-            if r.status_code == 200:
-                ctype = r.headers.get("content-type", "")
-                if ctype.startswith("image/"):
-                    with open(dest, "wb") as _f:
-                        _f.write(r.content)
-                    return True
+        # 复用 net.ssrf_safe_get：解析一次即钉死公网 IP、默认不跟随重定向，
+        # 消除 DNS 重绑定 TOCTOU 与重定向 SSRF（与 /api/proxy/image 同源防护）。
+        resp = await run_in_threadpool(ssrf_safe_get, icon_url, timeout=15.0)
+        if resp.status_code == 200:
+            ctype = resp.headers.get("content-type", "")
+            if ctype.startswith("image/"):
+                with open(dest, "wb") as _f:
+                    _f.write(resp.content)
+                return True
     except Exception as _e:
         logger.debug("下载技能图标失败，忽略: %s", _e)
     return False

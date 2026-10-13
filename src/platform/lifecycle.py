@@ -108,6 +108,9 @@ class LifecycleMixin(EngineMixinBase):
         - "worker"：仅跑后台轮询器 + 调度器（不启 Web），与 web 进程共享 SQLite(WAL)。
         web/worker 两进程可由 scripts/run_linkora.py 拉起，实现「改 Web 代码只重启 web 进程」。
         """
+        if self._running:
+            logger.warning("run() 已在运行，忽略重复调用（避免后台线程翻倍）")
+            return
         self._running = True
         self._shutdown_event.clear()
         # 职责门控：web/worker 两模式互斥启动对应部分，both 两者都启

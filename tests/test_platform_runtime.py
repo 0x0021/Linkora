@@ -250,10 +250,18 @@ def test_run_launches_per_platform_poller_threads(monkeypatch):
     bot._start_messages_cleanup_scheduler = lambda: MagicMock()
     bot._start_global_tables_cleanup_scheduler = lambda: MagicMock()
     bot._start_wal_checkpoint_scheduler = lambda: MagicMock()
-    # 主线程立即触发关闭，避免无限等待
-    bot._shutdown_event = threading.Event()
-    bot._running = True
-    bot._shutdown_event.set()
+    # 主线程立即触发关闭，避免无限等待。
+    # ⚠️ 不能把 _running 预先置 True：run() 开头的「已在运行」守卫会直接 return，
+    # 轮询线程根本不会被创建（该守卫上线后本测试即恒失败，且掩盖了真实回归）。
+    # 正确做法是让等待循环立刻返回：run() 内部会 clear 事件，故只 set 不够。
+    class _ImmediateShutdown(threading.Event):
+        """wait() 恒返回 True：启动完轮询线程后主线程立即退出等待。"""
+
+        def wait(self, timeout=None):  # noqa: D102
+            return True
+
+    bot._shutdown_event = _ImmediateShutdown()
+    bot._running = False
 
     # 阻止真实信号处理与 web 启动
     started = []

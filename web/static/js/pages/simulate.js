@@ -132,6 +132,13 @@ async function loadSimulatePage() {
     // 避免初次加载或 API 失败时仅显示裸 banner，底部 3 张卡（路由/工具/证据）被裁。
     _initSimulateResultShell();
 
+    // 技能来源徽标映射（内置 vs 用户安装）；拉取失败不阻断页面
+    if (typeof ensureSkillOriginMap === 'function') {
+        ensureSkillOriginMap().then(() => {
+            renderSimHistory();          // 回填历史记录里的技能徽标
+        });
+    }
+
     try {
         const [samplesRes, statusRes, historyRes] = await Promise.all([
             api.get('/api/simulate/sample-messages'),
@@ -272,7 +279,7 @@ function renderSimHistory(history) {
                 <div class="sim-history-meta">
                     <span><i class="fa-solid fa-user"></i> ${escapeHtml(item.sender_name || '测试用户')}</span>
                     <span><i class="fa-solid fa-clock"></i> ${time}</span>
-                    ${item.skill_name ? `<span><i class="fa-solid fa-wrench"></i> ${escapeHtml(item.skill_name)}</span>` : ''}
+                    ${item.skill_name ? `<span><i class="fa-solid fa-wrench"></i> ${escapeHtml(item.skill_name)} ${skillOriginBadge(item.skill_name)}</span>` : ''}
                 </div>
             </div>
         `;
@@ -416,7 +423,7 @@ function _buildRouteCardBody(res) {
                 <div class="sim-route-icon-wrap"><i class="fa-solid fa-target"></i></div>
                 <div class="sim-route-info">
                     <span class="sim-route-label">命中技能</span>
-                    <span class="sim-route-value ${res.skill_name ? '' : 'muted'}">${res.skill_name ? escapeHtml(res.skill_name) : '未命中'}</span>
+                    <span class="sim-route-value ${res.skill_name ? '' : 'muted'}">${res.skill_name ? escapeHtml(res.skill_name) : '未命中'}${res.skill_name ? ' ' + skillOriginBadge(res.skill_name) : ''}</span>
                 </div>
             </div>
             <div class="sim-route-item">

@@ -514,6 +514,8 @@ async function loadSkillsPage() {
 
         const skills = data.skills || [];
         _installedSkillNames.clear();
+        // 注册 name→origin，供本页弹窗标题与跨页（决策流/路由追踪）徽标查找
+        registerSkillOrigins(skills);
 
         if (skills.length === 0) {
             container.innerHTML = `
@@ -566,6 +568,7 @@ async function loadSkillsPage() {
                     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px;">
                         <div>
                             <strong class="skill-name" style="font-size:16px;">${escapeHtml(s.name)}</strong>
+                            ${skillOriginBadgeHtml(s.origin)}
                             ${platformToggle}
                             ${s.error ? '<span class="pill" style="background:#fff2f0;color:#ef4444;margin-left:8px;">加载失败</span>' : ''}
                         </div>
@@ -610,6 +613,9 @@ async function loadSkillsPage() {
             </div>`;
     }
 }
+
+// 供 app.js init() 桥接与页面级测试调用（与文件内其它 window.X 导出一致）
+window.loadSkillsPage = loadSkillsPage;
 
 async function installSkill() {
     const input = document.getElementById('skill-repo-input');
@@ -759,7 +765,8 @@ window.reloadSkills = reloadSkills;
 async function openSkillConfig(name) {
     if (!name) return;
     document.getElementById('skill-config-name').value = name;
-    document.getElementById('skill-config-title').textContent = `技能配置 — ${name}`;
+    document.getElementById('skill-config-title').innerHTML =
+        `技能配置 — ${escapeHtml(name)} ${skillOriginBadge(name)}`;
     document.getElementById('skill-config-editor').value = '# 加载中...';
     document.getElementById('skill-config-modal').classList.add('active');
 
@@ -815,7 +822,8 @@ window.saveSkillConfig = saveSkillConfig;
 function openSkillIntent(name, keywords) {
     if (!name) return;
     document.getElementById('skill-intent-name').value = name;
-    document.getElementById('skill-intent-title').textContent = `意图关键词 — ${name}`;
+    document.getElementById('skill-intent-title').innerHTML =
+        `意图关键词 — ${escapeHtml(name)} ${skillOriginBadge(name)}`;
 
     // 渲染已有关键词为可删除的 chip
     const wrap = document.getElementById('skill-intent-chips');
@@ -914,7 +922,8 @@ async function openSkillAiIntent(name) {
     if (!name) return;
     _aiIntentName = name;
     const modal = document.getElementById('skill-ai-intent-modal');
-    document.getElementById('skill-ai-intent-title').textContent = `AI 生成意图词 — ${name}`;
+    document.getElementById('skill-ai-intent-title').innerHTML =
+        `AI 生成意图词 — ${escapeHtml(name)} ${skillOriginBadge(name)}`;
     const body = document.getElementById('skill-ai-intent-body');
     body.innerHTML = `
         <div class="ai-intent-loading">

@@ -25,6 +25,8 @@ async def list_tools(platform: str = ""):
     - in_whitelist: 是否在 config.yaml tools.available 白名单内
     - blocked_by_skill: 是否被已停用技能级联屏蔽
     - source: "builtin" 或 "skill"（内置工具 vs 技能自动包装）
+    - skill_origin: source="skill" 时所属技能的来源（builtin=平台内置技能 /
+      user=用户安装技能）；内置工具为 null
     - status: "active" | "disabled_whitelist" | "disabled_skill"
 
     当 platform 参数非空时，按平台过滤：
@@ -69,6 +71,9 @@ async def list_tools(platform: str = ""):
             name = t.name
             mod = type(t).__module__
             is_builtin = mod.startswith("src.tools") or "tool_wrapper" not in mod
+            # 技能自动包装的工具携带所属技能来源（SkillTool.skill_origin），
+            # 供前端区分「内置技能工具」与「用户安装技能工具」；内置工具无此属性。
+            skill_origin = None if is_builtin else getattr(t, "skill_origin", None)
             # 内置工具受白名单约束；skill 工具不受白名单约束（由 skill enabled 门控）
             in_whitelist = (not whitelist) or (name in whitelist) or (not is_builtin)
             blocked = name in blocked_by_skill
@@ -87,6 +92,7 @@ async def list_tools(platform: str = ""):
                 "intent_categories": list(getattr(t, "intent_categories", []) or []),
                 "platforms": list(getattr(t, "platforms", []) or []),
                 "source": "builtin" if is_builtin else "skill",
+                "skill_origin": skill_origin,
                 "in_whitelist": in_whitelist,
                 "blocked_by_skill": blocked,
                 "status": status,

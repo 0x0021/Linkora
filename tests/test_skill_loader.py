@@ -418,6 +418,93 @@ class TestLoad:
             assert result is None
 
 
+# ── 来源分类（平台内置 vs 用户安装）─────────────────────────
+
+class TestClassifyOrigin:
+    """classify_skill_origin：src/skills 与捆绑 data/skills → builtin；
+    可写 data/skills 与 .agents/skills → user；异常保守回退 user。"""
+
+    def _fake_roots(self, monkeypatch, app_root: Path, user_data_skills: Path):
+        """把 loader 模块内的 get_app_root / data_path 指到测试目录。
+
+        data_path 语义与 src.paths 一致：``data_path("skills")`` 返回技能目录本身，
+        故 fake 以 ``user_data_skills.parent`` 为数据目录根再拼接参数。
+        """
+        import src.skills.loader as loader_mod
+        monkeypatch.setattr(loader_mod, "get_app_root", lambda: app_root)
+        monkeypatch.setattr(loader_mod, "data_path",
+                            lambda *parts: user_data_skills.parent.joinpath(*parts))
+
+    def test_src_skills_is_builtin(self, monkeypatch, tmp_path):
+        app_root = tmp_path / "app"
+        skill_md = app_root / "src" / "skills" / "demo" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True)
+        skill_md.write_text("---\nname: demo\n---\n", encoding="utf-8")
+        self._fake_roots(monkeypatch, app_root, tmp_path / "userdata" / "skills")
+        from src.skills.loader import classify_skill_origin
+        assert classify_skill_origin(skill_md) == "builtin"
+
+    def test_bundled_data_skills_is_builtin_when_distinct(self, monkeypatch, tmp_path):
+        """冻结态：捆绑 data/skills 与可写数据目录分离 → builtin。"""
+        app_root = tmp_path / "app"
+        skill_md = app_root / "data" / "skills" / "bundled" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True)
+        skill_md.write_text("---\nname: bundled\n---\n", encoding="utf-8")
+        self._fake_roots(monkeypatch, app_root, tmp_path / "userdata" / "skills")
+        from src.skills.loader import classify_skill_origin
+        assert classify_skill_origin(skill_md) == "builtin"
+
+    def test_same_dir_counts_as_user(self, monkeypatch, tmp_path):
+        """开发态：data_path('skills') 与捆绑目录同为仓库 data/skills → user。"""
+        app_root = tmp_path / "app"
+        skill_md = app_root / "data" / "skills" / "weather" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True)
+        skill_md.write_text("---\nname: weather\n---\n", encoding="utf-8")
+        # data_path('skills') 指向同一目录（cwd=仓库根时的真实形态）
+        self._fake_roots(monkeypatch, app_root, app_root / "data" / "skills")
+        from src.skills.loader import classify_skill_origin
+        assert classify_skill_origin(skill_md) == "user"
+
+    def test_agents_legacy_path_is_user(self, monkeypatch, tmp_path):
+        app_root = tmp_path / "app"
+        skill_md = tmp_path / ".agents" / "skills" / "legacy" / "SKILL.md"
+        skill_md.parent.mkdir(parents=True)
+        skill_md.write_text("---\nname: legacy\n---\n", encoding="utf-8")
+        self._fake_roots(monkeypatch, app_root, tmp_path / "userdata" / "skills")
+        from src.skills.loader import classify_skill_origin
+        assert classify_skill_origin(skill_md) == "user"
+
+    def test_unresolvable_path_falls_back_user(self, monkeypatch, tmp_path):
+        app_root = tmp_path / "app"
+        self._fake_roots(monkeypatch, app_root, tmp_path / "userdata" / "skills")
+        from src.skills.loader import classify_skill_origin
+        assert classify_skill_origin("/nonexistent/xyz/SKILL.md") == "user"
+
+    def test_load_sets_origin_from_dir(self, monkeypatch, tmp_path):
+        """load() 按所在目录写 origin：src/skills → builtin，data/skills → user。"""
+        import src.skills.loader as loader_mod
+        app_root = tmp_path / "app"
+        self._fake_roots(monkeypatch, app_root, tmp_path / "userdata" / "skills")
+        # discover 只扫测试内的 src/skills，避免读到真实仓库技能
+        monkeypatch.setattr(loader_mod, "_SKILL_DIRS", [str(app_root / "src" / "skills")])
+
+        builtin_dir = app_root / "src" / "skills" / "demo-builtin"
+        builtin_dir.mkdir(parents=True)
+        (builtin_dir / "SKILL.md").write_text(
+            "---\nname: demo-builtin\ndescription: 内置演示\n---\n", encoding="utf-8")
+
+        user_dir = tmp_path / "userdata" / "skills" / "demo-user"
+        user_dir.mkdir(parents=True)
+        (user_dir / "SKILL.md").write_text(
+            "---\nname: demo-user\ndescription: 用户演示\n---\n", encoding="utf-8")
+
+        loader = SkillLoader(app_root)
+        skill_b = loader.load(str(builtin_dir))
+        skill_u = loader.load(str(user_dir))
+        assert skill_b is not None and skill_b.origin == "builtin"
+        assert skill_u is not None and skill_u.origin == "user"
+
+
 # ── _split_frontmatter ──────────────────────────────────────
 
 class TestSplitFrontmatter:

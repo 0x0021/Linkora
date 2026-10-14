@@ -80,6 +80,15 @@ class SkillTool(BaseTool):
         """是否具备可执行的 CLI 入口（模板或脚本）。"""
         return bool(self._cli_template or self._fallback_script)
 
+    @property
+    def skill_origin(self) -> str:
+        """所属技能的来源类型（builtin=平台内置 / user=用户安装）。
+
+        供 Web「工具调用链路」区分「内置技能工具」与「用户安装技能工具」，
+        与 Skill.origin 单一真源一致（见 src.skills.loader.classify_skill_origin）。
+        """
+        return getattr(self._skill, "origin", "user")
+
     # ── BaseTool 抽象方法 ──────────────────────────────────────
 
     @property

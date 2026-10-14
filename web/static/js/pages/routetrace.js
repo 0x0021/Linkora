@@ -259,7 +259,7 @@ function renderRouteCard(rec) {
     const chips = [];
     if (intent && intent !== "—") chips.push(`<span class="rt-chip">意图 ${escapeHtml(intent)}</span>`);
     if (action && action !== "—") chips.push(`<span class="rt-chip">动作 ${escapeHtml(action)}</span>`);
-    chips.push(`<span class="rt-chip rt-chip-strong">技能 ${escapeHtml(skill)} <b>${scoreStr}</b></span>`);
+    chips.push(`<span class="rt-chip rt-chip-strong">技能 ${escapeHtml(skill)} ${skillOriginBadge(skill)} <b>${scoreStr}</b></span>`);
     if (mode && mode !== "—") chips.push(`<span class="rt-chip">模式 ${escapeHtml(mode)}</span>`);
     if (convApplied) chips.push(`<span class="rt-chip-badge rt-chip-conv"><i class="fa-solid fa-bolt"></i> 收敛介入</span>`);
     if (comboCnt > 0) chips.push(`<span class="rt-chip-badge rt-chip-combo"><i class="fa-solid fa-layer-group"></i> 组合×${comboCnt}</span>`);
@@ -391,6 +391,8 @@ async function loadRouteTrace(page) {
     if (!listEl) return;
     listEl.classList.add("rt-list");
     try {
+        // 技能来源徽标映射（内置 vs 用户安装）；拉取失败不阻断链路渲染
+        if (typeof ensureSkillOriginMap === "function") await ensureSkillOriginMap();
         const skill = document.getElementById("rt-filter-skill")?.value || "";
         const source = document.getElementById("rt-filter-source")?.value || "";
         const time = document.getElementById("rt-filter-time")?.value || "";
@@ -517,7 +519,7 @@ async function openRouteTraceDetail(id) {
                 <div><span class="rt-d-label">动作</span>${rtShortText(rec.intent_action, 18)}</div>
                 <div><span class="rt-d-label">行动意图</span>${(rec.intent_actions && String(rec.intent_actions).trim()) ? escapeHtml(rec.intent_actions) : '<span class="rt-muted">无</span>'}</div>
                 <div><span class="rt-d-label">被屏蔽工具</span>${blockedTools.length ? `<span class="rt-d-blocked">${escapeHtml(blockedTools.join(", "))}</span>` : '<span class="rt-muted">无</span>'}</div>
-                <div><span class="rt-d-label">主技能</span>${rtShortText(rec.primary_skill, 18)}</div>
+                <div><span class="rt-d-label">主技能</span>${rtShortText(rec.primary_skill, 18)} ${skillOriginBadge(rec.primary_skill)}</div>
                 <div><span class="rt-d-label">分数</span>${rec.primary_score ?? "—"}</div>
                 <div><span class="rt-d-label">路由模式</span>${rtShortText(rec.routing_mode, 18)}</div>
                 <div><span class="rt-d-label">LLM 模型</span>${rtShortText(rec.llm_model, 18)}</div>

@@ -19,10 +19,22 @@ function statusBadge(status) {
     }
 }
 
-function sourceLabel(source) {
-    return source === 'builtin'
-        ? '<span class="pill pill-intent">内置</span>'
-        : '<span class="pill pill-skill">技能</span>';
+// 来源三态：内置工具（平台手搓）/ 内置技能（平台技能自动包装）/ 用户技能（用户安装技能自动包装）
+// 与 core/util.js 的来源徽标视觉语言一致（靛蓝=平台、琥珀=用户、中性=内置工具）。
+function sourceLabel(source, skillOrigin) {
+    if (source === 'builtin') {
+        return '<span class="origin-badge origin-badge--tool" title="平台内置工具：随 Linkora 源码分发"><i class="fa-solid fa-screwdriver-wrench"></i>内置工具</span>';
+    }
+    if (skillOrigin === 'builtin') {
+        return '<span class="origin-badge origin-badge--builtin" title="平台内置技能自动包装的工具"><i class="fa-solid fa-cube"></i>内置技能</span>';
+    }
+    return '<span class="origin-badge origin-badge--user" title="用户安装技能自动包装的工具"><i class="fa-solid fa-arrow-down-to-bracket"></i>用户技能</span>';
+}
+
+// 客户端筛选用的来源归类（与来源列三态一一对应）
+function toolSourceKind(t) {
+    if (t.source === 'builtin') return 'builtin';
+    return t.skill_origin === 'builtin' ? 'skill_builtin' : 'skill_user';
 }
 
 function renderCategoryTags(categories) {
@@ -45,8 +57,8 @@ function renderToolsList() {
         }
         // 状态过滤
         if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-        // 来源过滤
-        if (sourceFilter !== 'all' && t.source !== sourceFilter) return false;
+        // 来源过滤（内置工具 / 内置技能 / 用户技能）
+        if (sourceFilter !== 'all' && toolSourceKind(t) !== sourceFilter) return false;
         return true;
     });
 
@@ -72,10 +84,11 @@ function renderToolsList() {
         + '                <option value="disabled_whitelist">白名单屏蔽</option>\n'
         + '                <option value="disabled_skill">技能停用屏蔽</option>\n'
         + '            </select>\n'
-        + '            <select id="tools-filter-source" class="form-select form-select-sm" data-action="renderToolsList" style="width:100px;">\n'
+        + '            <select id="tools-filter-source" class="form-select form-select-sm" data-action="renderToolsList" style="width:110px;">\n'
         + '                <option value="all">全部来源</option>\n'
-        + '                <option value="builtin">内置</option>\n'
-        + '                <option value="skill">技能</option>\n'
+        + '                <option value="builtin">内置工具</option>\n'
+        + '                <option value="skill_builtin">内置技能</option>\n'
+        + '                <option value="skill_user">用户技能</option>\n'
         + '            </select>\n'
         + '            <button class="btn btn-sm btn-outline-secondary" data-action="loadToolsPage" style="margin-left:auto"><i class="fa-solid fa-rotate"></i> 刷新</button>\n'
         + '        </div>';
@@ -107,7 +120,7 @@ function renderToolsList() {
             + '                </div>\n'
             + '                <div class="tool-desc-col" title="' + desc + '">' + desc + '</div>\n'
             + '                <div class="tool-cats">' + renderCategoryTags(t.intent_categories) + '</div>\n'
-            + '                <div class="tool-source">' + sourceLabel(t.source) + '</div>\n'
+            + '                <div class="tool-source">' + sourceLabel(t.source, t.skill_origin) + '</div>\n'
             + '                <div class="tool-status-col">' + statusBadge(t.status) + '</div>\n'
             + '            </div>';
     }

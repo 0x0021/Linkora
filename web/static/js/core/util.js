@@ -232,4 +232,83 @@
         return _chartLoadPromise;
     }
     global.loadChart = loadChart;
+
+    // ============ 技能来源标识（平台内置 vs 用户安装） ============
+    // 单一真源：src/skills/loader.py::classify_skill_origin（builtin=平台内置 /
+    // user=用户安装）。Web 端所有涉及技能展示的界面（技能列表 / 技能弹窗 /
+    // 意图映射 / 工具链路 / 路由追踪 / 决策流）共用本注册表与徽标渲染，
+    // 保证「一眼可辨」的视觉语言全站一致。
+    //
+    // 两种用法：
+    // 1) 列表页直接拿到 skill.origin 字段 → skillOriginBadgeHtml(origin)；
+    // 2) 历史记录（决策 / 路由追踪）只有技能名 → ensureSkillOriginMap() 拉一次
+    //    /api/skills 建 name→origin 映射，render 后 applySkillOriginBadges(root)
+    //    把 [data-skill-origin] 占位槽补上徽标。
+    const _skillOriginMap = new Map();   // skill name -> 'builtin' | 'user'
+    let _skillOriginPromise = null;
+
+    const _SKILL_ORIGIN_META = {
+        builtin: {
+            label: '内置', icon: 'fa-cube',
+            title: '平台内置技能：随 Linkora 源码分发，修改会影响所有部署',
+        },
+        user: {
+            label: '安装', icon: 'fa-arrow-down-to-bracket',
+            title: '用户安装技能：来自 SkillHub 市场或手动安装，可随时卸载',
+        },
+    };
+
+    /** 用 /api/skills 列表批量注册 name→origin（幂等，后写不覆盖已有）。 */
+    function registerSkillOrigins(skills) {
+        if (!Array.isArray(skills)) return;
+        for (const s of skills) {
+            if (s && s.name && (s.origin === 'builtin' || s.origin === 'user')) {
+                _skillOriginMap.set(s.name, s.origin);
+            }
+        }
+    }
+
+    /** 确保来源映射已加载（全局只发一次请求）；失败静默降级为「不显示徽标」。 */
+    function ensureSkillOriginMap() {
+        if (_skillOriginPromise) return _skillOriginPromise;
+        _skillOriginPromise = (typeof global.api !== 'undefined' && global.api && global.api.fetch)
+            ? global.api.fetch('/api/skills')
+                .then(function (data) { registerSkillOrigins((data && data.skills) || []); })
+                .catch(function () { /* 徽标降级：不阻断页面渲染 */ })
+            : Promise.resolve();
+        return _skillOriginPromise;
+    }
+
+    /** 由显式 origin 渲染徽标 HTML（列表页用）；origin 缺失返回空串。 */
+    function skillOriginBadgeHtml(origin) {
+        const meta = _SKILL_ORIGIN_META[origin];
+        if (!meta) return '';
+        return '<span class="origin-badge origin-badge--' + origin + '" title="' + meta.title + '">'
+            + '<i class="fa-solid ' + meta.icon + '"></i>' + meta.label + '</span>';
+    }
+
+    /** 由技能名查注册表渲染徽标 HTML（决策流 / 路由追踪等历史场景用）。 */
+    function skillOriginBadge(name) {
+        if (!name) return '';
+        return skillOriginBadgeHtml(_skillOriginMap.get(name));
+    }
+
+    /** 把 root 内所有 [data-skill-origin] 占位槽补上徽标（重复调用安全）。 */
+    function applySkillOriginBadges(root) {
+        const scope = root || document;
+        const slots = scope.querySelectorAll('[data-skill-origin]:not([data-skill-origin-done])');
+        for (const el of slots) {
+            const html = skillOriginBadge(el.getAttribute('data-skill-origin'));
+            if (html) {
+                el.innerHTML = html;
+                el.setAttribute('data-skill-origin-done', '1');
+            }
+        }
+    }
+
+    global.registerSkillOrigins = registerSkillOrigins;
+    global.ensureSkillOriginMap = ensureSkillOriginMap;
+    global.skillOriginBadgeHtml = skillOriginBadgeHtml;
+    global.skillOriginBadge = skillOriginBadge;
+    global.applySkillOriginBadges = applySkillOriginBadges;
 })(window);

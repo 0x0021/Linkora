@@ -1696,6 +1696,55 @@ class TestNewFeatureEndpoints:
         assert send["status"] == "active"
         assert send["in_whitelist"] is True
 
+    def test_tools_chain_skill_tool_origin(self, tmp_config, tmp_db):
+        """技能自动包装的工具携带 skill_origin；内置工具为 null。
+
+        覆盖「工具链路」页区分 内置工具 / 内置技能 / 用户安装技能 的数据契约。
+        """
+        from fastapi.testclient import TestClient
+        from web.api import app
+
+        builtin_tool = MagicMock()
+        builtin_tool.name = "send_message"
+        builtin_tool.display_name = "send_message"
+        builtin_tool.description = "Send a DingTalk message"
+        builtin_tool.intent_categories = ["domain.communication"]
+        type(builtin_tool).__module__ = "src.tools.send_message"
+
+        # 用户安装技能自动包装的工具（SkillTool：module 含 tool_wrapper + skill_origin）
+        user_skill_tool = MagicMock()
+        user_skill_tool.name = "weather_skill"
+        user_skill_tool.display_name = "weather"
+        user_skill_tool.description = "天气查询"
+        user_skill_tool.intent_categories = ["domain.weather"]
+        user_skill_tool.skill_origin = "user"
+        type(user_skill_tool).__module__ = "src.skills.tool_wrapper"
+
+        router = MagicMock()
+        router._tools = {"send_message": builtin_tool, "weather_skill": user_skill_tool}
+
+        skill_mgr = MagicMock()
+        skill_mgr.get_disabled_skill_owned_tools.return_value = set()
+
+        agent = MagicMock()
+        agent.tool_router = router
+        agent.skill_manager = skill_mgr
+
+        app_instance = MagicMock()
+        app_instance.llm_agent = agent
+        app_instance.config.tools.available = ["send_message", "weather_skill"]
+
+        with patch("web.routers.tools.get_app_instance", return_value=app_instance):
+            client = TestClient(app)
+            resp = client.get("/api/tools-chain")
+        assert resp.status_code == 200
+        data = resp.json()
+        by_name = {t["name"]: t for t in data["tools"]}
+        assert by_name["send_message"]["source"] == "builtin"
+        assert by_name["send_message"]["skill_origin"] is None
+        assert by_name["weather_skill"]["source"] == "skill"
+        assert by_name["weather_skill"]["skill_origin"] == "user"
+
 
 class TestClientIpSpoofing:
     """回归 F18：X-Forwarded-For 取最右（受信任边缘代理追加）而非最左，防伪造 IP 绕过登录限流。"""

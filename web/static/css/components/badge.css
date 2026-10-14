@@ -40,3 +40,55 @@
   background: var(--bg-subtle);
   border-color: var(--border-color);
 }
+
+/* ── 技能来源徽标（内置 vs 用户安装，全站统一视觉语言） ──
+   平台内置 = 靛蓝（fa-cube）；用户安装 = 琥珀（fa-arrow-down-to-bracket）。
+   工具链路页另有中性变体 --tool（平台内置工具）。 */
+.origin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: default;
+}
+
+.origin-badge i {
+    font-size: 0.625rem;
+}
+
+.origin-badge--builtin {
+    color: var(--brand-secondary);
+    background: rgba(79, 70, 229, 0.08);
+    border-color: rgba(79, 70, 229, 0.22);
+}
+
+.origin-badge--user {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.10);
+    border-color: rgba(245, 158, 11, 0.28);
+}
+
+.origin-badge--tool {
+    color: var(--text-secondary);
+    background: var(--bg-subtle);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .origin-badge--builtin {
+    color: #a5b4fc;
+    background: rgba(79, 70, 229, 0.22);
+    border-color: rgba(79, 70, 229, 0.45);
+}
+
+[data-theme="dark"] .origin-badge--user {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.20);
+    border-color: rgba(245, 158, 11, 0.42);
+}

@@ -20,6 +20,10 @@
 
 各目录下只认「正常命名的子目录」为技能目录：隐藏目录与工具链产物目录
 （``__pycache__``、``node_modules``、``.venv`` 等）一律跳过，见 is_skill_dir_candidate。
+
+来源分类：按 SKILL.md 所在目录区分 ``builtin``（平台内置，src/skills 或捆绑
+data/skills）与 ``user``（用户安装，可写 data/skills 或 .agents/skills），
+见 classify_skill_origin；Web 各展示界面据此渲染来源徽标。
 """
 
 from __future__ import annotations
@@ -84,6 +88,56 @@ def skill_capabilities_satisfied(skill: "Skill", available: set[str]) -> list[st
     return [c for c in (skill.requires_capabilities or []) if c not in available]
 
 
+# ── 技能来源分类（平台内置 vs 用户安装）──────────────────────
+# Web 端所有涉及技能展示的界面（技能列表 / 意图映射 / 工具链路 / 路由追踪 /
+# 决策流）靠该字段一眼区分「平台手搓的内置技能」与「用户安装的 skill」，
+# 视觉徽标由前端统一渲染（core/util.js::skillOriginBadgeHtml）。
+ORIGIN_BUILTIN = "builtin"   # 平台内置：随源码 / 捆绑包分发
+ORIGIN_USER = "user"         # 用户安装：Web 安装 / git clone / 手动放入
+
+
+def _is_under(path: Path, base: Path) -> bool:
+    """判断 path 是否位于 base 目录之下（含等于）。解析失败时保守返回 False。"""
+    try:
+        return path.is_relative_to(base.resolve())
+    except (OSError, ValueError):
+        return False
+
+
+def classify_skill_origin(source_path: str | Path) -> str:
+    """按 SKILL.md 所在目录判定技能来源类型。
+
+    - ``builtin``：平台内置技能——仓库 ``src/skills``（随源码分发，clone 即
+      自带）或捆绑资源 ``<app_root>/data/skills``（冻结态 _MEIPASS，只读随包
+      附带）；
+    - ``user``：用户安装技能——可写数据目录 ``data/skills``（Web 安装 / git
+      clone 的落点）或旧版兼容路径 ``.agents/skills``。
+
+    开发态下 ``data_path("skills")`` 与 ``<app_root>/data/skills`` 常为同一
+    目录（cwd=仓库根，且 data/ 不入库），此时按用户数据目录处理——该目录可写、
+    以用户安装内容为主，是更准确的语义。解析异常一律保守回退 ``user``。
+    """
+    try:
+        p = Path(source_path).resolve()
+        app_root = get_app_root()
+        # 1) 仓库内置：src/skills（随源码分发）
+        if _is_under(p, app_root / "src" / "skills"):
+            return ORIGIN_BUILTIN
+        # 2) 捆绑资源内置：仅当与可写数据目录不是同一目录时才判定（冻结态场景）
+        bundled_dir = app_root / "data" / "skills"
+        user_dir = data_path("skills")
+        try:
+            differ = bundled_dir.resolve() != user_dir.resolve()
+        except OSError:
+            differ = True
+        if differ and _is_under(p, bundled_dir):
+            return ORIGIN_BUILTIN
+    except OSError:
+        pass
+    # 3) 其余（用户数据目录 / .agents 兼容路径 / 无法解析）→ 用户安装
+    return ORIGIN_USER
+
+
 def iter_skill_files(skill_dir: str | Path) -> Iterator[Path]:
     """遍历技能目录下的有效文件（跳过隐藏项与工具链产物子目录）。
 
@@ -117,6 +171,7 @@ class Skill:
     composable: bool = False           # 是否允许与其他 composable 技能组合激活（Phase 3）
     platforms: list[str] = field(default_factory=list)  # 适用平台列表（空=通用）
     requires_capabilities: list[str] = field(default_factory=list)  # 运行时能力依赖（如 ["playwright"]）
+    origin: str = ORIGIN_USER          # 来源类型：builtin=平台内置 / user=用户安装（见 classify_skill_origin）
 
     def prompt_section(self) -> str:
         """生成注入到 system prompt 的技能简介片段。"""
@@ -312,6 +367,7 @@ class SkillLoader:
             requires_capabilities=requires_capabilities,
             config=self._load_config(skill_dir),
             has_config=(Path(skill_dir) / "config.yaml").is_file(),
+            origin=classify_skill_origin(skill_md),
         )
 
     def save_intent(

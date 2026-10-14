@@ -145,7 +145,14 @@ async function loadSkillIntentMap() {
     if (!el) return;
     try {
         const data = await api.fetch('/api/skills');
+        // 注册 name→origin：本页技能映射徽标 + 决策流历史记录徽标共用
+        if (typeof registerSkillOrigins === 'function') registerSkillOrigins(data.skills || []);
         renderSkillIntentMap(data.skills || []);
+        // 映射就绪后回填决策流里尚未补徽标的占位槽（两个请求并发，无先后保证）
+        if (typeof applySkillOriginBadges === 'function') {
+            applySkillOriginBadges(document.getElementById('decisions-feed'));
+            applySkillOriginBadges(document.getElementById('decisions-history-body'));
+        }
     } catch (e) {
         console.error('加载技能意图映射失败', e);
         if (el) el.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation" style="font-size:1.75rem;opacity:.4;color:#f59e0b;"></i><p style="margin-top:.5rem;">加载失败</p></div>`;
@@ -170,7 +177,9 @@ function renderSkillIntentMap(skills) {
             ? cats.map(c => `<span class="tam-tag">${escapeHtml(c)}</span>`).join('')
             : `<span class="sim-none">未声明</span>`;
         const cls = s.enabled === false ? ' tam-row sim-disabled' : ' tam-row';
-        html += `<div class="${cls.trim()}"><span class="tam-tool">${escapeHtml(s.name)}</span><span class="tam-tags">${tags}</span></div>`;
+        // 来源徽标：内置（平台手搓）vs 安装（用户安装），一眼可辨
+        const originBadge = typeof skillOriginBadgeHtml === 'function' ? skillOriginBadgeHtml(s.origin) : '';
+        html += `<div class="${cls.trim()}"><span class="tam-tool">${escapeHtml(s.name)} ${originBadge}</span><span class="tam-tags">${tags}</span></div>`;
     }
     el.innerHTML = html;
 }
@@ -189,6 +198,10 @@ async function loadDecisions() {
             return;
         }
         renderDecisionFeed('decisions-feed', list, { emptyText: '暂无决策记录，发一条消息试试' });
+        // 决策流技能徽标（内置 vs 用户安装）
+        if (typeof applySkillOriginBadges === 'function') {
+            applySkillOriginBadges(document.getElementById('decisions-feed'));
+        }
     } catch (e) {
         console.error('加载决策失败', e);
         showToast('决策流加载失败', 'error');
@@ -363,7 +376,9 @@ function renderDecisionsHistory(data) {
         const modePill = d.routing_mode ? `<span class="pill pill-mode">${escapeHtml(d.routing_mode)}</span>` : '';
         const tools = (d.routed_tools || []).map(t => `<span class="tam-tag">${escapeHtml(t)}</span>`).join('');
         const actionPill = `<span class="pill pill-${escapeHtml(d.action)}">${actionLabel(d.action)}</span>`;
-        const skillBadge = d.skill_name ? `<span class="pill pill-skill" title="来源: ${escapeHtml(d.skill_source || '')}">${escapeHtml(d.skill_name)}</span>` : '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
+        const skillBadge = d.skill_name
+            ? `<span class="pill pill-skill" title="来源: ${escapeHtml(d.skill_source || '')}">${escapeHtml(d.skill_name)}<span class="skill-origin-slot" data-skill-origin="${escapeHtml(d.skill_name)}"></span></span>`
+            : '<span style="color:var(--text-tertiary);font-size:12px">—</span>';
         html += `<tr>
             <td class="dec-hist-cell" style="font-size: 12px; color: var(--text-tertiary);" title="${escapeHtml(ts)}">${escapeHtml(ts)}</td>
             <td class="dec-hist-cell" title="${escapeHtml(d.sender_name || d.sender_id || '')}">${escapeHtml(d.sender_name || d.sender_id || '—')}</td>
@@ -379,6 +394,9 @@ function renderDecisionsHistory(data) {
     }
     html += '</tbody></table></div>';
     body.innerHTML = html;
+
+    // 补技能来源徽标（内置 vs 用户安装）；映射未就绪时静默跳过
+    if (typeof applySkillOriginBadges === 'function') applySkillOriginBadges(body);
 
     // 分页
     renderDecisionsPagination(data);

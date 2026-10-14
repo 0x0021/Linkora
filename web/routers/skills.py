@@ -70,6 +70,7 @@ async def list_skills(platform: str = ""):
                 "source_path": skill.source_path,
                 "has_config": skill.has_config,
                 "platforms": getattr(skill, "platforms", []) or [],
+                "origin": getattr(skill, "origin", "user"),
             })
 
         # 也列出 data/skills 目录下未加载的（可能是安装后尚未 reload）
@@ -90,6 +91,7 @@ async def list_skills(platform: str = ""):
                             "source_path": str(entry),
                             "unloaded": True,
                             "platforms": [],
+                            "origin": "user",
                         })
 
         # 平台过滤
@@ -173,6 +175,7 @@ async def get_skill_detail(skill_name: str):
             "source_path": skill.source_path,
             "body": skill.body,
             "raw_content": raw_content,
+            "origin": getattr(skill, "origin", "user"),
         }
     except HTTPException:
         raise

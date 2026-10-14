@@ -47,7 +47,9 @@
     const intentPill = d.intent ? `<span class="pill pill-intent">${escapeHtml(d.intent)}</span>` : '';
     const modePill = d.routing_mode ? `<span class="pill pill-mode">${escapeHtml(d.routing_mode)}</span>` : '';
     const skillLabel = d.skill_name ? `${escapeHtml(d.skill_name)}${d.skill_source ? ' · ' + skillSourceLabel(d.skill_source) : ''}` : '';
-    const skillPill = skillLabel ? `<span class="pill pill-skill" title="技能来源: ${escapeHtml(d.skill_source || '')}">⚡ ${skillLabel}</span>` : '';
+    // data-skill-origin 占位槽：渲染后由 applySkillOriginBadges() 补「内置/安装」徽标
+    // （决策记录是历史数据，只有技能名，需查 name→origin 注册表；查不到则留空）。
+    const skillPill = skillLabel ? `<span class="pill pill-skill" title="技能来源: ${escapeHtml(d.skill_source || '')}">⚡ ${skillLabel}<span class="skill-origin-slot" data-skill-origin="${escapeHtml(d.skill_name)}"></span></span>` : '';
     const toolsHtml = renderToolsCapped(d.routed_tools, 3);
     const reply = d.reply_preview ? `<div class="dec-reply">↳ ${escapeHtml(d.reply_preview)}</div>` : '';
     return `

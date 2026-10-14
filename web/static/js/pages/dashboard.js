@@ -579,6 +579,14 @@ async function loadDashboardData(showSkeleton = true, retryCount = 0) {
                     return;
                 }
                 renderDecisionFeed('decisions-top-list', decisions, { max: 2, emptyText: '暂无决策记录' });
+                // 决策行技能来源徽标（内置 vs 用户安装）；映射未就绪时后台补
+                if (typeof ensureSkillOriginMap === 'function') {
+                    ensureSkillOriginMap().then(() => {
+                        if (typeof applySkillOriginBadges === 'function') {
+                            applySkillOriginBadges(document.getElementById('decisions-top-list'));
+                        }
+                    });
+                }
             } catch (e) {
                 console.error('Failed to load decisions top:', e);
             }
@@ -771,6 +779,9 @@ async function fetchDashboardStream() {
         const decContainer = document.getElementById('decisions-top-list');
         if (data && data.decisions && decContainer) {
             renderDecisionFeed('decisions-top-list', data.decisions.decisions || [], { max: 2, emptyText: '暂无决策记录，发一条消息试试' });
+            if (typeof applySkillOriginBadges === 'function') {
+                applySkillOriginBadges(decContainer);
+            }
         }
         // 消息：服务端已按游标过滤，直接渲染增量
         if (data && data.messages && data.messages.length) {

@@ -216,7 +216,10 @@ platforms:
       backup_dir: ./data/backups
       backup_interval_hours: 24
     poller:
-      interval_seconds: 10
+      interval_seconds: 20                      # 轮询间隔（秒）；stream 长连接启用时轮询仅为兜底
+      unread_convs_cache_ttl_seconds: 30        # 未读会话列表缓存 TTL（降频用，设 0=每轮都拉）
+      forced_fetch_min_interval_seconds: 30     # 未读会话抓取下限间隔（降频用，设 0=每轮必抓）
+      conv_info_negative_cache_ttl_seconds: 300 # 对方信息解析失败负缓存 TTL（降频用，设 0=下轮重试）
       history_days: 3
       poll_new_message_max_age_hours: 24   # 仅处理最近 N 小时内的新消息（默认 24，防历史重放）
       max_concurrent_replies: 4

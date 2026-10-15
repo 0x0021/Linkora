@@ -193,6 +193,12 @@ class PollerConfig(BaseModel):
     # 置顶/最近会话列表缓存 TTL（秒）：会话列表极少变化，无需每轮(默认5s)都打 DWS 接口。
     # 新会话仍能被 unread / list-all / db 缓存层发现，缓存不影响消息收发。
     top_convs_cache_ttl_seconds: int = 120
+    # 未读会话列表 TTL 缓存（秒）：未读列表唯一用途是给「实时优先 forced_ids」提供输入，
+    # 而新消息由 list-all 主通道每轮全量拉取（快通道即时派发），缓存短暂陈旧不丢消息。
+    # 命中缓存期间直接复用上次结果，把每轮 1 次的未读列表调用降到约 1/TTL 轮一次；
+    # TTL 内新出现的未读会话仍会被 list-all 发现并派发，只是不享「跳过长尾限频」的
+    # 优先权（最长延迟一个长尾限频窗口）。0 = 关闭缓存（每轮都拉，旧行为）。
+    unread_convs_cache_ttl_seconds: int = 30
     # 长尾会话（非未读）按会话限频抓取的最小间隔（秒）：避免每个置顶/db缓存会话
     # 每轮(默认5s)都打一次 chat_message_list。未读会话不受影响（实时优先）。
     # list-all 主通道仍每轮保底抓取全部新消息，故不会漏消息。0 = 关闭限频。
@@ -207,10 +213,25 @@ class PollerConfig(BaseModel):
     # 是「长尾限频形同虚设」的根因修复。0 = 关闭（每轮都抓，靠时间窗口限频降级）。
     # 未读/forced 会话不受此限（实时优先），list-all 主通道每轮仍全量拉，外部好友不丢。
     min_conversation_poll_rounds: int = 1
+    # 未读（forced）会话抓取下限间隔（秒）：未读会话仍优先于长尾，但不再"每轮必打"。
+    # per-conversation 抓取只是健壮性冗余通道（群消息/@我 的保底路径），新消息由
+    # list-all 主通道每轮全量拉取并经快通道即时派发；给 forced 抓取一个下限间隔，
+    # 把活跃时段"未读会话每轮全量重抓"的风暴压掉一半以上（钉钉 RATE_LIMIT_ERROR
+    # 与管理后台调用日志的主要来源），消息本身不丢、不慢（主通道 20s 一轮）。
+    # 0 = 关闭下限（未读会话每轮必抓，旧行为）。
+    forced_fetch_min_interval_seconds: int = 30
     # 平台级限频退避冷却（秒）：当某平台 chat 接口返回 RATE_LIMIT_ERROR 时，
     # 全局暂停该平台 chat 抓取冷却秒数（不推进轮询游标、不丢消息），避免继续猛打
     # 已限流的接口、加剧限流风暴。冷却到期下一轮自动恢复。0 = 关闭退避（旧行为，不推荐）。
     chat_rate_limit_cooldown_seconds: int = 60
+    # 单聊对方信息解析失败的负缓存 TTL（秒）：chat_conversation_info /
+    # contact_user_search 对某会话解析失败（外部好友 / 跨组织 / 瞬断 / 搜索无命中）
+    # 后，TTL 内不再重复打这两个接口，避免每轮对不可解析会话空转重试。
+    # 消息仍由 list-all 主通道投递，对方 openDingTalkId 由消息 sender 字段兜底
+    # （见 _process_conv_messages 反写），不影响收发。权限类失败另有
+    # _metadata_unavailable 内存集合做本次运行内跳过，此处兜住瞬断/无命中类失败。
+    # 0 = 关闭负缓存（失败后下轮即重试，旧行为）。
+    conv_info_negative_cache_ttl_seconds: int = 300
 
 
 class KeywordRule(BaseModel):

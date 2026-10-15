@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import re
+import time
 
 from src.models import Message
 from src.memory.platform_context import get_current_platform
@@ -245,6 +246,25 @@ class DedupMixin(PollerMixinBase):
         def _is_valid_ou(value: str) -> bool:
             return bool(value) and str(value).startswith("ou_")
 
+        def _mark_peer_resolve_failed(cid: str) -> None:
+            """记一次对方信息解析失败，进入 TTL 负缓存（config.conv_info_negative_cache_ttl_seconds）。
+
+            覆盖 chat_conversation_info / contact_user_search 的各类失败（外部好友、
+            跨组织、瞬断、搜索无命中）：TTL 内不再重打这两个接口，避免每轮对不可
+            解析会话空转。消息仍由 list-all 主通道投递、对方 ID 由消息 sender 兜底，
+            不影响收发。权限类失败另有 _metadata_unavailable 做本次运行内跳过。
+            """
+            ttl = getattr(self.config, "conv_info_negative_cache_ttl_seconds", 0) or 0
+            if ttl <= 0 or not cid:
+                return
+            with self._poll_shared_lock:
+                self._peer_resolve_cooldown_until[cid] = time.time() + ttl
+
+        def _clear_peer_resolve_cooldown(cid: str) -> None:
+            """解析成功：清掉该会话可能残留的失败负缓存，恢复下一轮正常解析。"""
+            with self._poll_shared_lock:
+                self._peer_resolve_cooldown_until.pop(cid, None)
+
         # 1. 从数据库缓存取
         conv = self.store._conversation_repo.get_conversation(open_id)
         if conv:
@@ -306,6 +326,21 @@ class DedupMixin(PollerMixinBase):
         #    但这不代表"无法收发消息"——list-all 主通道仍能投递其消息，且对方
         #    openDingTalkId 可从消息的 sender 字段直接获取。因此该接口失败
         #    【绝不拉黑】，仅记入内存 _metadata_unavailable 避免每轮空转重试。
+        #
+        #    失败负缓存（TTL）：第 3/4 步（chat_conversation_info / contact_user_search）
+        #    近期失败过 → TTL 内直接跳过两个元数据接口，把"每轮重打"降为"每 TTL 一次"。
+        #    DB 缓存（第 1 步）与外部好友映射（第 2 步）是纯本地查询，不受影响。
+        cooldown_ttl = getattr(self.config, "conv_info_negative_cache_ttl_seconds", 0) or 0
+        if cooldown_ttl > 0:
+            now_ts = time.time()
+            with self._poll_shared_lock:
+                until = self._peer_resolve_cooldown_until.get(open_id, 0.0)
+            if until > now_ts:
+                logger.debug(
+                    "[轮询器] 跳过 %s 的对方信息解析（失败负缓存中，剩余 %.0fs，减少 DWS 调用）",
+                    open_id[:30], until - now_ts,
+                )
+                return {"user_id": "", "open_dingtalk_id": ""}
         if open_id in self._metadata_unavailable:
             logger.debug("[轮询器] 跳过 chat_conversation_info（已知元数据不可用，外部好友/跨组织单聊常见）: %s", open_id[:30])
         else:
@@ -346,6 +381,7 @@ class DedupMixin(PollerMixinBase):
                             peer_user_id=remote_uid,
                             peer_open_dingtalk_id=remote_oid,
                         )
+                        _clear_peer_resolve_cooldown(open_id)
                         return {"user_id": remote_uid, "open_dingtalk_id": remote_oid}
             except (sqlite3.Error, RuntimeError, IMAdapterError) as e:
                 if self._is_global_permission_error(e):
@@ -363,11 +399,14 @@ class DedupMixin(PollerMixinBase):
                         "不影响收发），跳过元数据解析: %s | %s", open_id[:30], e
                     )
                     # 不 return，继续走第 4 步联系人搜索兜底
+                # 权限/瞬断失败都进负缓存：TTL 内不再重打元数据接口（见 _mark_peer_resolve_failed）
+                _mark_peer_resolve_failed(open_id)
             logger.debug("[轮询器] chat_conversation_info 未能解析 %s 的会话详情（尝试联系人搜索兜底）", open_id)
 
         # 4. 通过 DWS 联系人搜索查找（仅对组织内成员有效）
         if not title:
             logger.debug("[轮询器] 无法解析对方 %s：缺少标题（会话详情获取失败，且不是外部好友）", open_id)
+            _mark_peer_resolve_failed(open_id)
             return {"user_id": "", "open_dingtalk_id": ""}
         try:
             results = self.dws.contact_user_search(title)
@@ -402,9 +441,11 @@ class DedupMixin(PollerMixinBase):
                         peer_user_id=uid,
                         peer_open_dingtalk_id=oid,
                     )
+                    _clear_peer_resolve_cooldown(open_id)
                     return {"user_id": uid, "open_dingtalk_id": oid}
         except (sqlite3.Error, RuntimeError, IMAdapterError) as e:
             logger.warning("搜索联系人 '%s' 失败：%s", title, e)
+            _mark_peer_resolve_failed(open_id)
 
         logger.debug(
             "[轮询器] 无法解析对方 '%s'（会话 %s）："
@@ -412,4 +453,5 @@ class DedupMixin(PollerMixinBase):
             "如果是外部好友（非组织内成员），请通过 API 添加：POST /api/external-friends",
             title, open_id,
         )
+        _mark_peer_resolve_failed(open_id)
         return {"user_id": "", "open_dingtalk_id": ""}

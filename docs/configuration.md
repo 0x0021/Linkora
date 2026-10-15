@@ -8,7 +8,7 @@
 |---|---|---|
 | **`platforms`** ★ | `id` / `display_name` / `enabled` / `adapter_type` / `storage` / `poller` / `adapter` | **多平台隔离主配置段**：每个 IM 平台独立适配器 / 数据库 / 轮询器；运行期以本段为准。钉钉默认库 `./data/linkora.db`；飞书/企微仅在显式配置 `storage.path` 时使用各自独立库（如 `./data/feishu-ai.db`） |
 | `dws` | `cli_path` / `profile` / `retries` / `timeout` / `dry_run` | dws CLI 行为（legacy 兼容段，`config_manage` 读取，与 platforms 中 dingtalk 保持一致） |
-| `poller` | `interval_seconds` / `merge_window_seconds` / `reply_cooldown_seconds` / `max_dispatch_per_cycle` / `max_concurrent_replies` / `history_window` / `history_days` / `history_session_gap_minutes` / `target_org_corp_id` / `blacklist_*` / `reconcile_probe_batch_size` / `image_ocr_enabled` / `image_temp_dir` / `list_all_empty_alert_rounds` / `min_conversation_poll_interval_seconds` / `top_convs_cache_ttl_seconds` / `poll_new_message_max_age_hours` | 轮询与背压（**运行期以 platforms.dingtalk.poller 为准**，root 级 poller 为 legacy 兼容段）；`poll_new_message_max_age_hours`（默认 24）限制轮询只处理最近 N 小时内的新消息，防止历史消息被重放投喂 |
+| `poller` | `interval_seconds` / `merge_window_seconds` / `reply_cooldown_seconds` / `max_dispatch_per_cycle` / `max_concurrent_replies` / `history_window` / `history_days` / `history_session_gap_minutes` / `target_org_corp_id` / `blacklist_*` / `reconcile_probe_batch_size` / `image_ocr_enabled` / `image_temp_dir` / `list_all_empty_alert_rounds` / `min_conversation_poll_interval_seconds` / `forced_fetch_min_interval_seconds` / `top_convs_cache_ttl_seconds` / `unread_convs_cache_ttl_seconds` / `conv_info_negative_cache_ttl_seconds` / `chat_rate_limit_cooldown_seconds` / `poll_new_message_max_age_hours` | 轮询与背压（**运行期以 platforms.dingtalk.poller 为准**，root 级 poller 为 legacy 兼容段）；`poll_new_message_max_age_hours`（默认 24）限制轮询只处理最近 N 小时内的新消息，防止历史消息被重放投喂；`unread_convs_cache_ttl_seconds`（默认 30）/ `conv_info_negative_cache_ttl_seconds`（默认 300）/ `forced_fetch_min_interval_seconds`（默认 30）是三处 DWS 调用降频开关（list-all 主通道每轮全量拉取，消息不丢） |
 | `llm` | `provider` / `model` / `base_url` / `api_key` / `persona_style_prompt` / `model_pool` / `fallback_model_pool` | 主模型 + 同池/跨池备用模型；`persona_style_prompt` 为可选语气覆盖（留空则自动从主人历史消息抽取风格画像） |
 | `llm.advanced` | `max_chars_daily_chat` / `max_chars_tech_issue` / `hard_truncation_chars` / `rag_auto_inject` / `rag_min_similarity` / `rag_max_results` / `rag_max_content_chars` / `low_confidence_handoff_enabled` / `low_confidence_threshold` / `history_tiering_recent` / `summary_async_enabled` / `summary_max_age_seconds` / `summary_min_coverage_ratio` / `summary_min_older` | 长度控制；RAG 自动注入门控（默认 `rag_min_similarity=0.30`、`rag_max_results=4`、`rag_max_content_chars=1200`）与条数限制；低置信度转人工开关与阈值；历史分层阈值；异步摘要配置 |
 | `llm_throttle` | `enabled` / `background_min_interval_seconds` / `idle_min_interval_seconds` / `rate_limit_backoff_seconds` / `extract_memory_*` / `max_summaries_per_cycle` | 后台 LLM 任务（摘要/记忆提取）限速与空闲降频，保护免费额度 |
@@ -51,7 +51,7 @@ platforms:
       messages_retention_days: 90
       doc_sync_interval_hours: 1
     poller:                      # 与全局 poller 字段一致（见上表）
-      interval_seconds: 10
+      interval_seconds: 20
       # ... 其余轮询参数
     adapter:                     # 钉钉 → DwsConfig 字段
       cli_path: dws
@@ -64,7 +64,7 @@ platforms:
   #   enabled: false
   #   adapter_type: feishu
   #   storage: { type: sqlite, path: ./data/feishu-ai.db }
-  #   poller: { interval_seconds: 10 }
+  #   poller: { interval_seconds: 20 }
   #   adapter: { cli_path: lark-cli, dry_run: false }
 ```
 

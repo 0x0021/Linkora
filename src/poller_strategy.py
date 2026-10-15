@@ -191,13 +191,37 @@ class PollerStrategyMixin(PollerMixinBase):
     # ── poll_once 辅助方法（T5 拆分）──
 
     def _fetch_unread_conversations(self) -> list[dict]:
-        """拉取未读会话列表（仅用于实时优先 forced_ids，不做已读不回复判定）。"""
+        """拉取未读会话列表（仅用于实时优先 forced_ids，不做已读不回复判定）。
+
+        TTL 缓存（config.unread_convs_cache_ttl_seconds，默认 30s）：未读列表唯一
+        作用是给「实时优先 forced_ids」提供输入，而新消息由 list-all 主通道每轮
+        全量拉取（list-all 快通道还会即时派发）。缓存期内直接复用上次结果，未读
+        列表调用量降至约 1/TTL 轮一次；TTL 内新出现的未读会话仍会被 list-all
+        发现并派发，只是不享「跳过长尾限频」的优先权，最长延迟一个长尾限频窗口，
+        不丢消息。拉取失败不写缓存（下轮重试），避免把瞬断污染成「无未读」。
+        """
+        ttl = getattr(self.config, "unread_convs_cache_ttl_seconds", 0) or 0
+        now = time.time()
+        if ttl > 0:
+            with self._poll_shared_lock:
+                cached = self._unread_convs_cache
+                cached_ts = self._unread_convs_cache_ts
+            if cached is not None and (now - cached_ts) < ttl:
+                logger.debug(
+                    "[轮询器] 未读会话列表命中 TTL 缓存（%ds，%d 个，减少 DWS 调用）",
+                    ttl, len(cached),
+                )
+                return list(cached)
         unread_convs: list[dict] = []
         try:
             unread_convs = self.dws.chat_message_list_unread_conversations(
                 self.config.unread_conversation_count
             )
             logger.debug("[轮询器] 发现 %d 个未读会话（实时优先）", len(unread_convs))
+            if ttl > 0:
+                with self._poll_shared_lock:
+                    self._unread_convs_cache = list(unread_convs)
+                    self._unread_convs_cache_ts = now
         except DwsPermissionError as e:
             self._warn_permission_once(
                 "list_unread",
@@ -607,6 +631,8 @@ class PollerStrategyMixin(PollerMixinBase):
         skipped_throttle = self._should_skip_longtail_fetch(open_id, open_id in forced_ids)
         if skipped_throttle:
             logger.debug("[轮询器] 会话 %s 限频跳过本轮抓取", title or open_id[:20])
+            with self._poll_shared_lock:
+                self._round_throttled_skips += 1
             return None
 
         # 平台级 chat 限频冷却：刚命中 RATE_LIMIT_ERROR 时暂停本平台 chat 抓取，
@@ -967,6 +993,9 @@ class PollerStrategyMixin(PollerMixinBase):
         # === 5. 群消息批量预取 ===
         group_cache = self._build_group_list_all_cache(all_conversations)
 
+        # 本轮限频跳过计数清零（_poll_one_conversation 的 early-return 路径不计入
+        # _poll_conversations 返回值，靠这个计数器让统计反映真实跳过量）
+        self._round_throttled_skips = 0
         new_messages_part, throttled_skip = self._poll_conversations(all_conversations, group_cache, forced_ids)
         new_messages.extend(new_messages_part)
 
@@ -982,7 +1011,7 @@ class PollerStrategyMixin(PollerMixinBase):
                 "[轮询器][%s] 轮询统计：本轮检查 %d 个会话，长尾限频跳过 %d 个抓取；"
                 "置顶列表缓存=%s%s",
                 self.platform_id or "?",
-                len(all_conversations), throttled_skip,
+                len(all_conversations), self._round_throttled_skips,
                 "命中" if top_hit else "刷新",
                 cache_suffix,
             )

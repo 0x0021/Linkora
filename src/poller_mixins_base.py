@@ -68,12 +68,16 @@ class PollerMixinBase(LinkoraComponentBase):
     _ocr_results: Any
     _perm_fail_streak: Any
     _perm_warned: Any
+    _peer_resolve_cooldown_until: Any
     _poll_count: Any
     _processed_msg_ids: Any
     _queue_depth: Any
     _reconcile_every: Any
+    _round_throttled_skips: Any
     _rule_engine: Any
     _skip_ocr: Any
+    _unread_convs_cache: Any
+    _unread_convs_cache_ts: Any
 
     # === 跨 mixin 方法（真实签名原样；实现在同文件 mixin 或 MessagePoller） ===
 

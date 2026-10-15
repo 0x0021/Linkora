@@ -166,13 +166,25 @@ class AccessControlMixin(PollerMixinBase):
     def _should_skip_longtail_fetch(self, open_id: str, forced: bool) -> bool:
         """长尾会话是否应跳过本轮抓取（限频）。
 
-        forced(未读会话)=False 永不跳过；从未抓取过也不跳过。
-        两层叠加：
+        forced(未读会话) 另有下限间隔（config.forced_fetch_min_interval_seconds，
+        默认 30s）：未读仍优先于长尾，但不再每轮必打——per-conversation 抓取只是
+        健壮性冗余通道，新消息由 list-all 主通道每轮全量拉取（快通道即时派发），
+        下限间隔把活跃时段的抓取风暴压掉一半以上，消息不丢不慢。0 = 关闭下限
+        （未读每轮必抓，旧行为）。从未抓取过（无时间记录）不跳过。
+
+        非 forced 两层叠加：
         1) 时间窗口：距上次真实抓取不足 min_conversation_poll_interval_seconds 则跳过；
         2) 轮次级节流（不依赖轮询速度，永不击穿）：每 min_conversation_poll_rounds 轮才抓一次。
         任一层命中即跳过。
         """
         if forced:
+            floor = getattr(self.config, "forced_fetch_min_interval_seconds", 0) or 0
+            if floor <= 0:
+                return False
+            with self._poll_shared_lock:
+                last_time = self._last_fetch_time.get(open_id, 0.0)
+            if last_time and (time.time() - last_time) < floor:
+                return True
             return False
         interval = getattr(self.config, "min_conversation_poll_interval_seconds", 60) or 0
         rounds = getattr(self.config, "min_conversation_poll_rounds", 0) or 0

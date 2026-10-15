@@ -55,7 +55,7 @@ platforms:
       doc_sync_interval_hours: 1                     # 钉钉文档自动同步间隔（小时），≤0 禁用
     poller:
       # —— 基础轮询 ——
-      interval_seconds: 10                           # 轮询间隔（秒）
+      interval_seconds: 20                           # 轮询间隔（秒）。stream 长连接启用时轮询仅为兜底，20s 兼顾实时性与 DWS 调用频率
       # P0 Stream 长连接（v1.0.59+，需 dws event 子命令支持）：true 启用 dws event
       # +listen-im 实时接收消息，替代 5s 全量轮询，API 调用量降 90%+。默认 false（保留
       # 轮询为主通道，兼容存量行为）。启用后轮询仍运行（兜底/历史回填），stream 消息
@@ -65,6 +65,7 @@ platforms:
         - all-direct
         - all-group
       unread_conversation_count: 50                  # 单轮拉取的未读会话数上限
+      unread_convs_cache_ttl_seconds: 30             # 未读会话列表 TTL 缓存（秒）：缓存期内复用上次结果，未读列表调用降到约 1/TTL 轮一次；新消息仍由 list-all 每轮全量拉取，不丢消息。0=每轮都拉
       messages_per_conversation: 16                  # 每个会话单次拉取的最大消息数
       merge_window_seconds: 5                        # 同会话多条消息在此时间内合并处理
       history_window: 12                             # 带入 LLM 上下文的历史消息条数（= max_recent + 2，原料窗需 > 近期条数才能触发 H2-A 异步摘要；feishu/wecom 同为 12）
@@ -120,11 +121,14 @@ platforms:
       target_org_corp_id: ''                        # 多组织环境下仅轮询该组织；留空=当前登录 profile 所属组织
       # —— 会话黑名单容错 ——
       blacklist_min_consecutive_failures: 3         # 群聊权限错误需连续失败达此次数才拉黑（0=立即拉黑）
-      blacklist_reconcile_every: 10                 # 黑名单自愈对账间隔（轮数）
+      blacklist_reconcile_every: 20                 # 黑名单自愈对账间隔（轮数）
       reconcile_probe_batch_size: 5                 # 自愈每轮直接探测上限（轮转分批）
       # —— 缓存 / 限频 ——
-      top_convs_cache_ttl_seconds: 120              # 置顶/最近会话列表缓存 TTL（秒）
+      top_convs_cache_ttl_seconds: 180              # 置顶/最近会话列表缓存 TTL（秒）
       min_conversation_poll_interval_seconds: 60    # 长尾会话最小抓取间隔（秒）；未读会话不受影响
+      forced_fetch_min_interval_seconds: 30         # 未读(forced)会话抓取下限间隔（秒）：不再每轮必打，per-conversation 只是健壮性冗余通道，新消息由 list-all 主通道每轮全量拉取。0=关闭下限
+      conv_info_negative_cache_ttl_seconds: 300     # 单聊对方解析（chat_conversation_info/联系人搜索）失败负缓存 TTL（秒）：TTL 内不再重打元数据接口；消息仍由 list-all 投递、对方 ID 由消息 sender 兜底。0=失败后下轮即重试
+      chat_rate_limit_cooldown_seconds: 120         # 命中 RATE_LIMIT_ERROR 后暂停该平台 chat 抓取的冷却（秒）：给服务端限流窗口留恢复时间，不丢消息
       # —— 合规透明 ——
       ai_tag_enabled: true                          # 发送时携带"由AI发送"标签（合规透明）；false=与本人手发无区别
     adapter:                                         # 钉钉 → DwsConfig 字段
@@ -152,7 +156,7 @@ platforms:
   #     messages_retention_days: 90
   #     doc_sync_interval_hours: 1
   #   poller:
-  #     interval_seconds: 10
+  #     interval_seconds: 20
   #     unread_conversation_count: 50
   #     messages_per_conversation: 16
   #     merge_window_seconds: 5
@@ -191,9 +195,9 @@ platforms:
   #     image_temp_dir: ./data/tmp_images
   #     target_org_corp_id: ''
   #     blacklist_min_consecutive_failures: 3
-  #     blacklist_reconcile_every: 10
+  #     blacklist_reconcile_every: 20
   #     reconcile_probe_batch_size: 5
-  #     top_convs_cache_ttl_seconds: 120
+  #     top_convs_cache_ttl_seconds: 180
   #     min_conversation_poll_interval_seconds: 60
   #     ai_tag_enabled: true
   #   adapter:
@@ -218,7 +222,7 @@ platforms:
   #     messages_retention_days: 90
   #     doc_sync_interval_hours: 1
   #   poller:
-  #     interval_seconds: 10
+  #     interval_seconds: 20
   #     unread_conversation_count: 50
   #     messages_per_conversation: 16
   #     merge_window_seconds: 5
@@ -257,9 +261,9 @@ platforms:
   #     image_temp_dir: ./data/tmp_images
   #     target_org_corp_id: ''
   #     blacklist_min_consecutive_failures: 3
-  #     blacklist_reconcile_every: 10
+  #     blacklist_reconcile_every: 20
   #     reconcile_probe_batch_size: 5
-  #     top_convs_cache_ttl_seconds: 120
+  #     top_convs_cache_ttl_seconds: 180
   #     min_conversation_poll_interval_seconds: 60
   #     ai_tag_enabled: true
   #   adapter:

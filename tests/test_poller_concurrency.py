@@ -18,10 +18,12 @@ from src.poller_strategy import PollerStrategyMixin
 class FakeThrottle(AccessControlMixin):
     """最小 fake：提供 _should_skip_longtail_fetch 所需的实例属性。"""
 
-    def __init__(self, interval: int = 60, rounds: int = 1, poll_count: int = 5):
+    def __init__(self, interval: int = 60, rounds: int = 1, poll_count: int = 5,
+                 forced_floor: int = 0):
         self.config = SimpleNamespace(
             min_conversation_poll_interval_seconds=interval,
             min_conversation_poll_rounds=rounds,
+            forced_fetch_min_interval_seconds=forced_floor,
         )
         self._poll_count = poll_count
         self._last_fetch_time: dict[str, float] = {}
@@ -30,12 +32,36 @@ class FakeThrottle(AccessControlMixin):
 
 
 class TestShouldSkipLongtailFetchRoundBased:
-    def test_forced_never_skipped(self):
-        # 未读/forced 会话不受任何限频影响（实时优先）
-        ft = FakeThrottle(interval=60, rounds=1)
+    def test_forced_never_skipped_when_floor_disabled(self):
+        # floor=0（旧行为）：未读/forced 会话不受任何限频影响（实时优先）
+        ft = FakeThrottle(interval=60, rounds=1, forced_floor=0)
         ft._last_fetch_time["cid1"] = time.time()
         ft._last_fetch_round["cid1"] = ft._poll_count
         assert ft._should_skip_longtail_fetch("cid1", True) is False
+
+    def test_forced_floor_skips_within_window(self):
+        # floor=30：未读会话 30s 内抓过 → 跳过（per-conversation 是冗余通道，
+        # 新消息由 list-all 主通道每轮全量拉取，不丢消息）
+        ft = FakeThrottle(interval=60, rounds=1, forced_floor=30)
+        ft._last_fetch_time["cid1"] = time.time() - 10  # 10s < 30s
+        assert ft._should_skip_longtail_fetch("cid1", True) is True
+
+    def test_forced_floor_allows_after_window(self):
+        ft = FakeThrottle(interval=60, rounds=1, forced_floor=30)
+        ft._last_fetch_time["cid1"] = time.time() - 31  # 31s > 30s
+        assert ft._should_skip_longtail_fetch("cid1", True) is False
+
+    def test_forced_floor_ignores_longtail_rounds_layer(self):
+        # forced 只受 floor 管：长尾的轮次级节流（rounds）不叠加到 forced 上
+        ft = FakeThrottle(interval=60, rounds=1, forced_floor=30)
+        ft._last_fetch_time["cid1"] = time.time() - 31
+        ft._last_fetch_round["cid1"] = ft._poll_count  # 上一轮刚抓过
+        assert ft._should_skip_longtail_fetch("cid1", True) is False
+
+    def test_forced_never_fetched_not_skipped(self):
+        # 从未抓取过（无时间记录）不跳过——保证新会话首轮必抓
+        ft = FakeThrottle(interval=60, rounds=1, forced_floor=30)
+        assert ft._should_skip_longtail_fetch("cidNew", True) is False
 
     def test_rounds_skip_when_within_window(self):
         # rounds=1 → 每 2 轮才抓一次：上一轮(距当前1)跳过，更早(距当前2)抓取

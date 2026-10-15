@@ -101,6 +101,16 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         # 置顶/最近会话列表缓存（极少变化，无需每轮打 DWS）
         self._top_convs_cache: list = []
         self._top_convs_cache_ts: float = 0.0
+        # 未读会话列表 TTL 缓存（列表 + 拉取时间戳）：未读列表只决定「实时优先
+        # forced_ids」，list-all 主通道每轮全量拉消息，缓存短暂陈旧不丢消息，
+        # 却能砍掉一半以上的未读列表调用（见 _fetch_unread_conversations）。
+        self._unread_convs_cache: list[dict] | None = None
+        self._unread_convs_cache_ts: float = 0.0
+        # 单聊对方信息解析失败负缓存（openConversationId -> 冷却到期 epoch）：
+        # chat_conversation_info / contact_user_search 失败（外部好友/跨组织/瞬断/
+        # 搜索无命中）后 TTL 内不再重打，避免每轮对不可解析会话空转
+        # （见 _resolve_single_chat_peer）。
+        self._peer_resolve_cooldown_until: dict[str, float] = {}
         # 钉钉群枚举缓存（chat +chat-list-all / +chat-list-mine，极少变化，TTL 10 分钟）
         self._group_enum_cache: list = []
         self._group_enum_cache_ts: float = 0.0
@@ -110,13 +120,17 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         # 与 _last_fetch_time 时间窗口叠加，提供「不依赖轮询速度」的稳定节流，
         # 彻底修复串行慢轮询击穿时间窗口导致长尾限频形同虚设的问题。
         self._last_fetch_round: dict[str, int] = {}
+        # 本轮因限频跳过的会话数（_poll_one_conversation early-return 路径不计入
+        # _poll_conversations 的返回值，故用独立计数器供轮询统计观测降频效果）。
+        self._round_throttled_skips = 0
         # 平台级 chat 限频退避冷却（platform_id -> 冷却到期 epoch）：
         # 命中 DWS RATE_LIMIT_ERROR 后暂停该平台 chat 抓取，避免继续猛打已限流接口。
         self._chat_rate_limited_until: dict[str, float] = {}
         # 并发保护锁：所有被多线程（受控并发 per-conversation 抓取）读写的共享实例字典
         # （_last_fetch_time / _last_fetch_round / _perm_fail_streak / _feishu_conv_info_cache /
         # _chat_rate_limited_until / _inaccessible_conversations / _perm_warned / _last_poll_time /
-        # _processed_msg_ids 等）的临界区都用它串行化。subprocess CLI 调用留在锁外以保留并发收益。
+        # _processed_msg_ids / _unread_convs_cache(_ts) / _peer_resolve_cooldown_until 等）
+        # 的临界区都用它串行化。subprocess CLI 调用留在锁外以保留并发收益。
         self._poll_shared_lock = threading.Lock()
 
         # 持久化黑名单：启动时从 DB 加载，避免重启后对已离职/非好友/被踢群等

@@ -198,6 +198,80 @@ def install_no_log_injection_filter() -> None:
             h.addFilter(f)
 
 
+# ── 焦点模式（--focus）：控制台噪声过滤 ─────────────────────────────
+#
+# 背景（用户反馈「终端全是没营养的，干扰看正常信息」）：稳态运行时终端被两类
+# INFO 刷屏——① 周期性统计（展示摘要评估、轮询统计，已在源头降级 DEBUG）；
+# ② 每条消息的链路内部细节（[发送] DWS 返回、防抖缓存、意图识别、工具路由、
+# LLM 请求参数……），单条回复可产生 15+ 行，把「谁发来什么 / AI 回了什么」
+# 淹没。用户要看的只有：收到的新消息、AI 回复内容、重大错误。
+#
+# 焦点模式在**控制台 handler** 上挂 Filter 抑制下列模块的 INFO/DEBUG：
+# - 信号行不受影响：✅ 收到新消息（src.poller_strategy / poller_core_discovery）、
+#   LLM 回复（src.platform.runtime_llm_reply）、启动/关闭横幅（lifecycle）；
+# - WARNING 及以上永远放行（重大错误必须可见）；
+# - 文件日志与 Web 内存缓冲**不过滤**——logs/linkora.log 与 /api/logs 仍保留
+#   全量，排障时 --no-focus 或直接翻文件即可，不损失任何日志完整性。
+FOCUS_SUPPRESSED_LOGGERS: tuple[str, ...] = (
+    # ── 周期统计 / 调度器内部（源头已降 DEBUG，此处双保险）──
+    "src.llm.display_summary_scheduler",
+    "src.llm.dynamic_summary_scheduler",
+    "src.llm.summary_scheduler",
+    "src.llm.summary_backfill",
+    "src.doc_sync_scheduler",
+    "src.metrics.report",
+    "src.rag_metrics",
+    # ── 每条消息的链路内部细节（内容已由「✅ 收到 / LLM 回复」两行覆盖）──
+    "src.platform.runtime_dispatch",    # [发送] DWS 返回 / peer 查询 / 去重标记
+    "src.platform.runtime_inbound",     # 门控 / 跳过 / 已回复判定内部
+    "src.platform.runtime_reply_guard", # 去重 / 冷却 / 分片内部
+    "src.platform.message_loop",        # 防抖缓存 / 合并内部
+    "src.platform.memory",              # 记忆提取 / 汇总内部
+    "src.rule_engine",                  # [意图识别] 明细
+    "src.llm.client",                   # LLM 请求参数
+    "src.llm.router",                   # 工具路由决策
+    "src.llm.prompt_builder",           # RAG / 公共记忆拼装明细
+    "src.llm.rag_inject",
+    "src.llm.memory_inject",
+    "src.llm.agent_steps",              # 代理轮次 / 技能激活明细
+    "src.llm.tool_orchestrator",        # 工具调用 / 结果明细
+    "src.llm.stream_helper",            # 流式占位消息
+    "src.llm.reply_helper",             # 续写补全明细
+    "src.llm.rag",                      # 风格画像等
+    # ── Web 访问日志（单进程模式下与业务日志同终端）──
+    "uvicorn.access",
+)
+
+
+class ConsoleNoiseFilter(logging.Filter):
+    """焦点模式过滤器：抑制已知噪声模块的 INFO/DEBUG（仅控制台生效）。
+
+    判定规则：WARNING 及以上一律放行；否则 logger 名命中
+    FOCUS_SUPPRESSED_LOGGERS 前缀则拦截。行为由
+    tests/test_focus_log_filter.py 兜底。
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING:
+            return True
+        name = record.name or ""
+        return not any(name.startswith(prefix) for prefix in FOCUS_SUPPRESSED_LOGGERS)
+
+
+def _install_console_noise_filter() -> None:
+    """给 root 上所有**控制台** handler 装配焦点模式过滤器（幂等）。
+
+    刻意跳过 RotatingFileHandler 与 InMemoryLogHandler：焦点模式只改变终端
+    可见性，文件日志与 Web 日志视图必须保留全量（排障依赖）。
+    """
+    root = logging.getLogger()
+    for h in root.handlers:
+        if isinstance(h, (RotatingFileHandler, InMemoryLogHandler)):
+            continue
+        if not any(isinstance(x, ConsoleNoiseFilter) for x in h.filters):
+            h.addFilter(ConsoleNoiseFilter())
+
+
 class ColoredFormatter(logging.Formatter):
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -502,7 +576,8 @@ class JsonLogFormatter(logging.Formatter):
 
 def setup_logger(level: str = "info", log_file: str | None = None,
                  max_size_mb: int = 50, max_backups: int = 7,
-                 *, use_fancy: bool = True, json_logs: bool = False) -> None:
+                 *, use_fancy: bool = True, json_logs: bool = False,
+                 focus: bool = False) -> None:
     log_level = getattr(logging, level.upper(), logging.INFO)
     fmt = "%(asctime)s [%(levelname)s] [%(request_id)s] [%(trace_id)s] %(name)s: %(message)s"
     plain_formatter = PlainFileFormatter(fmt)
@@ -549,6 +624,11 @@ def setup_logger(level: str = "info", log_file: str | None = None,
     install_log_filter()
     # 日志注入（CWE-117）防线：统一剥离日志消息/参数中的 CR/LF，覆盖全部调用点
     install_no_log_injection_filter()
+    # 焦点模式：仅控制台抑制链路内部噪声（文件/Web 缓冲保留全量）。
+    # 必须在 console handler 全部装配完成后调用（fancy 路径的 StreamHandler 在
+    # inject_fancy_console_handler 内才加入 root）。
+    if focus:
+        _install_console_noise_filter()
 
 
 def get_log_buffer() -> InMemoryLogHandler:

@@ -50,6 +50,28 @@ python main.py --mode worker
 
 # 测试规则匹配
 python main.py --test-rule "在吗"
+
+# 焦点模式：终端只显示 收到的新消息 / AI 回复 / WARNING 及以上，
+# 抑制每条消息的链路内部噪声（[发送] DWS 返回、防抖、意图识别、工具路由等）
+python main.py --mode both --focus
+```
+
+### 焦点模式（终端降噪）
+
+稳态运行时，一条消息从「轮询发现 → 门控 → LLM → 发送」会产生 15+ 行 INFO 内部
+细节（`[发送] DWS 返回`、`[防抖] 已缓存消息`、`[意图识别]`、`[工具路由]`、LLM
+请求参数等），把「谁发来什么、AI 回了什么」淹掉。焦点模式在**控制台**抑制这些
+已知噪声模块的 INFO/DEBUG：
+
+- 保留：`✅ 收到 %s 的新消息`、`LLM 回复: %s`、启动/关闭横幅；
+- 保留：全部 WARNING / ERROR / CRITICAL（重大错误必须可见）；
+- 不影响：`logs/linkora.log` 文件日志与 Web「实时日志」页仍是全量，排障直接
+  翻文件；周期性统计（展示摘要评估、轮询统计）已降为 DEBUG，需要时把
+  `config.yaml` 的 `logging.level` 设为 `debug` 即可见。
+
+```bash
+# 启动器默认开启焦点模式；关闭：
+python scripts/run_linkora.py --no-focus
 ```
 
 ### 单进程模式（推荐用于生产）

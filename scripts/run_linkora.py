@@ -7,7 +7,8 @@
     scripts/run_linkora.py --no-worker          # 只跑 web（调试 Web 时常用）
     scripts/run_linkora.py --worker-only        # 只跑 worker（纯 ingestion）
     scripts/run_linkora.py --dev                # dev 模式（文件变更热重启，both 模式）
-    scripts/run_linkora.py --no-dedup           # 关闭跨进程日志去重，web/worker 逐行双显
+    scripts/run_linkora.py --single-process     # 单进程模式（both），消除跨进程锁争用
+    scripts/run_linkora.py --no-focus           # 关闭焦点模式，恢复全量 INFO 输出
 
 进程职责:
     - web    : 仅 Web 管理平台。改 Web 代码后只重启本进程，不打断后台 ingestion。
@@ -21,6 +22,11 @@
 另一个进程已经打印过（忽略时间戳/ANSI 着色差异），则折叠为单条 [web+worker]，
 避免重复刷屏；仅某一进程独有的行（如 web 监听端口、worker 调度器启动）保留各自
 前缀。可用 --no-dedup 关闭折叠、恢复逐行双显（调试两进程差异时有用）。
+
+焦点模式（默认开启）: 稳态运行终端只显示「✅ 收到的新消息 / LLM 回复 /
+WARNING 及以上告警」，抑制每条消息的链路内部噪声（[发送] DWS 返回、防抖缓存、
+意图识别、工具路由、LLM 请求参数等）与周期统计。文件日志 logs/linkora.log 与
+Web「实时日志」页不受影响，仍保留全量；需要完整输出时加 --no-focus。
 """
 from __future__ import annotations
 
@@ -187,13 +193,27 @@ def main() -> None:
     ap.add_argument("--single-process", action="store_true",
                     help="单进程模式（both）：Web 与后台轮询跑在同一进程，"
                          "从根本上消除跨进程 SQLite 写锁争用")
+    ap.add_argument("--no-focus", action="store_true",
+                    help="关闭焦点模式（默认开启）：恢复全量 INFO 终端输出。"
+                         "焦点模式下只显示 收到的新消息/AI 回复/WARNING 及以上，"
+                         "完整日志仍写入 logs/linkora.log")
     args = ap.parse_args()
 
     extra = ["--dev"] if args.dev else []
+    # 焦点模式默认开启：把「别人发来什么 / AI 回了什么 / 重大错误」从链路噪声里
+    # 救出来（2026-10-16 用户反馈）。--no-focus 可恢复全量；文件日志始终全量。
+    focus = not args.no_focus
+    if focus:
+        extra.append("--focus")
 
     procs: list[tuple[str, subprocess.Popen]] = []
     pumps: list[threading.Thread] = []
     dedup = not args.no_dedup
+
+    if focus:
+        print(f"{_CYAN}[run_linkora]{_RESET} "
+              f"焦点模式：仅显示 收到的新消息 / AI 回复 / 告警；"
+              f"完整日志见 logs/linkora.log（--no-focus 关闭）", flush=True)
 
     # 【P0 2026-10-05 锁争用根治】单进程模式：只 spawn 一个 both 进程。
     #

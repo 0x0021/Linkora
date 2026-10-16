@@ -152,7 +152,9 @@ class DynamicSummaryScheduler:
             if self._stop_event.is_set():
                 break
             self._enqueue(chat["chat_id"], "signal")
-        logger.info(
+        # 周期统计（DEBUG）：与展示摘要调度器同源，每轮评估都打会刷屏
+        # （2026-10-16 用户反馈）；排障时 logging.level=debug 即可见。
+        logger.debug(
             "[动态摘要] 本轮评估发现 %d 个待摘要会话（平台=%s）",
             len(chats), self._platform,
         )

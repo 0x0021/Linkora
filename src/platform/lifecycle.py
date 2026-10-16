@@ -368,6 +368,7 @@ def main(root: str | None = None):
     web_port = 0
     test_rule_text = None
     dev_mode = False
+    focus_mode = False
     mode = "both"
 
     i = 1
@@ -396,6 +397,18 @@ def main(root: str | None = None):
             i += 1
         elif sys.argv[i] == "--dev":
             dev_mode = True
+            i += 1
+        elif sys.argv[i] == "--focus":
+            # 焦点模式：终端只显示 收到的新消息 / AI 回复 / WARNING 及以上，
+            # 抑制每条消息的链路内部噪声（[发送]/防抖/意图识别/工具路由等）。
+            # 文件日志 logs/linkora.log 与 Web 日志视图不受影响，仍为全量。
+            focus_mode = True
+            i += 1
+        elif sys.argv[i] == "--no-focus":
+            focus_mode = False
+            i += 1
+        elif sys.argv[i].startswith("--focus="):
+            focus_mode = sys.argv[i].split("=", 1)[1].lower() in ("1", "true", "yes", "on")
             i += 1
         elif sys.argv[i] == "--data-dir":
             data_dir_override = sys.argv[i+1] if i+1 < len(sys.argv) else None
@@ -501,7 +514,7 @@ def main(root: str | None = None):
         print(f"{'='*60}\n")
         return
 
-    app = LinkoraEngine(config_path, mode=mode)
+    app = LinkoraEngine(config_path, mode=mode, focus=focus_mode)
 
     # 启动 CLI 版本自检 + 后台异步更新（lark-cli / dws / 企微 CLI）。
     # 在 daemon 线程执行，不阻塞主流程；任何异常仅记日志，不影响启动。

@@ -33,9 +33,13 @@ class PrimaryMixin(EngineMixinBase):
         "添加", "开一下", "弄一下", "怎么", "如何", "需要", "我要", "给我",
     )
 
-    def __init__(self, config_path: str = "config.yaml", mode: str = "both"):
+    def __init__(self, config_path: str = "config.yaml", mode: str = "both",
+                 focus: bool = False):
         self.mode = mode
         self.config_path = config_path
+        # 焦点模式（终端只显示 收消息/回复/告警）：由 CLI --focus 传入，
+        # 在 _init_config 里交给 setup_logger 装配控制台噪声过滤器。
+        self.focus_mode = focus
         self.platforms: dict[str, PlatformContext] = {}
         # 提前初始化当前用户信息字段，避免 _init_user 内调用
         # _resolve_own_open_dingtalk_id() 时访问尚未赋值的 current_open_dingtalk_id
@@ -82,6 +86,7 @@ class PrimaryMixin(EngineMixinBase):
             log_file=self.config.logging.file,
             max_size_mb=self.config.logging.max_size_mb,
             max_backups=self.config.logging.max_backups,
+            focus=self.focus_mode,
         )
         logger.info("正在初始化灵桥(Linkora)...")
 

@@ -103,7 +103,9 @@ class LLMReplyMixin(EngineMixinBase):
                 logger.info("[防双重回复] agent 已自回复当前会话，poller 不再发送")
                 self._mark_agent_self_replied(message)
             elif reply_text.text:
-                logger.info("LLM 回复: %s", reply_text.text[:100])
+                # 截断到 200 字符（2026-10-16 由 100 提升）：终端焦点模式下这是
+                # 「AI 回了什么」的唯一信息源，100 字符常把回复切断一半。
+                logger.info("LLM 回复: %s", reply_text.text[:200])
                 self._deliver_llm_reply(message, reply_text, history)
             else:
                 logger.warning("LLM返回了空回复")

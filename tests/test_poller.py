@@ -837,7 +837,9 @@ class TestPollStatsPlatformLabel:
             {"openConversationId": "chat-skip-no-oc"}
         ]
         mock_store._external_friend_repo.list_external_friends.return_value = []
-        caplog.set_level("INFO")
+        # 轮询统计 2026-10-16 起降为 DEBUG（周期性输出在稳态运行里属噪声），
+        # 此处验证的是统计**内容**（平台标识/CLI 名），与级别无关，故按 DEBUG 捕获。
+        caplog.set_level("DEBUG")
         with patch.object(poller, "_fetch_messages_via_list_all", return_value=[]), \
              patch.object(poller, "_get_cached_top_conversations", return_value=[]), \
              patch.object(poller, "_get_recent_conversations_from_db", return_value=[]):
@@ -876,7 +878,9 @@ class TestPollStatsPlatformLabel:
         # 关键：未读/置顶/历史均返回空 → all_conversations 为空
         poller.dws.chat_message_list_unread_conversations.return_value = []
         mock_store._external_friend_repo.list_external_friends.return_value = []
-        caplog.set_level("INFO")
+        # 轮询统计 2026-10-16 起降为 DEBUG（周期性输出在稳态运行里属噪声），
+        # 此处验证的是统计**内容**（平台标识/CLI 名），与级别无关，故按 DEBUG 捕获。
+        caplog.set_level("DEBUG")
         with patch.object(poller, "_fetch_messages_via_list_all", return_value=[]), \
              patch.object(poller, "_get_cached_top_conversations", return_value=[]), \
              patch.object(poller, "_get_recent_conversations_from_db", return_value=[]):

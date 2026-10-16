@@ -192,7 +192,9 @@ class DisplaySummaryScheduler:
         # 限流后每轮只处理 _max_enqueue_per_round 个，其余留待下一轮，
         # 让出写锁窗口给轮询器等对时延敏感的链路。
         if len(chats) > self._max_enqueue_per_round:
-            logger.info(
+            # 周期统计（DEBUG）：每轮评估都打会刷屏，把「收到消息/回复」淹没了
+            # （2026-10-16 用户反馈）；排障时 logging.level=debug 即可见。
+            logger.debug(
                 "[展示摘要] 本轮发现 %d 个待摘要会话，超出单轮上限 %d，本轮只入队 %d 个"
                 "（其余留待下一轮，避免写锁争用导致轮询器停摆）",
                 len(chats), self._max_enqueue_per_round, self._max_enqueue_per_round,
@@ -202,7 +204,7 @@ class DisplaySummaryScheduler:
             if self._stop_event.is_set():
                 break
             self._enqueue(chat["chat_id"], "signal")
-        logger.info("[展示摘要] 本轮评估发现 %d 个待摘要会话（平台=%s）", len(chats), self._platform)
+        logger.debug("[展示摘要] 本轮评估发现 %d 个待摘要会话（平台=%s）", len(chats), self._platform)
 
     # ----------------------------------------------------------- 工作循环
     def _worker_loop(self) -> None:

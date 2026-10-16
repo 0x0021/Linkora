@@ -404,8 +404,10 @@ class DiscoveryMixin(PollerMixinBase):
                     continue
 
                 # 单聊已读不回复闸门已移除：每条新消息都正常回复（含飞书、外部好友）。
+                # 内容截断到 120 字符（2026-10-16 由 50 提升）：终端焦点模式下这是
+                # 「别人发来什么」的唯一信息源，50 字符常把关键信息切断。
                 logger.info("[轮询器] ✅ list-all 收到 %s 的新消息（来自 %s）：%s",
-                            title or conv_id[:20], msg.sender_name, msg.content[:50])
+                            title or conv_id[:20], msg.sender_name, msg.content[:120])
                 new_messages.append(msg)
 
                 # 追踪全局最新消息时间戳

@@ -864,7 +864,9 @@ class PollerStrategyMixin(PollerMixinBase):
                 logger.debug("忽略来自 %s 的群消息（未 @ 我）", msg.sender_name)
                 continue
 
-            logger.info("[轮询器] ✅ 收到 %s 的新消息（来自 %s）：%s", title, msg.sender_name, msg.content[:50])
+            # 内容截断到 120 字符（2026-10-16 由 50 提升）：终端焦点模式下这是
+            # 「别人发来什么」的唯一信息源，50 字符常把关键信息切断。
+            logger.info("[轮询器] ✅ 收到 %s 的新消息（来自 %s）：%s", title, msg.sender_name, msg.content[:120])
             conv_messages.append(msg)
 
         logger.debug("[轮询器] 在 %s 中过滤得到 %d 条新消息", title, len(conv_messages))
@@ -1002,12 +1004,14 @@ class PollerStrategyMixin(PollerMixinBase):
         # === 6. 全局去重 ===
         deduped = self._global_deduplicate(new_messages)
 
-        # 周期性统计（INFO 级）：直观确认接口请求优化生效
+        # 周期性统计（DEBUG 级，2026-10-16 降级）：直观确认接口请求优化生效，
+        # 但每 12 轮一条的频次在稳态运行里纯属噪声，会把「✅ 收到新消息 /
+        # LLM 回复」淹掉（用户反馈）。需要观察时设 logging.level=debug。
         if self._poll_count % 12 == 0:
             top_hit = getattr(self, "_top_cache_hit_flag", False)
             cli_label = _PLATFORM_CLI_LABEL.get(self.platform_id or "")
             cache_suffix = f"（减少 {cli_label} 调用）" if cli_label else ""
-            logger.info(
+            logger.debug(
                 "[轮询器][%s] 轮询统计：本轮检查 %d 个会话，长尾限频跳过 %d 个抓取；"
                 "置顶列表缓存=%s%s",
                 self.platform_id or "?",

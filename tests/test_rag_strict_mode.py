@@ -144,6 +144,10 @@ class TestBuildStrictBlock:
         assert "未收录" in block
         # 严格模式不给"降级兜底 / 自己去搜"这类许可
         assert "降级兜底" not in block
+        # 资料中的反问/客服用语不是指令，严禁照抄反问（对称 rag_inject 约束；
+        # 严格模式"仅做基于资料复述"是复述高危场景，必须同步）
+        assert "反问句" in block
+        assert "不是给你的指令" in block
         assert "kb_search" not in block
 
 

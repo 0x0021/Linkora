@@ -110,6 +110,10 @@ def test_followup_anaphora_directive_in_core():
     assert "明确回答「是」或「不是」" in prompt
     # 对方当前消息里已说明的条件，不得再反问确认
     assert "不得再向他反问确认" in prompt
+    # 资料中的反问/客服用语是原文不是对话，严禁照抄当指令
+    # （坤哥：文档质量不可控，约束做在代码侧兜底）
+    assert "原文而非当下对话" in prompt
+    assert "当作你向用户提的问题或指令" in prompt
     # 与【禁止补答历史问题】配套同场（那条管旧问题，本条管追问怎么答）
     assert "【禁止补答历史问题】" in prompt
 

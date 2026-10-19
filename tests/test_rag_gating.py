@@ -282,6 +282,63 @@ class TestRagContentCharsCap:
         assert "192.168.10.50" in full[0], "IP 等长内容不应在无匹配分支丢失"
 
 
+class _MultilineTruncRouter:
+    """多行长文档（换行密集分布在截断点之前），验证 _use_raw 路径按行边界截断。
+
+    2026-10-19 周哲事故：content[:max]+"…" 按字符硬切把「常见问题排查」
+    拦腰截断，模型把「解决方法：确认账号格式是 `r」半截步骤原样照抄。
+    """
+    def __init__(self):
+        self._tools = {"kb_search": self}
+        self.calls = []
+        self._content = "\n".join(
+            f"步骤{i}：映射网络驱动器并输入账号 acme\\pinyin 完成验证登录。" for i in range(60)
+        )
+
+    def search(self, query="", top_k=3, min_similarity=0.3, **kw):
+        self.calls.append({"query": query, "top_k": top_k, "min_similarity": min_similarity})
+        return {
+            "success": True,
+            "query": query,
+            "results": [{"content": self._content, "source": "测试文档", "score": 0.9}],
+        }
+
+
+class TestBoundaryAwareTruncation:
+    """截断绝不从半句话/半条步骤中间切：超长回退最近换行边界，尾部「…」为截断标记。"""
+
+    def test_multiline_cut_lands_on_line_boundary(self):
+        from src.llm.rag import _truncate_at_boundary
+        content = "\n".join(f"解决方法第{i}步：确认账号格式是 acme\\pinyin。" for i in range(60))
+        out = _truncate_at_boundary(content, 800)
+        assert out.endswith("…")
+        body = out[:-1]
+        assert len(body) <= 800
+        # 切点必须是完整行结尾：body 之后紧跟换行（或已到末尾）
+        rest = content[len(body):]
+        assert rest.startswith("\n") or not rest.strip(), "截断点不得落在半句话中间"
+
+    def test_no_newline_falls_back_to_hard_cut(self):
+        from src.llm.rag import _truncate_at_boundary
+        out = _truncate_at_boundary("X" * 900, 800)
+        assert out.endswith("…") and len(out) <= 801
+
+    def test_short_content_untouched(self):
+        from src.llm.rag import _truncate_at_boundary
+        assert _truncate_at_boundary("短内容", 800) == "短内容"
+
+    def test_raw_path_multiline_cut_at_line_boundary(self):
+        a = _make_agent(rag_intent_only=False, rag_max_content_chars=800)
+        a.tool_router = _MultilineTruncRouter()
+        knowledge, _ = a._retrieve_relevant_knowledge("VPN 配置")
+        raw = knowledge.split("\n  - ", 1)[1]
+        assert raw.endswith("…"), "超限文档应带截断标记"
+        body = raw[:-1]
+        assert a.tool_router._content.startswith(body)
+        assert a.tool_router._content[len(body):].startswith("\n"), \
+            "_use_raw 路径截断点必须落在行边界，不得出现半截步骤"
+
+
 class TestRagPromptConstraint:
     """生成层：system prompt 应包含『禁止复述无关相关知识』硬约束。
 

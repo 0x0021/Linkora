@@ -257,6 +257,9 @@ class TestRagInjectAntiDump:
         assert "完整引用并组织回答" not in new_sys
         # 反复述 + 针对问题作答的新措辞必须在场
         assert "严禁把整篇文档从头到尾复述一遍" in new_sys
+        # 截断标记约束（2026-10-19 周哲事故）：尾部「…」= 被截断，半截步骤严禁照抄
+        assert "半句话、半条步骤" in new_sys
+        assert "严禁当作完整答案照抄输出" in new_sys
         assert "他问什么，你就答什么" in new_sys
         # 文档内反问/客服用语不是用户指令，严禁照抄执行
         # （坤哥：知识库文档质量不可控，约束必须做在代码侧）

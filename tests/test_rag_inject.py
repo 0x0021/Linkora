@@ -231,6 +231,42 @@ class TestRagInjectNormalInject:
         assert result.best_score == 0.7
 
 
+class TestRagInjectAntiDump:
+    """回归 2026-10-19 事故：RAG 前导指令不得诱导整篇复述知识库文档。
+
+    事故：某同事问「我想用手机连接研发部WiFi也是这个账号跟密码吗？」
+    （紧接上文的 yes/no 追问），分身因前导指令写着「请完整引用并组织回答」，
+    把《Windows共享访问教程》整篇倒给对面，还照抄教程结尾的反问。
+    """
+
+    def test_preamble_forbids_full_document_dump(self):
+        """「完整引用」措辞必须移除，换成「只摘取必需片段 + 严禁整篇复述」。"""
+        kb_text = (
+            "【相关知识】\n1. Windows共享访问教程（82%）\n"
+            "  - WiFi方式：手机连接 acme WiFi…\n  - VPN方式：连接 office.i.acme.com:5444…"
+        )
+        agent = FakeAgent(intent_returns=True, kb_returns=(kb_text, 0.82))
+        new_sys, result = _run(
+            "我想用手机连接研发部WiFi也是这个账号跟密码吗", agent=agent,
+        )
+        assert result.injected is True
+        # 治「只有标题没有步骤」忽略病的事实约束必须保留——不能把旧病弄回去
+        assert "唯一事实来源" in new_sys
+        assert "只有标题" in new_sys
+        # 诱导复述的旧措辞必须消失
+        assert "完整引用并组织回答" not in new_sys
+        # 反复述 + 针对问题作答的新措辞必须在场
+        assert "严禁把整篇文档从头到尾复述一遍" in new_sys
+        assert "他问什么，你就答什么" in new_sys
+
+    def test_preamble_requires_anaphora_resolution(self):
+        """前导指令必须要求：对方追问含指代词时，先结合上文弄清指代对象再答。"""
+        agent = FakeAgent(intent_returns=True, kb_returns=("【相关知识】x", 0.9))
+        new_sys, _ = _run("研发部WiFi 也是这个账号跟密码吗", agent=agent)
+        assert "也是……吗" in new_sys
+        assert "先结合上文弄清他指代的对象" in new_sys
+
+
 class TestRagInjectEdgeCases:
     """边界场景：system_content 拼接方向、连续调用隔离。"""
 

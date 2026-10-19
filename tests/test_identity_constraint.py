@@ -95,6 +95,25 @@ def test_identity_constraint_no_self_denial_but_no_taking_on_work():
         assert "【承诺边界" in prompt, label
 
 
+def test_followup_anaphora_directive_in_core():
+    """回归 2026-10-19 事故：追问里的指代必须先解析再作答。
+
+    张智宁问「我想用手机连接rokae-dev也是这个账号跟密码吗？」——
+    「也是……吗」是紧接上文的 yes/no 追问，分身却整篇复述知识库教程，
+    结尾还反问「你是用手机连WiFi还是装VPN客户端？」（对方已说明用手机）。
+    指令必须常驻 core（不受 RAG 开关影响）。
+    """
+    prompt = build_system_prompt_core(_fake_agent(user_title="IT运维"))
+    assert "【追问与指代】" in prompt
+    # 指代/承接词场景：先弄清指代对象，问「是不是」就明确回答是/否
+    assert "也是……吗" in prompt
+    assert "明确回答「是」或「不是」" in prompt
+    # 对方当前消息里已说明的条件，不得再反问确认
+    assert "不得再向他反问确认" in prompt
+    # 与【禁止补答历史问题】配套同场（那条管旧问题，本条管追问怎么答）
+    assert "【禁止补答历史问题】" in prompt
+
+
 def _fake_full_agent() -> SimpleNamespace:
     """补齐 build_system_prompt 所需属性的 fake（few-shot / 技能 / 风格段留空）。"""
     cfg = SimpleNamespace(

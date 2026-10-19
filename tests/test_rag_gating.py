@@ -314,7 +314,10 @@ class TestRagPromptConstraint:
         assert len(rag_msgs) == 1, "v5: RAG 应为独立 system 消息"
         rag_content = rag_msgs[0]["content"]
         assert "必须直接基于以下内容回答用户问题" in rag_content  # v5 新措辞
-        assert "具体的地址/IP/配置/流程" in rag_content or "直接给出具体步骤" in rag_content
+        # 治「只有标题没有步骤」忽略病：具体细节必须给出（2026-10-19 改措辞后保留）
+        assert "具体步骤/地址/IP/配置/账号密码等细节必须给出" in rag_content
+        # 反复述：只摘当前问题必需片段，禁整篇复述（回归 2026-10-19 事故）
+        assert "严禁把整篇文档从头到尾复述一遍" in rag_content
 
     def _msgs_of(self, agent, content):
         """完整消息列表（含 RAG 独立消息），供 v5 断言用。"""

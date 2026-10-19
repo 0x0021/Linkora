@@ -238,6 +238,25 @@ def is_document_query(agent: Any, query: str, query_embedding=None) -> bool:
     return not any(w in q for w in _CASUAL_FALLBACK)
 
 
+def _truncate_at_boundary(text: str, max_chars: int) -> str:
+    """保护性截断，但绝不从半句话/半条步骤中间切。
+
+    2026-10-19 事故（周哲单聊）：`content[:max] + "…"` 按字符硬切，把
+    《Windows共享访问教程》的「常见问题排查」整段拦腰截断，模型看到
+    「解决方法：确认账号格式是 `r」这种半截步骤后原样照抄给用户。
+    修复：超长时回退到截断点之前最近的换行边界，保证切出的内容以完整
+    行结尾；若前半段完全没有换行（整块无换行的长文本），退回硬切兜底。
+    尾部统一以「…」收尾——注入层 prompt 已约定该标记表示"资料被截断，
+    只引用完整条目，严禁照抄半截内容"。
+    """
+    if len(text) <= max_chars:
+        return text
+    cut = text.rfind("\n", 0, max_chars)
+    if cut < max_chars // 2:
+        cut = max_chars
+    return text[:cut].rstrip() + "…"
+
+
 def extract_relevant_snippets(
     content: str,
     query: str,
@@ -273,9 +292,9 @@ def extract_relevant_snippets(
             continue
         seen.add(idx)
         # 不再硬性截断到 200 字，避免关键信息（如分块后段的 IP）被丢弃；
-        # 仅在内容异常庞大时做保护性截断，并保留完整段落上下文。
+        # 仅在内容异常庞大时做保护性截断——按换行边界切，绝不从半句话中间断。
         if len(para) > max_chars_per_snippet:
-            snippets.append(para[:max_chars_per_snippet] + "…")
+            snippets.append(_truncate_at_boundary(para, max_chars_per_snippet))
         else:
             snippets.append(para)
 
@@ -376,7 +395,8 @@ def retrieve_relevant_knowledge(
                         and float(best_score) >= float(_RAG_GROUND_SIMILARITY))
             if _use_raw:
                 _max_c = agent._rag_max_content_chars or 800
-                raw = content[:_max_c] + ("…" if len(content) > _max_c else "")
+                # 按换行边界截断，绝不把半截步骤/半句话喂给模型（2026-10-19 周哲事故）
+                raw = _truncate_at_boundary(content, _max_c)
                 snippet_text = f"  - {raw}"
                 snippets_for_cite = [raw]
             else:

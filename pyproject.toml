@@ -4,7 +4,7 @@ version = "0.6.5"
 description = "灵桥 (Linkora) — 多平台 AI 自动回复助手（钉钉/飞书/企业微信 + RAG + 规则引擎 + Web 管理台）"
 readme = "README.md"
 # requires-python = ">=3.14"：项目仅支持 Python 3.14 系列（CI / 工作流 / Docker 统一切到 3.14.6），
-# 不再兼容 3.12 / 3.13。锁定依赖（numpy==2.5.3、tokenizers==0.23.3、rapidocr-onnxruntime==1.2.3 等）
+# 不再兼容 3.12 / 3.13。锁定依赖（numpy==2.5.4、tokenizers==0.23.3、rapidocr-onnxruntime==1.2.3 等）
 # 均已确认提供 cp314 wheel 或在 3.14.6 下可从 sdist 构建。改动依赖版本后请重跑 `python scripts/check_deps.py`。
 requires-python = ">=3.14"
 authors = [{ name = "Linkora Team" }]
@@ -22,17 +22,17 @@ classifiers = [
 dependencies = [
     # ---- 配置 / 环境 ----
     "PyYAML==6.0.3",
-    "pydantic==2.14.0",
+    "pydantic==2.14.1",
     "python-dotenv==1.2.4",
-    "platformdirs==4.12.4",
+    "platformdirs==4.13.3",
     # ---- LLM / 嵌入模型 ----
     "openai==2.54.0",
-    "numpy==2.5.3",
+    "numpy==2.5.4",
     "sentence-transformers==5.7.0",
     "huggingface_hub==1.33.0",
     "tokenizers==0.23.3",
     # ---- Web 服务 ----
-    "fastapi==0.143.0",
+    "fastapi==0.143.2",
     "uvicorn==0.54.0",
     "jinja2==3.1.6",
     "python-multipart==0.0.32",
@@ -64,7 +64,7 @@ dependencies = [
 # 开发/CI 期依赖，同样钉版：ruff 版本会直接影响 lint 结果，pytest 版本影响用例行为，
 # 不钉版会导致「本地绿、CI 红」。pytest* 三项必须与 requirements.txt 的测试段保持同版本。
 dev = [
-    "ruff==0.17.0",
+    "ruff==0.17.1",
     "pyright==1.1.414",
     "pytest==9.1.1",
     "pytest-cov==7.1.0",

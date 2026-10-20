@@ -4,19 +4,19 @@
 
 # ---- 配置 / 环境 ----
 PyYAML==6.0.3
-pydantic==2.14.0
+pydantic==2.14.1
 python-dotenv==1.2.4
-platformdirs==4.12.4
+platformdirs==4.13.3
 
 # ---- LLM / 嵌入模型 ----
 openai==2.54.0
-numpy==2.5.3
+numpy==2.5.4
 sentence-transformers==5.7.0
 huggingface_hub==1.33.0
 tokenizers==0.23.3
 
 # ---- Web 服务 ----
-fastapi==0.143.0
+fastapi==0.143.2
 uvicorn==0.54.0
 pyjwt==2.15.1
 jinja2==3.1.6

@@ -1,37 +1,29 @@
-name: Dependabot 依赖自动同步与合并
+name: Dependabot 依赖自动同步
 
-# 一劳永逸地解决两件事：
+# 解决「Dependabot 提了 PR，锁文件没跟着更新，CI 报依赖漂移，只能人工上机器
+# 跑一遍 lock_deps.sh 再补一个提交」的问题。
 #
-# 1. 锁文件不跟随依赖声明更新 —— 本项目有四份依赖声明必须同版本：
-#    requirements.txt（真源）、pyproject.toml、requirements.lock（CI/Docker
-#    实际安装）、uv.lock，CI 的 check_deps.py --strict 强制校验四者一致。
-#    但 Dependabot 只会改 pyproject.toml + requirements.txt，不保证锁文件同步，
-#    于是 pip 生态的 PR 必然让 check_deps 变红，只能人工上机器补跑
-#    `bash scripts/lock_deps.sh`（2026-10-14 的 #33、10-20 的 #34 都是如此）。
-#    本 workflow 在 PR 分支上自动重生成锁文件并推回分支。
+# 本项目有四份依赖声明必须同版本：requirements.txt（真源）、pyproject.toml、
+# requirements.lock（CI/Docker 实际安装）、uv.lock，CI 的 check_deps.py --strict
+# 强制校验四者一致。但 Dependabot 只保证改声明文件，不保证锁文件同步
+# （2026-10-14 的 #33、10-20 的 #34 都因此需人工补跑 lock_deps.sh）。
 #
-# 2. auto-merge 卡死 —— 旧版 auto-merge 第一步 `gh pr review --approve` 被
-#    GitHub 拒绝（仓库未开启 "Allow GitHub Actions to create and approve pull
-#    requests"，can_approve_pull_request_reviews=false），而分支保护本身
-#    required_approving_review_count=0 即并不要求人工审批 —— 该步骤多余，
-#    且是 auto-merge 失败的唯一原因（2026-10-21 实测）。
+# 本 workflow 在 Dependabot PR 上自动重生成锁文件并推回分支；合并由
+# dependabot-auto-merge.yml 负责（它用 pull_request_target 触发，必然运行）。
 #
 # 关键设计
 # --------
-# · 同步与合并放在同一个 workflow 内、串行执行：若拆成两个并行 workflow，
-#   合并方可能在锁文件推送之前就把 PR 合掉，导致主线 check_deps 变红。
 # · 用 pull_request（不是 pull_request_target）触发：前者拿不到仓库 secrets，
 #   天然避免在有写权限的上下文里执行 PR 里的代码。
-# · 只执行主线（origin/main）里的 lock_deps.sh / check_deps.py，不执行 PR
-#   分支里的同名脚本：PR 分支的脚本由 Dependabot 修改，属于不可信输入。
-#   依赖声明文件（requirements.txt / pyproject.toml）仍取 PR 分支的版本。
-# · GITHUB_TOKEN 推送不会触发新的 workflow run（GitHub 防递归设计），
-#   故推完锁文件后用 `gh workflow run ci.yml` 显式 dispatch 一次 CI
-#   （workflow_dispatch 不受 PR 审批策略限制，run 会落在该 PR 的 head SHA 上，
-#   分支保护的 required check 才能被满足）。
-# · npm 侧不重生成锁文件：Dependabot 自身就会正确更新 package-lock.json
-#   （含 overrides 钉版），本地 npm 重算反而会因 npm 版本差异产生无谓漂移
-#   （如 libc 字段）。需要重生成的只有 Python 侧的两份锁。
+# · 只执行主线（origin/base）的 lock_deps.sh / check_deps.py，不执行 PR 分支里
+#   的同名脚本 —— 那是 Dependabot 可写的不可信输入。依赖声明文件取 PR 分支版本。
+# · GITHUB_TOKEN 推送不会触发新的 workflow run（GitHub 防递归设计），故推完
+#   锁文件后用 `gh workflow run ci.yml` 显式 dispatch 一次 CI，让新提交的锁文件
+#   被 check_deps --strict 真正校验到。（需 actions: write 权限，否则 403。）
+# · npm 侧不重生成锁文件：Dependabot 自身会正确更新 package-lock.json
+#   （含 overrides 钉版），本地 npm 重算反因 npm 版本差异产生无谓漂移
+#   （libc 字段、lock 内 name 字段随目录名变）。需重生成的只有 Python 侧两份锁。
+# · 幂等：锁文件已一致则不提交、不 dispatch，无限循环风险已排除。
 
 on:
   pull_request:
@@ -49,9 +41,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync-and-merge:
+  sync-lockfiles:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    # 只处理 Dependabot 开的 PR —— 普通 PR 的锁文件由作者自己负责，
+    # 机器人擅自改动别人的分支是越权。
+    # 判据用 PR 作者而非事件触发者：锁文件推送后的 synchronize 事件
+    # actor 是 github-actions[bot]，但 PR 作者始终是 dependabot[bot]。
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: 检出 PR 分支
         uses: actions/checkout@v7
@@ -138,38 +135,3 @@ jobs:
           git fetch origin "$HEAD_REF" --quiet
           gh workflow run ci.yml --ref "$HEAD_REF"
           echo "已 dispatch ci.yml on $HEAD_REF"
-
-      - name: 获取 Dependabot 元数据
-        id: meta
-        uses: dependabot/fetch-metadata@v3
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: 等待 CI 汇总通过并合并
-        if: >-
-          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-          steps.meta.outputs.update-type == 'version-update:semver-minor'
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -uo pipefail
-          REPO="$GITHUB_REPOSITORY"
-          # 轮询分支保护真正要求的必填 check「CI 汇总」（= test + frontend 汇总）。
-          # 必须按 head SHA 查 check-runs：锁文件推送后 head SHA 会变，旧 SHA 上
-          # 的失败状态不再代表当前提交。
-          for i in $(seq 1 80); do
-            sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
-            state=$(gh api "repos/$REPO/commits/$sha/check-runs" \
-              --jq '[.check_runs[] | select(.name=="CI 汇总") | .conclusion] | unique | join(",")' \
-              2>/dev/null || echo "UNKNOWN")
-            echo "第 $i 次尝试：head=$sha CI 汇总=$state"
-            if [ "$state" = "success" ]; then
-              echo ">> CI 汇总通过，合并"
-              gh pr merge --squash "$PR_NUMBER" --repo "$REPO"
-              exit 0
-            fi
-            sleep 30
-          done
-          echo ">> 等待「CI 汇总」超时，不合并"
-          exit 1

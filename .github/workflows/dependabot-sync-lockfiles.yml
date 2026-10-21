@@ -225,7 +225,7 @@ jobs:
           sha=$(git rev-parse "refs/remotes/origin/prbranch")
           echo "当前 head=$sha"
 
-          # 先放行待审批的 pull_request run（可能尚未创建，需重试几轮）
+          # 放行待审批的 pull_request run（可能尚未创建，需重试几轮）
           approved=0
           for i in $(seq 1 12); do
             pending=$(gh api "repos/$REPO/actions/runs?branch=$HEAD_REF&per_page=20" \
@@ -242,10 +242,14 @@ jobs:
             echo "第 $i 次：暂无待审批 run，等待创建"
             sleep 5
           done
-          [ "$approved" = "1" ] || echo "警告：未找到待审批的 run"
 
-          # 再显式 dispatch 一次 CI：即使上面批准成功，pull_request 事件因
-          # GITHUB_TOKEN 推送而待审批的场景下可能未生成；dispatch 至少保证
-          # PR 上有 CI 结论可看（结论是否被分支保护认可取决于事件类型）。
-          gh workflow run ci.yml --ref "$HEAD_REF"
-          echo "已 dispatch ci.yml on $HEAD_REF"
+          if [ "$approved" = "1" ]; then
+            # 已放行 pull_request 事件的 CI：其 check 会被分支保护认可。
+            # 不再 dispatch —— 那会在同一 SHA 上多出一个 workflow_dispatch 的
+            # check-run，导致同名 check 出现多个不同结论，判定时容易取错。
+            echo "已放行 pull_request 事件的 CI，跳过 workflow_dispatch"
+          else
+            echo "警告：未找到待审批的 run，退回 workflow_dispatch 触发 CI"
+            gh workflow run ci.yml --ref "$HEAD_REF"
+            echo "已 dispatch ci.yml on $HEAD_REF"
+          fi

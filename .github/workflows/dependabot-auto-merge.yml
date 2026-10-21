@@ -34,7 +34,7 @@ name: Dependabot 自动合并
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: write
@@ -48,7 +48,11 @@ jobs:
     # 锁文件同步 workflow 推完锁文件后触发的 synchronize 事件，actor 是
     # github-actions[bot]；若按 actor 判断，合并方在锁文件就绪后反而不会被
     # 触发，PR 就永远停在待合并。PR 作者始终是 dependabot[bot]，判据稳定。
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    # 同时支持打了 dependencies 标签的 PR（人类提的依赖升级 PR 复用同一套
+    # 自动化；Dependabot PR 由 dependabot.yml 自动带此标签）。
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' ||
+      contains(github.event.pull_request.labels.*.name, 'dependencies')
     steps:
       - name: 获取 Dependabot 元数据
         id: meta

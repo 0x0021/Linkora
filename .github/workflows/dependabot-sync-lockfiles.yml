@@ -129,14 +129,20 @@ jobs:
           git push origin "HEAD:refs/heads/$HEAD_REF"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: 触发 CI 重跑
-        if: steps.push.outputs.changed == 'true'
+      - name: 触发 CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        # push 不会自动触发 CI（且该 push 改动了锁文件，pull_request 事件会因
-        # 锁文件安全策略转为待审批），故用 workflow_dispatch 显式跑一次，
-        # 让新提交的锁文件被 check_deps --strict 真正校验到。
+        # 必须无条件 dispatch，不能只在「推了锁文件」时才跑。
+        #
+        # 原因：Dependabot PR 的 CI 靠 pull_request 事件触发，而该事件对改动过
+        # 锁文件的 PR 会进入「待审批」状态 —— 无人批准就永不执行。实测 #36
+        # （npm 生态，锁文件本就一致、无需重生成）从头到尾没有跑过 CI，
+        # PR 上没有「CI 汇总」结论，合并方只能空等到超时。
+        #
+        # workflow_dispatch 不受待审批策略限制，且是显式指定 ref 跑，
+        # 结论会落在该 PR 的 head SHA 上，供分支保护与合并方读取。
+        # 不会形成循环：CI 跑完不推代码、不触发 synchronize 事件。
         run: |
           git fetch origin "$HEAD_REF" --quiet
           gh workflow run ci.yml --ref "$HEAD_REF"

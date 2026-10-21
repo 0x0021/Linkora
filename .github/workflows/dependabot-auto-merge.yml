@@ -74,17 +74,28 @@ jobs:
           # 轮询分支保护真正要求的必填 check「CI 汇总」（= test + frontend 汇总）。
           # 必须按 head SHA 查 check-runs：锁文件推送后 head SHA 会变，旧 SHA 上
           # 的失败状态不再代表当前提交。
+          #
+          # 区分两种「没绿」：
+          # · 尚无结论（CI 还没跑完 / 还没 dispatch）→ 继续等
+          # · 已失败 → 立即退出。真实失败（如依赖装不上、测试挂了）没有再等的
+          #   意义，空等 40 分钟只会拖慢反馈；这类 PR 交人工看即可。
           for i in $(seq 1 80); do
             sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
             state=$(gh api "repos/$REPO/commits/$sha/check-runs" \
               --jq '[.check_runs[] | select(.name=="CI 汇总") | .conclusion] | unique | join(",")' \
               2>/dev/null || echo "UNKNOWN")
             echo "第 $i 次尝试：head=$sha CI 汇总=$state"
-            if [ "$state" = "success" ]; then
-              echo ">> CI 汇总通过，开始合并"
-              gh pr merge --squash "$PR_NUMBER" --repo "$REPO"
-              exit 0
-            fi
+            case "$state" in
+              success)
+                echo ">> CI 汇总通过，开始合并"
+                gh pr merge --squash "$PR_NUMBER" --repo "$REPO"
+                exit 0
+                ;;
+              failure|cancelled|timed_out|action_required|startup_failure)
+                echo ">> CI 汇总未通过（$state），不合并，交人工处理"
+                exit 1
+                ;;
+            esac
             sleep 30
           done
           echo ">> 等待「CI 汇总」超时，不合并"

@@ -101,10 +101,10 @@ jobs:
 
       - name: 同步主线到 PR 分支
         # 多个 Dependabot PR 并发时会改到 package-lock.json 的同一行
-        # （例：#35 带入 postcss 8.5.30、#36 要升 8.5.31），合并时必冲突。
-        # 这里先把主线 merge 进 PR 分支，冲突一律以主线为准 —— 主线的锁文件
-        # 是权威解析结果；随后由 npm 依 PR 的 package.json 重新解析，
-        # 把 PR 想要的版本带回来。冲突在源头消解，而非等到合并阶段。
+        # （例：#35 带入 postcss 8.5.30、#36 要升 8.5.31），合并时必冲突，
+        # 表现为 mergeable=CONFLICTING、合并报 "merge commit cannot be
+        # cleanly created"。这里先把主线 merge 进 PR 分支，冲突在源头消解，
+        # 而非等到合并阶段才发现。
         #
         # 不做 rebase：rebase 会改写 Dependabot 的提交历史，让它下次更新时
         # 困惑；merge 保留历史，代价仅是分支上多一个 merge commit。

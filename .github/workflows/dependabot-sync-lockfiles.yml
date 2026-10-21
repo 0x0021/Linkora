@@ -33,7 +33,7 @@ name: Dependabot 依赖自动同步
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: write
@@ -50,11 +50,15 @@ jobs:
   sync-lockfiles:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # 只处理 Dependabot 开的 PR —— 普通 PR 的锁文件由作者自己负责，
-    # 机器人擅自改动别人的分支是越权。
+    # 只处理 Dependabot 开的 PR，以及显式打了 dependencies 标签的 PR ——
+    # 人类提的依赖升级 PR 打上该标签即可复用同一套自动化（Dependabot PR 由
+    # dependabot.yml 自动带此标签），不必再手工补跑 lock_deps.sh。
+    # 不按标签之外的任何理由动手：机器人擅自改动别人的分支是越权。
     # 判据用 PR 作者而非事件触发者：锁文件推送后的 synchronize 事件
     # actor 是 github-actions[bot]，但 PR 作者始终是 dependabot[bot]。
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' ||
+      contains(github.event.pull_request.labels.*.name, 'dependencies')
     steps:
       - name: 检出 PR 分支
         uses: actions/checkout@v7

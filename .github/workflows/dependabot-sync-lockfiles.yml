@@ -99,6 +99,55 @@ jobs:
             echo "不涉及依赖相关文件，跳过锁文件重生成"
           fi
 
+      - name: 同步主线到 PR 分支
+        # 多个 Dependabot PR 并发时会改到 package-lock.json 的同一行
+        # （例：#35 带入 postcss 8.5.30、#36 要升 8.5.31），合并时必冲突。
+        # 这里先把主线 merge 进 PR 分支，冲突一律以主线为准 —— 主线的锁文件
+        # 是权威解析结果；随后由 npm 依 PR 的 package.json 重新解析，
+        # 把 PR 想要的版本带回来。冲突在源头消解，而非等到合并阶段。
+        #
+        # 不做 rebase：rebase 会改写 Dependabot 的提交历史，让它下次更新时
+        # 困惑；merge 保留历史，代价仅是分支上多一个 merge commit。
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -uo pipefail
+          # merge 会产生提交，需先配好身份
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BASE_REF" --quiet
+          if git merge-base --is-ancestor "origin/$BASE_REF" HEAD; then
+            echo "分支已包含主线，跳过 merge"
+            exit 0
+          fi
+          if git merge "origin/$BASE_REF" --no-edit --no-ff; then
+            echo "主线已 merge 进来"
+          else
+            echo "merge 冲突，按类型分别解决："
+            conflicted=$(git diff --name-only --diff-filter=U)
+            echo "$conflicted"
+            # merge 冲突里 ours = 当前分支(PR)，theirs = 被合并方(主线)。
+            # 分两类处理：
+            # · package-lock.json → 取 PR 侧：这份 lock 是 Dependabot 依 PR 的
+            #   package.json 生成的，两者配套；取主线侧会与 package.json 不匹配。
+            #   （不用 npm 重解析来修：npm 10.9.x 在重建依赖树时解析 vitest 4.x
+            #   的 optional peer 集合会崩 —— npm/cli#9787 上游缺陷，
+            #   npm 11+ 才修；而 npm ci 用已提交的 lock 不受影响。）
+            # · 其余文件 → 取主线侧：主线是权威状态。
+            for f in $conflicted; do
+              if [ "$f" = "package-lock.json" ]; then
+                echo "  $f → 取 PR 侧（与 package.json 配套）"
+                git checkout --ours -- "$f" || true
+              else
+                echo "  $f → 取主线侧"
+                git checkout --theirs -- "$f" || true
+              fi
+            done
+            git add $conflicted || true
+            git commit -m "chore(deps): 同步主线，冲突按文件类型解决" --no-verify || true
+            echo "冲突已解决"
+          fi
+
       - name: 重生成 Python 锁文件
         if: steps.relevant.outputs.relevant == 'true'
         # lock_deps.sh 用 uv pip compile 生成 requirements.lock、uv lock 生成
@@ -113,16 +162,16 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain requirements.lock uv.lock)" ]; then
+          if [ -z "$(git status --porcelain requirements.lock uv.lock package-lock.json)" ]; then
             echo "锁文件已与依赖声明一致，无需提交"
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "锁文件有更新，提交："
-          git status --porcelain requirements.lock uv.lock
+          git status --porcelain requirements.lock uv.lock package-lock.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add requirements.lock uv.lock
+          git add requirements.lock uv.lock package-lock.json
           git commit -m "chore(deps): 重新生成锁文件以匹配依赖声明"
           # GITHUB_TOKEN 推送：不会触发新的 workflow run（防递归），
           # 所以下面用 workflow_dispatch 显式重跑 CI。

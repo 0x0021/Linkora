@@ -276,7 +276,7 @@ regex==2026.9.29
     #   transformers
 requests==2.34.2
     # via -r requirements.txt
-rich==15.0.0
+rich==14.3.4
     # via
     #   -r requirements.txt
     #   typer

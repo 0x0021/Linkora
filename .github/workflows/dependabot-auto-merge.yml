@@ -5,10 +5,18 @@ name: Dependabot 自动合并
 #
 # 与 dependabot-sync-lockfiles.yml 的分工
 # ------------------------------------------
-# · dependabot-sync-lockfiles.yml：先在 PR 分支上重生成锁文件并推回分支
-#   （GITHUB_TOKEN 推送不触发 CI，故它会显式 dispatch 一次 ci.yml）。
-# · 本 workflow：等「CI 汇总」这个 required check 变绿后再 squash 合并。
-#   等的是 required check 本身，而不是某个 job —— 分支保护只认「CI 汇总」。
+# · dependabot-sync-lockfiles.yml（pull_request 触发）：在 PR 分支上重生成
+#   requirements.lock / uv.lock 并推回分支，再 dispatch 一次 ci.yml。
+# · 本 workflow（pull_request_target 触发）：确认锁文件已同步、等「CI 汇总」
+#   变绿后 squash 合并。
+#
+# 为什么合并方用 pull_request_target
+# ----------------------------------
+# GitHub 的规则（官方文档「Triggering a workflow」）：当 workflow 用 GITHUB_TOKEN
+# 创建或更新 PR 时，产生的 pull_request 事件会创建「处于待审批状态」的 workflow
+# run —— 需人工批准才会执行。锁文件同步 workflow 推送锁文件后触发的正是这种
+# synchronize 事件，若合并方也依赖它，就会卡在待审批、无人批准 → 永不合并。
+# 而 pull_request_target 在主分支上下文运行，「无论审批设置如何都会运行」。
 #
 # 为什么不再执行 `gh pr review --approve`
 # ----------------------------------------
@@ -17,10 +25,16 @@ name: Dependabot 自动合并
 #   GraphQL: GitHub Actions is not permitted to approve pull requests.
 # 而分支保护本身 required_approving_review_count = 0（即并不要求人工审批），
 # 所以这一步不仅多余，还是 auto-merge 失败的唯一原因（2026-10-21 实测）。
-# 直接走 `gh pr merge --squash` 即可，required check 通过后即可合入。
+#
+# 安全
+# ----
+# pull_request_target 有写权限且能读到 PR 的完整上下文，因此本 workflow
+# 绝不 checkout 或执行 PR 分支里的任何代码：只用 GitHub API 读取元数据与
+# check 状态，改动操作仅限 squash 合并。
 
 on:
   pull_request_target:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -29,8 +43,12 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
-    if: github.actor == 'dependabot[bot]'
+    timeout-minutes: 60
+    # 判据用 PR 作者（pull_request.user）而非事件触发者（github.actor）：
+    # 锁文件同步 workflow 推完锁文件后触发的 synchronize 事件，actor 是
+    # github-actions[bot]；若按 actor 判断，合并方在锁文件就绪后反而不会被
+    # 触发，PR 就永远停在待合并。PR 作者始终是 dependabot[bot]，判据稳定。
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: 获取 Dependabot 元数据
         id: meta
@@ -43,27 +61,41 @@ jobs:
           steps.meta.outputs.update-type == 'version-update:semver-patch' ||
           steps.meta.outputs.update-type == 'version-update:semver-minor'
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          # 轮询等待分支保护要求的必填 status check「CI 汇总」通过。
-          # 注意：
-          # · 必须等 required check 本身（CI 汇总 = test + frontend 汇总），
-          #   等单个 job 会漏判 —— 审计 P1-18 记录过这个脱节。
-          # · 依赖同步 workflow 推完锁文件后会 dispatch 新一轮 CI，
-          #   这期间可能短暂出现上一轮的失败状态，故失败不立即退出，
-          #   而是继续轮询直到超时；只有当「CI 汇总」成功才合并。
-          for i in $(seq 1 60); do
-            state=$(gh pr checks "$PR_URL" --json name,state \
-              --jq '[.[] | select(.name=="CI 汇总") | .state] | unique | join(",")' \
+          # 无需在此判断锁文件是否已同步 —— CI 汇总本身就是最权威的判据：
+          # 若锁文件未与依赖声明一致，CI 的 check_deps --strict 会红，
+          # 「CI 汇总」就不会 success，合并自然不会发生。这同时消除了
+          # 「同步与合并并行」的竞态：锁文件没同步完，CI 就不可能绿。
+          #
+          # 轮询分支保护真正要求的必填 check「CI 汇总」（= test + frontend 汇总）。
+          # 必须按 head SHA 查 check-runs：锁文件推送后 head SHA 会变，旧 SHA 上
+          # 的失败状态不再代表当前提交。
+          #
+          # 区分两种「没绿」：
+          # · 尚无结论（CI 还没跑完 / 还没 dispatch）→ 继续等
+          # · 已失败 → 立即退出。真实失败（如依赖装不上、测试挂了）没有再等的
+          #   意义，空等 40 分钟只会拖慢反馈；这类 PR 交人工看即可。
+          for i in $(seq 1 80); do
+            sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+            state=$(gh api "repos/$REPO/commits/$sha/check-runs" \
+              --jq '[.check_runs[] | select(.name=="CI 汇总") | .conclusion] | unique | join(",")' \
               2>/dev/null || echo "UNKNOWN")
-            echo "第 $i 次尝试：CI 汇总 状态 = $state"
-            if [ "$state" = "SUCCESS" ]; then
-              echo ">> CI 汇总通过，开始合并"
-              gh pr merge --squash "$PR_URL"
-              exit 0
-            fi
+            echo "第 $i 次尝试：head=$sha CI 汇总=$state"
+            case "$state" in
+              success)
+                echo ">> CI 汇总通过，开始合并"
+                gh pr merge --squash "$PR_NUMBER" --repo "$REPO"
+                exit 0
+                ;;
+              failure|cancelled|timed_out|action_required|startup_failure)
+                echo ">> CI 汇总未通过（$state），不合并，交人工处理"
+                exit 1
+                ;;
+            esac
             sleep 30
           done
           echo ">> 等待「CI 汇总」超时，不合并"

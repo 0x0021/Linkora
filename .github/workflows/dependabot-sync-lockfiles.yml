@@ -1,71 +1,78 @@
 name: Dependabot 依赖自动同步
 
-# 一劳永逸地解决「Dependabot 提了 PR，锁文件没跟着更新，CI 报依赖漂移，
-# 只能人工上机器跑一遍 lock_deps.sh 再补一个提交」的问题。
+# 解决「Dependabot 提了 PR，锁文件没跟着更新，CI 报依赖漂移，只能人工上机器
+# 跑一遍 lock_deps.sh 再补一个提交」的问题。
 #
-# 背景
-# ----
 # 本项目有四份依赖声明必须同版本：requirements.txt（真源）、pyproject.toml、
-# requirements.lock（CI/Docker 实际安装）、uv.lock。CI 的 check_deps.py --strict
-# 会强制校验四者一致。
+# requirements.lock（CI/Docker 实际安装）、uv.lock，CI 的 check_deps.py --strict
+# 强制校验四者一致。但 Dependabot 只保证改声明文件，不保证锁文件同步
+# （2026-10-14 的 #33、10-20 的 #34 都因此需人工补跑 lock_deps.sh）。
 #
-# 但 Dependabot 只会改 pyproject.toml + requirements.txt，不会重生成
-# requirements.lock / uv.lock —— 于是每个 pip 生态的 Dependabot PR 都会让
-# check_deps --strict 变红，必须人工补跑 `bash scripts/lock_deps.sh`。
-# 2026-10-14 的 #33、2026-10-20 的 #34 都是这么手工补的。
+# 本 workflow 在 Dependabot PR 上自动重生成锁文件并推回分支；合并由
+# dependabot-auto-merge.yml 负责（它用 pull_request_target 触发，必然运行）。
 #
-# 做法
-# ----
-# 本 workflow 在 Dependabot PR 上自动重生成锁文件并 commit 回该 PR 分支：
-#   1. checkout PR 分支（带完整历史）
-#   2. 跑 scripts/lock_deps.sh 重生成 requirements.lock + uv.lock
-#   3. npm 侧：跑 npm install --package-lock-only 让 package-lock.json 与
-#      package.json 重新对齐（保留 overrides 钉版）
-#   4. 有变更就 commit + push 回 PR 分支
-#
-# 关键细节
-# ----------
-# · 用 pull_request（不是 pull_request_target）触发：前者拿不到仓库 secrets，
-#   天然避免在有写权限的上下文里执行 PR 里的代码。push 用的是本仓库的
-#   GITHUB_TOKEN，权限由下方 permissions 显式授予。
-# · GITHUB_TOKEN 推送不会触发新的 workflow run（GitHub 的防递归设计），
-#   所以推完锁文件后 CI 不会自动重跑。解决办法是本 workflow 结尾用
-#   `gh workflow run ci.yml --ref <branch>` 显式 dispatch 一次 CI。
-# · 幂等：若锁文件本就一致则不产生提交、不 dispatch，避免空转与递归。
-# · 只处理依赖相关的文件变动，其余 PR 一律跳过。
-#
-# 配套
-# ----
-# 合并由 dependabot-auto-merge.yml 负责（它等待本 workflow 推锁文件后
-# 重跑的 CI 变绿后再 squash 合并）。
+# 关键设计
+# --------
+# · 用 pull_request_target 触发（不是 pull_request）：它用的是**主线**的 workflow
+#   定义，而 pull_request 用的是 PR 分支上的定义 —— Dependabot 分支基于旧 main
+#   时会跑旧逻辑（2026-10-21 的 #36 实测：分支上还是旧版，缺 actions: write，
+#   dispatch 直接 403），而 Dependabot 的 rebase 是异步的、最长要等一周。
+#   改用 pull_request_target 后，无论分支基线多旧，跑的都是主线最新版。
+#   另外 pull_request_target 不受「待审批」策略限制 —— GITHUB_TOKEN 推送后
+#   触发的 pull_request 事件会创建待审批的 run，没人批准就永不执行。
+# · 安全：pull_request_target 有写权限，故本 workflow 绝不执行 PR 分支里的
+#   任何代码 —— 只从 PR 分支读取依赖声明文件（数据），lock_deps.sh 与
+#   check_deps.py 一律用主线版本覆盖后执行。
+# · GITHUB_TOKEN 推送不会触发新的 workflow run（GitHub 防递归设计），故推完
+#   锁文件后用 `gh workflow run ci.yml` 显式 dispatch 一次 CI，让新提交的锁文件
+#   被 check_deps --strict 真正校验到。（需 actions: write 权限，否则 403。）
+# · npm 侧不重生成锁文件：Dependabot 自身会正确更新 package-lock.json
+#   （含 overrides 钉版），本地 npm 重算反因 npm 版本差异产生无谓漂移
+#   （libc 字段、lock 内 name 字段随目录名变）。需重生成的只有 Python 侧两份锁。
+# · 幂等：锁文件已一致则不提交、不 dispatch，无限循环风险已排除。
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
+  actions: write
   pull-requests: write
 
 concurrency:
-  group: dependabot-sync-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  # 按 PR 号 + head SHA 分组：锁文件推送会产生新 SHA，新 SHA 的 run 不得
+  # 取消正在跑的第一个 run（否则锁文件推了一半就被打断）。
+  group: dependabot-sync-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
 
 jobs:
   sync-lockfiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     # 只处理 Dependabot 开的 PR —— 普通 PR 的锁文件由作者自己负责，
     # 机器人擅自改动别人的分支是越权。
-    if: github.actor == 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 判据用 PR 作者而非事件触发者：锁文件推送后的 synchronize 事件
+    # actor 是 github-actions[bot]，但 PR 作者始终是 dependabot[bot]。
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: 检出 PR 分支
         uses: actions/checkout@v7
         with:
-          # 显式取 PR 的 head 分支：pull_request 事件默认检出的是 merge ref，
-          # 直接 push merge ref 会被 GitHub 拒绝。
+          # 显式取 PR 的 head 分支：pull_request_target 默认检出的是主线，
+          # 而我们要读 PR 分支里的依赖声明文件、并把锁文件推回该分支。
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+
+      - name: 检出主线可信脚本
+        # 锁定执行主线版本的 lock_deps.sh / check_deps.py：PR 分支里的同名
+        # 文件是 Dependabot 可写的不可信输入，不能拿它的代码来跑本仓库。
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}:refs/remotes/origin/base" --quiet
+          git show "origin/base:scripts/lock_deps.sh" > scripts/lock_deps.sh
+          git show "origin/base:scripts/check_deps.py" > scripts/check_deps.py
+          chmod +x scripts/lock_deps.sh
+          echo "已用主线版本覆盖 lock_deps.sh / check_deps.py"
 
       - name: 安装 uv
         uses: astral-sh/setup-uv@v7
@@ -73,71 +80,135 @@ jobs:
           python-version: '3.14'
           enable-cache: true
 
-      - name: 安装 Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: npm
-
       - name: 判断是否涉及依赖文件
         id: relevant
         run: |
-          changed=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
+          changed=$(git diff --name-only "origin/base...HEAD")
           echo "变更文件："
           echo "$changed"
           echo "---"
-          if echo "$changed" | grep -qE '^(pyproject\.toml|requirements\.txt|requirements\.lock|uv\.lock|package\.json|package-lock\.json)$'; then
+          # 只要动了任一依赖相关文件就重生成 Python 锁文件：
+          # Dependabot 的 npm 生态 PR 也会顺带更新 requirements.lock 里的传递
+          # 依赖（如 setuptools），若不在此统一重生成，锁文件就会带着
+          # 「非本仓库工具链产出」的漂移进主线。统一由 lock_deps.sh 产出，
+          # 保证与本地/CI 的解析结果一致。
+          if echo "$changed" | grep -qE '^(pyproject\.toml|requirements\.txt|requirements\.lock|uv\.lock)$'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
-            echo "不涉及依赖文件，跳过"
+            echo "不涉及依赖相关文件，跳过锁文件重生成"
+          fi
+
+      - name: 同步主线到 PR 分支
+        # 多个 Dependabot PR 并发时会改到 package-lock.json 的同一行
+        # （例：#35 带入 postcss 8.5.30、#36 要升 8.5.31），合并时必冲突。
+        # 这里先把主线 merge 进 PR 分支，冲突一律以主线为准 —— 主线的锁文件
+        # 是权威解析结果；随后由 npm 依 PR 的 package.json 重新解析，
+        # 把 PR 想要的版本带回来。冲突在源头消解，而非等到合并阶段。
+        #
+        # 不做 rebase：rebase 会改写 Dependabot 的提交历史，让它下次更新时
+        # 困惑；merge 保留历史，代价仅是分支上多一个 merge commit。
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -uo pipefail
+          # merge 会产生提交，需先配好身份
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 必须显式 fetch 到 refs/remotes/origin/base：actions/checkout 只拉了
+          # PR 分支，remote-tracking ref 里没有 origin/main，直接用
+          # `git fetch origin main` 只会更新 FETCH_HEAD、不建 ref，
+          # 后续 merge 会因 ref 不存在而静默失败（2026-10-21 实测）。
+          git fetch origin "+$BASE_REF:refs/remotes/origin/base" --quiet
+          if ! git rev-parse --verify --quiet "origin/base" >/dev/null; then
+            echo "::error::未能获取主线 ref origin/base，终止"
+            exit 1
+          fi
+          if git merge-base --is-ancestor origin/base HEAD; then
+            echo "分支已包含主线，跳过 merge"
+            exit 0
+          fi
+          if git merge origin/base --no-edit --no-ff; then
+            echo "主线已 merge 进来"
+          else
+            echo "merge 冲突，按类型分别解决："
+            conflicted=$(git diff --name-only --diff-filter=U)
+            echo "$conflicted"
+            # merge 冲突里 ours = 当前分支(PR)，theirs = 被合并方(主线)。
+            # 分两类处理：
+            # · package-lock.json → 取 PR 侧：这份 lock 是 Dependabot 依 PR 的
+            #   package.json 生成的，两者配套；取主线侧会与 package.json 不匹配。
+            #   （不用 npm 重解析来修：npm 10.9.x 在重建依赖树时解析 vitest 4.x
+            #   的 optional peer 集合会崩 —— npm/cli#9787 上游缺陷，
+            #   npm 11+ 才修；而 npm ci 用已提交的 lock 不受影响。）
+            # · 其余文件 → 取主线侧：主线是权威状态。
+            for f in $conflicted; do
+              if [ "$f" = "package-lock.json" ]; then
+                echo "  $f → 取 PR 侧（与 package.json 配套）"
+                git checkout --ours -- "$f" || true
+              else
+                echo "  $f → 取主线侧"
+                git checkout --theirs -- "$f" || true
+              fi
+            done
+            git add $conflicted || true
+            git commit -m "chore(deps): 同步主线，冲突按文件类型解决" --no-verify || true
+            echo "冲突已解决"
           fi
 
       - name: 重生成 Python 锁文件
         if: steps.relevant.outputs.relevant == 'true'
-        # lock_deps.sh 会用 uv pip compile 生成 requirements.lock、uv lock 生成
+        # lock_deps.sh 用 uv pip compile 生成 requirements.lock、uv lock 生成
         # uv.lock，末尾自带 check_deps.py 校验。PY_FLOOR 与 CI 的 Python 版本
         # 同为 3.14，解析结果与 CI 一致。
         run: bash scripts/lock_deps.sh
-
-      - name: 重生成 npm 锁文件
-        if: steps.relevant.outputs.relevant == 'true'
-        # --package-lock-only 只更新 lock 不动 node_modules；overrides
-        # （source-map-js 钉 1.2.2）由 package.json 声明，npm 会遵守。
-        run: npm install --package-lock-only --no-audit --no-fund
 
       - name: 提交锁文件并推回 PR 分支
         id: push
         if: steps.relevant.outputs.relevant == 'true'
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain requirements.lock uv.lock package-lock.json)" ]; then
-            echo "锁文件已与依赖声明一致，无需提交"
+          # 判据要看「有没有待推送的提交」，不能只看工作区是否变更：
+          # 「同步主线到 PR 分支」产生的是 merge commit（已提交、工作区干净），
+          # 若只看工作区就会 early exit，merge commit 永远推不回分支，
+          # 合并方仍会因 CONFLICTING 失败（2026-10-21 实测）。
+          git fetch origin "+$HEAD_REF:refs/remotes/origin/prbranch" --quiet
+          local_sha=$(git rev-parse HEAD)
+          remote_sha=$(git rev-parse "refs/remotes/origin/prbranch" 2>/dev/null || echo "")
+          if [ -n "$(git status --porcelain requirements.lock uv.lock package-lock.json)" ]; then
+            echo "锁文件有更新，提交："
+            git status --porcelain requirements.lock uv.lock package-lock.json
+            git add requirements.lock uv.lock package-lock.json
+            git commit -m "chore(deps): 重新生成锁文件以匹配依赖声明"
+            local_sha=$(git rev-parse HEAD)
+          fi
+          if [ "$local_sha" = "$remote_sha" ]; then
+            echo "分支已是最新（锁文件一致且已含主线），无需推送"
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "锁文件有更新，提交："
-          git status --porcelain requirements.lock uv.lock package-lock.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add requirements.lock uv.lock package-lock.json
-          git commit -m "chore(deps): 重新生成锁文件以匹配依赖声明"
+          echo "推送 $local_sha（远端 $remote_sha）"
           # GITHUB_TOKEN 推送：不会触发新的 workflow run（防递归），
           # 所以下面用 workflow_dispatch 显式重跑 CI。
           git push origin "HEAD:refs/heads/$HEAD_REF"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: 触发 CI 重跑
-        if: steps.push.outputs.changed == 'true'
+      - name: 触发 CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        # push 不会自动触发 CI，这里显式 dispatch 一次，让新提交的锁文件
-        # 真正被 check_deps --strict 校验到。
+        # 必须无条件 dispatch，不能只在「推了锁文件」时才跑。
+        #
+        # 原因：Dependabot PR 的 CI 靠 pull_request 事件触发，而该事件对改动过
+        # 锁文件的 PR 会进入「待审批」状态 —— 无人批准就永不执行。实测 #36
+        # （npm 生态，锁文件本就一致、无需重生成）从头到尾没有跑过 CI，
+        # PR 上没有「CI 汇总」结论，合并方只能空等到超时。
+        #
+        # workflow_dispatch 不受待审批策略限制，且是显式指定 ref 跑，
+        # 结论会落在该 PR 的 head SHA 上，供分支保护与合并方读取。
+        # 不会形成循环：CI 跑完不推代码、不触发 synchronize 事件。
         run: |
           git fetch origin "$HEAD_REF" --quiet
           gh workflow run ci.yml --ref "$HEAD_REF"

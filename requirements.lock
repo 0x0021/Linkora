@@ -290,7 +290,7 @@ scipy==1.18.1
     #   sentence-transformers
 sentence-transformers==5.7.0
     # via -r requirements.txt
-setuptools==84.2.0
+setuptools==84.2.1
     # via torch
 shapely==2.2.0
     # via rapidocr-onnxruntime

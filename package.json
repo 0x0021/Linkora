@@ -3,12 +3,12 @@
     "@fortawesome/fontawesome-free": "^7.3.0"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.1",
-    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-prettier": "^9.1.2",
     "jsdom": "^25.0.1",
-    "prettier": "^3.3.3",
-    "vitest": "^4.1.11"
+    "prettier": "^3.9.10",
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "source-map-js": "1.2.2"

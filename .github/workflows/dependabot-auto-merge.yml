@@ -97,9 +97,13 @@ jobs:
           #   意义，空等 40 分钟只会拖慢反馈；这类 PR 交人工看即可。
           for i in $(seq 1 80); do
             sha=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+            # 取**最新**一个「CI 汇总」check-run，而不是把所有同名 check 合并：
+            # 同一 SHA 上可能存在多个（workflow_dispatch 跑的 + pull_request 事件
+            # 跑的 + 中途失败重跑的），GitHub 分支保护判定取的是最新那个。
+            # 曾用 unique|join(",") 得到 "failure,success" 而永远判不出成功。
             state=$(gh api "repos/$REPO/commits/$sha/check-runs" \
-              --jq '[.check_runs[] | select(.name=="CI 汇总") | .conclusion] | unique | join(",")' \
-              2>/dev/null || echo "UNKNOWN")
+              --jq '[.check_runs[] | select(.name=="CI 汇总")] | sort_by(.id) | last | .conclusion // ""' \
+              2>/dev/null || echo "")
             echo "第 $i 次尝试：head=$sha CI 汇总=$state"
             case "$state" in
               success)

@@ -115,12 +115,20 @@ jobs:
           # merge 会产生提交，需先配好身份
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "$BASE_REF" --quiet
-          if git merge-base --is-ancestor "origin/$BASE_REF" HEAD; then
+          # 必须显式 fetch 到 refs/remotes/origin/base：actions/checkout 只拉了
+          # PR 分支，remote-tracking ref 里没有 origin/main，直接用
+          # `git fetch origin main` 只会更新 FETCH_HEAD、不建 ref，
+          # 后续 merge 会因 ref 不存在而静默失败（2026-10-21 实测）。
+          git fetch origin "+$BASE_REF:refs/remotes/origin/base" --quiet
+          if ! git rev-parse --verify --quiet "origin/base" >/dev/null; then
+            echo "::error::未能获取主线 ref origin/base，终止"
+            exit 1
+          fi
+          if git merge-base --is-ancestor origin/base HEAD; then
             echo "分支已包含主线，跳过 merge"
             exit 0
           fi
-          if git merge "origin/$BASE_REF" --no-edit --no-ff; then
+          if git merge origin/base --no-edit --no-ff; then
             echo "主线已 merge 进来"
           else
             echo "merge 冲突，按类型分别解决："

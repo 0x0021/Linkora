@@ -56,14 +56,26 @@ jobs:
     steps:
       - name: 获取 Dependabot 元数据
         id: meta
+        # 对非 Dependabot 创建的 PR（人类提的依赖升级 PR，打了 dependencies
+        # 标签）fetch-metadata 会失败 —— 它只能解析 Dependabot PR 的元数据。
+        # 故容错：拿不到元数据不阻塞，交给下面的合并条件按「标签 PR」处理。
+        continue-on-error: true
         uses: dependabot/fetch-metadata@v3
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: 审批并合并（仅 minor/patch）
+      - name: 审批并合并
+        # 两类都放行：
+        # · Dependabot PR 且为 minor/patch —— major 升级保留人工评审，
+        #   避免破坏性变更被无脑合入（dependabot.yml 已忽略 semver-major，
+        #   这里再兜一层，防止配置变更后 major 被自动合）。
+        # · 打了 dependencies 标签的 PR（人类显式授权走这套自动化）——
+        #   无 update-type 概念，由标签本身作为授权。
         if: >-
-          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-          steps.meta.outputs.update-type == 'version-update:semver-minor'
+          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+           steps.meta.outputs.update-type == 'version-update:semver-minor') ||
+          (github.event.pull_request.user.login != 'dependabot[bot]' &&
+           contains(github.event.pull_request.labels.*.name, 'dependencies'))
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}

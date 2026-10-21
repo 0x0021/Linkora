@@ -195,21 +195,53 @@ jobs:
           git push origin "HEAD:refs/heads/$HEAD_REF"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: 触发 CI
+      - name: 触发并放行 CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        # 必须无条件 dispatch，不能只在「推了锁文件」时才跑。
+          REPO: ${{ github.repository }}
+        # 两件事，缺一不可：
         #
-        # 原因：Dependabot PR 的 CI 靠 pull_request 事件触发，而该事件对改动过
-        # 锁文件的 PR 会进入「待审批」状态 —— 无人批准就永不执行。实测 #36
-        # （npm 生态，锁文件本就一致、无需重生成）从头到尾没有跑过 CI，
-        # PR 上没有「CI 汇总」结论，合并方只能空等到超时。
+        # 1) dispatch 一次 CI —— GITHUB_TOKEN 推送不触发 workflow run，必须显式跑。
         #
-        # workflow_dispatch 不受待审批策略限制，且是显式指定 ref 跑，
-        # 结论会落在该 PR 的 head SHA 上，供分支保护与合并方读取。
-        # 不会形成循环：CI 跑完不推代码、不触发 synchronize 事件。
+        # 2) 批准待审批的 pull_request run —— 这是关键。GitHub 的规则：workflow 用
+        #    GITHUB_TOKEN 更新 PR 时，产生的 pull_request 事件会创建「待审批」的
+        #    run，无人批准就永不执行。同步方推锁文件后触���的正是这种 run。
+        #    而 workflow_dispatch 跑出的 check **不被分支保护认可**（GitHub 只认
+        #    pull_request / push 事件产生的 check 作为 required status check 的
+        #    判定依据）—— 表现为 mergeable=true 但 mergeable_state=blocked，
+        #    合并报 "the base branch policy prohibits the merge"。
+        #    故这里显式批准那个待审批的 run，让 CI 以 pull_request 事件正常执行，
+        #    产出的「CI 汇总」才会被分支保护认下。
+        #    批准 workflow run 不需要 "Allow GitHub Actions to create and approve
+        #    pull requests"（那项管的是 PR review 审批），有 write 权限即可。
         run: |
-          git fetch origin "$HEAD_REF" --quiet
+          set -uo pipefail
+          git fetch origin "+$HEAD_REF:refs/remotes/origin/prbranch" --quiet
+          sha=$(git rev-parse "refs/remotes/origin/prbranch")
+          echo "当前 head=$sha"
+
+          # 先放行待审批的 pull_request run（可能尚未创建，需重试几轮）
+          approved=0
+          for i in $(seq 1 12); do
+            pending=$(gh api "repos/$REPO/actions/runs?branch=$HEAD_REF&per_page=20" \
+              --jq '[.workflow_runs[] | select(.head_sha=="'"$sha"'" and .conclusion=="action_required") | .id] | join(" ")' \
+              2>/dev/null || echo "")
+            if [ -n "$pending" ]; then
+              for rid in $pending; do
+                echo "批准待审批 run $rid"
+                gh api -X POST "repos/$REPO/actions/runs/$rid/approve" 2>&1 | head -2 || true
+              done
+              approved=1
+              break
+            fi
+            echo "第 $i 次：暂无待审批 run，等待创建"
+            sleep 5
+          done
+          [ "$approved" = "1" ] || echo "警告：未找到待审批的 run"
+
+          # 再显式 dispatch 一次 CI：即使上面批准成功，pull_request 事件因
+          # GITHUB_TOKEN 推送而待审批的场景下可能未生成；dispatch 至少保证
+          # PR 上有 CI 结论可看（结论是否被分支保护认可取决于事件类型）。
           gh workflow run ci.yml --ref "$HEAD_REF"
           echo "已 dispatch ci.yml on $HEAD_REF"

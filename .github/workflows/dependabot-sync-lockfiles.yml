@@ -13,10 +13,16 @@ name: Dependabot 依赖自动同步
 #
 # 关键设计
 # --------
-# · 用 pull_request（不是 pull_request_target）触发：前者拿不到仓库 secrets，
-#   天然避免在有写权限的上下文里执行 PR 里的代码。
-# · 只执行主线（origin/base）的 lock_deps.sh / check_deps.py，不执行 PR 分支里
-#   的同名脚本 —— 那是 Dependabot 可写的不可信输入。依赖声明文件取 PR 分支版本。
+# · 用 pull_request_target 触发（不是 pull_request）：它用的是**主线**的 workflow
+#   定义，而 pull_request 用的是 PR 分支上的定义 —— Dependabot 分支基于旧 main
+#   时会跑旧逻辑（2026-10-21 的 #36 实测：分支上还是旧版，缺 actions: write，
+#   dispatch 直接 403），而 Dependabot 的 rebase 是异步的、最长要等一周。
+#   改用 pull_request_target 后，无论分支基线多旧，跑的都是主线最新版。
+#   另外 pull_request_target 不受「待审批」策略限制 —— GITHUB_TOKEN 推送后
+#   触发的 pull_request 事件会创建待审批的 run，没人批准就永不执行。
+# · 安全：pull_request_target 有写权限，故本 workflow 绝不执行 PR 分支里的
+#   任何代码 —— 只从 PR 分支读取依赖声明文件（数据），lock_deps.sh 与
+#   check_deps.py 一律用主线版本覆盖后执行。
 # · GITHUB_TOKEN 推送不会触发新的 workflow run（GitHub 防递归设计），故推完
 #   锁文件后用 `gh workflow run ci.yml` 显式 dispatch 一次 CI，让新提交的锁文件
 #   被 check_deps --strict 真正校验到。（需 actions: write 权限，否则 403。）
@@ -26,7 +32,7 @@ name: Dependabot 依赖自动同步
 # · 幂等：锁文件已一致则不提交、不 dispatch，无限循环风险已排除。
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -53,8 +59,8 @@ jobs:
       - name: 检出 PR 分支
         uses: actions/checkout@v7
         with:
-          # 显式取 PR 的 head 分支：pull_request 事件默认检出的是 merge ref，
-          # 直接 push merge ref 会被 GitHub 拒绝。
+          # 显式取 PR 的 head 分支：pull_request_target 默认检出的是主线，
+          # 而我们要读 PR 分支里的依赖声明文件、并把锁文件推回该分支。
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 

@@ -170,17 +170,26 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain requirements.lock uv.lock package-lock.json)" ]; then
-            echo "锁文件已与依赖声明一致，无需提交"
+          # 判据要看「有没有待推送的提交」，不能只看工作区是否变更：
+          # 「同步主线到 PR 分支」产生的是 merge commit（已提交、工作区干净），
+          # 若只看工作区就会 early exit，merge commit 永远推不回分支，
+          # 合并方仍会因 CONFLICTING 失败（2026-10-21 实测）。
+          git fetch origin "+$HEAD_REF:refs/remotes/origin/prbranch" --quiet
+          local_sha=$(git rev-parse HEAD)
+          remote_sha=$(git rev-parse "refs/remotes/origin/prbranch" 2>/dev/null || echo "")
+          if [ -n "$(git status --porcelain requirements.lock uv.lock package-lock.json)" ]; then
+            echo "锁文件有更新，提交："
+            git status --porcelain requirements.lock uv.lock package-lock.json
+            git add requirements.lock uv.lock package-lock.json
+            git commit -m "chore(deps): 重新生成锁文件以匹配依赖声明"
+            local_sha=$(git rev-parse HEAD)
+          fi
+          if [ "$local_sha" = "$remote_sha" ]; then
+            echo "分支已是最新（锁文件一致且已含主线），无需推送"
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "锁文件有更新，提交："
-          git status --porcelain requirements.lock uv.lock package-lock.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add requirements.lock uv.lock package-lock.json
-          git commit -m "chore(deps): 重新生成锁文件以匹配依赖声明"
+          echo "推送 $local_sha（远端 $remote_sha）"
           # GITHUB_TOKEN 推送：不会触发新的 workflow run（防递归），
           # 所以下面用 workflow_dispatch 显式重跑 CI。
           git push origin "HEAD:refs/heads/$HEAD_REF"

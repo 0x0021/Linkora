@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # 供 dependabot-sync-lockfiles.yml 显式 dispatch：GITHUB_TOKEN 推送锁文件
+  # 不会触发新的 workflow run（GitHub 防递归设计），必须手动 dispatch 一次，
+  # 新提交的锁文件才会被 check_deps --strict 真正校验到。
+  workflow_dispatch:
 
 # 同一分支的旧 run 尚在跑时，新 push 直接取消旧的：既省 runner 又保证
 # 「最新提交的结果」才是最终结论（快速连续 push 不叠加完整作业）。

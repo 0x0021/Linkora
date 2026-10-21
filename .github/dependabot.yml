@@ -24,6 +24,33 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
+  # npm 依赖：前端构建工具链（esbuild / vitest / eslint 等）
+  # 此前未在此声明，npm 的升级 PR 由 GitHub 默认配置产生，不受本文件的
+  # 调度时间、忽略规则、标签约束控制，且与 pip 生态的流水线脱节。
+  # 显式声明后，npm 升级同样走每周一 09:00 的统一节奏与同样的 semver-major
+  # 忽略策略，并复用 dependabot-sync-lockfiles.yml 重生成 package-lock.json。
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    groups:
+      npm-deps:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+    # 与 pip 生态保持一致：忽略大版本跳跃，降低破坏性升级冲击
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   # GitHub Actions 工作流
   - package-ecosystem: "github-actions"
     directory: "/"

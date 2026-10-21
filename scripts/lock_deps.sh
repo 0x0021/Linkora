@@ -60,7 +60,18 @@ echo "==> 生成 uv.lock（基于 pyproject.toml）"
 uv lock
 
 echo "==> 校验四处依赖声明一致性"
-python3 scripts/check_deps.py
+# 用 uv run 而非系统 python3：保证与 CI 同为满足 requires-python 的解释器
+# （3.14），不依赖 runner 上系统 Python 的版本（tomllib 需 3.11+）。
+# 校验脚本只读文件、不导入项目代码，故用 --no-project 避免安装整套依赖。
+# 兜底：机器上没有 3.14 解释器时退回系统 python3（脚本仅需 tomllib，3.11+ 即可）。
+if uv run --no-project python scripts/check_deps.py; then
+    :
+elif python3 scripts/check_deps.py; then
+    echo "提示：未找到 3.14 解释器，已退回系统 python3 校验。"
+else
+    echo "错误：依赖一致性校验失败，未生成可提交的锁文件。" >&2
+    exit 1
+fi
 
 echo
 echo "完成。请提交 requirements.lock 与 uv.lock。"

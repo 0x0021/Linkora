@@ -1,0 +1,144 @@
+name: Dependabot 依赖自动同步
+
+# 一劳永逸地解决「Dependabot 提了 PR，锁文件没跟着更新，CI 报依赖漂移，
+# 只能人工上机器跑一遍 lock_deps.sh 再补一个提交」的问题。
+#
+# 背景
+# ----
+# 本项目有四份依赖声明必须同版本：requirements.txt（真源）、pyproject.toml、
+# requirements.lock（CI/Docker 实际安装）、uv.lock。CI 的 check_deps.py --strict
+# 会强制校验四者一致。
+#
+# 但 Dependabot 只会改 pyproject.toml + requirements.txt，不会重生成
+# requirements.lock / uv.lock —— 于是每个 pip 生态的 Dependabot PR 都会让
+# check_deps --strict 变红，必须人工补跑 `bash scripts/lock_deps.sh`。
+# 2026-10-14 的 #33、2026-10-20 的 #34 都是这么手工补的。
+#
+# 做法
+# ----
+# 本 workflow 在 Dependabot PR 上自动重生成锁文件并 commit 回该 PR 分支：
+#   1. checkout PR 分支（带完整历史）
+#   2. 跑 scripts/lock_deps.sh 重生成 requirements.lock + uv.lock
+#   3. npm 侧：跑 npm install --package-lock-only 让 package-lock.json 与
+#      package.json 重新对齐（保留 overrides 钉版）
+#   4. 有变更就 commit + push 回 PR 分支
+#
+# 关键细节
+# ----------
+# · 用 pull_request（不是 pull_request_target）触发：前者拿不到仓库 secrets，
+#   天然避免在有写权限的上下文里执行 PR 里的代码。push 用的是本仓库的
+#   GITHUB_TOKEN，权限由下方 permissions 显式授予。
+# · GITHUB_TOKEN 推送不会触发新的 workflow run（GitHub 的防递归设计），
+#   所以推完锁文件后 CI 不会自动重跑。解决办法是本 workflow 结尾用
+#   `gh workflow run ci.yml --ref <branch>` 显式 dispatch 一次 CI。
+# · 幂等：若锁文件本就一致则不产生提交、不 dispatch，避免空转与递归。
+# · 只处理依赖相关的文件变动，其余 PR 一律跳过。
+#
+# 配套
+# ----
+# 合并由 dependabot-auto-merge.yml 负责（它等待本 workflow 推锁文件后
+# 重跑的 CI 变绿后再 squash 合并）。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync-lockfiles:
+    # 只处理 Dependabot 开的 PR —— 普通 PR 的锁文件由作者自己负责，
+    # 机器人擅自改动别人的分支是越权。
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出 PR 分支
+        uses: actions/checkout@v7
+        with:
+          # 显式取 PR 的 head 分支：pull_request 事件默认检出的是 merge ref，
+          # 直接 push merge ref 会被 GitHub 拒绝。
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+
+      - name: 安装 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 判断是否涉及依赖文件
+        id: relevant
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.event.pull_request.base.ref }}...HEAD")
+          echo "变更文件："
+          echo "$changed"
+          echo "---"
+          if echo "$changed" | grep -qE '^(pyproject\.toml|requirements\.txt|requirements\.lock|uv\.lock|package\.json|package-lock\.json)$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "不涉及依赖文件，跳过"
+          fi
+
+      - name: 重生成 Python 锁文件
+        if: steps.relevant.outputs.relevant == 'true'
+        # lock_deps.sh 会用 uv pip compile 生成 requirements.lock、uv lock 生成
+        # uv.lock，末尾自带 check_deps.py 校验。PY_FLOOR 与 CI 的 Python 版本
+        # 同为 3.14，解析结果与 CI 一致。
+        run: bash scripts/lock_deps.sh
+
+      - name: 重生成 npm 锁文件
+        if: steps.relevant.outputs.relevant == 'true'
+        # --package-lock-only 只更新 lock 不动 node_modules；overrides
+        # （source-map-js 钉 1.2.2）由 package.json 声明，npm 会遵守。
+        run: npm install --package-lock-only --no-audit --no-fund
+
+      - name: 提交锁文件并推回 PR 分支
+        id: push
+        if: steps.relevant.outputs.relevant == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain requirements.lock uv.lock package-lock.json)" ]; then
+            echo "锁文件已与依赖声明一致，无需提交"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "锁文件有更新，提交："
+          git status --porcelain requirements.lock uv.lock package-lock.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements.lock uv.lock package-lock.json
+          git commit -m "chore(deps): 重新生成锁文件以匹配依赖声明"
+          # GITHUB_TOKEN 推送：不会触发新的 workflow run（防递归），
+          # 所以下面用 workflow_dispatch 显式重跑 CI。
+          git push origin "HEAD:refs/heads/$HEAD_REF"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: 触发 CI 重跑
+        if: steps.push.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        # push 不会自动触发 CI，这里显式 dispatch 一次，让新提交的锁文件
+        # 真正被 check_deps --strict 校验到。
+        run: |
+          git fetch origin "$HEAD_REF" --quiet
+          gh workflow run ci.yml --ref "$HEAD_REF"
+          echo "已 dispatch ci.yml on $HEAD_REF"

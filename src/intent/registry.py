@@ -84,6 +84,9 @@ TOOL_ACTION_MAP: dict[str, list[str]] = {
     "search_messages": ["action.query", "action.communicate"],
     # 执行/通讯/媒体类
     "create_todo": ["action.execute", "action.monitor", "action.subscribe"],
+    "schedule_meeting": ["action.query"],
+    "list_todos": ["action.query"],
+    "complete_todo": ["action.execute"],
     "send_ding": ["action.execute", "action.communicate", "action.monitor", "action.subscribe"],
     "transfer_approval": ["action.execute", "action.communicate"],
     "upload_image": ["action.execute", "action.media"],
@@ -97,6 +100,7 @@ TOOL_ACTION_MAP: dict[str, list[str]] = {
     "wiki_node_search": ["action.query"],
     # 钉钉 OA 审批只读查询
     "approval_list_forms": ["action.query"],
+    "approval_get_form_schema": ["action.query"],
     "approval_search_forms": ["action.query"],
     "approval_get_detail": ["action.query"],
     "approval_list_pending": ["action.query"],

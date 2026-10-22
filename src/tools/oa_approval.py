@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from src.dws_adapter import DwsAdapter
+from src.im_adapter.errors import IMAdapterError
 from src.tools.base import BaseTool
 from src.tools.utils import _coerce_limit, list_result
 
@@ -128,6 +129,124 @@ class ApprovalGetDetailTool(BaseTool):
         if raw is None:
             return {"instance_id": instance_id, "detail": None, "found": False}
         return {"instance_id": instance_id, "detail": raw, "found": True}
+
+
+class ApprovalGetFormSchemaTool(BaseTool):
+    name = "approval_get_form_schema"
+    display_name = "查看审批表单字段配置"
+    short_description = (
+        "查询审批模板的字段级配置（字段名/组件类型/是否必填/选项），"
+        "可按字段名反查哪些表单含该字段（如「项目」字段盘点）"
+    )
+    description = "查询钉钉审批表单的字段配置"
+    intent_categories = ["domain.oa_approval"]
+    platforms = ["dingtalk"]
+    parameters = {
+        "type": "object",
+        "properties": {
+            "process_code": {
+                "type": "string",
+                "description": "审批模板 processCode（与 form_name 二选一）",
+            },
+            "form_name": {
+                "type": "string",
+                "description": "表单名称关键词（与 process_code 二选一），会先搜索再逐个取 Schema",
+            },
+            "field_name": {
+                "type": "string",
+                "description": (
+                    "只关心含该字段的表单时填写（如「项目」）；"
+                    "给了 process_code 就只筛该表单的字段，不填则返回全部字段"
+                ),
+            },
+            "max_forms": {
+                "type": "integer",
+                "description": "按 form_name 搜索时最多检查多少个表单，默认 20，上限 50",
+            },
+        },
+        "required": [],
+    }
+
+    def __init__(self, dws: DwsAdapter):
+        self.dws = dws
+
+    def execute(self, args: dict) -> str | dict:
+        process_code = (args.get("process_code") or "").strip()
+        form_name = (args.get("form_name") or "").strip()
+        field_name = (args.get("field_name") or "").strip()
+        max_forms = _coerce_limit(args.get("max_forms"), 20)
+
+        if not process_code and not form_name:
+            return {"error": "process_code 与 form_name 至少提供一个"}
+
+        # 目标 processCode 列表
+        if process_code:
+            codes = [process_code]
+        else:
+            try:
+                found = self.dws.oa_approval_search_forms(query=form_name)
+            except (IMAdapterError, ValueError, OSError, RuntimeError) as e:
+                logger.exception("搜索审批表单失败: %s", e)
+                return {"error": f"搜索审批表单失败: {e}"}
+            codes = []
+            for it in (found or []):
+                if not isinstance(it, dict):
+                    continue
+                code = it.get("processCode") or it.get("process_code")
+                if code:
+                    codes.append((str(code), str(it.get("name") or it.get("processName") or "")))
+            if not codes:
+                return {"count": 0, "items": [], "hint": f"未找到名称含「{form_name}」的审批表单"}
+            codes = codes[:max_forms]
+
+        items: list[dict] = []
+        errors: list[dict] = []
+        for entry in codes:
+            code, fallback_name = entry if isinstance(entry, tuple) else (entry, "")
+            try:
+                schema = self.dws.oa_approval_form_schema(code)
+            except (IMAdapterError, ValueError, OSError, RuntimeError) as e:
+                logger.warning("获取表单 Schema 失败(%s): %s", code, e)
+                errors.append({"process_code": code, "error": str(e)})
+                continue
+            if not isinstance(schema, dict):
+                continue
+            if schema.get("error"):
+                errors.append({"process_code": code, "error": schema["error"]})
+                continue
+            fields = schema.get("fields") or []
+            if field_name:
+                matched = [
+                    f for f in fields
+                    if isinstance(f, dict) and field_name in str(f.get("label") or "")
+                ]
+                if not matched:
+                    continue
+                items.append({
+                    "process_code": schema.get("process_code") or code,
+                    "process_name": schema.get("process_name") or fallback_name,
+                    "matched_fields": matched,
+                })
+            else:
+                items.append({
+                    "process_code": schema.get("process_code") or code,
+                    "process_name": schema.get("process_name") or fallback_name,
+                    "process_status": schema.get("process_status") or "",
+                    "can_modify": schema.get("can_modify"),
+                    "fields": fields,
+                    "field_count": schema.get("field_count") or len(fields),
+                })
+
+        result: dict = {"count": len(items), "items": items}
+        if field_name:
+            result["field_name"] = field_name
+            result["hint"] = (
+                f"共 {len(items)} 个表单含「{field_name}」字段"
+                if items else f"没有表单含「{field_name}」字段"
+            )
+        if errors:
+            result["errors"] = errors
+        return result
 
 
 class ApprovalListPendingTool(BaseTool):

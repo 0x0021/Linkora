@@ -683,7 +683,9 @@ class ToolsConfig(BaseModel):
     kb_search_enabled: bool = True
     available: list[str] = Field(default_factory=lambda: [
         "kb_search", "send_message", "search_doc", "get_doc_content", "search_contact",
-        "get_calendar_events", "create_todo", "recall_memory", "save_memory",
+        "get_calendar_events", "create_todo", "list_todos", "complete_todo",
+        "schedule_meeting",
+        "recall_memory", "save_memory",
         "web_search", "get_weather", "system_status", "message_stats",
         "keyword_rules", "config_manage",
         "get_unread", "get_conversation_info", "search_messages",
@@ -694,6 +696,7 @@ class ToolsConfig(BaseModel):
         "list_minutes", "get_minutes",
         "wiki_space_list", "wiki_space_search", "wiki_node_list", "wiki_node_search",
         "approval_list_forms", "approval_search_forms", "approval_get_detail",
+        "approval_get_form_schema",
         "approval_list_pending", "approval_list_tasks", "approval_list_initiated",
         "approval_list_executed",
         "list_reports", "get_report_detail", "list_report_templates",

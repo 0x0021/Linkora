@@ -1,6 +1,7 @@
 """DwsAdapter OA 审批只读查询 mixin。拆分自 dws_adapter.py。"""
 from __future__ import annotations
 from .dws_mixins_base import DwsAdapterBase
+from src.im_adapter.errors import IMAdapterError
 
 import logging
 import time
@@ -135,6 +136,81 @@ class DwsAdapterOaApprovalMixin(DwsAdapterBase):
                 raise last_exc
         result = self._get_result(data)
         return result if isinstance(result, dict) else {"values": []}
+
+    def oa_approval_form_schema(self, process_code: str) -> dict:
+        """查询审批模板的表单 Schema（字段级配置）。
+
+        封装 `dws oa approval form-schema --process-code <code>`。
+
+        ⚠️ 返回体是**双层嵌套**（实测 v1.0.63）：
+        ``{"errorMsg":"ok","result":{"content":"<JSON 字符串>","processName":...},
+        "success":true}`` —— ``result.content`` 本身又是一段 JSON 字符串，内含
+        ``{"title":..,"canModify":..,"items":[{"componentName":..,"props":{label,required,
+        placeholder,...}}]}``。本方法已解开这层嵌套，返回可直接使用的 dict。
+
+        这是「盘点含某字段（如「项目」）的表单模板」的**唯一数据源** —— 只有
+        list-forms / search-forms 拿不到字段级配置。
+
+        失败返回空 dict（``{"error": ...}``）。
+        """
+        if not process_code:
+            return {"error": "oa_approval_form_schema 需提供 process_code"}
+        import json  # 局部导入：仅本方法需要解析嵌套 JSON
+
+        try:
+            data = self.run(
+                ["oa", "approval", "form-schema", "--process-code", str(process_code)],
+                operation="oa_approval_form_schema", force_no_dry_run=True,
+            )
+        except (IMAdapterError, ValueError, OSError) as e:
+            logger.warning("[DWS] 查询审批表单 Schema 失败: %s", e)
+            return {"error": f"查询审批表单 Schema 失败: {e}"}
+
+        result = self._get_result(data)
+        if not isinstance(result, dict):
+            return {"error": "审批表单 Schema 返回结构异常"}
+        if result.get("success") is False:
+            return {"error": result.get("errorMsg") or "查询审批表单 Schema 失败"}
+
+        # content 是嵌套 JSON 字符串，解开后合并进结果
+        content_raw = result.get("content")
+        schema: dict = {}
+        if isinstance(content_raw, str) and content_raw.strip():
+            try:
+                parsed = json.loads(content_raw)
+                if isinstance(parsed, dict):
+                    schema = parsed
+            except (ValueError, TypeError) as e:
+                logger.warning("[DWS] 审批表单 Schema content 解析失败: %s", e)
+                return {"error": "审批表单 Schema content 解析失败"}
+        elif isinstance(content_raw, dict):
+            schema = content_raw
+
+        items = schema.get("items")
+        fields: list[dict] = []
+        if isinstance(items, list):
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                props_raw = it.get("props")
+                props: dict = props_raw if isinstance(props_raw, dict) else {}
+                fields.append({
+                    "label": props.get("label") or props.get("text") or "",
+                    "component": it.get("componentName") or "",
+                    "id": props.get("id") or "",
+                    "required": bool(props.get("required")),
+                    "options": props.get("options") or props.get("items") or [],
+                })
+
+        return {
+            "process_code": result.get("processCode") or process_code,
+            "process_name": result.get("processName") or schema.get("title") or "",
+            "process_status": result.get("processStatus") or "",
+            "can_modify": schema.get("canModify"),
+            "title": schema.get("title") or "",
+            "fields": fields,
+            "field_count": len(fields),
+        }
 
     def oa_approval_redirect_task(self, *, task_id: str, to_actioner_id: str,
                                   remark: str = "") -> dict:

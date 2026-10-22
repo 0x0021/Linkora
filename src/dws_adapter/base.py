@@ -161,6 +161,45 @@ class DwsAdapterBaseMixin(DwsAdapterBase):
             return data["result"]
         return data
 
+    @staticmethod
+    def _readable_dws_error(err: Exception) -> str:
+        """从 dws 错误串里提取**人可读**的失败原因。
+
+        dws CLI 失败时抛出的异常串形如::
+
+            dws exit 3: {
+              "ok": false,
+              "error": {"type":"validation","message":"以下参与者无法解析为唯一 userId：..."}
+            }
+
+        JSON 壳对 LLM 与人都很难读（要跨行拼接、含转义换行）。本方法尝试把
+        内嵌 JSON 解析出来，取 ``error.message``（或 ``message``/``errorMsg``）；
+        解析不出就原样返回异常串。
+        """
+        import json
+        import re
+
+        text = str(err)
+        # 取第一对大括号之间的内容（dws 错误 JSON 就在其中）
+        match = re.search(r"\{.*\}", text, re.S)
+        if not match:
+            return text
+        try:
+            payload = json.loads(match.group(0))
+        except (ValueError, TypeError):
+            return text
+        if not isinstance(payload, dict):
+            return text
+        err_obj = payload.get("error")
+        if isinstance(err_obj, dict):
+            msg = err_obj.get("message") or err_obj.get("errorMsg")
+            if msg:
+                return str(msg)
+        msg = payload.get("message") or payload.get("errorMsg")
+        if msg:
+            return str(msg)
+        return text
+
     def _is_personal_dingtalk_error(self, err_str: str) -> bool:
         """判断是否个人钉钉不支持的企业级 API 错误或认证失效。"""
         return any(

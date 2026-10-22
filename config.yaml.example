@@ -752,6 +752,9 @@ tools:
     - search_contact                               # 搜索联系人
     - get_calendar_events                          # 获取日历事件
     - create_todo                                  # 创建待办事项
+    - schedule_meeting                             # 会议协调（冲突/空闲/建议时间）
+    - list_todos                                   # 列出待办事项
+    - complete_todo                                # 完成待办事项
     - recall_memory                                # 回忆长期记忆
     - save_memory                                  # 保存长期记忆
     - web_search                                   # 联网搜索
@@ -779,6 +782,7 @@ tools:
     - approval_list_forms                          # 列出审批表单模板（仅钉钉）
     - approval_search_forms                        # 搜索审批表单模板（仅钉钉）
     - approval_get_detail                          # 查看审批实例详情（仅钉钉）
+    - approval_get_form_schema                     # 查看审批表单字段配置（仅钉钉）
     - approval_list_pending                        # 查询待我审批（仅钉钉）
     - approval_list_tasks                          # 查询审批实例下的审批任务（仅钉钉）
     - approval_list_initiated                      # 查询已发起审批记录（仅钉钉）

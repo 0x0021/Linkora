@@ -11,6 +11,7 @@ from src.tools.oa_approval import (
     ApprovalListPendingTool,
     ApprovalListTasksTool,
     ApprovalListInitiatedTool,
+    ApprovalGetFormSchemaTool,
 )
 from src.dws_adapter import DwsAdapter
 
@@ -201,3 +202,107 @@ def test_tool_metadata_and_intent(dws):
         assert t.intent_categories == ["domain.oa_approval"]
         assert t.require_confirm is False
         assert t.name.startswith("approval_")
+
+
+# ---------- get_form_schema ----------
+def _schema(process_name="项目", fields=None):
+    return {
+        "process_code": "P1",
+        "process_name": process_name,
+        "process_status": "PUBLISHED",
+        "can_modify": False,
+        "fields": fields if fields is not None else [],
+        "field_count": len(fields or []),
+    }
+
+
+def test_get_form_schema_by_process_code(dws):
+    dws.oa_approval_form_schema.return_value = _schema(
+        fields=[{"label": "项目", "component": "DDSelectField", "id": "F1",
+                 "required": False, "options": []}]
+    )
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute({"process_code": "P1"})
+    assert out["count"] == 1
+    assert out["items"][0]["process_name"] == "项目"
+    assert out["items"][0]["field_count"] == 1
+    dws.oa_approval_form_schema.assert_called_once_with("P1")
+
+
+def test_get_form_schema_requires_one_of_code_or_name(dws):
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute({})
+    assert "error" in out
+    dws.oa_approval_form_schema.assert_not_called()
+
+
+def test_get_form_schema_by_form_name_searches_first(dws):
+    dws.oa_approval_search_forms.return_value = [
+        {"processCode": "P1", "name": "项目"},
+        {"processCode": "P2", "name": "项目验收"},
+    ]
+    dws.oa_approval_form_schema.return_value = _schema()
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute({"form_name": "项目"})
+    assert out["count"] == 2
+    dws.oa_approval_search_forms.assert_called_once_with(query="项目")
+    assert dws.oa_approval_form_schema.call_count == 2
+
+
+def test_get_form_schema_field_name_filters(dws):
+    dws.oa_approval_search_forms.return_value = [{"processCode": "P1", "name": "项目"}]
+    dws.oa_approval_form_schema.return_value = _schema(
+        fields=[
+            {"label": "项目编号", "component": "TextField", "id": "F1",
+             "required": True, "options": []},
+            {"label": "备注", "component": "TextareaField", "id": "F2",
+             "required": False, "options": []},
+        ]
+    )
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute(
+        {"form_name": "项目", "field_name": "项目"})
+    assert out["count"] == 1
+    matched = out["items"][0]["matched_fields"]
+    assert len(matched) == 1
+    assert matched[0]["label"] == "项目编号"
+    assert out["field_name"] == "项目"
+
+
+def test_get_form_schema_no_match_returns_hint(dws):
+    dws.oa_approval_form_schema.return_value = _schema(
+        fields=[{"label": "备注", "component": "TextareaField", "id": "F2",
+                 "required": False, "options": []}]
+    )
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute(
+        {"process_code": "P1", "field_name": "项目"})
+    assert out["count"] == 0
+    assert "没有表单" in out["hint"]
+
+
+def test_get_form_schema_search_miss(dws):
+    dws.oa_approval_search_forms.return_value = []
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute({"form_name": "不存在"})
+    assert out["count"] == 0
+    assert out["items"] == []
+    assert "未找到" in out["hint"]
+
+
+def test_get_form_schema_error_collected(dws):
+    dws.oa_approval_form_schema.return_value = {"error": "无权限"}
+    out = _tool(ApprovalGetFormSchemaTool, dws).execute({"process_code": "P1"})
+    assert out["count"] == 0
+    assert out["errors"][0]["process_code"] == "P1"
+
+
+def test_get_form_schema_max_forms_caps(dws):
+    dws.oa_approval_search_forms.return_value = [
+        {"processCode": f"P{i}", "name": f"表单{i}"} for i in range(10)
+    ]
+    dws.oa_approval_form_schema.return_value = _schema()
+    _tool(ApprovalGetFormSchemaTool, dws).execute({"form_name": "表单", "max_forms": 3})
+    assert dws.oa_approval_form_schema.call_count == 3
+
+
+def test_get_form_schema_metadata(dws):
+    t = _tool(ApprovalGetFormSchemaTool, dws)
+    assert t.platforms == ["dingtalk"]
+    assert t.intent_categories == ["domain.oa_approval"]
+    assert t.require_confirm is False
+    assert t.name == "approval_get_form_schema"

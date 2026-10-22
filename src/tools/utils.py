@@ -85,6 +85,28 @@ def _coerce_limit(value, default: int = 20) -> int:
     return n
 
 
+def _coerce_int_in_range(value, default: int, low: int, high: int) -> int:
+    """把任意入参规整为 ``[low, high]`` 区间内的 int。
+
+    与 ``_coerce_limit`` 的区别：后者只保证非负（无上界），本函数额外做上界夹紧，
+    供「CLI 侧对参数范围有硬约束」的场景使用（如 dws ``todo +get-my-tasks``
+    的 ``--size`` 只接受 1..20，越界会被 CLI 直接拒绝）。
+
+    语义与 ``_coerce_limit`` 对齐：不可解析或**低于 low**（含 0/负数，等价于
+    「没填」）回退 default；**高于 high** 时夹紧到 high（用户显式要更多，
+    给出能取到的最大值而非丢弃）。
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    if n < low:
+        return default
+    if n > high:
+        return high
+    return n
+
+
 def _clean_text(text: str) -> str:
     """清洗文本，去除HTML标签、Markdown格式、多余空白等干扰内容。"""
     if not text:

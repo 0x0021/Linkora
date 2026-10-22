@@ -111,3 +111,90 @@ class TestOaApprovalReadMethods:
         assert "--start" in args and "--end" in args
         assert "--cursor" in args and "--limit" in args
         assert res == {"processInstanceList": [{"processInstanceId": "PI-1"}]}
+
+
+class TestOaApprovalFormSchema:
+    """oa_approval_form_schema：审批模板字段级配置。
+
+    实测 dws v1.0.63 返回体是**双层嵌套**：
+    {"errorMsg":"ok","result":{"content":"<JSON 字符串>",...},"success":true}
+    content 内部又是 {"title":..,"items":[{"componentName":..,"props":{..}}]}。
+    """
+
+    def _schema_payload(self, content_obj):
+        import json
+        return {
+            "errorMsg": "ok",
+            "success": True,
+            "result": {
+                "content": json.dumps(content_obj, ensure_ascii=False),
+                "processCode": "PROC-1",
+                "processName": "项目",
+                "processStatus": "PUBLISHED",
+            },
+        }
+
+    def test_passes_process_code(self):
+        adapter = _make_adapter(self._schema_payload({"items": []}))
+        adapter.oa_approval_form_schema("PROC-1")
+        args = adapter.run.call_args[0][0]
+        assert args[:3] == ["oa", "approval", "form-schema"]
+        assert "--process-code" in args and "PROC-1" in args
+
+    def test_parses_nested_content_json(self):
+        payload = self._schema_payload({
+            "title": "项目",
+            "canModify": False,
+            "items": [
+                {"componentName": "DDSelectField",
+                 "props": {"label": "项目", "required": False, "id": "F-1"}},
+                {"componentName": "TextField",
+                 "props": {"label": "项目编号", "required": True, "id": "F-2"}},
+            ],
+        })
+        adapter = _make_adapter(payload)
+        res = adapter.oa_approval_form_schema("PROC-1")
+        assert res["field_count"] == 2
+        assert res["process_name"] == "项目"
+        assert res["process_status"] == "PUBLISHED"
+        assert res["can_modify"] is False
+        assert res["fields"][0] == {
+            "label": "项目", "component": "DDSelectField", "id": "F-1",
+            "required": False, "options": [],
+        }
+        assert res["fields"][1]["label"] == "项目编号"
+        assert res["fields"][1]["required"] is True
+
+    def test_options_preserved(self):
+        payload = self._schema_payload({
+            "items": [{"componentName": "DDSelectField",
+                       "props": {"label": "项目", "options": [{"value": "P1"}]}}],
+        })
+        adapter = _make_adapter(payload)
+        res = adapter.oa_approval_form_schema("PROC-1")
+        assert res["fields"][0]["options"] == [{"value": "P1"}]
+
+    def test_empty_process_code_returns_error(self):
+        adapter = _make_adapter({})
+        res = adapter.oa_approval_form_schema("")
+        assert "error" in res
+        adapter.run.assert_not_called()
+
+    def test_success_false_returns_error(self):
+        adapter = _make_adapter({"success": False, "errorMsg": "无权限"})
+        res = adapter.oa_approval_form_schema("PROC-1")
+        assert res["error"] == "无权限"
+
+    def test_broken_content_json_returns_error(self):
+        adapter = _make_adapter({"success": True, "result": {"content": "{not json"}})
+        res = adapter.oa_approval_form_schema("PROC-1")
+        assert "error" in res
+
+    def test_run_failure_degrades_to_error_dict(self):
+        # run() 抛的是 IMAdapterError 族（CLI 失败/JSON 解析失败），
+        # 不含 RuntimeError —— 用真实异常类型验证降级路径。
+        from src.im_adapter.errors import IMAdapterError
+        adapter = _make_adapter(None)
+        adapter.run.side_effect = IMAdapterError("dws exit 1: boom")
+        res = adapter.oa_approval_form_schema("PROC-1")
+        assert "error" in res

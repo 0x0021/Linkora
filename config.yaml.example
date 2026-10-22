@@ -783,6 +783,11 @@ tools:
     - approval_list_tasks                          # 查询审批实例下的审批任务（仅钉钉）
     - approval_list_initiated                      # 查询已发起审批记录（仅钉钉）
     - approval_list_executed                       # 查询我已处理的审批（仅钉钉）
+    - list_reports                                 # 列出钉钉日志（日报/周报，仅钉钉）
+    - get_report_detail                            # 读取单份钉钉日志正文（仅钉钉）
+    - list_report_templates                        # 搜索钉钉日志模板（仅钉钉）
+    - search_enterprise_content                    # 跨类型语义检索企业内容（仅钉钉）
+    - search_enterprise_behavior                   # 追溯企业行为记录（仅钉钉）
   rate_limit:                                      # 工具速率限制（防止滥用，单位：每小时）
     create_todo: { per_hour: 20 }
     get_attendance: { per_hour: 20 }

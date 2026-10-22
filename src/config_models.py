@@ -695,7 +695,9 @@ class ToolsConfig(BaseModel):
         "wiki_space_list", "wiki_space_search", "wiki_node_list", "wiki_node_search",
         "approval_list_forms", "approval_search_forms", "approval_get_detail",
         "approval_list_pending", "approval_list_tasks", "approval_list_initiated",
-        "approval_list_executed"
+        "approval_list_executed",
+        "list_reports", "get_report_detail", "list_report_templates",
+        "search_enterprise_content", "search_enterprise_behavior"
     ])
     rate_limit: dict[str, dict] = Field(default_factory=lambda: {
         "send_message": {"per_hour": 30},

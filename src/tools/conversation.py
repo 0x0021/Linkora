@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from src.dws_adapter import DwsAdapter
+from src.im_adapter.errors import IMAdapterError
 from src.tools.base import BaseTool
 from src.tools.utils import safe_int
 
@@ -83,10 +84,17 @@ class GetConversationInfoTool(BaseTool):
             "chat_id": {
                 "type": "string",
                 "description": "会话 ID（openConversationId）",
-            }
+            },
+            "include_members": {
+                "type": "boolean",
+                "description": "是否列出群成员（默认 true；仅群聊有效，成员过多时只返回前 50 名）",
+            },
         },
         "required": ["chat_id"],
     }
+
+    # 成员列表最大返回条数（避免 1000+ 人的大群把上下文撑爆）
+    _MAX_MEMBERS = 50
 
     def __init__(self, dws: DwsAdapter):
         self.dws = dws
@@ -95,6 +103,9 @@ class GetConversationInfoTool(BaseTool):
         chat_id = (args.get("chat_id") or "").strip()
         if not chat_id:
             return {"error": "chat_id 不能为空"}
+        include_members = args.get("include_members", True)
+        if isinstance(include_members, str):
+            include_members = include_members.strip().lower() not in ("false", "0", "no")
 
         try:
             info = self.dws.chat_conversation_info(chat_id)
@@ -104,17 +115,18 @@ class GetConversationInfoTool(BaseTool):
         if not isinstance(info, dict):
             return {"error": "未获取到会话信息"}
 
-        members = (
+        is_single = bool(info.get("singleChat"))
+        # 成员明细：优先用会话信息里**内嵌**的成员列表（飞书 chat_conversation_info
+        # 会直接返回 members / memberList / member_list）；钉钉 dws 的
+        # conversation-info 只给 memberCount、不含明细，此时再走成员枚举通道。
+        inline_members = (
             info.get("members")
             or info.get("memberList")
             or info.get("member_list")
             or []
         )
-        member_list = []
-        for m in (members or [])[:50]:
-            if not isinstance(m, dict):
-                continue
-            member_list.append({
+        member_list = [
+            {
                 "name": (
                     m.get("name")
                     or m.get("nickName")
@@ -125,17 +137,74 @@ class GetConversationInfoTool(BaseTool):
                 "userid": (
                     m.get("userId")
                     or m.get("openDingTalkId")
+                    or m.get("openDingtalkId")
                     or m.get("userid")
                     or ""
                 ),
-            })
-        return {
-            "title": info.get("title", ""),
+                "role": m.get("role") or m.get("memberRoleDesc") or "",
+            }
+            for m in (inline_members or [])[: self._MAX_MEMBERS]
+            if isinstance(m, dict)
+        ]
+        result = {
+            "title": info.get("title", "") or info.get("name", ""),
             "chat_id": chat_id,
-            "type": "single" if info.get("singleChat") else "group",
-            "owner": info.get("owner") or info.get("ownerName") or info.get("owner_name") or "",
-            "member_count": len(members),
+            "type": "single" if is_single else "group",
+            "owner": (
+                info.get("owner") or info.get("ownerName") or info.get("owner_name")
+                or info.get("ownerNick") or ""
+            ),
+            # 人数优先取接口给的 memberCount；没有则用内嵌名单长度。
+            "member_count": int(info.get("memberCount") or 0) or len(inline_members or []),
             "members": member_list,
+            "bots": [],
+            # 内嵌名单由会话信息接口直接给出，视为已完整；枚举通道会按实际完整性覆盖。
+            "members_complete": bool(member_list),
+        }
+
+        # 内嵌名单为空且是群聊 → 走成员枚举（``chat +chat-members-list``）。
+        # 单聊无成员列表概念；显式关闭或枚举失败都不影响基础信息返回。
+        if include_members and not is_single and not member_list:
+            result.update(self._fetch_members(chat_id))
+        return result
+
+    def _fetch_members(self, chat_id: str) -> dict:
+        """枚举群成员（真人 / 机器人分桶），失败时降级为「人数已知、名单未知」。"""
+        try:
+            data = self.dws.chat_group_members(chat_id)
+        except (IMAdapterError, ValueError, OSError, RuntimeError) as e:
+            # 成员枚举是增强信息，失败不应让整个工具失败——降级返回已知的 memberCount。
+            # 精确捕获（不新增宽异常）：IMAdapterError=CLI 失败、ValueError=参数校验、
+            # OSError=文件 IO、RuntimeError=适配器内部错误；其余异常属 Bug，上抛。
+            logger.warning("[get_conversation_info] 群成员枚举失败（不影响基础信息）: %s", e)
+            return {"members": [], "members_complete": False, "bots": []}
+        if not isinstance(data, dict):
+            return {"members": [], "members_complete": False, "bots": []}
+
+        users = data.get("users") or []
+        bots = data.get("bots") or []
+        member_list = [
+            {
+                "name": m.get("name", ""),
+                "userid": m.get("open_dingtalk_id", ""),
+                "role": m.get("role", ""),
+            }
+            for m in users[: self._MAX_MEMBERS]
+            if isinstance(m, dict)
+        ]
+        bot_list = [
+            {
+                "name": m.get("name", ""),
+                "userid": m.get("open_dingtalk_id", ""),
+            }
+            for m in bots[: self._MAX_MEMBERS]
+            if isinstance(m, dict)
+        ]
+        return {
+            "members": member_list,
+            "bots": bot_list,
+            # complete=False 表示名单被截断或有分页失败，不能当「群里就这些人」。
+            "members_complete": bool(data.get("complete", False)),
         }
 
 

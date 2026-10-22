@@ -82,7 +82,7 @@
 
   <div class="container hero__inner">
     <div class="hero__copy">
-      <span class="hero__badge"><span class="tag">v0.6.5</span> 修复 RAG 答非所问：分身不再整篇复述知识库、不再照抄文档里的客服反问句</span>
+      <span class="hero__badge"><span class="tag">v0.7.0</span> 对接钉钉 CLI v1.0.63：话题能读能答、群成员拿得到，新增日志、企业语义检索与会议协调等 9 个工具</span>
       <h1 class="hero__title">让 AI 分身，<br /><span class="grad">替你打理日常沟通</span></h1>
       <p class="hero__sub">群聊私聊都接得住 · 钉钉、飞书、企业微信全覆盖</p>
       <p class="hero__desc">灵桥把 AI 分身接进团队每天都在用的办公软件。它读得懂公司资料、会自己动手办事，也懂得在合适的时候把话头交还给同事——让沟通和业务都不掉线。</p>
@@ -133,10 +133,10 @@
 <!-- ============ 指标 ============ -->
 <div class="container">
   <div class="stats reveal">
-    <div class="stat"><div class="stat__num" data-count="38">0</div><div class="stat__label">内置工具</div></div>
-    <div class="stat"><div class="stat__num" data-count="39">0</div><div class="stat__label">意图分类</div></div>
+    <div class="stat"><div class="stat__num" data-count="47">0</div><div class="stat__label">内置工具</div></div>
+    <div class="stat"><div class="stat__num" data-count="41">0</div><div class="stat__label">意图分类</div></div>
     <div class="stat"><div class="stat__num" data-count="3">0</div><div class="stat__label">接入平台</div></div>
-    <div class="stat"><div class="stat__num" data-count="16">0</div><div class="stat__label">管理台页面</div></div>
+    <div class="stat"><div class="stat__num" data-count="18">0</div><div class="stat__label">管理台页面</div></div>
   </div>
 </div>
 
@@ -169,13 +169,13 @@
       </div>
       <div class="feature-card reveal" data-delay="2">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></div>
-        <h3 class="feature-card__title">工具调用 · 38 个</h3>
-        <p class="feature-card__desc">一张统一的能力清单，目前内置 38 个：查考勤、建待办、发通知、搜消息……它是真去办事，不是只动嘴给建议。</p>
+        <h3 class="feature-card__title">工具调用 · 47 个</h3>
+        <p class="feature-card__desc">一张统一的能力清单，目前内置 47 个：查考勤、建待办、发通知、搜消息、读日报周报、找大家都有空的会议时间……它是真去办事，不是只动嘴给建议。</p>
       </div>
       <div class="feature-card reveal" data-delay="3">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 11 16M16 7.5 13 16"/></svg></div>
         <h3 class="feature-card__title">规则 / 意图引擎</h3>
-        <p class="feature-card__desc">先把消息分个类，39 种意图里能套规则的就走固定流程，只有拿不准的才交给大模型。</p>
+        <p class="feature-card__desc">先把消息分个类，41 种意图里能套规则的就走固定流程，只有拿不准的才交给大模型。</p>
       </div>
       <div class="feature-card reveal" data-delay="1">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
@@ -185,7 +185,7 @@
       <div class="feature-card reveal" data-delay="2">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h8"/></svg></div>
         <h3 class="feature-card__title">Web 管理台</h3>
-        <p class="feature-card__desc">16 个页面、一百六十多个接口。会话、知识库、工具、审批、实时摘要，全在浏览器里看得清、调得了。</p>
+        <p class="feature-card__desc">18 个页面、一百七十多个接口。会话、知识库、工具、审批、实时摘要，全在浏览器里看得清、调得了。</p>
       </div>
       <div class="feature-card reveal" data-delay="3">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
@@ -391,7 +391,7 @@ cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
       </a>
       <a class="doc-card reveal" data-delay="3" href="./tools.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></span>
-        <div><div class="doc-card__title">工具清单</div><div class="doc-card__desc">38 个内置工具，参数和用法示例都在。</div></div>
+        <div><div class="doc-card__title">工具清单</div><div class="doc-card__desc">47 个内置工具，参数和用法示例都在。</div></div>
       </a>
       <a class="doc-card reveal" data-delay="1" href="./web-api.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>

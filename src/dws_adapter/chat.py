@@ -559,6 +559,48 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         logger.debug("[DWS] 编辑消息: dws %s", " ".join(args))
         return self.run(args)
 
+    def chat_thread_reply(self, *, thread_id: str, text: str = "",
+                          title: str = "", uuid: str | None = None,
+                          msg_type: str | None = None,
+                          media_id: str | None = None,
+                          file_path: str | None = None) -> dict:
+        """向钉钉话题(Thread)追加一条回复。
+
+        封装 ``dws chat thread reply --conversation-id <openConvThreadId> --content <text>``。
+
+        ⚠️ ``--conversation-id`` 在此命令下传的是 **Thread 子会话 openConvThreadId**
+        （不是父群 openConversationId）——dws 官方 thread reference 明确："thread reply
+        沿用原发送命令的 --conversation-id，但这里传 Thread 子会话的 openConvThreadId"。
+
+        ⚠️ 该命令是「直接追加回复」，不产生引用气泡；因此与 ``chat message reply`` 的
+        引用语义不同，是**互斥的两条通道**，不可同时使用。
+
+        dws v1.0.63 起支持（v1.0.61/1.0.62-beta.8 尚无该命令）。
+        """
+        if not thread_id:
+            raise ValueError("chat_thread_reply 需提供 thread_id（openConvThreadId）")
+        content = text or title
+        if not content and not media_id and not file_path:
+            raise ValueError("chat_thread_reply 需提供 text/title（或富媒体参数）")
+
+        args = ["chat", "thread", "reply",
+                "--conversation-id", thread_id,
+                "--content", content]
+        if title:
+            args.extend(["--title", title])
+        if msg_type in ("file", "audio", "video"):
+            if not file_path:
+                raise ValueError(f"msg_type={msg_type} 需要 file_path（本地文件路径）")
+            args.extend(["--msg-type", msg_type, "--file", file_path])
+        elif media_id:
+            args.extend(["--msg-type", "image", "--media-id", media_id])
+        if uuid:
+            args.extend(["--uuid", uuid])
+        if self.ai_tag_default:
+            args.append("--ai-tag")
+        logger.debug("[DWS] 话题回复: dws %s", " ".join(args))
+        return self.run(args)
+
     def chat_message_reply(self, *, message_id: str | None = None, text: str = "",
                            title: str = "", uuid: str | None = None,
                            reply_in_thread: bool = False,
@@ -572,8 +614,17 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                            ref_sender: str | None = None,
                            conversation_id: str | None = None,
                            use_native_reply: bool | None = None,
-                           fallback_to_send: bool = True) -> dict:
+                           fallback_to_send: bool = True,
+                           thread_id: str | None = None) -> dict:
         """回复消息。
+
+        三条通道，按优先级：
+
+        1. **话题回复**（传入 ``thread_id`` 时）：``dws chat thread reply``，把回复直接
+           追加到该 Thread 内（不产生引用气泡）。入站消息带 ``openConvThreadId`` 即表示
+           它位于某个话题下，回复应回到同一话题而非主群流。
+        2. **原生引用回复**：``dws chat message reply``，在钉钉内展示「引用气泡」。
+        3. **普通发送**：``dws chat message send``。
 
         原生引用回复：当提供被引用消息的 ``ref_msg_id``（openMessageId）、其发送者
         ``ref_sender``（openDingTalkId）与会话 ``conversation_id``（openConversationId）
@@ -586,7 +637,10 @@ class DwsAdapterChatMixin(DwsAdapterBase):
           永不丢失；
         - ``False``（供 runtime 单聊路径）：改抛异常，让调用方走自己的 peer 感知分片
           发送分支，避免「原生失败 + 内部发送」造成重复发送。
-        （reply_in_thread 钉钉不支持，已忽略。）
+
+        ``reply_in_thread``：钉钉话题通过 ``thread_id`` 显式指定（Thread 唯一标识无法从
+        父群推导）。若只传 ``reply_in_thread`` 而无 ``thread_id``，则无法定位话题，
+        降级为普通回复（debug 日志，不刷 warning 噪音）。
         """
         # 目标：普通发送用 group/user/open_dingtalk_id；原生引用回复用 conversation_id。
         target = group or user or open_dingtalk_id or conversation_id
@@ -595,11 +649,33 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                 "dws chat_message_reply 需提供 group / user / open_dingtalk_id 之一"
                 "（或原生引用回复的 conversation_id）"
             )
-        if reply_in_thread:
-            logger.warning("dws 不支持 reply_in_thread，已忽略")
         content = text or title
         if not content:
             raise ValueError("chat_message_reply 需提供 text 或 title")
+
+        # === 通道 1：话题(Thread)回复 ===
+        # 入站消息位于话题下时，回复必须回到同一话题，否则上下文在主群流被打断。
+        if thread_id:
+            try:
+                return self.chat_thread_reply(
+                    thread_id=thread_id, text=content, title=title, uuid=uuid,
+                    msg_type=msg_type, media_id=media_id, file_path=file_path,
+                )
+            except (DwsError, ValueError, OSError) as e:
+                # 精确捕获（不新增宽异常）：
+                #   DwsError  —— self.run() 的 CLI 失败（退出码非 0 / 业务错误 /
+                #                JSON 解析失败），已由 _classify_error 映射到 IMAdapterError 族；
+                #   ValueError—— chat_thread_reply 的参数校验失败（缺 text / 缺 file_path）；
+                #   OSError   —— dws 可执行文件缺失 / IO 异常。
+                # 其余异常（Bug 类）一律上抛，不做静默降级。
+                if not fallback_to_send:
+                    raise
+                logger.warning("[DWS] 话题回复失败，降级为普通发送: %s", e)
+                # 落到下方普通发送分支
+        elif reply_in_thread:
+            # 仅有 reply_in_thread 但缺少 thread_id → 无法定位 Thread 子会话。
+            logger.debug("[DWS] reply_in_thread=True 但无 thread_id（openConvThreadId），"
+                         "无法定位话题，降级为普通回复")
 
         # 是否走原生引用回复：默认自动——三者齐全且非富媒体时启用
         if use_native_reply is None:
@@ -638,8 +714,14 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                 # 落到下方普通发送分支
 
         logger.debug("[DWS] reply (via send) to message_id=%s", message_id)
+        # 降级普通发送时的目标解析：group / user / open_dingtalk_id 三者皆空时，
+        # 用 conversation_id（openConversationId）兜底——它就是父群会话 id，
+        # dws ``chat message send --group`` 接受该值。
+        # 否则本方法唯一的调用形态（runtime 群聊路径只传 conversation_id）
+        # 会在降级时抛 ValueError("group, user, or open_dingtalk_id must be
+        # specified")，导致降级路径形同虚设、回复直接丢失。
         return self.chat_message_send(
-            group=group, user=user, open_dingtalk_id=open_dingtalk_id,
+            group=group or conversation_id, user=user, open_dingtalk_id=open_dingtalk_id,
             title=title, text=text, uuid=uuid,
             msg_type=msg_type, media_id=media_id, file_path=file_path,
         )

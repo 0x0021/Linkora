@@ -496,6 +496,10 @@ class ParseMixin(PollerMixinBase):
         ts_str = raw.get("createTime") or raw.get("timestamp") or ""
         ts = self._parse_timestamp(ts_str) if ts_str else datetime.now()
         msg_type = self._detect_msg_type(raw)
+        # 话题(Thread)归属：dws 消息对象带 openConvThreadId 即表示该消息位于某个话题下
+        # （dws 官方 schema 原文："如果返回的会话消息中包含 openConvThreadId 字段，
+        # 说明是话题消息"）。非空时回复应回到该话题而非主群流。
+        thread_id = raw.get("openConvThreadId") or ""
         # 图片消息处理：
         # - 他人发送 + 启用 OCR：下载并 OCR，让 LLM 读取截图内容
         # - 我（主人）发送的：不 OCR，但下载保存，便于对话框里展示
@@ -558,6 +562,7 @@ class ParseMixin(PollerMixinBase):
             timestamp=ts,
             raw=raw,
             image_path=image_path,
+            thread_id=thread_id,
         )
 
     def _extract_image_caption(self, raw: dict) -> str:
@@ -799,6 +804,9 @@ class ParseMixin(PollerMixinBase):
             timestamp=last.timestamp,
             raw={"merged": True, "count": len(group), "filtered_polite": polite_count,
                  "original_ids": [m.msg_id for m in group], "merged_type": merged_type},
+            # 合并消息继承话题归属：同批消息若都在同一话题下，回复须回到该话题。
+            # 取首条非空值（组内消息可能跨话题，此时以第一条为准）。
+            thread_id=next((m.thread_id for m in group if m.thread_id), ""),
         )
 
     def _is_at_me(self, raw: dict) -> bool:

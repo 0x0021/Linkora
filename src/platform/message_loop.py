@@ -505,6 +505,7 @@ class MessageLoopMixin(EngineMixinBase):
                                     msg_type=m.msg_type,
                                     timestamp=m.timestamp,
                                     raw=m.raw,
+                                    thread_id=m.thread_id,
                                 )
                                 refreshed.append(new_msg)
                                 continue
@@ -530,6 +531,7 @@ class MessageLoopMixin(EngineMixinBase):
                             msg_type=m.msg_type,
                             timestamp=m.timestamp,
                             raw=m.raw,
+                            thread_id=m.thread_id,
                         )
                         refreshed.append(new_msg)
                         continue
@@ -552,6 +554,7 @@ class MessageLoopMixin(EngineMixinBase):
                                 msg_type=db_msg.msg_type,
                                 timestamp=m.timestamp,
                                 raw=m.raw,
+                                thread_id=m.thread_id,
                             )
                             refreshed.append(new_msg)
                             continue
@@ -578,6 +581,7 @@ class MessageLoopMixin(EngineMixinBase):
                         msg_type=m.msg_type,
                         timestamp=m.timestamp,
                         raw=m.raw,
+                        thread_id=m.thread_id,
                     ))
                     continue
                 refreshed.append(m)
@@ -642,6 +646,8 @@ class MessageLoopMixin(EngineMixinBase):
                     timestamp=latest.timestamp,
                     raw={"merged": True, "count": len(messages), "original_ids": [m.msg_id for m in messages]},
                     image_path=_resolve_merge_image_path(messages),
+                    # 合并消息继承话题归属（取首条非空），保证回复仍落在原话题。
+                    thread_id=next((m.thread_id for m in messages if m.thread_id), ""),
                 )
                 logger.info("[防抖] 合并了 %d 条消息 (类型=%s): %s", len(messages), merged_type, merged_content[:100])
 

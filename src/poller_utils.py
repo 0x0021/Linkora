@@ -224,6 +224,8 @@ def combine_message_group(
         msg_type=merged_type,
         timestamp=first.timestamp,
         raw={**getattr(first, "raw", {}), "merged": True, "merged_original_ids": all_msg_ids},
+        # 合并消息继承话题归属（取首条非空），保证回复仍落在原话题而非主群流。
+        thread_id=next((m.thread_id for m in group if getattr(m, "thread_id", "")), ""),
     )
     return merged
 

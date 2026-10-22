@@ -17,9 +17,11 @@ class DwsAdapterMediaMixin(DwsAdapterBase):
         该命令需要真实应用凭证（DWS_CLIENT_ID / DWS_CLIENT_SECRET），不支持
         --dry-run 预览，故强制 force_no_dry_run=True 走真实调用。
 
-        ⚠️ 版本提示（2026-09-15 核实 v1.0.61 与 v1.0.62-beta.8）：dws 已**下线**
-        ``chat media upload``——它现在只返回 validation error（"已下线，当前 CLI 不提供
-        通用的本地文件到 mediaId 的上传能力"）。官方替代路径：
+        ⚠️ 版本提示（2026-09-15 核实 v1.0.61 与 v1.0.62-beta.8；2026-10-22 复核
+        v1.0.63 结论不变）：dws 已**下线** ``chat media upload``——它现在只返回
+        deprecation 提示（"Command 'upload' is deprecated, 请改用
+        dws chat message send --msg-type file --file <本地路径>"），且明确
+        「不再读取应用凭证或调用旧版媒体上传接口」。官方替代路径：
           • 本地图片/文件 → ``chat message send --msg-type file --file <本地路径>``
             （Linkora 的 ``chat_message_send(msg_type="image", file_path=...)``
              已自动降级走此路径，无需经过本方法）

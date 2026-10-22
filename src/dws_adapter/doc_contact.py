@@ -43,11 +43,14 @@ class DwsAdapterDocMixin(DwsAdapterBase):
     def doc_search(self, query: str, page_size: int = 10) -> list[dict]:
         """按关键词搜索钉钉文档，返回 ``documents[]``（名称/nodeId/类型/URL）。
 
-        ⚠️ ``dws doc search`` 在 v1.0.62-beta.8 已 **deprecated**（实测输出 WARN：
-        "'dws doc search' is deprecated, use 'dws drive search' or
-        'dws wiki node search --workspace <id>' instead"）——文档类文件管理能力整体
-        迁往 ``dws drive``，旧命令将来可能被移除。故优先走新命令 ``drive +search-docs``，
-        仅在旧版 dws 不认识该子命令时回退旧命令，保证「升级」与「回退」两个方向都能用。
+        主路径走 ``dws drive +search-docs``（v1.0.63 实测仍可用）；仅当旧版 dws
+        不认识该子命令时回退 ``dws doc search``，保证「升级」与「回退」两个方向都能用。
+
+        ⚠️ 版本核实（2026-10-22，dws v1.0.63）：``dws doc search`` **已不再**输出
+        deprecated 警告，命令本身可用（v1.0.62-beta.8 时曾标 deprecated，建议改用
+        ``drive search`` / ``wiki node search``）。但主路径仍优先 ``+search-docs``
+        ——它按「在线文档」语义检索，与「钉盘文件检索」（``drive +search``）区分
+        开，与本方法「搜文档标题」的用途更贴合；``doc search`` 保留为旧版回退。
         """
         try:
             data = self.run([
@@ -63,7 +66,7 @@ class DwsAdapterDocMixin(DwsAdapterBase):
                     "unknown command", "unknown flag", "unknown shorthand",
                     "no such", "not found")):
                 raise
-            logger.info("dws 不支持 drive +search-docs，回退已废弃的 doc search: %s", e)
+            logger.info("dws 不支持 drive +search-docs，回退 doc search: %s", e)
             data = self.run([
                 "doc", "search",
                 "--query", query,

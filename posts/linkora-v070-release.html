@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.7.0：分身开始看得见群里发生的事 · 坤子</title>
+<meta name="description" content="v0.7.0 对接钉钉 CLI v1.0.63：话题能读能答、群成员终于拿得到，新增钉钉日志、企业语义检索、审批表单字段、待办闭环与会议协调等 9 个工具，内置工具 38 → 47。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<div class="post-progress" aria-hidden="true"></div>
+
+<nav>
+  <a href="../index.html" class="nav-brand">坤子</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-10-22 · 发布记录</div>
+    <h1>Linkora v0.7.0：分身开始看得见群里发生的事</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.7.0</span>
+      <span class="tag">钉钉</span>
+      <span class="tag">工具</span>
+    </div>
+  </header>
+
+  <article class="post-content">
+    <p>前几版都在修「答得好不好」。这一版换了个方向：修「看得见看不见」。钉钉的 CLI 升到 v1.0.63 之后，我拿真实群聊把它的能力重新过了一遍，发现 Linkora 里有几处设计是<strong>照着旧版 CLI 的认知写下的</strong>——包括一条被我自己信了好几年的错误判断。于是有了这一版：内置工具 38 → 47，意图分类 39 → 41。</p>
+
+    <blockquote>
+      <p><strong>本文要点</strong></p>
+      <ul>
+        <li>话题（Thread）从「能回复但读不到历史」变成能读能答——这条纠正的是一条错误判断</li>
+        <li>群成员枚举修好了：此前工具声称返回成员，实际一个都没返回</li>
+        <li>新接入两个域：钉钉日志（日报周报）、企业语义检索</li>
+        <li>补齐三处业务缺口：审批表单字段配置、待办闭环、日程协调（冲突 / 空闲 / 推荐时间）</li>
+        <li>媒体下载迁到安全 Shortcut，保留四项安全属性</li>
+      </ul>
+    </blockquote>
+
+    <h2>纠偏 1：话题不是「不支持」，是「只做了一半」</h2>
+    <p>Linkora 里一直写着「钉钉不支持话题内回复」。这句话是错的。v1.0.63 实测下来，真实情况是——</p>
+    <ul>
+      <li><strong>能回复</strong>：话题内发消息，完全支持。</li>
+      <li><strong>读不到</strong>：话题里的历史消息，此前拿不到。</li>
+    </ul>
+    <p>这是个典型的「不对称」：能写不能读。后果很具体——同事在话题里把一个方案讨论了三轮，你进去问「这个方案谁提的」，分身只看得见群里那句「开个话题聊一下」，看不见话题里的内容，自然答不上来。</p>
+    <p>v0.7.0 补上了读的那一半：新增话题上下文拉取，按时间合并、去重后并入主回复上下文。现在分身在话题里能顺着上下文回答，而不是只看见一句话就失忆。</p>
+
+    <h2>纠偏 2：「已返回成员列表」，实际一个成员都没有</h2>
+    <p>会话信息工具此前会明确报告「已返回成员列表」，返回的却是空数组。群成员是 <code>cid...</code> 形式的会话 ID，查成员时必须走 ID 直通；而群成员枚举接口的 <code>--group</code> 参数走的是语义解析（传群名 / 关键词），把已保存的会话 ID 传过去反而报「解析失败」。这类坑不实测根本想不到——参数名字一样，语义完全相反。</p>
+    <p>现在改成：优先用会话内联返回的成员信息，拿不到时才走群成员枚举接口，并把「ID 直通 vs 语义解析」这条规则固化在适配器层，避免下次再踩。</p>
+
+    <h2>新接入：钉钉日志与企业语义检索</h2>
+    <h3>钉钉日志（日报 / 周报）</h3>
+    <p>能列出我收到和发出的日志、读取单份日志的完整正文、搜索本单位的填报模板。日志正文是嵌套的 JSON 字符串，解析后原样保留语义——不然「本周进展」会被拆成一堆无上下文的碎片。</p>
+
+    <h3>企业语义检索</h3>
+    <p>一次跨类型语义检索企业内部内容：文档、消息、日程、待办、听记、日志、邮件，一次覆盖多个来源。还能按行为类型追溯——「我发给谁了什么」「谁发给我的」「我创建过哪些」。</p>
+    <p>这里有个细节值得一说：检索结果里会保留「仅摘要片段」和「语义候选」两个证据标记。不保留的话，分身会把一个降级的摘要结果当成完整命中来汇报，那比查不到更糟。</p>
+
+    <h2>补齐：三个此前只能「半个」回答的业务问题</h2>
+    <table>
+      <tr><th>能力</th><th>此前</th><th>现在</th></tr>
+      <tr><td>审批表单</td><td>只能看到表单名</td><td>能看字段级配置（字段名 / 组件类型 / 必填 / 选项），还能<strong>按字段名反查</strong>——「哪些表单含『项目』字段」直接能答</td></tr>
+      <tr><td>待办</td><td>只能创建</td><td>能查我的待办清单、标记完成（写操作需二次确认）</td></tr>
+      <tr><td>日程</td><td>只能列日程</td><td>能查冲突、找空闲时段、给多人推荐共同开会时间</td></tr>
+    </table>
+    <p>「找大家都有空的时间」这个场景，之前只能靠人肉在日历里划。现在直接问，分身会查冲突、算空闲，再按姓名解析参会人给出建议时间。</p>
+
+    <h2>顺手修的：媒体下载走安全通道</h2>
+    <p>下载改走 dws 的安全 Shortcut 接口，四项安全属性全部保留——拒绝绝对路径、拒绝 <code>..</code> 逃逸、原子落盘、默认不覆盖。调用方需要重下同名文件时显式开启覆盖，不给这个开关的默认行为是不覆盖。</p>
+
+    <h2>一个刻意的决定：有些新能力不接</h2>
+    <p>dws v1.0.63 一共 26 个服务域，全接进来并不划算。评估后明确不采纳的有：</p>
+    <ul>
+      <li><strong>邮件</strong>：需要独立授权，且与企业内容检索高度重叠。</li>
+      <li><strong>动态 schema</strong>：dws 能导出 1495 个工具的元数据，但那意味着工具清单要改成运行时动态生成——这是架构级改造，不该塞进一个版本。</li>
+      <li><strong>与会中能力</strong>、<strong>无权限域</strong>：拿不到就是拿不到，不做假承诺。</li>
+    </ul>
+    <p>另外记了一条铁律：<strong>适配器层绝不传输出改写类全局 flag</strong>。实测发现 <code>--fields</code> 只在顶层投影，传 <code>--fields name,conversationId</code> 时 <code>+chat-list</code> 返回 <code>{}</code> 而且<strong>不报错</strong>；<code>--jq</code> 表达式写错返回 <code>null</code> 加 exit 0，也没有错误信号。这种「静默返回空」的 flag 传到适配器里就是数据丢失的温床。</p>
+
+    <h2>升级注意</h2>
+    <p>无数据迁移、无破坏性变更。但<strong>新增 9 个工具需要显式加入 <code>tools.available</code> 白名单</strong>才会对 LLM 可见：</p>
+    <pre><code>schedule_meeting        list_todos        complete_todo
+approval_get_form_schema
+list_reports           get_report_detail  list_report_templates
+search_enterprise_content              search_enterprise_behavior</code></pre>
+    <p>仓库里的 <code>config.yaml.example</code> 已含全部 47 项，照抄即可。新增的 9 个工具全部依赖 dws 专属能力，飞书与企微暂不可用（企微会明确回报不支持，而不是静默失败）。</p>
+
+    <h2>验证</h2>
+    <p>ruff 全路径通过；pyright 用钉版（1.1.414）跑出零错误，与基线一致；<code>check_deps.py --strict</code> 零告警；裸异常基线未新增（仍为 638）。新增 6 个测试文件覆盖本版全部新能力（报告 35 例、语义检索 28 例、日程待办 18 例、群成员 16 例、资源下载 8 例、话题上下文 14 例），全量逐文件回归通过。</p>
+
+    <h2>延伸阅读</h2>
+    <ul>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">完整变更日志（CHANGELOG）</a>——本次全部变更条目</li>
+      <li><a href="https://github.com/0x0021/Linkora/releases/tag/v0.7.0" target="_blank" rel="noopener">GitHub Release v0.7.0</a></li>
+      <li><a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">项目源码</a>——<a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </article>
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+<script src="../assets/main.js"></script>
+</body>
+</html>

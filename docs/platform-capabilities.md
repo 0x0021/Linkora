@@ -32,7 +32,7 @@ Linkora 可同时接入**钉钉、飞书、企业微信**三大 IM 平台。三�
 
 | 能力分组 | 工具（name） | 钉钉 | 飞书 | 企业微信 |
 |---|---|:---:|:---:|:---:|
-| **OA 审批**（8） | `approval_list_forms` / `approval_list_pending` / `approval_list_initiated` / `approval_list_executed` / `approval_list_tasks` / `approval_get_detail` / `approval_search_forms` / `transfer_approval` | ✓ | ✗ | ✗ |
+| **OA 审批**（9） | `approval_list_forms` / `approval_list_pending` / `approval_list_initiated` / `approval_list_executed` / `approval_list_tasks` / `approval_get_detail` / `approval_search_forms` / `approval_get_form_schema` / `transfer_approval` | ✓ | ✗ | ✗ |
 | **组织与考勤**（3） | `get_attendance` / `get_current_org` / `list_orgs` | ✓ | ✗ | ✗ |
 | **文档**（2） | `search_doc` / `get_doc_content` | ✓ | ✗ | ✗ |
 | **AI 听记**（2） | `get_minutes` / `list_minutes` | ✓ | ✗ | ✗ |
@@ -40,13 +40,16 @@ Linkora 可同时接入**钉钉、飞书、企业微信**三大 IM 平台。三�
 | **主动发消息**（2） | `send_ding` / `send_message` | ✓ | ✗ | ✗ |
 | **媒体 / 图片**（1） | `upload_image` | ✓ | ✗ | ✗ |
 | **知识库 Wiki**（4） | `wiki_space_list` / `wiki_space_search` / `wiki_node_list` / `wiki_node_search` | ✓ | ✗ | ✗ |
-| **日历 / 待办**（2） | `get_calendar_events` / `create_todo` | ✓ | ✗ | ✗ |
+| **日历 / 待办**（5） | `get_calendar_events` / `create_todo` / `list_todos` / `complete_todo` / `schedule_meeting` | ✓ | ✗ | ✗ |
+| **钉钉日志**（3） | `list_reports` / `get_report_detail` / `list_report_templates` | ✓ | ✗ | ✗ |
+| **企业语义检索**（2） | `search_enterprise_content` / `search_enterprise_behavior` | ✓ | ✗ | ✗ |
 | **会话信息**（1） | `get_conversation_info` | ✓ | ✓ | ✗ |
 
 **根因（适配器级，已逐一核对代码）**：
 
 - 飞书适配器（`feishu.py`）**未实现** `calendar_event_list` / `todo_task_create` / `doc_list` → 故日历、待办、文档类工具在飞书不可用（工具层门控已隐藏）。
 - 企业微信适配器（`wecom.py`）：`calendar_event_list` / `todo_task_create` / `doc_search` / `doc_read` 因企微 CLI 无对应能力而显式报错 / 空实现，故 `get_calendar_events` / `create_todo` 已对企微门控隐藏（`platforms=["dingtalk"]`）；`chat_conversation_info` / `chat_list_top_conversations` / `mark_read` 未实现 → 会话信息类工具在企微不可用。
+- **v0.7.0 新增的 9 个工具全部依赖 dws 专属能力**（`todo_task_list` / `todo_task_complete` / `calendar_conflicts` / `calendar_free_slots` / `calendar_suggest_time` / `approval_form_schema` / `report_list` / `report_entry_get` / `report_template_list` / `aisearch_*`），飞书与企微 CLI 均无对应命令，故门控一律为 `["dingtalk"]`。
 - 钉钉（DWS）适配器能力最完整，上述全部支持。
 
 > 工具门控与适配器能力完全对应：`get_calendar_events` / `create_todo` 因企微 CLI 不支持，门控为 `["dingtalk"]`（仅钉钉）；`get_conversation_info` 因企微适配器缺 `chat_conversation_info`，门控为 `["dingtalk","feishu"]`。Web 管理台会按当前平台过滤意图与工具映射，不会向不可用的平台暴露对应工具。

@@ -104,10 +104,10 @@ class DwsAdapterChatMixin(DwsAdapterBase):
     def chat_list_groups_mine(self, limit: int = 0) -> list[dict]:
         """拉取「我创建/管理的群」（dws chat +chat-list-mine）。
 
-        ⚠️ 该 shortcut **不支持 --cursor**：dws v1.0.62-beta.8 实测传 --cursor 会直接
-        返回 unknown flag 错误（合法 flag 仅 limit / exclude-muted / role）。但其
-        ``--limit`` **不传即返回全部**（实测一次返回全部自建群）。故这里 limit 默认 0
-        （不传 --limit）、单次拉取不翻页。
+        ⚠️ 该 shortcut **不支持 --cursor**：实测 v1.0.62-beta.8 与 v1.0.63 均如此——
+        传 --cursor 会直接返回 unknown flag 错误（合法 flag 仅 limit / exclude-muted /
+        role）。但其 ``--limit`` **不传即返回全部**（实测一次返回全部自建群）。
+        故这里 limit 默认 0（不传 --limit）、单次拉取不翻页。
 
         旧实现复用通用分页函数会拼 --cursor，第 2 页在真实 dws 上必然失败——虽被
         except 吞掉不致崩，但每次都产生一次无效调用 + 告警日志，且只能拿到第一页。
@@ -170,9 +170,10 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         并按这批老消息的最大时间戳回写游标，使游标在历史里**逐轮后退**（实测同一会话
         16:48→09-14→09-11），新消息只能靠 event 流兜住。现改为 ``--direction newer``。
 
-        ⚠️ ``list-direct``（实测 v1.0.61 / v1.0.62-beta.8 均如此）**没有** ``--page-all``，
-        也**不支持** ``--cursor``，故无法在适配器内自动翻页补齐——它只回一页 ``--limit`` 条
-        （升序：本页最旧→最新）。这意味着「单聊一次积压 > limit 条」时本方法拿不全，
+        ⚠️ ``list-direct``（实测 v1.0.61 / v1.0.62-beta.8 / **v1.0.63** 均如此）
+        **没有** ``--page-all``，也**不支持** ``--cursor``，故无法在适配器内自动翻页
+        补齐——它只回一页 ``--limit`` 条（升序：本页最旧→最新）。这意味着「单聊一次
+        积压 > limit 条」时本方法拿不全，
         必须由调用方保证不漏：游标按页内最大时间戳推进（**不 +1s 越秒前进**），
         未取到的消息都比游标新，下一轮从同一时间点重新拉取即可覆盖，再靠 msg_id 去重
         跳过已处理消息（见 poller_strategy._update_poll_time_and_db）。
@@ -643,10 +644,11 @@ class DwsAdapterChatMixin(DwsAdapterBase):
 
         封装 ``dws chat message edit --conversation-id <cid> --message-id <mid> --text <t>``。
 
-        ⚠️ dws 已移除 ``chat message update``（核实 v1.0.61 与 v1.0.62-beta.8 均无此
-        子命令，仅剩 ``edit``），且 ``--msg-id`` 更名为 ``--message-id``、
-        ``--conversation-id`` 为必填。旧实现三处皆错，导致钉钉流式输出每一轮更新都
-        失败——占位消息永远停在 "..."（2026-09-15 核对 dws 新版本时发现）。
+        ⚠️ dws 已移除 ``chat message update``（核实 v1.0.61 / v1.0.62-beta.8 /
+        **v1.0.63** 均无此子命令，仅剩 ``edit``），且 ``--msg-id`` 更名为
+        ``--message-id``、``--conversation-id`` 为必填。旧实现三处皆错，导致钉钉流式
+        输出每一轮更新都失败——占位消息永远停在 "..."（2026-09-15 核对 dws 新版本时
+        发现）。
 
         ``edit`` 只能按 openConversationId 定位会话，**不支持按 user 定位**；单聊同样
         以 openConversationId 表达（Linkora 的 ``message.chat_id`` 即该值）。故 ``user``

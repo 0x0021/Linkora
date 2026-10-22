@@ -22,3 +22,4 @@ class Message:
     is_bot: bool = False  # True=机器人/AI发送, False=真人
     is_withdrawn: bool = False  # True=消息已被撤回
     is_archived: bool = False  # True=已归档（旧消息压缩）
+    thread_id: str = ""  # 话题(Thread)归属：openConvThreadId；非空表示消息位于某话题下

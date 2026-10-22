@@ -47,6 +47,13 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
     # 钉钉 / 企业微信的 markdown 子集不支持表格，置 False（发送前转换）。
     supports_markdown_tables: bool = True
 
+    # 是否支持「原生引用回复」（chat_message_reply 接受 ref_msg_id / ref_sender /
+    # conversation_id / fallback_to_send 等引用定位参数）。
+    # 仅钉钉 dws 的 ``chat message reply`` 支持按「被引消息 id + 原发送者 + 会话 id」
+    # 三元组定位并展示引用气泡；飞书用 --message-id 自行定位、企微无引用概念。
+    # 调用方据此决定是否走引用回复通道（避免传入对方不认的 kwargs 触发 TypeError）。
+    supports_native_quote_reply: bool = False
+
     # ==================================================================
     # 通用工具（平台无关，可直接复用）
     # ==================================================================
@@ -320,8 +327,13 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
                            open_dingtalk_id: str | None = None,
                            msg_type: str | None = None,
                            media_id: str | None = None,
-                           file_path: str | None = None) -> dict:
-        """回复指定消息。"""
+                           file_path: str | None = None,
+                           thread_id: str | None = None) -> dict:
+        """回复指定消息。
+
+        ``thread_id``（话题 openConvThreadId）：钉钉 dws v1.0.63+ 支持向话题直接
+        追加回复；入站消息携带该字段时，适配器应回复进话题而非主群流。
+        """
         ...
 
     @abc.abstractmethod

@@ -639,7 +639,8 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
                            open_dingtalk_id: str | None = None,
                            msg_type: str | None = None,
                            media_id: str | None = None,
-                           file_path: str | None = None) -> dict:
+                           file_path: str | None = None,
+                           thread_id: str | None = None) -> dict:
         """回复指定消息，支持话题内回复（reply-in-thread）。
 
         参数映射（飞书 ``+messages-reply``）：

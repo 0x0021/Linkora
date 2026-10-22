@@ -403,6 +403,8 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
                 raw=d.get("raw", {}) or {},
                 role="user",
                 is_bot=False,
+                # 话题归属：Stream 事件体与轮询消息同构，话题消息带 openConvThreadId。
+                thread_id=str((d.get("raw") or {}).get("openConvThreadId") or ""),
             )
         except Exception as e:  # noqa: BLE001
             logger.warning("[Stream] 构造 Message 失败: %s", e)

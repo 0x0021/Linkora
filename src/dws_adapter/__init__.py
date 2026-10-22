@@ -32,3 +32,6 @@ class DwsAdapter(DwsAdapterBaseMixin, DwsAdapterChatMixin,
                  DwsAdapterWikiMixin, DwsAdapterDingMixin, BaseIMAdapter):
     # 钉钉 markdown 子集不支持 GFM 表格：发送前需转换（见 chat_message_send/update）
     supports_markdown_tables = False
+    # 钉钉 dws 支持原生引用回复（chat message reply 按 ref-msg-id + ref-sender +
+    # conversation-id 定位并展示引用气泡），且 v1.0.63 起支持话题(Thread)内回复。
+    supports_native_quote_reply = True

@@ -784,7 +784,8 @@ class WecomCliAdapter(BaseIMAdapter):
                            open_dingtalk_id: str | None = None,
                            msg_type: str | None = None,
                            media_id: str | None = None,
-                           file_path: str | None = None) -> dict:
+                           file_path: str | None = None,
+                           thread_id: str | None = None) -> dict:
         """企微回复：原生无「回复/话题」概念，降级为向原会话重发（保持接口契约）。
 
         - ``reply_in_thread``：企微无话题概念，**忽略并告警**。

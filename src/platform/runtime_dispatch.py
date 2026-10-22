@@ -8,8 +8,18 @@ import sqlite3
 import time
 
 from src.poller_utils import is_read_receipt_content
+from src.im_adapter.errors import IMAdapterError
 
 logger = logging.getLogger("src.platform.runtime")
+
+# 发送通道的可降级异常集合：DB 层失败 + IM 适配器层失败（CLI 退出码非 0 / 业务错误）。
+#
+# ⚠️ IMAdapterError **不是** RuntimeError 的子类（继承链：
+# IMAdapterError → LinkoraError → Exception），故只写 ``except RuntimeError``
+# 捕获不到 dws CLI 的任何失败——异常会直接冒泡击穿发送流程，
+# 让「降级为分片发送、保证回复永不丢失」的兜底形同虚设。
+# 这里显式列出 IMAdapterError，使降级路径真正生效。
+_SEND_DEGRADABLE_ERRORS = (sqlite3.Error, RuntimeError, IMAdapterError)
 
 # F15：分片之间的发送间隔（秒）。DWS CLI 是同步调用，理论上顺序有保证，
 # 但服务端入库时间戳粒度可能相同导致客户端乱序展示，留一个极小的间隔更稳。
@@ -36,16 +46,44 @@ class ReplyDispatchMixin(EngineMixinBase):
         """
         if message.chat_type == "group":
             logger.info("[发送] 群聊回复: group=%s, text=%s", message.chat_id, filtered[:50])
+            # === 话题(Thread)内回复 ===
+            # 入站消息带 openConvThreadId 说明它位于某个话题下（dws 消息对象字段，
+            # 见 poller_core_parse._raw_to_message）。此时回复必须回到**同一话题**，
+            # 否则会被甩到主群流、话题上下文被打断。dws v1.0.63 起支持
+            # ``chat thread reply``；早于该版本 dws 无此命令，故按能力位判断。
+            _thread_id = getattr(message, "thread_id", "") or ""
+            if _thread_id and getattr(self.dws, "supports_native_quote_reply", False):
+                try:
+                    logger.info("[发送] 尝试话题回复: thread_id=%s", _thread_id[:24])
+                    native_result = self.dws.chat_message_reply(
+                        text=filtered, title=reply_title, uuid=reply_uuid,
+                        thread_id=_thread_id, conversation_id=message.chat_id,
+                        fallback_to_send=False,
+                    )
+                    logger.info("[发送] 话题回复 DWS 返回: %s", native_result)
+                    return True, native_result
+                except _SEND_DEGRADABLE_ERRORS as e:
+                    logger.warning("[发送] 话题回复失败，降级为分片发送: %s", e)
+                    # 落到下方 _send_possibly_sharded 分片发送
+
             # === 原生引用回复（群聊 UX 优化）===
             # 与单聊对称：用 dws 原生 chat message reply 在群内展示「引用气泡」，
             # 让群里的人直观看到 AI 在回复哪条消息。仅当被回复消息的 id + 发送者 +
             # 会话 id 齐全且非富媒体时启用；原生失败（参数缺失/接口异常）时
             # fallback_to_send=False 抛异常，落到下方 _send_possibly_sharded 分片发送，
             # 避免重复发送、保证回复永不丢失。
+            #
+            # ⚠️ ref_msg_id / ref_sender / conversation_id / fallback_to_send 是
+            # **钉钉专属** kwargs：飞书用 --message-id 自行定位、企微无引用概念，
+            # 二者签名不接受这些参数。故必须按能力位 ``supports_native_quote_reply``
+            # 判定后再调用，否则 Feishu/WeCom 群聊会抛 TypeError（且 TypeError 不在
+            # 下方 except 的 (sqlite3.Error, RuntimeError) 捕获范围内，会直接冒泡
+            # 击穿发送流程，导致群聊回复整体失效）。
             _ref_msg_id = message.msg_id or ""
             _ref_sender = message.sender_id or ""
             _conv_id = message.chat_id or ""
-            if _ref_msg_id and _ref_sender and _conv_id:
+            if (_ref_msg_id and _ref_sender and _conv_id
+                    and getattr(self.dws, "supports_native_quote_reply", False)):
                 try:
                     logger.info("[发送] 尝试原生引用回复（群聊）: chat_id=%s ref=%s",
                                 _conv_id, _ref_msg_id[:20])
@@ -56,7 +94,7 @@ class ReplyDispatchMixin(EngineMixinBase):
                     )
                     logger.info("[发送] 原生引用回复 DWS 返回: %s", native_result)
                     return True, native_result
-                except (sqlite3.Error, RuntimeError) as e:
+                except _SEND_DEGRADABLE_ERRORS as e:
                     # DB 层失败 / DWS CLI 运行失败 → 降级为分片发送。
                     # DWS 话题圈守卫（topic_quote_guard_unavailable / convThreadEnabled）
                     # 会拦截非话题圈群聊的引用回复，属预期内降级，不刷 warning 噪声。
@@ -278,6 +316,9 @@ class ReplyDispatchMixin(EngineMixinBase):
             timestamp=datetime.now(),
             raw={},
             is_bot=True,
+            # 话题归属：AI 回复若落在某个 Thread 下，持久化时一并带上，
+            # 保证历史回放/上下文重建时能还原「这条回复属于哪个话题」。
+            thread_id=getattr(message, "thread_id", "") or "",
         )
         self.store._message_repo.save_message(ai_message, role="assistant")
 

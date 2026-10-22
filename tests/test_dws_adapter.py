@@ -472,3 +472,45 @@ class TestDryRunThreadSafety:
             t1.join()
             t2.join()
         assert not violations, f"dry-run 模式下写操作丢失 --dry-run（串线程）: {violations[:3]}"
+
+
+class TestOutputShapingFlagsNotPassed:
+    """适配器**不得**传 dws 的输出改写类全局 flag。
+
+    2026-10-22 实测 dws v1.0.63：这三个 flag 会改写输出形状，令 Python 侧的归一化
+    拿不到字段，且失效方式是**静默降级**（见 ``_build_command`` docstring）：
+
+    - ``--fields`` 只在顶层投影：传 ``--fields name,conversationId`` 时
+      ``+chat-list`` 返回 ``{}``（不报错），因为字段嵌在 ``chats[]`` 内。
+    - ``--jq`` 表达式写错时返回 ``null`` 且 exit code 0，无错误信号。
+    - ``--mock`` 只对 Atomic 生效、对 Shortcut 无效，且返回体带 ``"_mock": true``
+      标记；适配器无识别逻辑，误传会污染真实数据路径。
+    """
+
+    # 只读与写操作各取一个代表性方法，确保覆盖面不是只有读路径
+    _CALLS = (
+        ("read", lambda a: a.chat_message_list_unread_conversations()),
+        ("write", lambda a: a.run(["chat", "message", "send"])),
+    )
+    _FORBIDDEN = ("--fields", "--jq", "--mock")
+
+    def test_output_flags_absent_from_built_command(self, mock_dws):
+        adapter = DwsAdapter(cli_path="dws", dry_run=True)
+        for label, call in self._CALLS:
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(
+                    returncode=0, stdout='{"result": {}}', stderr=""
+                )
+                call(adapter)
+                cmd = mock_run.call_args[0][0]
+                for flag in self._FORBIDDEN:
+                    assert flag not in cmd, f"{label} 路径误传 {flag}: {cmd}"
+
+    def test_build_command_shape_is_stable(self, mock_dws):
+        """命令收口形状：``dws <args> -f json -y``，仅按需追加 --no-browser/--dry-run/--profile。"""
+        adapter = DwsAdapter(cli_path="dws", dry_run=False)
+        cmd = adapter._build_command(["chat", "message", "list"])
+        assert cmd[:5] == ["dws", "chat", "message", "list", "-f"]
+        assert cmd[5] == "json" and "-y" in cmd
+        for flag in self._FORBIDDEN:
+            assert flag not in cmd

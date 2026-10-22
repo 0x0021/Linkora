@@ -61,6 +61,15 @@ from src.tools.oa_approval import (
     ApprovalListInitiatedTool,
     ApprovalListExecutedTool,
 )
+from src.tools.report import (
+    ListReportsTool,
+    GetReportDetailTool,
+    ListReportTemplatesTool,
+)
+from src.tools.aisearch import (
+    SearchEnterpriseContentTool,
+    SearchEnterpriseBehaviorTool,
+)
 from src.tools.web_search import WebSearchTool
 from src.tools.weather import WeatherTool
 
@@ -131,6 +140,13 @@ BUILTIN_TOOL_MANIFEST: list[type[BaseTool]] = [
     ApprovalListTasksTool,
     ApprovalListInitiatedTool,
     ApprovalListExecutedTool,
+    # 钉钉日志（日报/周报）查询（只读，支撑「我上周周报写了啥/谁发我日报」类自动回复）
+    ListReportsTool,
+    GetReportDetailTool,
+    ListReportTemplatesTool,
+    # 企业内容语义检索（跨类型聚合检索 + 行为追溯）
+    SearchEnterpriseContentTool,
+    SearchEnterpriseBehaviorTool,
     # 媒体上传
     ImageUploadTool,
     # RAG 知识库（受 enable_kb_search 开关控制）

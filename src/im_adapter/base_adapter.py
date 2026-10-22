@@ -224,10 +224,21 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
             "complete": False, "partial": True, "failures": [],
         }
 
+    def chat_thread_replies(self, *, thread_id: str = "", message_id: str = "",
+                            group: str = "", limit: int = 50,
+                            page_all: bool = False) -> list[dict]:
+        """读取话题(Thread)下的回复。默认返回空列表（企微 / 飞书无此概念）。
+
+        钉钉 dws 通过 ``chat +thread-replies`` 实现。返回项形如
+        ``{"message_id", "sender", "text", "timestamp"}``。
+        """
+        logging.getLogger(__name__).debug(
+            "[IM] 当前适配器不支持话题回复读取: %s", type(self).__name__)
+        return []
+
     def chat_list_top_conversations(self, limit: int = 50) -> list[dict]:
         """获取最近会话列表。默认委托到 ``chat_message_list_unread_conversations``（企微模式）。"""
         return self.chat_message_list_unread_conversations(count=limit)
-
     # ==================================================================
     # 认证 / 组织（抽象方法，需子类实现）
     # ==================================================================

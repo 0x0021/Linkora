@@ -713,6 +713,67 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         logger.debug("[DWS] 话题回复: dws %s", " ".join(args))
         return self.run(args)
 
+    def chat_thread_replies(self, *, thread_id: str = "", message_id: str = "",
+                            group: str = "", limit: int = 50,
+                            page_all: bool = False) -> list[dict]:
+        """读取钉钉话题(Thread)下的回复消息列表。
+
+        封装 dws v1.0.63 的 Shortcut ``chat +thread-replies``。该 Shortcut 承担：
+        - 沿服务端**毫秒级** nextCursor 自动续页（``--page-all``）并按稳定 ID 去重；
+        - 本地投影出每条回复的发言人 / 文本 / 时间（省去调用方解析原始字段）；
+        - 用 ``complete`` / ``hasMore`` / ``stopReason`` / ``failures`` 证明完整性。
+
+        用途：补齐「能回复话题但读不到话题历史」的不对称——AI 在话题里回复时，
+        主群流历史里没有话题内的对话内容，LLM 看不到「大家在聊什么」。
+
+        Args:
+            thread_id: 话题 ID（openConvThreadId）；与 ``message_id`` 二选一。
+            message_id: 话题主消息 openMessageId（CLI 自动只读解析会话与 thread）。
+            group: 群 openConversationId；``thread_id`` 模式下**必须**同时提供。
+            limit: 每页条数。
+            page_all: 是否自动续页（拉全量回复）。
+
+        Returns:
+            归一化后的回复列表，每项 ``{"message_id", "sender", "text", "timestamp"}``。
+            失败时返回空列表（调用方按「无话题上下文」降级，不阻断主回复）。
+        """
+        if not thread_id and not message_id:
+            raise ValueError("chat_thread_replies 需提供 thread_id 或 message_id")
+        if thread_id and not group:
+            raise ValueError("chat_thread_replies 的 thread_id 模式需同时提供 group")
+
+        args = ["chat", "+thread-replies"]
+        if message_id:
+            args.extend(["--message-id", message_id])
+        else:
+            args.extend(["--group", group, "--thread-id", thread_id])
+        args.extend(["--limit", str(max(1, limit))])
+        if page_all:
+            args.append("--page-all")
+        logger.debug("[DWS] 读取话题回复: dws %s", " ".join(args))
+        data = self.run(args, operation="chat_thread_replies", force_no_dry_run=True)
+        result = self._get_result(data)
+        if not isinstance(result, dict):
+            return []
+        # 上游字段（实测结构）：replies[].{messageId, sender, text, createTime}
+        raw_replies = (
+            result.get("replies")
+            or result.get("messages")
+            or result.get("items")
+            or []
+        )
+        out: list[dict] = []
+        for m in raw_replies:
+            if not isinstance(m, dict):
+                continue
+            out.append({
+                "message_id": str(m.get("messageId") or m.get("openMessageId") or ""),
+                "sender": str(m.get("sender") or m.get("senderName") or ""),
+                "text": str(m.get("text") or m.get("content") or ""),
+                "timestamp": str(m.get("createTime") or m.get("createAt") or ""),
+            })
+        return out
+
     def chat_message_reply(self, *, message_id: str | None = None, text: str = "",
                            title: str = "", uuid: str | None = None,
                            reply_in_thread: bool = False,

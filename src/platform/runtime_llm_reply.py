@@ -5,6 +5,8 @@ from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tr
 from .base import _active_platform_ctx  # 显式下划线符号
 import logging
 
+from src.im_adapter.errors import IMAdapterError
+
 
 logger = logging.getLogger("src.platform.runtime")
 
@@ -83,6 +85,29 @@ class LLMReplyMixin(EngineMixinBase):
         else:
             # 对话结束后自动提炼重要信息存入记忆（存原文，不含页脚）
             self._auto_save_memory(message, reply_text.text, history)
+    def _enrich_thread_context(self, message: Message, history: list) -> list:
+        """把话题(Thread)内的对话并入 LLM 历史。
+
+        入站消息位于钉钉话题下时，主群流历史里没有话题内的讨论内容，AI 只能看到
+        触发它的那一条消息 → 在话题里「答非所问」。此处按 ``thread_id`` 拉取话题
+        回复并入历史。
+
+        任何失败都降级为「原样返回 history」，绝不阻断主回复链路。
+        """
+        thread_id = (getattr(message, "thread_id", "") or "").strip()
+        if not thread_id:
+            return history
+        try:
+            from src.platform.thread_context import fetch_thread_context, merge_thread_context
+            thread_msgs = fetch_thread_context(self.dws, message)
+            if not thread_msgs:
+                return history
+            return merge_thread_context(history, thread_msgs)
+        except (IMAdapterError, ValueError, OSError, RuntimeError, TypeError, AttributeError) as e:
+            # 话题上下文是增强信息，失败不应影响主回复。
+            logger.warning("[话题上下文] 装配失败（不影响主回复）: %s", e)
+            return history
+
     def _process_llm_reply(self, message: Message, result) -> None:
         """LLM 兜底处理链：取历史 → LLM 生成 → 记录指标 → 分支发送；异常分级处理。"""
         try:
@@ -92,6 +117,10 @@ class LLMReplyMixin(EngineMixinBase):
                 days=self.config.poller.history_days,
                 session_gap_minutes=self.config.poller.history_session_gap_minutes,
             )
+            # 话题(Thread)上下文补齐：入站消息位于话题下时，主群流历史里没有话题内
+            # 的对话，AI 会「不知道大家在聊什么」。此处按 thread_id 拉取话题回复并
+            # 并入历史（仅当轮生效、不落库；拉取失败自动降级，不阻断主回复）。
+            history = self._enrich_thread_context(message, history)
             reply_text = self.llm_agent.process_message(
                 message, history,
                 disposition=result.intent or "",

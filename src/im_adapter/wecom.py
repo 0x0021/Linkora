@@ -922,3 +922,17 @@ class WecomCliAdapter(BaseIMAdapter):
         create_todo 在工具层已对企微门控隐藏（platforms=["dingtalk"]）。
         """
         raise IMAdapterUnsupportedTypeError("企微 CLI 不支持待办创建")
+
+    def todo_list_mine(self, *, size: int = 20, page: int = 1,
+                       status: str = "", role_types: str = "",
+                       priority: str = "") -> dict:
+        """企微 CLI 不支持待办查询（无对应子命令）。
+
+        显式报错而非返回空结果 —— list_todos 在工具层已对企微门控隐藏
+        （platforms=["dingtalk"]），此处为防御性兜底。
+        """
+        raise IMAdapterUnsupportedTypeError("企微 CLI 不支持待办查询")
+
+    def todo_complete(self, task_id: str) -> dict:
+        """企微 CLI 不支持完成待办（无对应子命令）。"""
+        raise IMAdapterUnsupportedTypeError("企微 CLI 不支持完成待办")

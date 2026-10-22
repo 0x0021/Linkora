@@ -26,7 +26,13 @@ from src.tools.business import (
     SendDingTool,
     TransferApprovalTool,
 )
-from src.tools.calendar import GetCalendarEventsTool, CreateTodoTool
+from src.tools.calendar import (
+    GetCalendarEventsTool,
+    CreateTodoTool,
+    ListTodosTool,
+    CompleteTodoTool,
+    ScheduleMeetingTool,
+)
 from src.tools.chat import SendMessageTool
 from src.tools.contact import SearchContactTool
 from src.tools.conversation import (
@@ -54,6 +60,7 @@ from src.tools.wiki import (
 )
 from src.tools.oa_approval import (
     ApprovalListFormsTool,
+    ApprovalGetFormSchemaTool,
     ApprovalSearchFormsTool,
     ApprovalGetDetailTool,
     ApprovalListPendingTool,
@@ -101,6 +108,9 @@ BUILTIN_TOOL_MANIFEST: list[type[BaseTool]] = [
     # 日历 / 待办
     GetCalendarEventsTool,
     CreateTodoTool,
+    ListTodosTool,
+    CompleteTodoTool,
+    ScheduleMeetingTool,
     # 记忆
     RecallMemoryTool,
     SaveMemoryTool,
@@ -134,6 +144,7 @@ BUILTIN_TOOL_MANIFEST: list[type[BaseTool]] = [
     WikiNodeSearchTool,
     # 钉钉 OA 审批查询（只读，支撑「有哪些审批表单/待我审批/审批进度」类自动回复）
     ApprovalListFormsTool,
+    ApprovalGetFormSchemaTool,
     ApprovalSearchFormsTool,
     ApprovalGetDetailTool,
     ApprovalListPendingTool,

@@ -417,6 +417,17 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
         raise NotImplementedError(
             f"todo_task_create not implemented for {self.__class__.__name__}") from None
 
+    def todo_list_mine(self, *, size: int = 20, page: int = 1,
+                       status: str = "", role_types: str = "",
+                       priority: str = "") -> dict:
+        """列出与当前用户相关的待办。默认返回空结果（仅钉钉支持）。"""
+        return {"todos": [], "count": 0, "has_more": False, "page": page, "size": size}
+
+    def todo_complete(self, task_id: str) -> dict:
+        """完成待办。默认抛 NotImplementedError（仅钉钉支持）。"""
+        raise NotImplementedError(
+            f"todo_complete not implemented for {self.__class__.__name__}") from None
+
     def oa_approval_redirect_task(self, *, task_id: str, to_actioner_id: str,
                                   remark: str = "") -> dict:
         """转交 OA 审批任务给其他人。默认抛 NotImplementedError（当前仅钉钉支持）。

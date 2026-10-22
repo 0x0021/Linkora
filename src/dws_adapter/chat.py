@@ -1,4 +1,28 @@
-"""DwsAdapter 聊天能力 mixin（会话/消息读写/发送/引用回复）。拆分自 dws_adapter.py。"""
+"""DwsAdapter 聊天能力 mixin（会话/消息读写/发送/引用回复）。拆分自 dws_adapter.py。
+
+⚠️ v1.0.63 新原子子命令的采纳取舍（2026-10-22 逐条对 help 文本 + 真实调用核对）：
+本 mixin 已覆盖 dws chat message 的主要读写面，其余子命令经核对**均不构成缺口**，
+故不新增适配器方法——理由逐条记录在此，避免下次升级重复评估：
+
+- ``send-by-bot``（机器人身份发消息）：已覆盖。Linkora 走 ``chat message send``
+  （当前用户身份），换机器人身份是**业务语义变更**（消息来源标识不同），非能力补齐。
+- ``send-a2ui-card`` / ``update-a2ui-card``：A2UI 是流式文本卡片（``send-card`` /
+  ``update-card``，本mixin 已实现为 ``chat_message_send_card`` /
+  ``chat_message_update_card``）的组件化继任者，须提供非空 JSON 字符串数组。
+  Linkora 的长内容输出（纪要/审批结论）走纯文本 + ``chat_message_update`` 流式改写即可，
+  无组件化渲染需求。
+- ``list-mentions``（拉 @我 的消息）/ ``+at-me``：已覆盖。``chat_message_search_advanced``
+  带 ``--at-me`` 参数（见该方法），可与时间窗/会话范围组合检索，表达力强于
+  ``list-mentions``；且 Linkora 的消息发现主链路是未读会话轮询
+  （``chat_message_list_unread_conversations``，见 poller_strategy），不靠 @ 检索驱动。
+- ``add-emoji`` / ``add-favorite`` / ``flag-*``（表情回应、收藏）：属互动装饰能力，
+  与「自动回复助手」定位无关，无调用方。
+- ``set-pin-msg`` / ``set-top-msg``（钉住/置顶）：属会话管理动作，需人工判断置顶哪条，
+  交由 LLM 自动置顶风险高，无调用方。
+- ``combine-forward``（合并转发）：Linkora 转发纪要走 ``forward`` 语义，未使用合并转发。
+- ``read-status``（已读/未读状态查询）：Linkora 已有 ``mark_read``（回执方向），
+  反向的已读状态无消费方。
+"""
 from __future__ import annotations
 from .dws_mixins_base import DwsAdapterBase
 

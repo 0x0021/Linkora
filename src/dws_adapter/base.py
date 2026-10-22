@@ -40,7 +40,27 @@ class DwsAdapterBaseMixin(DwsAdapterBase):
 
     def _build_command(self, args: list[str], *,
                        force_no_dry_run: bool = False) -> list[str]:
-        """钉钉 ``dws`` 命令语法：``dws <args> -f json -y [--no-browser] [--dry-run] [--profile]``。"""
+        """钉钉 ``dws`` 命令语法：``dws <args> -f json -y [--no-browser] [--dry-run] [--profile]``。
+
+        ⚠️ 刻意**不**传 dws 的三个输出相关全局 flag（2026-10-22 实测 v1.0.63 结论）：
+        适配器层的职责是「拿到原始 JSON 后在 Python 侧归一化」，一旦输出被 CLI 侧
+        改写，归一化赖以工作的字段就可能被裁掉，且失效方式是**静默降级**而非报错：
+
+        - ``--fields <逗号分隔字段>``：只在**顶层**做投影。传
+          ``--fields name,conversationId`` 时，``+chat-list`` 返回 ``{}``（不报错）——
+          因为 ``name``/``conversationId`` 嵌在 ``chats[]`` 内而非顶层。适配器的
+          ``_get_result()`` 会拿到空 dict，归一化全部退化为空列表。
+        - ``--jq <表达式>``：同样改写输出形状；且表达式写错（字段不存在）时返回
+          ``null`` 且 **exit code 0**，无任何错误信号可据以判失败。
+        - ``--mock``：**只对 Atomic 生效、对 Shortcut 无效**（实测
+          ``+chat-list --mock`` 仍返回真实空结果，``+chat-members-list --mock`` 仍走
+          真实语义解析并报 ``resolution_not_found``）。能力残缺，无法作为统一的
+          测试替身；且原子命令的 mock 返回体带 ``"_mock": true`` +
+          ``contractVersion`` 标记，适配器无识别逻辑，误传会污染真实数据路径。
+
+        反之 ``--dry-run`` 是**采纳**的（见下方），它只预览副作用、不改写输出形状，
+        与归一化层正交。
+        """
         cmd = [self.cli_path] + list(args) + ["-f", "json", "-y"]
         # --no-browser 是 auth login 的专属参数，不是所有 dws 子命令都支持
         # 对 auth 类命令自动添加，避免运行时弹浏览器

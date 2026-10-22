@@ -209,6 +209,21 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
         """获取会话详情。默认返回空 dict（企微无此能力）。"""
         return {}
 
+    def chat_group_members(self, group: str, *, page_limit: int = 50,
+                           member_types: str = "") -> dict:
+        """枚举群成员。默认返回空结果（企微 / 飞书 CLI 无此能力）。
+
+        钉钉 dws 通过 ``chat +chat-members-list`` 实现，真人 / 机器人分桶并自带
+        翻页去重与完整性证据。返回结构见 dws 适配器实现。
+        """
+        logging.getLogger(__name__).debug(
+            "[IM] 当前适配器不支持群成员枚举: %s", type(self).__name__)
+        return {
+            "conversation_id": group, "users": [], "bots": [],
+            "counts": {"users": 0, "bots": 0, "total": 0},
+            "complete": False, "partial": True, "failures": [],
+        }
+
     def chat_list_top_conversations(self, limit: int = 50) -> list[dict]:
         """获取最近会话列表。默认委托到 ``chat_message_list_unread_conversations``（企微模式）。"""
         return self.chat_message_list_unread_conversations(count=limit)

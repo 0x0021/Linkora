@@ -83,30 +83,75 @@ class DwsAdapterMediaMixin(DwsAdapterBase):
                        conversation_id: str, output_path: str) -> str:
         """下载聊天中的图片/视频/语音等资源到本地。
 
-        封装 `dws chat message download-media`。返回写入的本地文件路径。
+        封装 dws v1.0.63 的 Shortcut ``chat +messages-resource-download``，
+        返回写入的本地文件路径。
         media_id: 消息内容中的 mediaId；message_id: openMessageId；
         conversation_id: openConversationId（即 chat_id）。
 
-        复用基类 _run_download：拼命令 → subprocess → 校验产物非空（短路空图进入 OCR 链路）。
+        为什么用 Shortcut 而非原子 ``chat message download-media``（2026-10-22 升级）：
+        Shortcut 版本自带三项原实现不具备的安全属性（实测逐条验证）：
+          - **路径沙箱**：``--output`` 只接受工作目录内的相对路径，拒绝绝对路径、
+            拒绝 ``..`` 逃逸；原实现直接接受任意绝对路径，媒体 id 一旦被污染
+            （``content`` 里塞 ``mediaId=...&text=`` 之类）就可能写到任意位置；
+          - **原子落盘**：整文件临时落盘后原子发布，失败不留下半截文件
+            （原实现失败时可能残留 0 字节文件，被下游当成「下载到空图」）；
+          - **默认不覆盖**：目标已存在时拒绝写入，需显式 ``--overwrite``。
+
+        ⚠️ Shortcut 要求 ``--output`` 是**工作目录内的相对路径**，故这里把子进程
+        的 cwd 切到目标文件所在目录、只传文件名。目标目录不存在时先创建
+        （Shortcut 自身不建目录）。
+
+        ⚠️ 必须传 ``--overwrite``：Shortcut 默认拒绝覆盖已存在文件，而 Linkora
+        的调用方（``_resolve_image_content`` 等）允许同名文件被重新下载
+        （原实现是覆盖语义）。不加该 flag 时，已存在的目标文件会让整次下载
+        失败 → 表现为「图片下载失败」。安全属性（路径沙箱 / 原子落盘）不受影响。
         """
+        if not media_id or not message_id or not conversation_id:
+            raise ValueError("download_media 需提供 media_id / message_id / conversation_id")
+        target = os.path.abspath(output_path)
+        target_dir = os.path.dirname(target) or "."
+        filename = os.path.basename(target)
+        if not filename:
+            raise ValueError(f"download_media: output_path 无有效文件名: {output_path}")
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except OSError as e:
+            raise OSError(f"download_media: 无法创建目标目录 {target_dir}: {e}") from e
+
         args = [
-            "chat", "message", "download-media",
+            "chat", "+messages-resource-download",
             "--type", "mediaId",
             "--resource-id", media_id,
             "--message-id", message_id,
             "--open-conversation-id", conversation_id,
-            "--output", output_path,
+            "--output", filename,
+            "--overwrite",
         ]
-        logger.info("[DWS] 下载媒体: mediaId=%s msg=%s conv=%s -> %s",
-                    media_id[:20], message_id[:20], conversation_id[:20], output_path)
-        return self._run_download(args, output_path)
+        logger.info("[DWS] 下载媒体(Shortcut): mediaId=%s msg=%s conv=%s -> %s",
+                    media_id[:20], message_id[:20], conversation_id[:20], target)
+        # cwd 切到目标目录 → --output 传文件名即「工作目录内相对路径」。
+        # _run_download 负责校验产物存在且非空（含 10MB 上限）。
+        return self._run_download(args, target, cwd=target_dir)
 
     def chat_conversation_info(self, chat_id: str) -> dict:
-        """获取会话详情。chat_id 即 openConversationId。"""
+        """获取会话详情。chat_id 即 openConversationId。
+
+        ⚠️ dws 返回的是**嵌套**结构：``result.conversationInfo.{title, memberCount,
+        singleChat, ownerNick, ...}``（实测 2026-10-22）。此处向上取一层
+        ``conversationInfo`` 摊平返回，使调用方（``GetConversationInfoTool``）
+        能按扁平 key 取值——否则 title / memberCount / singleChat 全部取不到，
+        工具会误报「标题为空、单聊、人数 0」。
+        """
         data = self.run(["chat", "conversation-info", "--group", chat_id],
                        operation="chat_conversation_info", force_no_dry_run=True)
         result = self._get_result(data)
-        return result if isinstance(result, dict) else {}
+        if not isinstance(result, dict):
+            return {}
+        # result 形如 {"conversationInfo": {...}}；有的版本直接摊平，两种都兼容。
+        inner = result.get("conversationInfo")
+        if isinstance(inner, dict):
+            return inner
+        return result
 
     def mark_read(self, conversation_id: str, message_id: str) -> dict:
         """标记会话中指定消息及之前的所有消息为已读。

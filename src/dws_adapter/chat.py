@@ -419,6 +419,118 @@ class DwsAdapterChatMixin(DwsAdapterBase):
             return int(ct) == 1
         return False
 
+    def chat_group_members(self, group: str, *, page_limit: int = 50,
+                           member_types: str = "") -> dict:
+        """列出群成员（真人 / 机器人分桶）。
+
+        封装 dws v1.0.63 的 Shortcut ``chat +chat-members-list``。该 Shortcut 承担了
+        Linkora 手写翻页胶水不需要的职责：
+
+        - 用户桶自动翻页（毫秒级 nextCursor）并按稳定 ID 去重；
+        - 真人 / 机器人分桶（``users`` / ``bots``）——机器人单独成桶，避免把 Bot
+          当真人参与「群里有谁」这类语义判断；
+        - 输出 ``complete`` / ``partial`` / ``hasMore`` / ``failures`` 完整性证据，
+          调用方不会把部分结果误当完整集合。
+
+        ⚠️ 目标解析：``--group`` 接受「群名或 openConversationId」，但走的是**语义
+        解析**（群名需唯一命中）；已持有 openConversationId 时必须用
+        ``--conversation-id`` 走稳定 ID 直通路径，否则会因解析失败报
+        ``resolution_not_found``（实测确认）。故此处按入参形态自动分流。
+
+        Args:
+            group: 群 openConversationId（稳定 ID 直通）或群名（语义解析）。
+            page_limit: 用户成员桶最大页数（1-500），保证有界。
+            member_types: ``"user"`` / ``"bot"`` / ``"user,bot"``；空串表示两者都取。
+
+        Returns:
+            归一化后的 dict::
+
+                {
+                  "conversation_id": str,
+                  "users": [{"name", "open_dingtalk_id", "role"}],
+                  "bots":  [{"name", "open_dingtalk_id", "robot_code"}],
+                  "counts": {"users": int, "bots": int, "total": int},
+                  "complete": bool,     # 结果是否完整（未截断、无失败）
+                  "partial": bool,      # 是否为部分结果
+                  "failures": [...],     # 逐桶失败明细
+                }
+        """
+        if not group:
+            raise ValueError("chat_group_members 需提供 group（openConversationId 或群名）")
+        args = ["chat", "+chat-members-list"]
+        # 稳定 ID（oc_/cid_ 前缀）走直通用；否则按群名语义解析。
+        if group.startswith(("oc_", "cid_")):
+            args.extend(["--conversation-id", group])
+        else:
+            args.extend(["--group", group])
+        if member_types:
+            args.extend(["--member-types", member_types])
+        # page_limit 必须在 1-500 之间，dws 会自行校验；这里先夹紧避免越界。
+        args.extend(["--page-limit", str(max(1, min(int(page_limit), 500)))])
+        data = self.run(args, operation="chat_group_members", force_no_dry_run=True)
+        result = self._get_result(data)
+        if not isinstance(result, dict):
+            return {
+                "conversation_id": group, "users": [], "bots": [],
+                "counts": {"users": 0, "bots": 0, "total": 0},
+                "complete": False, "partial": True, "failures": [],
+            }
+        return self._normalize_group_members(result, group)
+
+    @staticmethod
+    def _normalize_group_members(result: dict, fallback_cid: str) -> dict:
+        """把 ``+chat-members-list`` 的返回归一化成稳定结构。
+
+        上游字段（实测）：
+        - ``users[]``: ``name`` / ``nick`` / ``memberNick``、``openDingtalkId``、
+          ``role`` / ``memberRoleDesc``（群主 / 管理员 / 普通成员）
+        - ``bots[]``: ``name``、``openDingtalkId``、``openBotId``、``robotCode``
+        - ``counts``: ``users`` / ``bots`` / ``total``
+        - ``complete`` / ``partial`` / ``failures``：完整性证据
+        """
+        def _pick(d: dict, *keys: str) -> str:
+            for k in keys:
+                v = d.get(k)
+                if v:
+                    return str(v)
+            return ""
+
+        users: list[dict] = []
+        for m in (result.get("users") or []):
+            if not isinstance(m, dict):
+                continue
+            users.append({
+                "name": _pick(m, "name", "nick", "memberNick", "memberEmpName"),
+                "open_dingtalk_id": _pick(m, "openDingtalkId", "openDingTalkId", "memberDingtalkId"),
+                "role": _pick(m, "role", "memberRoleDesc"),
+            })
+        bots: list[dict] = []
+        for m in (result.get("bots") or []):
+            if not isinstance(m, dict):
+                continue
+            bots.append({
+                "name": _pick(m, "name", "nick"),
+                "open_dingtalk_id": _pick(m, "openDingtalkId", "openDingTalkId"),
+                "robot_code": _pick(m, "robotCode", "openBotId"),
+            })
+        counts = result.get("counts")
+        if not isinstance(counts, dict):
+            counts = {}
+        return {
+            "conversation_id": str(result.get("conversationId") or fallback_cid),
+            "users": users,
+            "bots": bots,
+            "counts": {
+                "users": int(counts.get("users", len(users)) or 0),
+                "bots": int(counts.get("bots", len(bots)) or 0),
+                "total": int(counts.get("total", len(users) + len(bots)) or 0),
+            },
+            # complete=True 才代表「拿到了全部成员」；partial 说明被截断或有分页失败。
+            "complete": bool(result.get("complete", False)),
+            "partial": bool(result.get("partial", False)),
+            "failures": result.get("failures") or [],
+        }
+
     def chat_message_send(self, *, group: str | None = None,
                           user: str | None = None,
                           open_dingtalk_id: str | None = None,

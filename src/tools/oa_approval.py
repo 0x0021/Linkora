@@ -340,7 +340,7 @@ class ApprovalListTasksTool(BaseTool):
 class ApprovalListInitiatedTool(BaseTool):
     name = "approval_list_initiated"
     display_name = "查询已发起审批"
-    short_description = "查询某审批模板下已发起的审批记录（按时间窗），需提供模板 processCode 与起止时间"
+    short_description = "查询某审批模板下已发起的审批记录（按时间窗），需提供模板 processCode 与起止时间；跨度超 120 天自动分段"
     description = "查询已发起的审批记录"
     intent_categories = ["domain.oa_approval"]
     platforms = ["dingtalk"]
@@ -353,15 +353,15 @@ class ApprovalListInitiatedTool(BaseTool):
             },
             "start": {
                 "type": "string",
-                "description": "起始时间 ISO-8601（必填）",
+                "description": "起始时间 ISO-8601（必填），如 2026-09-01T00:00:00+08:00",
             },
             "end": {
                 "type": "string",
-                "description": "结束时间 ISO-8601（必填）",
+                "description": "结束时间 ISO-8601（必填），如 2026-10-26T23:59:59+08:00；与 start 跨度可超过 120 天（自动分段查询）",
             },
             "cursor": {
                 "type": "string",
-                "description": "分页游标，可选，默认 '0'",
+                "description": "分页游标，可选，默认 '0'（仅单段窗口内有效）",
             },
             "limit": {
                 "type": "integer",
@@ -371,8 +371,35 @@ class ApprovalListInitiatedTool(BaseTool):
         "required": ["process_code", "start", "end"],
     }
 
+    # 钉钉接口硬限制：start/end 间隔不超过 120 天，超窗服务端报「时间戳无效」（误导性），
+    # 故工具层自动按 ≤120 天分段查询后聚合。分段数设上限防 LLM 传超长窗口造成请求风暴。
+    _MAX_WINDOW_DAYS = 120
+    _MAX_SEGMENTS = 12
+
     def __init__(self, dws: DwsAdapter):
         self.dws = dws
+
+    @classmethod
+    def _parse_iso(cls, value: str) -> datetime | None:
+        """解析 ISO-8601；无时区时按东八区处理，非法返回 None。"""
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
+        return dt
+
+    @classmethod
+    def _split_windows(cls, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+        """把超长时间窗切成 ≤120 天的连续段（首尾相接不重叠）。"""
+        windows: list[tuple[datetime, datetime]] = []
+        cur = start
+        while cur < end and len(windows) < cls._MAX_SEGMENTS:
+            nxt = min(cur + timedelta(days=cls._MAX_WINDOW_DAYS), end)
+            windows.append((cur, nxt))
+            cur = nxt
+        return windows
 
     def execute(self, args: dict) -> str | dict:
         process_code = (args.get("process_code") or "").strip()
@@ -383,36 +410,73 @@ class ApprovalListInitiatedTool(BaseTool):
         cursor = (args.get("cursor") or "0").strip() or "0"
         limit = min(_coerce_limit(args.get("limit"), 20), 20)  # 钉钉接口单页上限 20，超限会 success=false
 
-        # 自动翻页：累计到 limit 或 hasMore=false 为止（钉钉单页上限 20）
-        items: list = []
-        next_cursor = cursor
-        try:
-            while len(items) < limit:
-                per_page = min(limit - len(items), 20)
-                raw = self.dws.oa_approval_list_initiated(
-                    process_code=process_code, start=start, end=end,
-                    cursor=next_cursor, limit=per_page
+        start_dt = self._parse_iso(start)
+        end_dt = self._parse_iso(end)
+        if start_dt is None or end_dt is None or start_dt >= end_dt:
+            return {"error": "start/end 需为合法 ISO-8601 时间且 start 早于 end（如 2026-09-01T00:00:00+08:00）"}
+
+        span_days = (end_dt - start_dt).days
+        if span_days > self._MAX_WINDOW_DAYS * self._MAX_SEGMENTS:
+            return {
+                "error": (
+                    f"时间窗跨度过大（约 {span_days} 天）：单段上限 120 天、自动分段最多 "
+                    f"{self._MAX_SEGMENTS} 段，请缩小时间窗或分多次查询。"
                 )
-                page_items = (raw or {}).get("processInstanceList") or []
-                if not isinstance(page_items, list):
-                    page_items = []
-                items.extend(page_items)
-                if not (raw or {}).get("hasMore"):
-                    next_cursor = None
+            }
+
+        # 显式 cursor 只在单段窗口内有意义；分段查询从每段首页开始取（聚合后按 limit 截断）
+        segments = (
+            self._split_windows(start_dt, end_dt)
+            if span_days > self._MAX_WINDOW_DAYS
+            else [(start_dt, end_dt)]
+        )
+
+        # 自动翻页 + 分段聚合：累计到 limit 或所有段取完为止（钉钉单页上限 20）
+        items: list = []
+        seen_ids: set[str] = set()
+        next_cursor = cursor
+        has_more = False
+        try:
+            for seg_start, seg_end in segments:
+                seg_cursor = cursor if len(segments) == 1 else "0"
+                while len(items) < limit:
+                    per_page = min(limit - len(items), 20)
+                    raw = self.dws.oa_approval_list_initiated(
+                        process_code=process_code,
+                        start=seg_start.isoformat(),
+                        end=seg_end.isoformat(),
+                        cursor=seg_cursor, limit=per_page
+                    )
+                    page_items = (raw or {}).get("processInstanceList") or []
+                    if not isinstance(page_items, list):
+                        page_items = []
+                    for it in page_items:
+                        key = str(it.get("processInstanceId") or id(it))
+                        if key in seen_ids:
+                            continue
+                        seen_ids.add(key)
+                        items.append(it)
+                    if not (raw or {}).get("hasMore"):
+                        seg_cursor = None
+                        break
+                    nxt = (raw or {}).get("nextCursor")
+                    if not nxt:
+                        seg_cursor = None
+                        break
+                    seg_cursor = str(nxt)
+                if len(items) >= limit:
+                    # 最后一段可能还有余量（hasMore 语义在分段下不跨段），如实上报
+                    has_more = bool(seg_cursor is not None)
                     break
-                nxt = (raw or {}).get("nextCursor")
-                if not nxt:
-                    next_cursor = None
-                    break
-                next_cursor = str(nxt)
         except Exception as e:
             logger.exception("查询已发起审批记录失败: %s", e)
             return {"error": f"查询已发起审批记录失败: {e}"}
 
         return list_result(
             items, limit, process_code=process_code, start=start, end=end,
-            has_more=bool(next_cursor is not None),
-            next_cursor=next_cursor or "",
+            has_more=has_more,
+            next_cursor=next_cursor if len(segments) == 1 and has_more else "",
+            windows_queried=len(segments),
         )
 
 

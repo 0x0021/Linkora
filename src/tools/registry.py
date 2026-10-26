@@ -67,6 +67,8 @@ from src.tools.oa_approval import (
     ApprovalListTasksTool,
     ApprovalListInitiatedTool,
     ApprovalListExecutedTool,
+    ApprovalListOrgTool,
+    ApprovalListCcTool,
 )
 from src.tools.report import (
     ListReportsTool,
@@ -151,6 +153,8 @@ BUILTIN_TOOL_MANIFEST: list[type[BaseTool]] = [
     ApprovalListTasksTool,
     ApprovalListInitiatedTool,
     ApprovalListExecutedTool,
+    ApprovalListOrgTool,
+    ApprovalListCcTool,
     # 钉钉日志（日报/周报）查询（只读，支撑「我上周周报写了啥/谁发我日报」类自动回复）
     ListReportsTool,
     GetReportDetailTool,

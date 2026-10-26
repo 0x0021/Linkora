@@ -698,7 +698,7 @@ class ToolsConfig(BaseModel):
         "approval_list_forms", "approval_search_forms", "approval_get_detail",
         "approval_get_form_schema",
         "approval_list_pending", "approval_list_tasks", "approval_list_initiated",
-        "approval_list_executed",
+        "approval_list_executed", "approval_list_org", "approval_list_cc",
         "list_reports", "get_report_detail", "list_report_templates",
         "search_enterprise_content", "search_enterprise_behavior"
     ])

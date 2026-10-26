@@ -11,6 +11,8 @@ from src.tools.oa_approval import (
     ApprovalListPendingTool,
     ApprovalListTasksTool,
     ApprovalListInitiatedTool,
+    ApprovalListOrgTool,
+    ApprovalListCcTool,
     ApprovalGetFormSchemaTool,
 )
 from src.dws_adapter import DwsAdapter
@@ -204,21 +206,43 @@ def test_list_initiated_limit_coerce(dws):
 
 
 def test_list_initiated_overlong_window_auto_split(dws):
-    # 13 个月窗口（2025-10-01 → 2026-10-26，真实故障场景）自动切为 ≤120 天分段
+    # 239 天窗口（一年内）自动切为 2 段（120+119）
     dws.oa_approval_list_initiated.return_value = {"processInstanceList": []}
-    _tool(ApprovalListInitiatedTool, dws).execute(
-        {"process_code": "PC", "start": "2025-10-01T00:00:00+08:00",
+    out = _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "2026-03-01T00:00:00+08:00",
          "end": "2026-10-26T23:59:59+08:00"}
     )
     calls = dws.oa_approval_list_initiated.call_args_list
-    assert 2 <= len(calls) <= 5  # 391 天 → 4 段（120+120+120+31）
-    # 各段首尾相接、每段 ≤120 天
+    assert len(calls) == 2
+    assert out["windows_queried"] == 2
     starts = [c.kwargs["start"] for c in calls]
     ends = [c.kwargs["end"] for c in calls]
-    assert starts[0] == "2025-10-01T00:00:00+08:00"
+    assert starts[0] == "2026-03-01T00:00:00+08:00"
     assert ends[-1] == "2026-10-26T23:59:59+08:00"
-    for i in range(1, len(calls)):
-        assert starts[i] == ends[i - 1]  # 首尾相接不重叠
+    assert starts[1] == ends[0]  # 首尾相接不重叠
+
+
+def test_list_initiated_start_older_than_year_clamped(dws):
+    # start 超一年（接口限制）自动 clamp 到一年前并在 meta 标注
+    dws.oa_approval_list_initiated.return_value = {"processInstanceList": []}
+    out = _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "2025-10-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
+    )
+    assert out["start_clamped"] is True
+    assert out["effective_start"] > "2025-10-01"
+    calls = dws.oa_approval_list_initiated.call_args_list
+    assert calls[0].kwargs["start"] > "2025-10-01"  # 实际请求用的是 clamp 后起点
+
+
+def test_list_initiated_window_too_long_rejected(dws):
+    # end 在远未来：跨度超 12 段上限（1440 天），不发起请求风暴
+    out = _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "2026-10-01T00:00:00+08:00",
+         "end": "2031-01-01T00:00:00+08:00"}
+    )
+    assert "error" in out
+    dws.oa_approval_list_initiated.assert_not_called()
 
 
 def test_list_initiated_overlong_window_dedup(dws):
@@ -232,14 +256,15 @@ def test_list_initiated_overlong_window_dedup(dws):
     assert out["count"] == 1
 
 
-def test_list_initiated_window_too_long_rejected(dws):
-    # 超 12 段（约 4 年）不发起请求风暴，直接要求缩小窗口
+def test_list_initiated_dedup_across_segments(dws):
+    # 跨段重复实例按 processInstanceId 去重
+    inst = {"processInstanceId": "dup"}
+    dws.oa_approval_list_initiated.return_value = {"processInstanceList": [inst]}
     out = _tool(ApprovalListInitiatedTool, dws).execute(
-        {"process_code": "PC", "start": "2019-01-01T00:00:00+08:00",
-         "end": "2026-10-26T00:00:00+08:00"}
+        {"process_code": "PC", "start": "2026-03-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
     )
-    assert "error" in out
-    dws.oa_approval_list_initiated.assert_not_called()
+    assert out["count"] == 1
 
 
 # ---------- 工具元数据 ----------
@@ -357,3 +382,113 @@ def test_get_form_schema_metadata(dws):
     assert t.intent_categories == ["domain.oa_approval"]
     assert t.require_confirm is False
     assert t.name == "approval_get_form_schema"
+
+
+# ---------- approval_list_org（管理员视角，别人转发场景） ----------
+def test_list_org_success(dws):
+    dws.oa_approval_list_by_admin.return_value = {
+        "list": [{"processInstanceId": "i1", "title": "周萍提交的其他合同审批"}]
+    }
+    out = _tool(ApprovalListOrgTool, dws).execute(
+        {"process_code": "PC", "start": "2026-09-26T00:00:00+08:00",
+         "end": "2026-10-26T00:00:00+08:00"}
+    )
+    assert out["count"] == 1
+    assert out["items"][0]["title"] == "周萍提交的其他合同审批"
+    dws.oa_approval_list_by_admin.assert_called_once_with(
+        process_code="PC", start="2026-09-26T00:00:00+08:00",
+        end="2026-10-26T00:00:00+08:00", cursor="0", limit=20,
+        statuses=None, user_ids=None,
+    )
+
+
+def test_list_org_filters_passthrough(dws):
+    dws.oa_approval_list_by_admin.return_value = {"list": []}
+    _tool(ApprovalListOrgTool, dws).execute(
+        {"process_code": "PC", "start": "2026-09-26T00:00:00+08:00",
+         "end": "2026-10-26T00:00:00+08:00", "statuses": ["RUNNING"],
+         "user_ids": ["u1", "u2"]}
+    )
+    kwargs = dws.oa_approval_list_by_admin.call_args.kwargs
+    assert kwargs["statuses"] == ["RUNNING"]
+    assert kwargs["user_ids"] == ["u1", "u2"]
+
+
+def test_list_org_overlong_window_auto_split(dws):
+    # 239 天窗口自动切为 2 段
+    dws.oa_approval_list_by_admin.return_value = {"list": []}
+    out = _tool(ApprovalListOrgTool, dws).execute(
+        {"process_code": "PC", "start": "2026-03-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
+    )
+    calls = dws.oa_approval_list_by_admin.call_args_list
+    assert len(calls) == 2
+    assert out["windows_queried"] == 2
+    starts = [c.kwargs["start"] for c in calls]
+    ends = [c.kwargs["end"] for c in calls]
+    assert starts[0] == "2026-03-01T00:00:00+08:00"
+    assert ends[-1] == "2026-10-26T23:59:59+08:00"
+    assert starts[1] == ends[0]  # 首尾相接不重叠
+
+
+def test_list_org_start_older_than_year_clamped(dws):
+    dws.oa_approval_list_by_admin.return_value = {"list": []}
+    out = _tool(ApprovalListOrgTool, dws).execute(
+        {"process_code": "PC", "start": "2025-10-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
+    )
+    assert out["start_clamped"] is True
+    calls = dws.oa_approval_list_by_admin.call_args_list
+    assert calls[0].kwargs["start"] > "2025-10-01"
+
+
+def test_list_org_dedup_across_segments(dws):
+    inst = {"processInstanceId": "dup", "title": "t"}
+    dws.oa_approval_list_by_admin.return_value = {"list": [inst]}
+    out = _tool(ApprovalListOrgTool, dws).execute(
+        {"process_code": "PC", "start": "2026-03-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
+    )
+    assert out["count"] == 1
+
+
+def test_list_org_invalid_time_rejected(dws):
+    out = _tool(ApprovalListOrgTool, dws).execute(
+        {"process_code": "PC", "start": "s", "end": "e"}
+    )
+    assert "error" in out
+    dws.oa_approval_list_by_admin.assert_not_called()
+
+
+# ---------- approval_list_cc（抄送我的） ----------
+def test_list_cc_success(dws):
+    dws.oa_approval_list_cc.return_value = {
+        "values": [{"originatorName": "王晓航", "formMassage": "x"}], "hasMore": True,
+    }
+    out = _tool(ApprovalListCcTool, dws).execute({"limit": 5, "page": "2"})
+    assert out["count"] == 1
+    assert out["page"] == 2
+    assert out["has_more"] is True
+    dws.oa_approval_list_cc.assert_called_once_with(
+        page=2, limit=5, query=None, process_code=None,
+        originator_user_id=None, create_time_from=None, create_time_to=None,
+    )
+
+
+def test_list_cc_limit_cap_and_filters(dws):
+    dws.oa_approval_list_cc.return_value = {"values": []}
+    _tool(ApprovalListCcTool, dws).execute(
+        {"limit": 500, "query": "合同", "process_code": "PC",
+         "originator_user_id": "u1", "create_time_from": "2026-10-01",
+         "create_time_to": "2026-10-26"}
+    )
+    kwargs = dws.oa_approval_list_cc.call_args.kwargs
+    assert kwargs["limit"] == 100  # 上限 100
+    assert kwargs["query"] == "合同"
+    assert kwargs["create_time_from"] == "2026-10-01"
+
+
+def test_list_cc_exception(dws):
+    dws.oa_approval_list_cc.side_effect = RuntimeError("boom")
+    out = _tool(ApprovalListCcTool, dws).execute({})
+    assert "error" in out

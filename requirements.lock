@@ -65,7 +65,7 @@ faiss-cpu==1.15.1
     # via -r requirements.txt
 fastapi==0.143.3
     # via -r requirements.txt
-filelock==3.32.0
+filelock==4.2.1
     # via
     #   -c (workspace)
     #   huggingface-hub

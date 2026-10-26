@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.8.1：别人转发的审批流程，也能查了 · 0x0021</title>
+<meta name="description" content="v0.8.1 新增 approval_list_org / approval_list_cc 两个工具，适应「别人转发审批流程给我看」的场景；实测钉钉审批实例接口的窗口双重硬限制（≤120 天 + 起点一年内）并做自动兜底；filelock 4.2.1 修复 3 个安全告警。内置工具 47 → 49。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<div class="post-progress" aria-hidden="true"></div>
+
+<nav>
+  <a href="../index.html" class="nav-brand">0x0021</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-10-26 · 发布记录</div>
+    <h1>Linkora v0.8.1：别人转发的审批流程，也能查了</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.8.1</span>
+      <span class="tag">钉钉</span>
+      <span class="tag">修复</span>
+    </div>
+  </header>
+
+  <article class="post-content">
+    <p>v0.8.0 发出去的当天下午，就撞上了一个真实场景：同事在单聊里转发了一条合同审批通知，分身烧光了全部工具轮次，最后回了句「没找到确切答案」。这一版就是为这个场景做的——顺便把根子上的一处接口限制也一并兜住。</p>
+
+    <blockquote>
+      <p><strong>本文要点</strong></p>
+      <ul>
+        <li>新增 <code>approval_list_org</code>：管理员视角查全组织审批实例，别人转发的流程从此能定位到实例 ID 并取回表单明细</li>
+        <li>新增 <code>approval_list_cc</code>：查抄送我的审批单（含表单摘要与跳转链接）</li>
+        <li>实测钉钉接口双重硬限制：窗口 ≤120 天 + 起点一年内，超限报的是误导性的「时间戳无效」——工具层已自动兜底</li>
+        <li>filelock 4.2.1 清零 3 个 Dependabot 安全告警</li>
+        <li>内置工具 47 → 49，均为只读；升级仅需可选补充白名单</li>
+      </ul>
+    </blockquote>
+
+    <h2>为什么个人视角查不到转发的审批</h2>
+    <p>先说那个故障。同事转发过来一条「周萍提交的其他合同审批」，分身连查了待办、已办、表单，最后调「已发起审批」还传了个 13 个月的时间窗——钉钉报「时间戳无效」，恰好 4 轮工具上限用完，整轮降级。两层问题叠一起：</p>
+    <p>第一层是<strong>视角错配</strong>：审批是周萍发起的，不是当前用户，而钉钉给的个人视角接口（我发起的 / 待我处理 / 我已处理）天生查不到别人的流程。这不是 bug，是能力缺口。</p>
+    <p>第二层是<strong>接口限制的误导性报错</strong>。实测（二分法把边界钉到具体日期）发现审批实例查询有双重硬限制：start/end 跨度 ≤120 天，且 start 不得早于 365 天前。超限的报错不是「跨度超限」，而是「时间戳无效」——格式明明没问题，报错完全不指向真相。</p>
+
+    <h2>解法：管理员视角 + 自动兜底</h2>
+    <p>新增 <code>approval_list_org</code>，以管理员身份按模板 + 时间窗查全组织的审批实例，可选按状态、发起人过滤。典型链路是：从转发文本提取模板名和提交人 → 搜模板拿 processCode → 按近期时间窗查实例（标题含提交人姓名，可直接匹配）→ 拿实例 ID 调详情取表单明细。实测周萍那条审批从定位到取回全部表单字段，一路通的。</p>
+    <p>接口限制的部分没有甩给 LLM 自觉——工具层直接兜住：超长窗口自动按 ≤120 天分段查询后聚合（首尾相接、按实例 ID 去重、最多 12 段防请求风暴）；起点超一年自动收紧到一年前并在结果里明确标注；非法时间串本地校验直接拒绝，不再透传给接口。现在 LLM 传任何合理的时间窗都能一次查成。</p>
+    <p>顺手把「抄送我的审批」也补上了（<code>approval_list_cc</code>），含表单摘要和跳转链接，凑齐审批可见性的最后一块。</p>
+
+    <h2>安全：filelock 清零</h2>
+    <p>3 个 Dependabot 告警（Windows 本地符号链接 / oplock 攻击面）统一修在 filelock 4.2.1。这个升级是跨大版本的，超出了 dependabot 自动升级的范围（配置里忽略了 semver-major），走了一遍人工依赖 PR + 流水线重生成锁文件的通道。项目只部署在 macOS / Linux，实际暴露面很低，按告警清零原则处理。</p>
+
+    <h2>升级注意</h2>
+    <p>无数据迁移、无破坏性变更。新增 2 个工具均为只读、仅钉钉；若希望分身获得「查转发的审批」能力，在 <code>tools.available</code> 白名单补充 <code>approval_list_org</code> 与 <code>approval_list_cc</code> 即可（仓库内 <code>config.yaml.example</code> 已含全部 49 项）。</p>
+
+    <h2>验证</h2>
+    <p>ruff 全路径通过；pyright 零错误；依赖一致性、裸异常基线（638）、gitleaks、前端 data-args 门禁全绿。审批工具测试 49 例全过（含窗口自动分段、跨段去重、一年起点收紧、非法时间拒绝）。CI、CodeQL、Pages 全部 success。</p>
+
+    <h2>延伸阅读</h2>
+    <ul>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">完整变更日志（CHANGELOG）</a>——本次全部变更条目</li>
+      <li><a href="https://github.com/0x0021/Linkora/releases/tag/v0.8.1" target="_blank" rel="noopener">GitHub Release v0.8.1</a></li>
+      <li><a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">项目源码</a>——<a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </article>
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+<script src="../assets/main.js"></script>
+</body>
+</html>

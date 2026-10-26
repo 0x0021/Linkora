@@ -422,10 +422,14 @@ class DedupMixin(PollerMixinBase):
                         r.get("openDingTalkId") or r.get("userId") or "?"
                         for r in results
                     ]
+                    # 候选可能很多（如组织内大量同名测试账号），只留前 3 个示例防日志刷屏
+                    shown = ", ".join(cand_ids[:3])
+                    if len(cand_ids) > 3:
+                        shown += ", …(共 %d 个)" % len(cand_ids)
                     logger.warning(
                         "[轮询器] 联系人 '%s' 搜索命中 %d 个同名候选（%s），"
                         "跳过按姓名写库（改由消息 sender_id 唯一解析，避免回复错人）",
-                        title, len(results), cand_ids,
+                        title, len(results), shown,
                     )
                     first = results[0]
                     uid = first.get("userId", "") if _is_valid_ou(first.get("userId", "")) else ""

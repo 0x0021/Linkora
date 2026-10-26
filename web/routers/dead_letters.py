@@ -89,41 +89,57 @@ async def batch_replay_dead_letters():
 
 
 @router.post("/api/dead-letters/{dl_id}/replay")
-async def replay_dead_letter(dl_id: int):
+async def replay_dead_letter(dl_id: str):
     """重放一条死信消息：取出原文重新走处理流程。
 
     【Phase 3 多平台】透传当前 ?platform= 上下文，确保重放走对应平台 store/dws/llm_agent。
+
+    dl_id 收为 str 而非 int：历史因前端 esbuild minify 把循环变量 item 重命名却漏改
+    data-args 里的 item.id，浏览器曾发出 dl_id=undefined 的请求，FastAPI 按 int 校验
+    直接吐 422（Unprocessable Content），用户无任何可读提示。这里显式解析，非法 id
+    一律归为 404 not_found（前端翻译为「记录已不存在，请刷新列表」），不再暴露 422。
     """
+    try:
+        dl_id_int = int(dl_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="not_found") from None
     app_instance = get_app_instance()
     if app_instance is None or not hasattr(app_instance, "replay_dead_letter"):
         raise HTTPException(status_code=500, detail="应用实例不可用，无法重放")
-    result = await run_sync(app_instance.replay_dead_letter, dl_id,                            platform=get_current_platform())
+    result = await run_sync(app_instance.replay_dead_letter, dl_id_int,                            platform=get_current_platform())
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "replay_failed"))
-    return {"success": True, "id": dl_id}
+    return {"success": True, "id": dl_id_int}
 
 
 @router.post("/api/dead-letters/{dl_id}/discard")
-async def discard_dead_letter(dl_id: int):
-    """丢弃一条死信消息（标记为 discarded，不再重放）。"""
+async def discard_dead_letter(dl_id: str):
+    """丢弃一条死信消息（标记为 discarded，不再重放）。
+
+    见 replay_dead_letter 的 dl_id 说明：非法 id 归为 404，避免无意义 422。
+    """
+    try:
+        dl_id_int = int(dl_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="not_found") from None
     try:
         def _work():
             store = get_store()
-            return store._draft_repo.resolve_dead_letter(dl_id, status="discarded", note="管理台手动丢弃")
+            return store._draft_repo.resolve_dead_letter(dl_id_int, status="discarded", note="管理台手动丢弃")
         ok = await run_sync(_work)
         if not ok:
             # 静默 404 曾让「点删除报错」无从排查：前端只拿到 not_found，
             # 后端日志一片空白。这里把 id 与平台落盘，便于事后定位。
             logger.warning(
                 "丢弃死信未命中记录: id=%s platform=%s（前端会收到 404 not_found）",
-                dl_id, get_current_platform(),
+                dl_id_int, get_current_platform(),
             )
             raise HTTPException(status_code=404, detail="not_found")
-        return {"success": True, "id": dl_id}
+        return {"success": True, "id": dl_id_int}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("丢弃死信失败: id=%s err=%s", dl_id, e)
+        logger.error("丢弃死信失败: id=%s err=%s", dl_id_int, e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

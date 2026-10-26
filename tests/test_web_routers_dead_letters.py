@@ -89,3 +89,40 @@ class TestBatchReplaySanitization:
 
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
+
+
+class TestDiscardMalformedId:
+    """回归 2026-10-26：前端 esbuild minify 把死信主循环变量 item 重命名为 u，却漏改
+    data-args 字符串里的 item.id，浏览器曾发出 dl_id=undefined 的请求。若路由把
+    dl_id 声明为 int，FastAPI 会返回 422（Unprocessable Content）且无可读提示。
+
+    修复：dl_id 改为 str 后显式 int() 解析，非法 id 一律 404 not_found（前端翻译为
+    「记录已不存在，请刷新列表」），不再暴露 422。
+    """
+
+    def test_undefined_id_returns_404_not_422(self, client):
+        resp = client.post("/api/dead-letters/undefined/discard")
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "not_found"
+
+    def test_text_id_returns_404_not_422(self, client):
+        resp = client.post("/api/dead-letters/abc/discard")
+        assert resp.status_code == 404
+
+    def test_valid_pending_id_discards_with_int(self, client, mock_store):
+        mock_store._draft_repo.resolve_dead_letter.return_value = True
+
+        with patch("web.routers.dead_letters.get_store", return_value=mock_store):
+            resp = client.post("/api/dead-letters/42/discard")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"success": True, "id": 42}
+        # 关键断言：传入的 "42" 被解析成 int(42) 再交给 repo
+        mock_store._draft_repo.resolve_dead_letter.assert_called_once_with(
+            42, status="discarded", note="管理台手动丢弃"
+        )
+
+    def test_valid_text_id_replay_returns_404(self, client):
+        # replay 端点同样防御：非法 id 归为 404，不暴露 422
+        resp = client.post("/api/dead-letters/undefined/replay")
+        assert resp.status_code == 404

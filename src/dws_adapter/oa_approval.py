@@ -95,9 +95,11 @@ class DwsAdapterOaApprovalMixin(DwsAdapterBase):
 
         返回 DingTalk 原始 result dict（含 ``processInstanceList`` / ``hasMore`` /
         ``nextCursor``），由上层工具负责取数与自动翻页。
-        start/end 为 ISO-8601（如 2026-03-10T00:00:00+08:00），且 DingTalk API 对
-        时间跨度有上限，调用方需传入合理窗口。单页 limit 硬上限 20，超限会
-        success=false。
+        start/end 为 ISO-8601（如 2026-03-10T00:00:00+08:00），且钉钉接口对**时间跨度
+        有硬限制：start/end 间隔不超过 120 天**——超窗服务端并不报「跨度超限」而是返回
+        误导性的 business_error「时间戳无效」（2026-10-26 实测）。上层工具
+        ``ApprovalListInitiatedTool`` 已做自动分段；直接调用本方法时调用方需自行保证
+        窗口 ≤120 天。单页 limit 硬上限 20，超限会 success=false。
         """
         data = self.run(
             ["oa", "approval", "list-initiated", "--process-code", process_code,

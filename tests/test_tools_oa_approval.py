@@ -167,11 +167,12 @@ def test_list_initiated_success(dws):
     # 真实 dws 返回 dict（含 processInstanceList），工具剥壳后累计
     dws.oa_approval_list_initiated.return_value = {"processInstanceList": [{"instanceId": "a"}]}
     out = _tool(ApprovalListInitiatedTool, dws).execute(
-        {"process_code": "PC", "start": "s", "end": "e"}
+        {"process_code": "PC", "start": "2026-09-01T00:00:00+08:00", "end": "2026-10-26T00:00:00+08:00"}
     )
     assert out["count"] == 1
     dws.oa_approval_list_initiated.assert_called_once_with(
-        process_code="PC", start="s", end="e", cursor="0", limit=20
+        process_code="PC", start="2026-09-01T00:00:00+08:00",
+        end="2026-10-26T00:00:00+08:00", cursor="0", limit=20,
     )
 
 
@@ -181,14 +182,64 @@ def test_list_initiated_missing_required(dws):
     dws.oa_approval_list_initiated.assert_not_called()
 
 
+def test_list_initiated_invalid_time_rejected(dws):
+    # 非法时间串不再透传给 dws（曾导致服务端报误导性的「时间戳无效」）
+    out = _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "s", "end": "e"}
+    )
+    assert "error" in out
+    dws.oa_approval_list_initiated.assert_not_called()
+
+
 def test_list_initiated_limit_coerce(dws):
     dws.oa_approval_list_initiated.return_value = []
     _tool(ApprovalListInitiatedTool, dws).execute(
-        {"process_code": "PC", "start": "s", "end": "e", "limit": "0", "cursor": "c"}
+        {"process_code": "PC", "start": "2026-09-01T00:00:00+08:00",
+         "end": "2026-10-26T00:00:00+08:00", "limit": "0", "cursor": "c"}
     )
     dws.oa_approval_list_initiated.assert_called_once_with(
-        process_code="PC", start="s", end="e", cursor="c", limit=20
+        process_code="PC", start="2026-09-01T00:00:00+08:00",
+        end="2026-10-26T00:00:00+08:00", cursor="c", limit=20,
     )
+
+
+def test_list_initiated_overlong_window_auto_split(dws):
+    # 13 个月窗口（2025-10-01 → 2026-10-26，真实故障场景）自动切为 ≤120 天分段
+    dws.oa_approval_list_initiated.return_value = {"processInstanceList": []}
+    _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "2025-10-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
+    )
+    calls = dws.oa_approval_list_initiated.call_args_list
+    assert 2 <= len(calls) <= 5  # 391 天 → 4 段（120+120+120+31）
+    # 各段首尾相接、每段 ≤120 天
+    starts = [c.kwargs["start"] for c in calls]
+    ends = [c.kwargs["end"] for c in calls]
+    assert starts[0] == "2025-10-01T00:00:00+08:00"
+    assert ends[-1] == "2026-10-26T23:59:59+08:00"
+    for i in range(1, len(calls)):
+        assert starts[i] == ends[i - 1]  # 首尾相接不重叠
+
+
+def test_list_initiated_overlong_window_dedup(dws):
+    # 跨段重复实例按 processInstanceId 去重
+    inst = {"processInstanceId": "dup"}
+    dws.oa_approval_list_initiated.return_value = {"processInstanceList": [inst]}
+    out = _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "2025-10-01T00:00:00+08:00",
+         "end": "2026-10-26T23:59:59+08:00"}
+    )
+    assert out["count"] == 1
+
+
+def test_list_initiated_window_too_long_rejected(dws):
+    # 超 12 段（约 4 年）不发起请求风暴，直接要求缩小窗口
+    out = _tool(ApprovalListInitiatedTool, dws).execute(
+        {"process_code": "PC", "start": "2019-01-01T00:00:00+08:00",
+         "end": "2026-10-26T00:00:00+08:00"}
+    )
+    assert "error" in out
+    dws.oa_approval_list_initiated.assert_not_called()
 
 
 # ---------- 工具元数据 ----------

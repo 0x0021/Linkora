@@ -18,6 +18,37 @@ from src.im_adapter.errors import IMAdapterError
 from src.tools.base import BaseTool
 from src.tools.utils import _coerce_limit, list_result
 
+# 钉钉 list-initiated / list-by-admin 接口硬限制：start/end 间隔不超过 120 天，
+# 超窗服务端报「时间戳无效」/ business error（误导性，2026-10-26 实测），
+# 故工具层自动按 ≤120 天分段查询后聚合。分段数设上限防 LLM 传超长窗口造成请求风暴。
+# 另经实测（list-by-admin 二分定位）：start 不得早于 365 天前，否则同样报错——
+# 超出时自动 clamp 到一年前并在结果 meta 标注，避免 LLM 浪费轮次重试。
+_MAX_WINDOW_DAYS = 120
+_MAX_SEGMENTS = 12
+_MAX_START_AGE_DAYS = 365
+
+
+def _parse_iso_dt(value: str) -> datetime | None:
+    """解析 ISO-8601；无时区时按东八区处理，非法返回 None。"""
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
+    return dt
+
+
+def _split_time_windows(start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
+    """把超长时间窗切成 ≤120 天的连续段（首尾相接不重叠），段数超上限时截断。"""
+    windows: list[tuple[datetime, datetime]] = []
+    cur = start
+    while cur < end and len(windows) < _MAX_SEGMENTS:
+        nxt = min(cur + timedelta(days=_MAX_WINDOW_DAYS), end)
+        windows.append((cur, nxt))
+        cur = nxt
+    return windows
+
 logger = logging.getLogger(__name__)
 
 
@@ -98,7 +129,12 @@ class ApprovalGetDetailTool(BaseTool):
     name = "approval_get_detail"
     display_name = "查看审批详情"
     short_description = "获取某条审批实例的详情（含表单字段与填写值），需提供审批实例 ID"
-    description = "查看钉钉审批实例详情"
+    description = (
+        "查看钉钉审批实例详情。典型场景：别人把审批通知转发到聊天里时，先从通知文本提取"
+        "模板名与提交人（如「周萍提交的其他合同审批」），用 approval_search_forms 找到"
+        " processCode、再用 approval_list_org 按近期时间窗定位实例拿到 instance_id，"
+        "最后用本工具取表单明细回答。"
+    )
     intent_categories = ["domain.oa_approval"]
     platforms = ["dingtalk"]
     parameters = {
@@ -371,35 +407,10 @@ class ApprovalListInitiatedTool(BaseTool):
         "required": ["process_code", "start", "end"],
     }
 
-    # 钉钉接口硬限制：start/end 间隔不超过 120 天，超窗服务端报「时间戳无效」（误导性），
-    # 故工具层自动按 ≤120 天分段查询后聚合。分段数设上限防 LLM 传超长窗口造成请求风暴。
-    _MAX_WINDOW_DAYS = 120
-    _MAX_SEGMENTS = 12
+    # 窗口限制与分段常量见模块级 _MAX_WINDOW_DAYS / _MAX_SEGMENTS 说明
 
     def __init__(self, dws: DwsAdapter):
         self.dws = dws
-
-    @classmethod
-    def _parse_iso(cls, value: str) -> datetime | None:
-        """解析 ISO-8601；无时区时按东八区处理，非法返回 None。"""
-        try:
-            dt = datetime.fromisoformat(value)
-        except ValueError:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
-        return dt
-
-    @classmethod
-    def _split_windows(cls, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
-        """把超长时间窗切成 ≤120 天的连续段（首尾相接不重叠）。"""
-        windows: list[tuple[datetime, datetime]] = []
-        cur = start
-        while cur < end and len(windows) < cls._MAX_SEGMENTS:
-            nxt = min(cur + timedelta(days=cls._MAX_WINDOW_DAYS), end)
-            windows.append((cur, nxt))
-            cur = nxt
-        return windows
 
     def execute(self, args: dict) -> str | dict:
         process_code = (args.get("process_code") or "").strip()
@@ -410,24 +421,33 @@ class ApprovalListInitiatedTool(BaseTool):
         cursor = (args.get("cursor") or "0").strip() or "0"
         limit = min(_coerce_limit(args.get("limit"), 20), 20)  # 钉钉接口单页上限 20，超限会 success=false
 
-        start_dt = self._parse_iso(start)
-        end_dt = self._parse_iso(end)
+        start_dt = _parse_iso_dt(start)
+        end_dt = _parse_iso_dt(end)
         if start_dt is None or end_dt is None or start_dt >= end_dt:
             return {"error": "start/end 需为合法 ISO-8601 时间且 start 早于 end（如 2026-09-01T00:00:00+08:00）"}
 
+        # start 距今超一年部分接口查不到：clamp 到一年前并在 meta 标注（而非报错让 LLM 重试）
+        start_clamped = False
+        effective_start = start
+        floor_dt = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8))) - timedelta(days=_MAX_START_AGE_DAYS)
+        if start_dt < floor_dt:
+            start_dt = floor_dt
+            start_clamped = True
+            effective_start = floor_dt.isoformat()
+
         span_days = (end_dt - start_dt).days
-        if span_days > self._MAX_WINDOW_DAYS * self._MAX_SEGMENTS:
+        if span_days > _MAX_WINDOW_DAYS * _MAX_SEGMENTS:
             return {
                 "error": (
                     f"时间窗跨度过大（约 {span_days} 天）：单段上限 120 天、自动分段最多 "
-                    f"{self._MAX_SEGMENTS} 段，请缩小时间窗或分多次查询。"
+                    f"{_MAX_SEGMENTS} 段，请缩小时间窗或分多次查询。"
                 )
             }
 
         # 显式 cursor 只在单段窗口内有意义；分段查询从每段首页开始取（聚合后按 limit 截断）
         segments = (
-            self._split_windows(start_dt, end_dt)
-            if span_days > self._MAX_WINDOW_DAYS
+            _split_time_windows(start_dt, end_dt)
+            if span_days > _MAX_WINDOW_DAYS
             else [(start_dt, end_dt)]
         )
 
@@ -477,6 +497,214 @@ class ApprovalListInitiatedTool(BaseTool):
             has_more=has_more,
             next_cursor=next_cursor if len(segments) == 1 and has_more else "",
             windows_queried=len(segments),
+            start_clamped=start_clamped, effective_start=effective_start,
+        )
+
+
+class ApprovalListOrgTool(BaseTool):
+    name = "approval_list_org"
+    display_name = "查询组织审批实例"
+    short_description = "以管理员视角查询某审批模板在全组织的审批实例（按时间窗），适合查看别人转发的审批流程"
+    description = (
+        "以管理员身份按模板 + 时间窗查询全组织的审批实例列表（可选按状态 / 发起人过滤）。"
+        "典型场景：别人把审批通知转发给你看（如「周萍提交的其他合同审批」）——此时发起人不是当前用户，"
+        "list_initiated / list_pending / list_executed 三个个人视角都查不到，应改用本工具："
+        "先用 approval_search_forms 按模板名找到 processCode，再用本工具按近期时间窗查实例"
+        "（标题含「提交人姓名」，可据此匹配），最后用 approval_get_detail 取表单明细。"
+        "时间窗超过 120 天会自动分段查询，无需关心接口限制。"
+    )
+    intent_categories = ["domain.oa_approval"]
+    platforms = ["dingtalk"]
+    parameters = {
+        "type": "object",
+        "properties": {
+            "process_code": {
+                "type": "string",
+                "description": "审批模板 processCode（必填），可用 approval_search_forms 按模板名获取",
+            },
+            "start": {
+                "type": "string",
+                "description": "起始时间 ISO-8601（必填），如 2026-09-26T00:00:00+08:00",
+            },
+            "end": {
+                "type": "string",
+                "description": "结束时间 ISO-8601（必填），如 2026-10-26T23:59:59+08:00",
+            },
+            "statuses": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "按审批状态过滤（可选）：RUNNING 进行中 / COMPLETED 已完成 / TERMINATED 已终止",
+            },
+            "user_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "按发起人 userId 过滤（可选，多个用数组）",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "返回条数上限，默认 20",
+            },
+        },
+        "required": ["process_code", "start", "end"],
+    }
+
+    def __init__(self, dws: DwsAdapter):
+        self.dws = dws
+
+    def execute(self, args: dict) -> str | dict:
+        process_code = (args.get("process_code") or "").strip()
+        start = (args.get("start") or "").strip()
+        end = (args.get("end") or "").strip()
+        if not process_code or not start or not end:
+            return {"error": "process_code / start / end 均不能为空"}
+        limit = min(_coerce_limit(args.get("limit"), 20), 20)  # 钉钉接口单页上限 20
+
+        statuses = [s.strip() for s in (args.get("statuses") or []) if str(s).strip()]
+        user_ids = [u.strip() for u in (args.get("user_ids") or []) if str(u).strip()]
+
+        start_dt = _parse_iso_dt(start)
+        end_dt = _parse_iso_dt(end)
+        if start_dt is None or end_dt is None or start_dt >= end_dt:
+            return {"error": "start/end 需为合法 ISO-8601 时间且 start 早于 end（如 2026-09-01T00:00:00+08:00）"}
+
+        # start 距今超一年部分接口查不到：clamp 到一年前并在 meta 标注（而非报错让 LLM 重试）
+        start_clamped = False
+        effective_start = start
+        floor_dt = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8))) - timedelta(days=_MAX_START_AGE_DAYS)
+        if start_dt < floor_dt:
+            start_dt = floor_dt
+            start_clamped = True
+            effective_start = floor_dt.isoformat()
+
+        span_days = (end_dt - start_dt).days
+        if span_days > _MAX_WINDOW_DAYS * _MAX_SEGMENTS:
+            return {
+                "error": (
+                    f"时间窗跨度过大（约 {span_days} 天）：单段上限 120 天、自动分段最多 "
+                    f"{_MAX_SEGMENTS} 段，请缩小时间窗或分多次查询。"
+                )
+            }
+
+        items: list = []
+        seen_ids: set[str] = set()
+        has_more = False
+        segments = _split_time_windows(start_dt, end_dt)
+        try:
+            for seg_start, seg_end in segments:
+                seg_cursor = "0"
+                while len(items) < limit:
+                    per_page = min(limit - len(items), 20)
+                    raw = self.dws.oa_approval_list_by_admin(
+                        process_code=process_code,
+                        start=seg_start.isoformat(),
+                        end=seg_end.isoformat(),
+                        cursor=seg_cursor, limit=per_page,
+                        statuses=statuses or None,
+                        user_ids=user_ids or None,
+                    )
+                    page_items = (raw or {}).get("list") or []
+                    if not isinstance(page_items, list):
+                        page_items = []
+                    for it in page_items:
+                        key = str(it.get("processInstanceId") or id(it))
+                        if key in seen_ids:
+                            continue
+                        seen_ids.add(key)
+                        items.append(it)
+                    if not (raw or {}).get("hasMore"):
+                        break
+                    nxt = (raw or {}).get("nextCursor")
+                    if not nxt:
+                        break
+                    seg_cursor = str(nxt)
+                if len(items) >= limit:
+                    has_more = True
+                    break
+        except (IMAdapterError, ValueError, OSError, RuntimeError) as e:
+            logger.exception("查询组织审批实例失败: %s", e)
+            return {"error": f"查询组织审批实例失败: {e}"}
+
+        return list_result(
+            items, limit, process_code=process_code, start=start, end=end,
+            has_more=has_more, windows_queried=len(segments),
+            start_clamped=start_clamped, effective_start=effective_start,
+        )
+
+
+class ApprovalListCcTool(BaseTool):
+    name = "approval_list_cc"
+    display_name = "查询抄送我的审批"
+    short_description = "查询抄送给当前用户的审批单列表（含表单内容摘要与跳转链接）"
+    description = (
+        "查询抄送（CC）给当前登录用户的审批单列表，含表单内容摘要、发起人姓名与审批单跳转链接。"
+        "适合回答「抄给我的有哪些审批」「最近谁抄送了我什么」。"
+        "注意与转发消息不同：别人在聊天里转发审批通知请用 approval_list_org 定位实例。"
+    )
+    intent_categories = ["domain.oa_approval"]
+    platforms = ["dingtalk"]
+    parameters = {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "关键词过滤（可选，匹配标题 / 表单内容）",
+            },
+            "process_code": {
+                "type": "string",
+                "description": "审批模板 processCode（可选）",
+            },
+            "originator_user_id": {
+                "type": "string",
+                "description": "按发起人 userId 过滤（可选）",
+            },
+            "create_time_from": {
+                "type": "string",
+                "description": "发起时间起始，格式 yyyy-MM-dd（可选）",
+            },
+            "create_time_to": {
+                "type": "string",
+                "description": "发起时间截止，格式 yyyy-MM-dd，含当日（可选）",
+            },
+            "page": {
+                "type": "integer",
+                "description": "页码，默认 1",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "每页条数，默认 20，最大 100",
+            },
+        },
+        "required": [],
+    }
+
+    def __init__(self, dws: DwsAdapter):
+        self.dws = dws
+
+    def execute(self, args: dict) -> str | dict:
+        page = max(_coerce_limit(args.get("page"), 1), 1)
+        limit = min(_coerce_limit(args.get("limit"), 20), 100)
+        query = (args.get("query") or "").strip() or None
+        process_code = (args.get("process_code") or "").strip() or None
+        originator = (args.get("originator_user_id") or "").strip() or None
+        create_from = (args.get("create_time_from") or "").strip() or None
+        create_to = (args.get("create_time_to") or "").strip() or None
+
+        try:
+            raw = self.dws.oa_approval_list_cc(
+                page=page, limit=limit, query=query, process_code=process_code,
+                originator_user_id=originator,
+                create_time_from=create_from, create_time_to=create_to,
+            )
+        except (IMAdapterError, ValueError, OSError, RuntimeError) as e:
+            logger.exception("查询抄送审批失败: %s", e)
+            return {"error": f"查询抄送审批失败: {e}"}
+
+        items = (raw or {}).get("values") or []
+        if not isinstance(items, list):
+            items = []
+        return list_result(
+            items, limit, page=page,
+            has_more=bool((raw or {}).get("hasMore")),
         )
 
 

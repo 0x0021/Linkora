@@ -32,10 +32,12 @@ def test_concurrent_init_db_no_duplicate_column(tmp_db_path):
     errors: list[str] = []
 
     def worker() -> None:
-        # CI 共享 runner（2 核、磁盘慢）上 10 线程同时全量 DDL，锁等待可能超出
-        # busy_timeout=5s 上限，偶发 'database is locked'。这是环境竞争而非被测
-        # 回归（重复列/结构损坏由下方断言独立守护）——对锁错误用**新连接**有限
-        # 重试（新连接无陈旧读快照，重试有效）；其他异常或重试耗尽才记录。
+        # CI 共享 runner（2 核、磁盘慢）上 10 线程同时全量 DDL，偶发两类瞬态环境错误：
+        #   - 'database is locked'：锁等待超出 busy_timeout=5s 上限；
+        #   - 'database schema has changed'（SQLITE_SCHEMA）：并发 ALTER 令已准备
+        #     的连接失效。两者都是环境竞争而非被测回归（重复列/结构损坏由下方
+        #     断言独立守护）——对这两类错误用**新连接**有限重试（新连接无陈旧
+        #     读快照、无失效的预编译语句，重试有效）；其他异常或重试耗尽才记录。
         last_err: Exception | None = None
         for _ in range(3):
             try:
@@ -45,7 +47,9 @@ def test_concurrent_init_db_no_duplicate_column(tmp_db_path):
                 return
             except Exception as e:  # noqa: BLE001
                 last_err = e
-                if "database is locked" not in repr(e):
+                repr_e = repr(e)
+                if ("database is locked" not in repr_e
+                        and "database schema has changed" not in repr_e):
                     break
                 time.sleep(0.2)
         errors.append(repr(last_err))

@@ -37,3 +37,21 @@
 - **测试**：`tests/test_web_routers_dead_letters.py` 新增 `TestDiscardMalformedId`
   4 例，锁住 `undefined` / 文本 id → 404（非 422）回归，以及合法 id 以 int 传入 repo。
 
+### 修复：CodeQL 中危告警「Information exposure through an exception」(#727)
+
+`POST /api/auth/refresh` 在角色非法时把 `ValueError` 原文
+（`detail=f"Invalid role: {e}"`）直接写回 401 响应，构成**异常信息泄露**。同一反模式
+在令牌校验 `verify_token` 也存在（`detail=f"Token verification failed: {exc}"`）。
+
+- **续期端点**（`web/api.py:802`）：捕获 `ValueError` 后仅把 `username/role/err` 记入
+  服务端日志（经 `sanitize_log_message` 脱敏），响应改为固定中文文案
+  「登录状态异常，请重新登录」，不再回显异常。
+- **令牌校验**（`web/auth_middleware.py:141`）：`InvalidTokenError` 不再拼进 detail，
+  改为固定英文文案 `Token verification failed`，异常仅 `logger.warning` 留痕。
+- **未改动的同类点**：`dependencies.py` / `skills_marketplace.py` 里几处 `500` 的
+  `detail=f"…{err}"` 看似同类，但全局 `http_exception_handler` 的 5xx 分支已把 detail
+  替换为安全常量（`api.py:252`），真实异常只进日志、不进响应——运行期本就不泄露，
+  故保留原样（改掉反而会丢掉服务端排查所需的错误文案）。
+- **测试**：`tests/test_auth_refresh_endpoint.py` 新增 2 例回归，分别锁住「角色非法不回显
+  异常原文」与「令牌校验失败不回显 pyjwt 异常类名」。
+

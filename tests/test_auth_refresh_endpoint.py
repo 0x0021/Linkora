@@ -14,7 +14,10 @@
 """
 from __future__ import annotations
 
+import time
 from unittest.mock import patch
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -87,3 +90,51 @@ class TestRefreshEndpoint:
                 headers={"Authorization": f"Bearer {expired}"},
             )
         assert resp.status_code == 401
+
+    def test_invalid_role_does_not_leak_exception(self):
+        """CodeQL #727 回归：续期时角色非法，响应 detail 不得回显异常原文。
+
+        旧实现 ``detail=f"Invalid role: {e}"`` 把 ValueError 文本直接返回给
+        客户端，构成「信息通过异常泄露」。修复后返回固定中文文案，身份/角色
+        等敏感上下文仅落服务端日志。
+        """
+        import jwt as _pyjwt
+
+        now = int(time.time())
+        bad_role_token = _pyjwt.encode(
+            {"sub": "alice", "role": "superuser", "iat": now, "exp": now + 3600},
+            _SECRET,
+            algorithm="HS256",
+            headers={"alg": "HS256", "typ": "JWT"},
+        )
+        with _with_secret():
+            resp = _client().post(
+                "/api/auth/refresh",
+                headers={"Authorization": f"Bearer {bad_role_token}"},
+            )
+        assert resp.status_code == 401
+        detail = resp.json()["detail"]
+        assert "superuser" not in detail
+        assert "Invalid role" not in detail
+
+    def test_verify_token_does_not_leak_exception(self):
+        """CodeQL 同类问题回归：令牌校验失败（如签名错误）不回显 pyjwt 异常原文。"""
+        import jwt as _pyjwt
+        from fastapi import HTTPException as _HTTPException
+
+        now = int(time.time())
+        # 用错误密钥签名 → decode 抛 InvalidSignatureError（属 InvalidTokenError）
+        bad = _pyjwt.encode(
+            {"sub": "alice", "role": "admin", "iat": now, "exp": now + 3600},
+            "wrong-secret-not-the-real-one",
+            algorithm="HS256",
+            headers={"alg": "HS256", "typ": "JWT"},
+        )
+        tm = TokenManager(_SECRET)
+        try:
+            tm.verify_token(bad)
+            pytest.fail("expected HTTPException")
+        except _HTTPException as e:
+            assert e.status_code == 401
+            assert "signature" not in e.detail.lower()
+            assert "invalidtokenerror" not in e.detail.lower()

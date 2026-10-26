@@ -138,7 +138,9 @@ class TokenManager:
         except _pyjwt.ExpiredSignatureError as exc:
             raise HTTPException(status_code=401, detail="Token expired") from exc
         except _pyjwt.InvalidTokenError as exc:
-            raise HTTPException(status_code=401, detail=f"Token verification failed: {exc}") from exc
+            # 不把异常原文回传客户端（CodeQL: 信息通过异常泄露），仅服务端留痕。
+            logger.warning("令牌校验失败: %s", exc)
+            raise HTTPException(status_code=401, detail="Token verification failed") from exc
         if _is_token_revoked(token):
             raise HTTPException(status_code=401, detail="Token revoked")
         return payload

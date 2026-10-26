@@ -799,7 +799,12 @@ async def refresh_token(request: Request):
     try:
         token = _token_manager.generate_token(username, role)
     except ValueError as e:
-        return JSONResponse(status_code=401, content={"detail": f"Invalid role: {e}"})
+        # 不把异常原文回传客户端（CodeQL: 信息通过异常泄露），仅服务端留痕。
+        logger.warning(
+            "refresh_token 生成令牌失败: username=%s role=%s err=%s",
+            username, role, sanitize_log_message(str(e)),
+        )
+        return JSONResponse(status_code=401, content={"detail": "登录状态异常，请重新登录"})
     return JSONResponse(content={"access_token": token, "role": role, "username": username})
 
 

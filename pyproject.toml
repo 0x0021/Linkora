@@ -80,7 +80,7 @@ dev = [
 # 升级方式：单独放开某一条 → 跑全量测试 → 通过后再更新此处版本号。
 constraint-dependencies = [
     "annotated-doc==0.0.4",
-    "filelock==3.32.0",
+    "filelock==4.2.1",
     "fsspec==2026.6.0",
     "onnxruntime==1.27.0",
     "tqdm==4.69.0",

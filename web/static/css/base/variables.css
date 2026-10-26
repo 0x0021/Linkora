@@ -1,8 +1,8 @@
 :root {
     --brand-primary: #2563eb;
     --brand-primary-hover: #1d4ed8;
-    --brand-primary-light: rgba(37, 99, 235, 0.08);
-    --brand-primary-glow: rgba(37, 99, 235, 0.25);
+    --brand-primary-light: rgba(var(--brand-primary-rgb), 0.08);
+    --brand-primary-glow: rgba(var(--brand-primary-rgb), 0.25);
     --brand-secondary: #4f46e5;
     --brand-success: #16a34a;
     --brand-warning: #f59e0b;
@@ -96,8 +96,8 @@
     --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
     --brand-primary: #3b82f6;
     --brand-primary-hover: #60a5fa;
-    --brand-primary-light: rgba(59, 130, 246, 0.12);
-    --brand-primary-glow: rgba(59, 130, 246, 0.30);
+    --brand-primary-light: rgba(var(--brand-primary-rgb), 0.12);
+    --brand-primary-glow: rgba(var(--brand-primary-rgb), 0.30);
     --brand-secondary: #818cf8;
     --brand-success: #22c55e;
     --brand-warning: #fbbf24;

@@ -153,7 +153,7 @@
     background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+    box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb), 0.28);
 }
 
 .draft-table-wrap {
@@ -334,7 +334,7 @@
 }
 
 .draft-actions .btn-draft-edit:hover {
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb), 0.35);
     transform: translateY(-1px);
 }
 
@@ -361,9 +361,9 @@
 
 .draft-detail-panel {
     padding: var(--space-lg) 1.25rem;
-    background: rgba(37, 99, 235, 0.02);
-    border-top: 1px solid rgba(37, 99, 235, 0.08);
-    border-bottom: 2px solid rgba(37, 99, 235, 0.12);
+    background: rgba(var(--brand-primary-rgb), 0.02);
+    border-top: 1px solid rgba(var(--brand-primary-rgb), 0.08);
+    border-bottom: 2px solid rgba(var(--brand-primary-rgb), 0.12);
 }
 
 .draft-detail-section {
@@ -552,7 +552,7 @@
 .draft-edit-modal-body textarea:focus {
     outline: none;
     border-color: var(--brand-primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.1);
 }
 
 .nav-badge {

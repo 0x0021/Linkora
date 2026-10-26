@@ -35,6 +35,8 @@ const CSS_ORDER = [
   'css/theme.css',
   'css/pages/persona.css',
   'css/base/variables.css',
+  // 主题配色（accent）令牌：必须跟在 variables.css 之后（覆盖其 :root 品牌色定义）
+  'css/theme-accent.css',
   'css/base/reset.css',
   'css/base/utilities.css',
   'css/layout/app-shell.css',

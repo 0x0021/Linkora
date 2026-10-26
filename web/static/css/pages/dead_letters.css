@@ -40,7 +40,7 @@
     background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+    box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb), 0.28);
 }
 
 .dlq-table-wrap {
@@ -145,7 +145,7 @@
     font-weight: 550;
     background: var(--brand-primary-light);
     color: var(--brand-primary);
-    border: 1px solid rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(var(--brand-primary-rgb), 0.1);
 }
 
 .dlq-stage-badge.stage-error {
@@ -204,7 +204,7 @@
 }
 
 .dlq-actions .btn-replay:hover {
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb), 0.35);
     transform: translateY(-1px);
 }
 

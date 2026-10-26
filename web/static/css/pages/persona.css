@@ -890,7 +890,7 @@
 [data-theme="dark"] .ps-status-badge.disabled { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
 [data-theme="dark"] .ps-status-badge.empty { background: rgba(245, 158, 11, 0.18); color: var(--brand-warning); }
 [data-theme="dark"] .ps-status-badge.conf-high { background: rgba(16,185,129,0.2); color: #6ee7b7; }
-[data-theme="dark"] .ps-status-badge.conf-medium { background: rgba(59,130,246,0.2); color: #93c5fd; }
+[data-theme="dark"] .ps-status-badge.conf-medium { background: rgba(var(--brand-primary-rgb),0.2); color: #93c5fd; }
 [data-theme="dark"] .ps-status-badge.conf-low { background: rgba(239,68,68,0.18); color: #fca5a5; }
 [data-theme="dark"] .ps-source-complete { color: #a5b4fc; }
 [data-theme="dark"] .ps-meta-item.ps-freshness-stale { color: var(--brand-warning); }

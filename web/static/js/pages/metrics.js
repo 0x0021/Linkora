@@ -212,8 +212,8 @@ async function renderLatencyChart(data) {
                 {
                     label: "总延迟",
                     data: totalData,
-                    backgroundColor: "rgba(37, 99, 235, 0.7)",
-                    borderColor: "#2563eb",
+                    backgroundColor: (window.getAccentColor ? window.getAccentColor() : "#2563eb") + "b3",
+                    borderColor: window.getAccentColor ? window.getAccentColor() : "#2563eb",
                     borderWidth: 1,
                     borderRadius: 4,
                 },
@@ -441,8 +441,8 @@ async function renderTokenChart(data) {
                 {
                     label: "输入 Token",
                     data: inputData,
-                    backgroundColor: "rgba(37, 99, 235, 0.7)",
-                    borderColor: "#2563eb",
+                    backgroundColor: (window.getAccentColor ? window.getAccentColor() : "#2563eb") + "b3",
+                    borderColor: window.getAccentColor ? window.getAccentColor() : "#2563eb",
                     borderWidth: 1,
                     borderRadius: 4,
                 },
@@ -658,8 +658,8 @@ async function renderTokenTrendChart() {
             datasets: [{
                 label: "Token 消耗",
                 data: tokenData,
-                borderColor: "#2563eb",
-                backgroundColor: "rgba(37, 99, 235, 0.1)",
+                borderColor: window.getAccentColor ? window.getAccentColor() : "#2563eb",
+                backgroundColor: (window.getAccentColor ? window.getAccentColor() : "#2563eb") + "1a",
                 borderWidth: 2,
                 pointRadius: 3,
                 pointHoverRadius: 5,

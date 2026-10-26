@@ -121,10 +121,16 @@ async function loadDeadLettersPage() {
 
             var actions;
             if (item.status === 'pending') {
-                actions = '<div class="dlq-actions">' +
-                    '<button class="btn-replay" data-action="_dlqReplay" data-args=\'[\' + item.id + \', "@el"]\'><i class="fa-solid fa-rotate"></i> 重放</button>' +
-                    '<button class="btn-discard" data-action="_dlqDiscard" data-args=\'[\' + item.id + \', "@el"]\'><i class="fa-solid fa-trash"></i></button>' +
-                    '</div>';
+            // 必须用模板字面量 ${item.id}（而非 ' + item.id + ' 拼接），否则 esbuild
+            // minify 会把主循环变量 item 重命名为 u，却漏改这里 data-args 字符串里
+            // 的 item.id（见 2026-10-26 死信 422 故障）：渲染出
+            // data-args='["undefined","@el"]' → 浏览器请求
+            // POST /api/dead-letters/undefined/discard → 后端 int 校验失败 422。
+            // 模板字面量 ${item.id} 会被 esbuild 一并重命名，与 tabs 的修复同源。
+            actions = '<div class="dlq-actions">' +
+                `<button class="btn-replay" data-action="_dlqReplay" data-args='["${item.id}", "@el"]'><i class="fa-solid fa-rotate"></i> 重放</button>` +
+                `<button class="btn-discard" data-action="_dlqDiscard" data-args='["${item.id}", "@el"]'><i class="fa-solid fa-trash"></i></button>` +
+                '</div>';
             } else if (item.status === 'replayed') {
                 // 截断到「月-日 时:分」(11字)，避免操作列被撑宽
                 var replayTs = item.replayed_at ? item.replayed_at.replace('T', ' ').slice(5, 16) : '';

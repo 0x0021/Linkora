@@ -17,3 +17,23 @@
   `{"detail":"not_found"}`（无 `error` 字段），会被**误计为成功**——出现过
   「完成 5/5」但实际一条都没删的情况。现改为判 `success`，并回报最后一条失败原因。
 - **服务端补日志**：丢弃时未命中记录此前完全静默，现在会记录 id 与平台，便于事后定位。
+
+### 修复：死信队列「丢弃 / 重放」点删除仍报 422 (Unprocessable Content)
+
+上一轮以为根因是登录过期（401），但用户复现的是 **422**。真正原因在**前端打包产物**：
+
+死信列表主循环变量 `item` 被 esbuild minify 重命名为 `u`，但重放 / 丢弃两个按钮
+`data-args` 字符串里的 `item.id` **没被一起重命名**（esbuild 对 `\'` 转义单引号字符串
+内的标识符有已知缺陷）。于是 `item` 在循环作用域里是 `undefined`，渲染出的 HTML 是
+`data-args='["undefined", "@el"]'`，浏览器实际请求
+`POST /api/dead-letters/undefined/discard`，FastAPI 按 `int` 校验路径参数失败 → 422。
+
+- **前端**：两个按钮的 `data-args` 改用模板字面量 `${item.id}`（与上一轮修复 tabs 的
+  `${st}` 同源，esbuild 会一并重命名）。重建 bundle 后验证 `item.` 全包计数为 0、
+  按钮已用 `u.id`。
+- **后端**：`discard` / `replay` 两个端点的 `dl_id` 由 `int` 改为 `str` 并显式 `int()`
+  解析，非法 id 一律归为 `404 not_found`（前端翻译为「记录已不存在，请刷新列表」），
+  彻底消除「看不懂的 422」——即便将来再有边角情况把非法 id 传进来也不会再暴露 422。
+- **测试**：`tests/test_web_routers_dead_letters.py` 新增 `TestDiscardMalformedId`
+  4 例，锁住 `undefined` / 文本 id → 404（非 422）回归，以及合法 id 以 int 传入 repo。
+

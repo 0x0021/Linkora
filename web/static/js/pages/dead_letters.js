@@ -177,6 +177,25 @@ function renderDeadLettersPager() {
     });
 }
 
+/** 把后端返回的裸错误翻译成人话。
+ *
+ * 历史行为（真实故障 2026-10-26）：接口返回 {"detail":"not_found"} 或
+ * {error:"unauthorized"} 时，页面直接把这串代码原样 toast 出来——用户看到
+ * 「点删除报错」却不知道是「登录过期」还是「这条已被处理」，只能来问。
+ */
+function _dlqErrMsg(res, fallback) {
+    if (!res) return fallback;
+    if (res.status === 401 || res.error === 'unauthorized') {
+        return '登录已过期，请重新登录后重试';
+    }
+    if (res.status === 403) return '当前账号无权限执行该操作';
+    if (res.status === 404 || res.detail === 'not_found') {
+        return '该记录已不存在（可能已被处理），请刷新列表';
+    }
+    if (res.status === 429) return '操作过于频繁，请稍后再试';
+    return res.detail || res.error || res.message || fallback;
+}
+
 async function _dlqReplay(id, btn) {
     if (!confirm('确认重放 #' + id + '？')) return;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
@@ -186,7 +205,7 @@ async function _dlqReplay(id, btn) {
             showToast('#' + id + ' 重放成功', 'success');
             loadDeadLettersPage();
         } else {
-            showToast((res && res.detail) || (res && res.error) || '重放失败', 'error');
+            showToast(_dlqErrMsg(res, '重放失败'), 'error');
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> 重放'; }
         }
     } catch (e) {
@@ -204,7 +223,7 @@ async function _dlqDiscard(id, btn) {
             showToast('#' + id + ' 已丢弃', 'success');
             loadDeadLettersPage();
         } else {
-            showToast((res && res.detail) || (res && res.error) || '丢弃失败', 'error');
+            showToast(_dlqErrMsg(res, '丢弃失败'), 'error');
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash"></i>'; }
         }
     } catch (e) {
@@ -291,14 +310,26 @@ async function _dlqBatchDiscard() {
     var btn = document.querySelector('#dlq-batch-bar .btn-danger');
     if (btn) { btn.disabled = true; btn.textContent = '丢弃中...'; }
     var success = 0;
+    var lastErr = null;
     for (var i = 0; i < ids.length; i++) {
         try {
             var res = await api.post('/api/dead-letters/' + ids[i] + '/discard');
-            if (res && !res.error) success++;
-        } catch(e) {}
+            // 必须判 success：404 返回 {"detail":"not_found"}、401 返回
+            // {error:"unauthorized"}，两者都没有 success 字段。旧判据
+            // `!res.error` 会把 404 也算成功（"完成 5/5" 但实际一条没删）。
+            if (res && res.success) success++;
+            else lastErr = res;
+        } catch (e) {
+            lastErr = { message: e && e.message };
+        }
     }
     if (btn) { btn.disabled = false; btn.textContent = '批量丢弃'; }
-    showToast('完成: ' + success + '/' + ids.length + ' 条已丢弃', success === ids.length ? 'success' : 'warning');
+    if (success === ids.length) {
+        showToast('完成: ' + success + '/' + ids.length + ' 条已丢弃', 'success');
+    } else {
+        showToast('已丢弃 ' + success + '/' + ids.length + ' 条 · '
+            + _dlqErrMsg(lastErr, '其余失败'), 'error');
+    }
     _dlqSelected = {};
     loadDeadLettersPage();
 }

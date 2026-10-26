@@ -112,12 +112,18 @@ async def discard_dead_letter(dl_id: int):
             return store._draft_repo.resolve_dead_letter(dl_id, status="discarded", note="管理台手动丢弃")
         ok = await run_sync(_work)
         if not ok:
+            # 静默 404 曾让「点删除报错」无从排查：前端只拿到 not_found，
+            # 后端日志一片空白。这里把 id 与平台落盘，便于事后定位。
+            logger.warning(
+                "丢弃死信未命中记录: id=%s platform=%s（前端会收到 404 not_found）",
+                dl_id, get_current_platform(),
+            )
             raise HTTPException(status_code=404, detail="not_found")
         return {"success": True, "id": dl_id}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("丢弃死信失败: %s", e)
+        logger.error("丢弃死信失败: id=%s err=%s", dl_id, e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

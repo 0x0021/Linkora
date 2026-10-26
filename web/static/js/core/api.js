@@ -6,6 +6,7 @@ class ApiClient {
         this._loadAuth();
         this._pendingRequests = new Map();
         this._requestCache = new Map();
+        this._refreshPromise = null;  // 令牌续期单飞（并发请求共享同一次刷新）
         this._cacheTTL = 60000;
         this._retryConfig = {
             maxRetries: 2,
@@ -138,6 +139,54 @@ class ApiClient {
         }
     }
 
+    // ── 令牌滚动续期 ────────────────────────────────────────────────
+    // 背景（真实故障 2026-10-26）：JWT 硬过期（24h）后，页面不刷新就毫无感知，
+    // 直到用户点某个写操作按钮（如死信队列的「丢弃」）才突然 401，弹出一句
+    // 英文 `unauthorized` —— 用户看到的就是「点删除报错」。
+    // 处置：请求前发现令牌剩余不足 30 分钟即静默续期；若仍撞 401，再续期一次
+    // 后重放原请求（只重放一次，避免死循环），续期失败才走登录流程。
+    _tokenExpSec() {
+        if (!this._token) return null;
+        try {
+            const payload = JSON.parse(atob(this._token.split('.')[1]));
+            return typeof payload.exp === 'number' ? payload.exp : null;
+        } catch (_) {
+            return null;  // 非标准 JWT（或 Basic 会话）→ 不参与续期
+        }
+    }
+
+    _tokenNeedsRefresh(marginSec = 1800) {
+        const exp = this._tokenExpSec();
+        if (exp === null) return false;
+        return (exp - Date.now() / 1000) < marginSec;
+    }
+
+    async _refreshToken() {
+        if (!this._token) return false;
+        // 单飞去重：并发请求共享同一次续期，避免 N 个请求打 N 次刷新
+        if (this._refreshPromise) return this._refreshPromise;
+        this._refreshPromise = (async () => {
+            try {
+                const res = await fetch(`${this.baseUrl}/api/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this._token },
+                });
+                if (!res.ok) return false;
+                const data = await res.json();
+                if (!data || !data.access_token) return false;
+                this.setAuthToken(data.access_token, data.role || this.getUserRole());
+                return true;
+            } catch (_) {
+                return false;
+            }
+        })();
+        try {
+            return await this._refreshPromise;
+        } finally {
+            this._refreshPromise = null;
+        }
+    }
+
     // 全局错误反馈层：网络/超时/5xx 等不可恢复异常统一提示（复用 showToast 的 error 角色）。
     // showToast 由 app.js 在运行时挂载到 window，api.js 先加载不影响（调用发生在用户操作之后）。
     _notifyGlobalError(msg) {
@@ -212,7 +261,8 @@ class ApiClient {
         return url + sep + 'platform=' + encodeURIComponent(p);
     }
 
-    async _fetchWithRetry(url, method = 'GET', body = null, retries = 0, timeoutMs = 30000) {
+    async _fetchWithRetry(url, method = 'GET', body = null, retries = 0, timeoutMs = 30000,
+                          deferAuthHandling = false) {
         const requestId = Math.random().toString(36).substr(2, 9);
         const controller = new AbortController();
         this._pendingRequests.set(requestId, controller);
@@ -234,13 +284,16 @@ class ApiClient {
             const res = await fetch(`${this.baseUrl}${url}`, opts);
 
             if (res.status === 401) {
-                this._handle401(res);
+                // deferAuthHandling：由 fetch() 先尝试静默续期再决定是否踢回登录，
+                // 避免「令牌刚过期但可续期」时闪一下登录框。
+                if (!deferAuthHandling) this._handle401(res);
                 return { error: 'unauthorized', status: 401 };
             }
 
             if (this._retryConfig.retryOnStatus.includes(res.status) && retries < this._retryConfig.maxRetries) {
                 await new Promise(r => setTimeout(r, this._retryConfig.retryDelay * (retries + 1)));
-                return this._fetchWithRetry(url, method, body, retries + 1, timeoutMs);
+                return this._fetchWithRetry(url, method, body, retries + 1, timeoutMs,
+                                            deferAuthHandling);
             } else if (this._retryConfig.retryOnStatus.includes(res.status)) {
                 this._notifyGlobalError(`服务端错误（${res.status}），请稍后重试`);
             }
@@ -283,7 +336,27 @@ class ApiClient {
             }
         }
 
-        const result = await this._fetchWithRetry(url, method, body, 0, timeoutMs);
+        // 令牌即将过期（<30min）就先静默续期，让长时间挂着的管理台不会
+        // 「用着用着突然所有按钮报错」。认证端点自身不参与，避免递归续期。
+        const isAuthUrl = url.indexOf('/api/auth/') === 0;
+        if (!isAuthUrl && this._tokenNeedsRefresh()) {
+            await this._refreshToken();
+        }
+
+        let result = await this._fetchWithRetry(url, method, body, 0, timeoutMs,
+                                               isAuthUrl);
+
+        // 仍撞 401：可能是「续期判定没覆盖到」的边缘情况（如服务端重启后
+        // 签名密钥变化），再续期一次并重放原请求——只重放一次。
+        if (!isAuthUrl && result && result.status === 401 && this._token) {
+            if (await this._refreshToken()) {
+                result = await this._fetchWithRetry(url, method, body, 0, timeoutMs, true);
+            }
+            if (result && result.status === 401) {
+                // 续期也救不回来（令牌被吊销 / 密钥已换）→ 走登录流程
+                this._handle401({ status: 401 });
+            }
+        }
 
         if (useCache && result && !result.error) {
             const key = this._generateRequestKey(url, method, body);

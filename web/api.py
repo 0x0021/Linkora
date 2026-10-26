@@ -306,7 +306,8 @@ app.mount("/static", VersionedStaticFiles(directory=str(get_static_dir())), name
 # ============ Web Auth Middleware ============
 # /api/platforms 仅暴露 id/display_name/enabled/adapter_type（无密钥），供前端切换器
 # 在登录前即可渲染，故加入白名单免认证。
-_AUTH_WHITELIST = {"/", "/health", "/api/platforms", "/api/auth/login", "/api/auth/me"}
+_AUTH_WHITELIST = {"/", "/health", "/api/platforms", "/api/auth/login", "/api/auth/me",
+                   "/api/auth/refresh"}
 # /api/image/ 和 /api/skill-icons/ 保留在白名单（免 Basic Auth），
 # 因为前端用 <img src> 直接渲染，浏览器不会自动带 Basic Auth 头。
 # /api/image/ 内部已用签名 token 做二次校验。
@@ -767,6 +768,39 @@ async def login(request: Request):
             status_code=405,
             content={"detail": "Method not allowed. Use POST with JSON body or Basic Auth."}
         )
+
+
+@app.post("/api/auth/refresh")
+async def refresh_token(request: Request):
+    """滚动续期：凭当前有效的 Bearer 令牌换发一枚新令牌。
+
+    为什么需要：JWT 硬过期（24h）后，前端所有写操作会突然全部 401，
+    表现为「用着用着点任何按钮都报错」，而用户并无感知。此端点让前端在
+    令牌即将过期时静默续期，把「突然失效」变成无感续期。
+
+    该路径登记在 _AUTH_WHITELIST 内（不叠加认证中间件），由本端点自行校验
+    令牌——这样才能绕过 _SENSITIVE_METHODS 对 POST 的 admin-only 二次校验，
+    使 operator 角色同样能续期；安全性等价（仍必须持有有效令牌）。
+    """
+    from web.auth_middleware import _token_manager
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Bearer token required"})
+    try:
+        payload = _token_manager.verify_token(auth_header[7:])
+    except HTTPException as e:
+        return JSONResponse(status_code=401, content={"detail": e.detail})
+
+    username = str(payload.get("sub", "") or "")
+    role = str(payload.get("role", "viewer") or "viewer")
+    if not username:
+        return JSONResponse(status_code=401, content={"detail": "Invalid token payload"})
+    try:
+        token = _token_manager.generate_token(username, role)
+    except ValueError as e:
+        return JSONResponse(status_code=401, content={"detail": f"Invalid role: {e}"})
+    return JSONResponse(content={"access_token": token, "role": role, "username": username})
 
 
 @app.post("/api/logout")

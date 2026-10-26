@@ -6,7 +6,7 @@
 PyYAML==6.0.3
 pydantic==2.14.1
 python-dotenv==1.2.4
-platformdirs==4.13.4
+platformdirs==4.13.5
 
 # ---- LLM / 嵌入模型 ----
 openai==2.54.0
@@ -16,7 +16,7 @@ huggingface_hub==1.33.0
 tokenizers==0.23.3
 
 # ---- Web 服务 ----
-fastapi==0.143.3
+fastapi==0.161.1
 uvicorn==0.54.0
 pyjwt==2.15.1
 jinja2==3.1.6

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.8.0：给管理台换上七种配色，把「突然报错」修干净 · 坤子</title>
+<meta name="description" content="v0.8.0 为 Web 管理台新增 7 款内置主题配色（与明暗模式正交组合），并集中修掉三处「用着用着突然报错」的体验缺陷：登录令牌自动续期、死信队列不再报看不懂的 422、收敛一处 CodeQL 异常信息泄露告警。无新增工具、无数据迁移。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<div class="post-progress" aria-hidden="true"></div>
+
+<nav>
+  <a href="../index.html" class="nav-brand">坤子</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-10-26 · 发布记录</div>
+    <h1>Linkora v0.8.0：给管理台换上七种配色，把「突然报错」修干净</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.8.0</span>
+      <span class="tag">管理台</span>
+      <span class="tag">修复</span>
+    </div>
+  </header>
+
+  <article class="post-content">
+    <p>v0.7.0 在扩能力，这一版回头照顾「每天盯着看」的那块屏幕——Web 管理台。一个新功能（主题配色）加三个修了很久才定位到的老毛病：开着页面用着用着突然掉登录、点删除报一个看不懂的 422、以及一处 CodeQL 中危告警。没有新增工具，没有数据迁移，升级零配置改动。</p>
+
+    <blockquote>
+      <p><strong>本文要点</strong></p>
+      <ul>
+        <li>管理台顶栏新增调色板：7 款内置配色 × 明暗模式，即时生效、刷新无闪烁</li>
+        <li>登录令牌自动续期：<code>POST /api/auth/refresh</code>，长时间开着管理台不再「用着用着就掉线」</li>
+        <li>死信队列「丢弃 / 重放」的 422 根因是 esbuild minify 的重命名缺陷，前后端一起锁死</li>
+        <li>收敛一处 CodeQL 中危告警：登录态异常不再把内部错误原文回显给前端</li>
+        <li>顺手：侧边栏页脚收为两行、重名防护日志不再刷屏 20 个 ID</li>
+      </ul>
+    </blockquote>
+
+    <h2>主题配色：是「配色」，不是「主题」</h2>
+    <p>顶栏多了一个调色板按钮，点开是七款配色：湛蓝（默认）、靛青、雅紫、碧青、翠绿、琥珀、玫红。点哪个立刻生效，选择记在本地，刷新页面不闪。</p>
+    <p>设计上刻意把它做成<strong>与明暗模式正交的一根轴</strong>：原来的 <code>data-theme</code> 管「亮还是暗」，新增的 <code>data-accent</code> 只管「主色是什么」。每款配色都带明暗两套亮度令牌——深色底下自动换高亮度变体，不然紫罗兰在深夜模式里会糊成一团。两根轴正交的好处是实现侧不需要 7×2 套样式表，只有一个令牌层按两组属性选择器覆盖变量，样式文件一行都不用改。</p>
+    <p>实现之外，这个版本真正的工作量在<strong>还债</strong>：项目里散落着五十多处硬编码的品牌蓝 <code>rgba(37,99,235,…)</code>，分布在 15 个 CSS 文件——导航高亮、focus 圈、悬停态、渐变边框，各写各的。这次全部收敛成 <code>rgba(var(--brand-primary-rgb), α)</code>，Bootstrap 覆盖层的 <code>--bs-primary*</code> 一并桥接。不收干净的话，切到玫红主题时按钮变红了、focus 圈还是蓝的，比不换还难受。</p>
+    <p>图表是另一个特例：canvas 不解析 CSS 变量，传 <code>var(--brand-primary)</code> 进 Chart.js 就是字面量。所以暴露了一个 <code>window.getAccentColor()</code>，按配色 + 明暗两根轴返回具体色值，消息趋势、Token 消耗、延迟、每日成本这些「主色系」图表都改走它。分类色板（一个图里七八条系列的那种）刻意不动——那些颜色是区分数据用的，跟品牌色无关。</p>
+
+    <h2>修复 1：「用着用着突然报错」</h2>
+    <p>登录令牌 24 小时有效，到期后页面毫无感知——直到你点某个写操作按钮才突然失败，而提示是后端原样返回的 <code>unauthorized</code>。这类报错最恼人的地方是<strong>看不出是登录过期还是数据没了</strong>。</p>
+    <ul>
+      <li><strong>令牌自动续期</strong>：新增 <code>POST /api/auth/refresh</code>。前端在令牌剩不到 30 分钟时静默换新；真撞上 401 也先续期一次并重放原请求，续不上才回登录页。长时间开着管理台不再需要手动刷新。</li>
+      <li><strong>提示说人话</strong>：登录过期 → 「登录已过期，请重新登录后重试」；记录已不存在 → 「该记录已不存在（可能已被处理），请刷新列表」。</li>
+      <li><strong>批量丢弃计数修正</strong>：此前只看响应里有没有 <code>error</code> 字段，而 404 返回的 <code>{"detail":"not_found"}</code> 恰好没有 <code>error</code>，会被<strong>误计为成功</strong>——出现过「完成 5/5」但实际一条都没删。现改为判 <code>success</code>，并回报最后一条失败原因。</li>
+    </ul>
+
+    <h2>修复 2：那个「看不懂的 422」，真凶是打包器</h2>
+    <p>死信队列的「丢弃 / 重放」按钮，点删除报 422。第一轮以为是登录过期，但复现是 422（参数校验失败），于是往下挖出了根因——在<strong>前端打包产物</strong>里：</p>
+    <p>死信列表主循环的变量 <code>item</code> 被 esbuild minify 重命名成 <code>u</code>，但两个按钮 <code>data-args</code> 字符串里的 <code>item.id</code> 没被一起重命名（esbuild 对转义单引号字符串内的标识符有已知缺陷）。于是渲染出来的 HTML 是 <code>data-args='["undefined", "@el"]'</code>，浏览器实际请求 <code>POST /api/dead-letters/undefined/discard</code>，后端按 <code>int</code> 校验路径参数直接 422。</p>
+    <p>这已经是同一类坑第二次咬人了——上一版修过 tabs 的同源问题。这次两头一起锁死：</p>
+    <ul>
+      <li><strong>前端</strong>：生成 HTML 的 <code>data-args</code> 一律改模板字面量 <code>${item.id}</code>（esbuild 会一并重命名），并加了门禁脚本扫描「字符串拼接生成 data-* 属性」的写法。</li>
+      <li><strong>后端</strong>：<code>discard</code> / <code>replay</code> 的 id 参数改为字符串再显式解析，非法 id 一律归为 404——即便将来再有边角情况把非法 id 传进来，用户看到的也是「记录已不存在」，而不是 422。</li>
+      <li><strong>测试</strong>：新增 4 例回归锁住 <code>undefined</code> / 文本 id 的行为。</li>
+    </ul>
+
+    <h2>修复 3：CodeQL 中危告警（异常信息泄露）</h2>
+    <p>续期端点在角色非法时把 <code>ValueError</code> 原文直接写回 401 响应，构成异常信息泄露；令牌校验处也有同一反模式。现在两处都改成固定文案回前端、异常原文只进服务端日志（经脱敏）。顺带排查了其余几处 <code>500</code> 的 <code>detail=f"…{err}"</code>——全局异常处理器的 5xx 分支已把 detail 替换为安全常量，运行期本就不泄露，保留原样，改掉反而会丢服务端排查所需的错误文案。</p>
+
+    <h2>顺手的小事</h2>
+    <ul>
+      <li><strong>侧边栏页脚</strong>：系统状态卡下方的开源署名从三四行居中零散小字收为两行左对齐，超长省略。Font Awesome 的 CC BY 4.0 署名是许可硬要求，保留但收敛了排版。</li>
+      <li><strong>日志收敛</strong>：联系人重名防护的告警此前会把全部候选 ID 刷进日志——组织里有一批同名测试账号时一次就是 20 条 UUID。现在只列前 3 个示例并注明总数。这个防护本身不是遗留逻辑：多候选时拒绝按姓名写库是刻意的，宁可少缓存也不能把消息回给错的同名同事。</li>
+    </ul>
+
+    <h2>升级注意</h2>
+    <p>无数据迁移、无破坏性变更、无新增工具，<code>tools.available</code> 白名单不需要动。唯一的新接口是 <code>POST /api/auth/refresh</code>，前端自动使用，无需配置。</p>
+
+    <h2>验证</h2>
+    <p>ruff 全路径通过；pyright 零错误；<code>check_deps.py --strict</code>、gitleaks、esbuild data-args 门禁全绿；前端构建两次哈希一致（可复现）。新增回归：死信队列畸形 id 4 例、令牌续期异常处理 2 例。CI 与 CodeQL 全部 success。</p>
+
+    <h2>延伸阅读</h2>
+    <ul>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">完整变更日志（CHANGELOG）</a>——本次全部变更条目</li>
+      <li><a href="https://github.com/0x0021/Linkora/releases/tag/v0.8.0" target="_blank" rel="noopener">GitHub Release v0.8.0</a></li>
+      <li><a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">项目源码</a>——<a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </article>
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+<script src="../assets/main.js"></script>
+</body>
+</html>

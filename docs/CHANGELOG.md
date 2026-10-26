@@ -8,6 +8,89 @@
 
 ---
 
+## v0.8.0 (2026-10-26)
+
+一次以「管理台体验」为主的版本：新增主题配色，并集中修掉三处「用着用着突然报错 / 看不懂报错」的管理台缺陷。无数据迁移、无破坏性变更、无新增工具。
+
+### 新增：管理台主题配色（7 款内置）
+
+Web 管理台顶栏新增调色板按钮，可一键切换品牌主色，与原有的明暗模式（light / dark）正交组合：
+
+- **内置 7 款配色**：湛蓝（默认）、靛青、雅紫、碧青、翠绿、琥珀、玫红；每款均提供
+  明暗两套亮度令牌，深色模式下自动使用高亮度变体保证对比度。
+- **选择即时生效并持久化**（localStorage `dt-accent`），首屏内联脚本同步预取，
+  刷新无闪烁；选择浮层支持点击外部 / Esc 关闭。
+- **实现方式**：新增 `css/theme-accent.css` 令牌层，通过
+  `:root[data-accent=…][data-theme=…]` 覆盖品牌色变量；同时将散落在 15 个 CSS 文件里的
+  硬编码品牌蓝 `rgba(37,99,235,…)` / `rgba(59,130,246,…)` 全部收敛为
+  `rgba(var(--brand-primary-rgb), α)`，Bootstrap 覆盖层（`--bs-primary*`）一并桥接，
+  后续换色只需改令牌。
+- **图表跟随**：仪表盘消息趋势、消息记录、Token 消耗 / 延迟、每日成本等图表中作为
+  「主色」使用的系列颜色改走 `window.getAccentColor()`（canvas 不解析 CSS 变量，
+  由 JS 按 accent + 明暗两轴取色）；分类色板保持不变以保证可读性。
+
+### 修复：管理台「用着用着突然报错」
+
+登录令牌（JWT）有效期 24 小时，到期后页面不会自己发现——直到你点某个写操作按钮
+（例如「死信队列 → 丢弃」）才突然失败，而失败提示是后端原样返回的英文代码
+`unauthorized` / `not_found`，既看不出是登录过期还是记录已不存在。
+
+- **令牌自动续期**：新增 `POST /api/auth/refresh`。前端在令牌剩余有效期不足 30 分钟时
+  静默换新令牌；真的撞上 401 也会先尝试续期一次并重放原请求，续期不成才回到登录页。
+  长时间开着管理台不再需要手动刷新页面。
+- **失败提示说人话**：登录过期 → 「登录已过期，请重新登录后重试」；
+  记录已不存在 → 「该记录已不存在（可能已被处理），请刷新列表」。
+- **批量丢弃计数修正**：此前只看响应里有没有 `error` 字段，而 404 返回的是
+  `{"detail":"not_found"}`（无 `error` 字段），会被**误计为成功**——出现过
+  「完成 5/5」但实际一条都没删的情况。现改为判 `success`，并回报最后一条失败原因。
+- **服务端补日志**：丢弃时未命中记录此前完全静默，现在会记录 id 与平台，便于事后定位。
+
+### 修复：死信队列「丢弃 / 重放」点删除仍报 422 (Unprocessable Content)
+
+上一轮以为根因是登录过期（401），但用户复现的是 **422**。真正原因在**前端打包产物**：
+
+死信列表主循环变量 `item` 被 esbuild minify 重命名为 `u`，但重放 / 丢弃两个按钮
+`data-args` 字符串里的 `item.id` **没被一起重命名**（esbuild 对 `\'` 转义单引号字符串
+内的标识符有已知缺陷）。于是 `item` 在循环作用域里是 `undefined`，渲染出的 HTML 是
+`data-args='["undefined", "@el"]'`，浏览器实际请求
+`POST /api/dead-letters/undefined/discard`，FastAPI 按 `int` 校验路径参数失败 → 422。
+
+- **前端**：两个按钮的 `data-args` 改用模板字面量 `${item.id}`（与上一轮修复 tabs 的
+  `${st}` 同源，esbuild 会一并重命名）。重建 bundle 后验证 `item.` 全包计数为 0、
+  按钮已用 `u.id`。
+- **后端**：`discard` / `replay` 两个端点的 `dl_id` 由 `int` 改为 `str` 并显式 `int()`
+  解析，非法 id 一律归为 `404 not_found`（前端翻译为「记录已不存在，请刷新列表」），
+  彻底消除「看不懂的 422」——即便将来再有边角情况把非法 id 传进来也不会再暴露 422。
+- **测试**：`tests/test_web_routers_dead_letters.py` 新增 `TestDiscardMalformedId`
+  4 例，锁住 `undefined` / 文本 id → 404（非 422）回归，以及合法 id 以 int 传入 repo。
+
+### 修复：CodeQL 中危告警「Information exposure through an exception」(#727)
+
+`POST /api/auth/refresh` 在角色非法时把 `ValueError` 原文
+（`detail=f"Invalid role: {e}"`）直接写回 401 响应，构成**异常信息泄露**。同一反模式
+在令牌校验 `verify_token` 也存在（`detail=f"Token verification failed: {exc}"`）。
+
+- **续期端点**（`web/api.py:802`）：捕获 `ValueError` 后仅把 `username/role/err` 记入
+  服务端日志（经 `sanitize_log_message` 脱敏），响应改为固定中文文案
+  「登录状态异常，请重新登录」，不再回显异常。
+- **令牌校验**（`web/auth_middleware.py:141`）：`InvalidTokenError` 不再拼进 detail，
+  改为固定英文文案 `Token verification failed`，异常仅 `logger.warning` 留痕。
+- **未改动的同类点**：`dependencies.py` / `skills_marketplace.py` 里几处 `500` 的
+  `detail=f"…{err}"` 看似同类，但全局 `http_exception_handler` 的 5xx 分支已把 detail
+  替换为安全常量（`api.py:252`），真实异常只进日志、不进响应——运行期本就不泄露，
+  故保留原样（改掉反而会丢掉服务端排查所需的错误文案）。
+- **测试**：`tests/test_auth_refresh_endpoint.py` 新增 2 例回归，分别锁住「角色非法不回显
+  异常原文」与「令牌校验失败不回显 pyjwt 异常类名」。
+
+### 其他
+
+- **侧边栏页脚整理**：系统状态卡下方的开源署名由 3~4 行居中零散小字收为两行左对齐
+  排版，超长自动省略（Font Awesome 的 CC BY 4.0 署名按许可要求保留）。
+- **日志收敛**：联系人重名防护的告警不再把全部候选 ID 刷进日志（同名账号多时可达
+  20+ 条），改为只列前 3 个示例并注明总数。
+
+---
+
 ## v0.7.0 (2026-10-22)
 
 一次大版本：对接钉钉 CLI（dws）v1.0.63 的能力迭代，把 Linkora 里几处**基于旧版本认知写下的过时设计**一次性校正过来，并顺着这条线索补上了一批真实业务缺口。内置工具 38 → **47**，意图分类 39 → **41**。

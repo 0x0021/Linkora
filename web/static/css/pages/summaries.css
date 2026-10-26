@@ -169,11 +169,11 @@
 .stat-card:hover .stat-icon {
     transform: scale(1.05);
 }
-.stat-card-blue   .stat-icon { background: rgba(59, 130, 246, 0.12);  color: var(--brand-primary); }
+.stat-card-blue   .stat-icon { background: rgba(var(--brand-primary-rgb), 0.12);  color: var(--brand-primary); }
 .stat-card-green  .stat-icon { background: rgba(16, 185, 129, 0.12);  color: var(--brand-success); }
 .stat-card-purple .stat-icon { background: rgba(139, 92, 246, 0.12);  color: var(--brand-purple); }
 .stat-card-orange .stat-icon { background: rgba(245, 158, 11, 0.14); color: var(--brand-warning); }
-[data-theme="dark"] .stat-card-blue   .stat-icon { background: rgba(59, 130, 246, 0.2);   color: var(--brand-primary-hover); }
+[data-theme="dark"] .stat-card-blue   .stat-icon { background: rgba(var(--brand-primary-rgb), 0.2);   color: var(--brand-primary-hover); }
 [data-theme="dark"] .stat-card-green  .stat-icon { background: rgba(16, 185, 129, 0.2);   color: var(--brand-success); }
 [data-theme="dark"] .stat-card-purple .stat-icon { background: rgba(139, 92, 246, 0.2);   color: var(--brand-purple); }
 [data-theme="dark"] .stat-card-orange .stat-icon { background: rgba(245, 158, 11, 0.2);   color: var(--brand-warning); }
@@ -753,7 +753,7 @@
 
 .summary-item-compact:hover {
     border-color: var(--brand-primary, var(--brand-primary));
-    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.08);
+    box-shadow: 0 2px 6px rgba(var(--brand-primary-rgb), 0.08);
 }
 
 .summary-item-name {

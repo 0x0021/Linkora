@@ -1218,6 +1218,7 @@ async def index(request: Request):
             theme_js_v=v("js/theme.js"),
             # 每个 CSS 文件使用自身 mtime 作为版本号，避免共用 theme_v 导致某文件修改后缓存不破
             variables_v=v("css/base/variables.css"),
+            theme_accent_css_v=v("css/theme-accent.css"),
             reset_v=v("css/base/reset.css"),
             utilities_v=v("css/base/utilities.css"),
             app_shell_v=v("css/layout/app-shell.css"),

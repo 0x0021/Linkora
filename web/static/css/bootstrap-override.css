@@ -9,12 +9,13 @@
    3. 布局（sidebar 等）由 theme.css 负责
    ============================================ */
 
-/* ---- 品牌色变量 ---- */
+/* ---- 品牌色变量 ----
+   主色全部桥接到 theme.css 的 --brand-* 令牌，跟随 [data-accent] 主题配色切换 */
 :root {
-    --bs-primary: #2563eb;
-    --bs-primary-rgb: 37, 99, 235;
-    --bs-primary-hover: #1d4ed8;
-    --bs-primary-light: rgba(37, 99, 235, 0.1);
+    --bs-primary: var(--brand-primary);
+    --bs-primary-rgb: var(--brand-primary-rgb);
+    --bs-primary-hover: var(--brand-primary-hover);
+    --bs-primary-light: rgba(var(--brand-primary-rgb), 0.1);
     --bs-success: #16a34a;
     --bs-warning: #f59e0b;
     --bs-danger: #dc2626;

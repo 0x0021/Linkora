@@ -415,12 +415,12 @@
     color: #fff;
     font-size: 0.85rem;
     background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35),
+    box-shadow: 0 4px 14px rgba(var(--brand-primary-rgb), 0.35),
                 inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 [data-theme="dark"] .ov-head-badge {
     background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-secondary) 100%);
-    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4),
+    box-shadow: 0 4px 14px rgba(var(--brand-primary-rgb), 0.4),
                 inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .ov-head-txt {
@@ -539,18 +539,18 @@
     overflow: hidden;
     border: 1px solid var(--border-light);
     background:
-        linear-gradient(120deg, rgba(37, 99, 235, 0.085) 0%, rgba(99, 102, 241, 0.045) 42%, rgba(139, 92, 246, 0.02) 70%, transparent 100%),
+        linear-gradient(120deg, rgba(var(--brand-primary-rgb), 0.085) 0%, rgba(99, 102, 241, 0.045) 42%, rgba(139, 92, 246, 0.02) 70%, transparent 100%),
         var(--bg-subtle);
     transition: border-color 0.28s ease, box-shadow 0.28s ease;
 }
 [data-theme="dark"] .ov-hero {
     background:
-        linear-gradient(120deg, rgba(59, 130, 246, 0.14) 0%, rgba(99, 102, 241, 0.08) 42%, rgba(139, 92, 246, 0.04) 70%, transparent 100%),
+        linear-gradient(120deg, rgba(var(--brand-primary-rgb), 0.14) 0%, rgba(99, 102, 241, 0.08) 42%, rgba(139, 92, 246, 0.04) 70%, transparent 100%),
         rgba(255, 255, 255, 0.02);
 }
 .ov-hero:hover {
-    border-color: rgba(37, 99, 235, 0.3);
-    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.09);
+    border-color: rgba(var(--brand-primary-rgb), 0.3);
+    box-shadow: 0 10px 30px rgba(var(--brand-primary-rgb), 0.09);
 }
 /* 左侧强调条 */
 .ov-hero::before {
@@ -724,7 +724,7 @@
 }
 #panel-overview .stat-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(37, 99, 235, 0.28);
+    border-color: rgba(var(--brand-primary-rgb), 0.28);
     box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
 }
 [data-theme="dark"] #panel-overview .stat-card:hover {
@@ -847,7 +847,7 @@
 }
 .ov-chip:hover {
     transform: translateY(-2px);
-    border-color: rgba(37, 99, 235, 0.3);
+    border-color: rgba(var(--brand-primary-rgb), 0.3);
 }
 .ov-chip-ico {
     width: 18px;

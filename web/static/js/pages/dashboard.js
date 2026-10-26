@@ -98,8 +98,8 @@ async function renderMessageTrendChart(trend) {
             datasets: [{
                 label: '消息数',
                 data,
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderColor: window.getAccentColor ? window.getAccentColor() : '#2563eb',
+                backgroundColor: (window.getAccentColor ? window.getAccentColor() : '#2563eb') + '1a',
                 borderWidth: 2,
                 fill: true,
                 tension: 0.3,

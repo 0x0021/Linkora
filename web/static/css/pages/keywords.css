@@ -36,7 +36,7 @@
 #page-keywords > .section-tabs .section-tab:hover {
     border-color: var(--brand-primary);
     color: var(--brand-primary);
-    background: var(--brand-primary-light, rgba(37,99,235,0.06));
+    background: var(--brand-primary-light, rgba(var(--brand-primary-rgb),0.06));
     transform: translateY(-1px);
 }
 
@@ -44,7 +44,7 @@
     background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+    box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb), 0.28);
     font-weight: 600;
 }
 

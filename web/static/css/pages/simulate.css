@@ -600,8 +600,8 @@
 }
 
 .sim-alert-info {
-    background: rgba(59, 130, 246, 0.06);
-    border: 1px solid rgba(59, 130, 246, 0.15);
+    background: rgba(var(--brand-primary-rgb), 0.06);
+    border: 1px solid rgba(var(--brand-primary-rgb), 0.15);
     color: var(--brand-primary);
 }
 
@@ -735,7 +735,7 @@
 }
 
 .sim-icon-robot {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
+    background: linear-gradient(135deg, rgba(var(--brand-primary-rgb), 0.15), rgba(139, 92, 246, 0.15));
     color: var(--brand-primary);
 }
 
@@ -876,7 +876,7 @@
     margin: var(--space-sm) 0;
     padding: 0.375rem var(--space-md);
     border-left: 3px solid var(--brand-primary);
-    background: rgba(59, 130, 246, 0.05);
+    background: rgba(var(--brand-primary-rgb), 0.05);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     color: var(--text-secondary);
 }
@@ -982,7 +982,7 @@
     width: 20px;
     height: 20px;
     border-radius: var(--radius-sm);
-    background: rgba(59, 130, 246, 0.08);
+    background: rgba(var(--brand-primary-rgb), 0.08);
     display: flex;
     align-items: center;
     justify-content: center;

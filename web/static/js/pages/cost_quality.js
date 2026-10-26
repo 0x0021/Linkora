@@ -226,7 +226,7 @@ async function cqRenderTrend(series) {
         data: {
             labels,
             datasets: [
-                { label: "每日成本(¥)", data: costData, borderColor: "#2563eb", backgroundColor: "rgba(37, 99, 235, 0.12)", fill: true, tension: 0.3, yAxisID: "y" },
+                { label: "每日成本(¥)", data: costData, borderColor: window.getAccentColor ? window.getAccentColor() : "#2563eb", backgroundColor: (window.getAccentColor ? window.getAccentColor() : "#2563eb") + "1f", fill: true, tension: 0.3, yAxisID: "y" },
                 { label: "转人工率(%)", data: handoffData, borderColor: "#f59e0b", backgroundColor: "rgba(245, 158, 11, 0.12)", fill: false, tension: 0.3, yAxisID: "y1" },
             ],
         },

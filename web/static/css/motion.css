@@ -49,7 +49,7 @@ html.theme-anim *::after {
   box-shadow: 0 14px 34px -14px rgba(15, 23, 42, 0.30);
 }
 .stat-card:hover {
-  border-color: rgba(37, 99, 235, 0.20);
+  border-color: rgba(var(--brand-primary-rgb), 0.20);
 }
 .stat-icon {
   transition: transform var(--dur-base) var(--ease-premium);

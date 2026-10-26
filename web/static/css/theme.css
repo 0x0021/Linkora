@@ -317,20 +317,23 @@ html {
     background: var(--bg-surface);
 }
 
-/* 开源署名（侧边栏页脚）：Font Awesome 图标 CC BY 4.0 的署名要求 */
+/* 开源署名（侧边栏页脚）：Font Awesome 图标 CC BY 4.0 的署名要求。
+   排版约束：固定两行、左对齐、单行超长省略——保持页脚安静，不与状态卡抢视觉 */
 .sidebar-attribution {
-    margin-top: 0.625rem;
+    margin-top: 0.5rem;
     padding-top: var(--space-sm);
     border-top: 1px dashed var(--border-light);
-    font-size: 0.6875rem;
-    line-height: 1.5;
+    font-size: 0.625rem;
+    line-height: 1.7;
     color: var(--text-tertiary);
-    text-align: center;
+    text-align: left;
     word-break: keep-all;
 }
 
-.sidebar-attribution-line + .sidebar-attribution-line {
-    margin-top: 0.125rem;
+.sidebar-attribution-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sidebar-attribution a {

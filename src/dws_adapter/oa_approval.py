@@ -230,3 +230,58 @@ class DwsAdapterOaApprovalMixin(DwsAdapterBase):
         if remark:
             args.extend(["--remark", remark])
         return self.run(args, operation="oa_approval_redirect_task")
+
+    def oa_approval_list_by_admin(self, process_code: str, start: str, end: str,
+                                  cursor: str = "0", limit: int = 20,
+                                  statuses: list[str] | None = None,
+                                  user_ids: list[str] | None = None) -> dict:
+        """以管理员视角查询审批模板的**全组织**实例列表（按时间窗）。
+
+        与 ``oa_approval_list_initiated``（仅当前用户发起）互补——别人转发审批
+        通知过来时，发起人不是当前用户，只有管理员视角能查到。失败抛异常。
+
+        start/end 为 ISO-8601，钉钉接口同样有 ≤120 天窗口硬限制（超窗报
+        business error，2026-10-26 实测），分段聚合由上层工具处理。
+        返回原始 result dict（含 ``list`` / ``hasMore``），单页 limit 硬上限 20。
+        """
+        args = ["oa", "approval", "list-by-admin", "--process-code", process_code,
+                "--start", start, "--end", end, "--cursor", str(cursor), "--limit", str(limit)]
+        if statuses:
+            args += ["--statuses", ",".join(statuses)]
+        if user_ids:
+            args += ["--user-ids", ",".join(user_ids)]
+        data = self.run(args, operation="oa_approval_list_by_admin", force_no_dry_run=True)
+        result = self._get_result(data)
+        return result if isinstance(result, dict) else {"list": []}
+
+    def oa_approval_list_cc(self, page: int = 1, limit: int = 20,
+                            query: str | None = None,
+                            process_code: str | None = None,
+                            originator_user_id: str | None = None,
+                            create_time_from: str | None = None,
+                            create_time_to: str | None = None,
+                            finish_time_from: str | None = None,
+                            finish_time_to: str | None = None) -> dict:
+        """查询抄送当前用户的审批单列表。失败抛异常。
+
+        返回原始 result dict（含 ``values`` / ``hasMore``），单页 limit 上限 100。
+        时间过滤格式为 yyyy-MM-dd（create_time_* 为发起时间，finish_time_* 为完成时间）。
+        """
+        args = ["oa", "approval", "list-cc", "--page", str(page), "--limit", str(min(limit, 100))]
+        if query:
+            args += ["--query", query]
+        if process_code:
+            args += ["--process-code", process_code]
+        if originator_user_id:
+            args += ["--originator-user-id", originator_user_id]
+        if create_time_from:
+            args += ["--create-time-from", create_time_from]
+        if create_time_to:
+            args += ["--create-time-to", create_time_to]
+        if finish_time_from:
+            args += ["--finish-time-from", finish_time_from]
+        if finish_time_to:
+            args += ["--finish-time-to", finish_time_to]
+        data = self.run(args, operation="oa_approval_list_cc", force_no_dry_run=True)
+        result = self._get_result(data)
+        return result if isinstance(result, dict) else {"values": []}

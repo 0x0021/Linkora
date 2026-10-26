@@ -107,6 +107,8 @@ TOOL_ACTION_MAP: dict[str, list[str]] = {
     "approval_list_tasks": ["action.query"],
     "approval_list_initiated": ["action.query"],
     "approval_list_executed": ["action.query"],
+    "approval_list_org": ["action.query"],
+    "approval_list_cc": ["action.query"],
     # 钉钉日志（日报/周报）只读查询
     "list_reports": ["action.query", "action.analyze"],
     "get_report_detail": ["action.query", "action.analyze"],

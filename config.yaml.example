@@ -787,6 +787,8 @@ tools:
     - approval_list_tasks                          # 查询审批实例下的审批任务（仅钉钉）
     - approval_list_initiated                      # 查询已发起审批记录（仅钉钉）
     - approval_list_executed                       # 查询我已处理的审批（仅钉钉）
+    - approval_list_org                            # 管理员视角查全组织审批实例（别人转发的流程用这个查，仅钉钉）
+    - approval_list_cc                             # 查询抄送我的审批（仅钉钉）
     - list_reports                                 # 列出钉钉日志（日报/周报，仅钉钉）
     - get_report_detail                            # 读取单份钉钉日志正文（仅钉钉）
     - list_report_templates                        # 搜索钉钉日志模板（仅钉钉）

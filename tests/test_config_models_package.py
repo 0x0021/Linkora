@@ -28,6 +28,7 @@ memory_skills / system / app）。
 """
 from __future__ import annotations
 
+import ast
 import pathlib
 
 import pytest
@@ -134,31 +135,43 @@ def test_models_still_resolve_annotations() -> None:
     assert PlatformConfig.__pydantic_complete__, "PlatformConfig 注解未解析完成"
 
 
-def test_model_module_identity_unchanged() -> None:
-    """留在 ``__init__.py`` 的模型类 ``__module__`` 仍为 ``src.config_models``。
+def test_no_model_left_in_init() -> None:
+    """``__init__.py`` 不再定义模型类（只做 re-export + 重建辅助）。
 
-    这一条同时保护两件事：
-    - 包化本身未改变类的身份（``__module__`` 决定 Pydantic 求值命名空间，
-      也影响序列化/反序列化时的类型标识）；
-    - 后续外移子模块时，若某模型的依赖类不在其所在模块 globals 中，
-      ``model_rebuild()`` 会抛 ``PydanticUndefinedAnnotation`` —— 此测试
-      会先一步暴露问题。
+    模型类的 ``__module__`` 决定 Pydantic v2 求值注解时所用的命名空间 ——
+    类若留在 ``__init__.py``，其依赖必须能被包层解析；一旦全部外移，
+    每个子模块必须自己**运行时** import 依赖（不可用 TYPE_CHECKING），
+    否则 ``model_rebuild()`` 会抛 ``PydanticUndefinedAnnotation``。
+    下面两条测试共同守护该约束。
     """
-    from src.config_models import AppConfig, PlatformConfig, WebConfig
+    import pathlib
 
-    for cls in (AppConfig, PlatformConfig, WebConfig):
-        assert cls.__module__ == "src.config_models", (
-            f"{cls.__name__}.__module__ 变为 {cls.__module__!r}；"
-            "若已外移到子模块，需确认其依赖类为**运行时** import（非 TYPE_CHECKING），"
-            "否则 model_rebuild 会抛 PydanticUndefinedAnnotation"
-        )
+    pkg = pathlib.Path(__file__).resolve().parents[1] / "src" / "config_models"
+    tree = ast.parse((pkg / "__init__.py").read_text(encoding="utf-8"))
+    defined = {
+        n.name for n in tree.body
+        if isinstance(n, ast.ClassDef) and not n.name.startswith("_")
+    }
+    assert not defined, (
+        f"__init__.py 仍定义公开类 {sorted(defined)}；"
+        "模型应按领域放在子模块，__init__.py 只做 re-export"
+    )
 
 
-# P2-7 第 2 步已外移的组 → 模型类
+# P2-7 已外移的组 → 模型类（第 2 步：llm/rules_tools/memory_skills；第 3 步：system/platform/app）
 EXTRACTED_GROUPS: dict[str, list[str]] = {
     "llm": ["LlmAdvancedConfig", "LlmConfig", "LlmThrottleConfig", "EmbeddingConfig"],
     "rules_tools": ["KeywordRule", "RulesConfig", "OcrPostprocessConfig", "ToolsConfig"],
     "memory_skills": ["MemoryConfig", "SkillsConfig", "SkillHubConfig", "RagConfig"],
+    "system": [
+        "LoggingConfig", "SafetyConfig", "DeadLetterConfig", "ProactiveConfig",
+        "SummaryBackfillConfig", "WebConfig", "OaApprovalConfig",
+    ],
+    "platform": [
+        "DwsConfig", "AdapterOverrideConfig", "PollerConfig", "StorageConfig",
+        "PlatformRagConfig", "PlatformLLMConfig", "PlatformToolsConfig", "PlatformConfig",
+    ],
+    "app": ["AppConfig"],
 }
 
 
@@ -183,37 +196,63 @@ def test_extracted_model_module_identity(group: str, member: str) -> None:
     assert cls.__pydantic_complete__, f"{member} 注解未解析完成（跨模块依赖需运行时 import）"
 
 
-def test_extracted_groups_have_no_missing_runtime_deps() -> None:
-    """已外移的三个组**零外部配置类依赖** → 注解解析不依赖其他模块的 globals。
+def _is_type_checking(test: ast.expr) -> bool:
+    """判定一个 ``if`` 的条件是否为 ``TYPE_CHECKING``。"""
+    return (
+        isinstance(test, ast.Name) and test.id == "TYPE_CHECKING"
+    ) or (
+        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+    )
 
-    若后续有人给这些组添加了对其它配置类的引用（如 RulesConfig 引用
-    PlatformConfig），必须同时在子模块里做**运行时** import，否则
-    ``__pydantic_complete__`` 会变 False。
+
+def test_cross_group_dependencies_are_runtime_imports() -> None:
+    """跨组引用的模型类必须在子模块做**运行时** import（不可用 TYPE_CHECKING）。
+
+    Pydantic v2 依据 ``cls.__module__`` 取该模块 globals 求值注解 ——
+    若依赖类只在 ``if TYPE_CHECKING:`` 块里可见，运行期求值会失败
+    （``PydanticUndefinedAnnotation``）。本测试扫出「引用了其它组模型类、
+    但该子模块未在运行时 import 它」的情况。
     """
-    import ast
     import pathlib
 
     pkg = pathlib.Path(__file__).resolve().parents[1] / "src" / "config_models"
-    init_tree = ast.parse((pkg / "__init__.py").read_text(encoding="utf-8"))
-    init_classes = {
-        n.name for n in init_tree.body if isinstance(n, ast.ClassDef)
-    }
+
+    # 所有模型类 → 所在组
+    owner: dict[str, str] = {}
+    for group, members in EXTRACTED_GROUPS.items():
+        for m in members:
+            owner[m] = group
 
     for group in EXTRACTED_GROUPS:
-        tree = ast.parse((pkg / f"{group}.py").read_text(encoding="utf-8"))
-        own = {n.name for n in tree.body if isinstance(n, ast.ClassDef)}
+        path = pkg / f"{group}.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+
+        # 运行时 import 的名字（排除 TYPE_CHECKING 块内的）
+        runtime_imported: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, ast.If) and _is_type_checking(node.test):
+                continue
+            if isinstance(node, ast.ImportFrom):
+                runtime_imported.update(a.asname or a.name for a in node.names)
+            elif isinstance(node, ast.Import):
+                runtime_imported.update((a.asname or a.name).split(".")[0] for a in node.names)
+
+        # 本模块引用的其它组模型类
         referenced: set[str] = set()
         for node in tree.body:
-            if not isinstance(node, ast.ClassDef):
-                continue
-            for sub in ast.walk(node):
-                if isinstance(sub, ast.Name):
-                    referenced.add(sub.id)
-        cross = (referenced & init_classes) - own
-        assert not cross, (
-            f"{group}.py 引用了其它模块的模型类 {sorted(cross)}，"
-            "必须在该子模块做**运行时** import（不可用 TYPE_CHECKING），"
-            "否则 Pydantic 注解解析会失败"
+            if isinstance(node, ast.ClassDef):
+                for sub in ast.walk(node):
+                    if isinstance(sub, ast.Name):
+                        referenced.add(sub.id)
+        cross = {
+            name for name in referenced
+            if name in owner and owner[name] != group
+        }
+        missing = cross - runtime_imported
+        assert not missing, (
+            f"{group}.py 跨组引用了 {sorted(missing)} 但未做**运行时** import；"
+            "Pydantic v2 按 cls.__module__ 查该模块 globals 求值注解，"
+            "仅 TYPE_CHECKING 导入会导致 model_rebuild 抛 PydanticUndefinedAnnotation"
         )
 
 

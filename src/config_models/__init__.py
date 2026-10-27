@@ -1,593 +1,82 @@
-"""配置数据模型（Pydantic）——拆分自 config.py。
+"""配置数据模型（Pydantic）——按领域拆分为包。
 
-config.py 保留加载/校验/多平台 seed 逻辑，本模块只含：
-- 默认路径常量
-- 全部配置模型（AppConfig 等 28 个）
-- 模型解析/重建辅助（_resolve_model_cls / _ensure_models_rebuilt / _ConfigState）
+P2-7（2026-10-27）：本模块原为单文件 ``src/config_models.py``（1127 行 /
+28 个 Pydantic 模型），现拆为包 ``src/config_models/``：
 
-P2-7（2026-10-27）：本文件原为单文件模块 ``src/config_models.py``（1127 行），
-现转为**包** ``src/config_models/``，以便按领域把配置模型拆入子模块
-（platform / llm / rules_tools / memory_skills / system / app）。
+- ``_const.py``         共享路径常量（零依赖，供各子模块运行时 import）
+- ``platform.py``       平台级配置（钉钉 / 适配器覆盖 / 轮询 / 存储 / 平台 RAG·LLM·工具）
+- ``llm.py``            LLM 与向量嵌入配置
+- ``rules_tools.py``    规则、工具与 OCR 后处理配置
+- ``memory_skills.py``  记忆、技能与检索配置
+- ``system.py``         系统级配置（日志 / 安全 / 死信 / 主动摘要 / Web / OA 审批）
+- ``app.py``            应用根配置（汇总全部子配置）
 
-当前为**第 1 步**：模型类暂留本 ``__init__.py``，因此所有类的 ``__module__``
-仍是 ``"src.config_models"``，且 ``from src.config_models import X`` 的语义
-**完全不变**（本文件即包的 ``__init__``，re-export 即为定义处）。后续步骤
-逐组外移时，必须让每个新模块**运行时 import** 其依赖类
-（不可用 ``TYPE_CHECKING``）—— Pydantic v2 依据 ``cls.__module__`` 取该模块
-globals 求值注解，仅类型检查期的导入会导致 ``model_rebuild`` 抛
-``PydanticUndefinedAnnotation``。
+本 ``__init__.py`` 只做三件事：
+1. **re-export** 全部模型与常量 —— ``from src.config_models import X`` 的
+   导入面对消费者**完全不变**（历史消费者无需改动一行）；
+2. 提供模型解析/重建辅助（``_resolve_model_cls`` / ``_ensure_models_rebuilt``
+   / ``_ConfigState``）；
+3. 用 ``__all__`` 显式声明公共 API 面。
+
+⚠️ 跨模块依赖必须用**运行时** import（不可用 ``TYPE_CHECKING``）—— Pydantic v2
+依据 ``cls.__module__`` 取该模块 globals 求值注解，仅类型检查期的导入会让
+注解解析失败（``PydanticUndefinedAnnotation``）。各子模块已按此约定实现。
 """
 from __future__ import annotations
 
 import logging
 import threading
 import typing
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel
 
-from src.paths import data_path, get_data_dir, get_log_dir
-
+from src.config_models._const import (
+    DEFAULT_BACKUP_DIR,
+    DEFAULT_DATA_DIR,
+    DEFAULT_STORAGE_PATH,
+    DEFAULT_TMP_IMAGES_DIR,
+)
+from src.config_models.app import AppConfig  # noqa: F401
 from src.config_models.llm import (  # noqa: F401
+    EmbeddingConfig,
     LlmAdvancedConfig,
     LlmConfig,
     LlmThrottleConfig,
-    EmbeddingConfig,
-)
-from src.config_models.rules_tools import (  # noqa: F401
-    KeywordRule,
-    RulesConfig,
-    OcrPostprocessConfig,
-    ToolsConfig,
 )
 from src.config_models.memory_skills import (  # noqa: F401
     MemoryConfig,
-    SkillsConfig,
-    SkillHubConfig,
     RagConfig,
+    SkillHubConfig,
+    SkillsConfig,
+)
+from src.config_models.platform import (  # noqa: F401
+    AdapterOverrideConfig,
+    DwsConfig,
+    PlatformConfig,
+    PlatformLLMConfig,
+    PlatformRagConfig,
+    PlatformToolsConfig,
+    PollerConfig,
+    StorageConfig,
+)
+from src.config_models.rules_tools import (  # noqa: F401
+    KeywordRule,
+    OcrPostprocessConfig,
+    RulesConfig,
+    ToolsConfig,
+)
+from src.config_models.system import (  # noqa: F401
+    DeadLetterConfig,
+    LoggingConfig,
+    OaApprovalConfig,
+    ProactiveConfig,
+    SafetyConfig,
+    SummaryBackfillConfig,
+    WebConfig,
 )
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_DATA_DIR = str(get_data_dir())
-DEFAULT_STORAGE_PATH = str(data_path("linkora.db"))
-DEFAULT_TMP_IMAGES_DIR = str(data_path("tmp_images"))
-DEFAULT_BACKUP_DIR = str(data_path("backups"))
-
-
-class DwsConfig(BaseModel):
-    cli_path: str = "dws"
-    timeout: int = 30
-    retries: int = 2
-    dry_run: bool = True
-    profile: str = ""
-
-
-class AdapterOverrideConfig(BaseModel):
-    """适配器专属覆盖配置，用于 PlatformConfig 中按平台覆盖默认适配器参数。
-
-    钉钉平台对应 DwsConfig 字段；飞书/企微对应各自 CLI 的 cli_path/dry_run 等。
-    所有字段均为可选（None 表示沿用全局默认值），仅覆盖显式设置的项。
-    """
-    cli_path: str | None = None
-    timeout: int | None = None
-    retries: int | None = None
-    dry_run: bool | None = None
-    profile: str | None = None
-    # 企微平台凭证（仅持久化用）。注意：当前企微适配器经 wecom-cli 扫码登录拉消息，
-    # 并不消费这些字段——它们是为「企微自建应用回调模式」预留的配置。UI 写回落地这些字段，
-    # 避免此前 _apply_wecom_platform 空壳导致 Web 提交的企微凭证被静默丢弃、重启即丢。
-    wecom_corp_id: str | None = None
-    wecom_corp_secret: str | None = None
-    wecom_agent_id: str | None = None
-    wecom_token: str | None = None
-    wecom_encoding_aes_key: str | None = None
-
-
-class PollerConfig(BaseModel):
-    interval_seconds: int = 5
-    unread_conversation_count: int = 20
-    messages_per_conversation: int = 20
-    history_window: int = 20
-    history_days: int = 3  # 历史消息取最近 N 天；与 config.yaml 对齐，避免环境未加载 yaml 时掉回 1 天导致跨天失忆
-    # 轮询侧「新消息」年龄门槛（小时），与 history_days 相互独立。
-    # history_days 语义是「取多少天的历史作为上下文/RAG 语料」（7 天合理）；
-    # 而这里判定的是「一条消息够不够新、要不要触发 AI 回复」。
-    # 两者混用会出事故：去重表一旦漏标（handler 抛错时不标记、服务中断、
-    # 历史同步路径异常），list-all 会在 history_days 窗口内把几天前的老消息
-    # 当新消息重放，与当前新消息合并成同一批投喂，LLM 把新报障认成旧话题的
-    # 收尾（2026-08-31 事故：6 天前的旧截图被重放，AI 对当天新故障回
-    # 「收到，问题已解决就好。」）。
-    # 取 min(history_days*24, 本值) 生效；0 表示不额外收紧（仅用 history_days）。
-    # 24h 兼顾「服务离线一夜后仍能补回消息」与「绝不重放隔天老消息」。
-    poll_new_message_max_age_hours: int = 24
-    # 会话间隔切分：相邻两条历史消息间隔超过此分钟数时，认为是新的对话轮次，
-    # 只保留最近一段连续对话，避免把陈年无关旧话题（如两周前的闲聊）带入当前上下文。
-    # 0 表示禁用切分（回退到纯 days+window 取数）。默认 360 分钟(6h)：当天连续聊算一段，隔夜/隔天自动断开。
-    history_session_gap_minutes: int = 360
-    merge_window_seconds: int = 60  # 合并同一人在短时间内的连续消息
-    # 高级配置（需要频繁调整的）
-    max_processed_msg_ids: int = 500  # 跨轮次去重内存缓存大小（仅 LRU 容量上限；
-                                     # 跨进程去重的 TTL 由 sqlite_store.cleanup_processed_msgs 负责）
-    list_all_time_window_minutes: int = 30  # list-all 时间窗口（分钟）
-    list_all_first_run_minutes: int = 5  # 首次运行时间窗口（分钟）
-    # 飞书每轮轮询走白名单模式（只拉已知相关会话 + 单次最近活跃探嗅），
-    # 不再全量翻页。此间隔控制「全量扫描」频率：每隔这么久做一次完整 +chat-list
-    # 翻页以发现长期未活跃但重新活跃的新会话。0 = 永不自动全量扫描（纯白名单+探嗅）。
-    list_all_full_scan_interval_minutes: int = 60
-    empty_poll_protection_minutes: int = 5  # 空转保护时间（分钟）
-    # list-all 分页硬上限（每页 limit 条，limit 由调用方传，默认 100）：单轮最多拉
-    # max_pages * limit 条。原硬编码 20 在"宽时间窗 + 活跃群"下极易触顶导致漏消息；
-    # 提到 50 并把上限本身做成可配，便于按实际消息量调。0 = 不限制（谨慎使用）。
-    list_all_max_pages: int = 50
-    # list-all 实时轮询扫描窗口上限（天）。作用：把"首次运行/增量游标"可能算出的
-    # 超宽时间窗（如误配 22 天）钳制到最近 N 天，避免每轮重扫历史全部消息、永远撞
-    # 分页上限刷警告。深度历史回填请走 sync_history，不要靠实时轮询循环。
-    list_all_max_window_days: int = 14
-    # P1-E 背压：防止重启/突发时一次性派发大量消息打爆 LLM/接口
-    max_dispatch_per_cycle: int = 30  # 单轮轮询最多派发多少条给 handler（0=不限制，兼容旧行为）
-    max_concurrent_replies: int = 4  # 同时进行的回复（LLM 调用）上限（背压）
-    reply_concurrency_timeout_seconds: int = 30  # 等待并发槽位超时（秒）；超时降级串行，不丢弃消息
-    # list-all 主通道空轮探针：连续 N 轮 list-all 一条新消息都没拉到就告警，
-    # 便于直观确认机器人确实在收消息（也提示可能的登录/权限异常）。0 = 关闭探针
-    list_all_empty_alert_rounds: int = 6
-    skip_msg_types: list[str] = Field(default_factory=lambda: [
-        "system", "app", "file", "call", "read_receipt",
-        "calendar", "schedule", "voice", "video", "feedCard"
-    ])  # 跳过的消息类型（image 不再默认跳过，改由 image_ocr_enabled 控制；read_receipt 为已读回执类通知；calendar/schedule 为日程/会议邀请卡片；voice/video/feedCard 为语音/视频/图文卡片，均无需 AI 回复）
-    # 注：oa 已从默认跳过列表移除——别人转来的 OA 审批需由 bot 识别并处理
-    #（系统 OA 通知的发送方会被 _is_system_sender 判为 system 类型，仍会被跳过，不会误触）。
-    # 历史死项已清理：action_card（类型映射后落值为 app，已由 app 覆盖）、
-    # meetting（拼写错误且从未命中，日程会议类已由 calendar/schedule 覆盖）。
-    # P2-G 优雅回退类型：bot 无法直接处理的媒体消息，不硬跳过而是送达 main 回复
-    # 引导文字（"请发文字"），而非静默忽略。逻辑上 skip 会减去该列表（见
-    # poller_core_parse._effective_skip_types / runtime 分发）。
-    # 当前 voice/video 已并入 skip_msg_types 彻底静默跳过，故此处留空。
-    graceful_fallback_msg_types: list[str] = Field(default_factory=list)
-    # 图片消息处理：启用后自动下载截图并 OCR 提取文字，让 LLM 能"看懂"图片内容
-    image_ocr_enabled: bool = True
-    image_temp_dir: str = DEFAULT_TMP_IMAGES_DIR  # OCR 图片持久化目录（按聊天对象子目录组织）
-    # 目标组织（多组织环境下只轮询该组织的会话，避免反复触发跨组织权限验证/弹窗）。
-    # 留空 = 自动使用当前登录的 DWS profile 所属组织；否则填 dws profile list 里的 corpId。
-    # 跨组织会话会被持久化跳过（加入无效会话黑名单），不再每轮重试。
-    target_org_corp_id: str = ""
-    # 处理完用户消息后，自动将该会话中该消息及之前的所有消息标记为已读。
-    # 避免机器人收到消息后会话列表一直显示未读红点。默认开启；
-    # 若需要保留未读状态（例如人工后续跟看），可设为 false。
-    mark_read_after_process: bool = True
-    # 单条回复的字符上限（F15 超长回复分片）。钉钉/飞书/企业微信的文本与
-    # markdown 消息上限约 4096，超限会被平台静默截断或直接拒绝。超过此值的
-    # 回复会自动切成多片、带「（i/n）」续发标记顺序发出。默认 4000 留余量；
-    # 0 或负数回落到代码内置默认值（不是「不分片」）。
-    reply_shard_limit: int = 4000
-    # P0 Stream 长连接（v1.0.59+）：启用后以 dws event +listen-im 实时接收消息，
-    # 替代 5s 全量轮询，API 调用量降 90%+。默认关闭（保留轮询为主通道，兼容存量行为）。
-    stream_enabled: bool = False
-    stream_kinds: list[str] = Field(default_factory=lambda: ["all-direct", "all-group"])
-    # F14 回复发送退避（防平台高频限流）：
-    # 连续两条回复发送之间的最小间隔（秒）。同一轮轮询若连发多条回复，平台
-    # （钉钉/飞书/企业微信）会按频率流控，超阈值被静默丢弃。设最小间隔后，两条
-    # 回复间隔不足时自动补足 sleep。正常单条回复（与上次发送间隔远大于此值）不增加任何延迟。
-    # 0 或负数 = 不限制（向后兼容，完全无额外延迟）。
-    reply_send_min_interval: float = 0.2
-    # 命中平台限频（IMAdapterRateLimitError / 含 "rate limit"/"429" 等流控信号）后的退避时长
-    # （秒）：其间暂停处理本轮剩余回复，避免在已被限流时继续高频触达、加剧限流与失败刷屏。默认 60 秒。
-    reply_send_rate_limit_backoff_seconds: float = 60.0
-    # === 通知抑制（重新设计：结构优先 + 窄签名）===
-    # 旧方案 skip_keywords 用「内容子串」近似「是否为通知」，会误伤真人消息
-    # （例：张三会话里的 U9C 报错通知以张三身份推送，结构层面与人类消息一致，无法靠内容区分）。
-    # 新方案分层：
-    #   1) 结构层（本类之上）：msgType ∈ skip_msg_types、发送者属系统/机器人/应用账号
-    #      （_is_system_sender / 系统账号名单）已被静默跳过——绝大多数通知走这里。
-    #   2) 窄签名层（本字段）：仅作为「以真人身份推送的纯文本通知」的最后安全网，
-    #      匹配固定模板 / 报错栈等【机器生成物】，绝不匹配人类散文。保持锚定、精确。
-    #      例：r"^\d{4}-\d{2}-\d{2}\d+发货通知单[：:]" 可精确命中某 ERP 推送。
-    #      默认空：无需静默的机器通知请交给 LLM 处理（如 U9C 报错由 AI 提炼要点）。
-    #      发现某个纯文本通知想静音时，再加一条窄正则到此列表，切勿用宽泛裸词。
-    skip_notification_patterns: list[str] = Field(default_factory=list)
-    # 显式静默的发送者 ID（机器人/三方应用账号），结构性静音，强于按名匹配。
-    # 与「系统账号名单」互补：名单是按名模糊匹配，本字段是按 senderId 精确匹配。
-    skip_notification_sender_ids: list[str] = Field(default_factory=list)
-    reply_cooldown_seconds: int = 60  # 同一会话回复冷却时间（秒），防止短时间内反复回复
-    # === 真人在场冷却（human-in-the-loop，防 AI 穿插真人对话）===
-    # 本会话最近 N 秒内若出现「真人手动发出的消息」（sender_id 命中当前用户且 is_bot=0，
-    # 即排除 AI 分身代发的回复），则抑制 AI 自动回复，让真人主导对话。
-    # 真人离开超过 N 秒、对方又发来新消息时，AI 自动接管。
-    # 0 或负数 = 不启用（沿用旧行为：仅 _has_user_taken_over 的被动接管检测）。
-    # 默认 600 秒（10 分钟）：贴合「真人和对方正在互动」的场景，避免机器人反复插嘴。
-    owner_present_cooldown_seconds: int = 600
-    # 注：旧的 reply_single_only_when_unread（"已读不回复"闸门）已移除，
-    # bot 现在对每条新消息都正常回复（见 poller 主流程）。
-    # 发送消息时是否携带 AI 标记（dws --ai-tag，在铉铉中显示“由AI发送”标签）。
-    # True=携带（默认，合规透明）；False=不携带，消息与本人手发无区别。
-    ai_tag_enabled: bool = True
-    # === 已读闸门（human-in-the-loop 补充，重接 DWS 已读信号）===
-    # 若 DWS 判定本会话“已读(无未读)”，则抑制 AI 自动回复（人工已看/已处理）。
-    # 新到的未读消息会让会话重新进入未读列表 → 不抑制（照常回复），以此规避历史
-    # 事故“bot 回复后会话移出未读、对方追问又不回填导致漏回(为什么不回复我)”。
-    # 仅当所在环境 DWS 未读状态失真、出现漏回时，设 False 关闭本闸门。
-    suppress_when_owner_read: bool = True
-    # 已读反悔窗口（秒）：AI 回复生成好后、真正发出前，先等这么久，再向 DWS 拉取
-    # 一次最新未读状态。若这段时间内你已把会话标记已读，则直接放弃发送——
-    # 保证“我已读的会话绝对不再往外发自动回复”。0 = 不等待（仅依赖生成期间的实时复核）。
-    # 注意：此窗口会让每条自动回复至少延迟该秒数才发出，按“宁可晚一点、绝不误发”取舍。
-    read_grace_seconds: int = 10
-    first_run_ignore_older_than_minutes: int = 10  # 首次运行/重启后忽略超过N分钟的老消息（0=不忽略）
-    # 会话黑名单（不遍历）容错：群聊权限错误需连续失败达到该次数才加入黑名单，
-    # 避免一次瞬时抖动（token 刷新间隙 / CLI 偶发 / 限流被钉钉报成 AUTH_PERMISSION_DENIED）
-    # 就把活跃群（如用户有权限的部门群）误杀。0 = 立即拉黑（旧行为，不推荐）。
-    blacklist_min_consecutive_failures: int = 3
-    # 黑名单自愈对账间隔（轮数）：用 list-top + 直接探测双路判断会话是否已恢复访问。
-    blacklist_reconcile_every: int = 10
-    # 黑名单自愈每轮直接探测上限（轮转分批，避免黑名单较多时一次性打爆 DWS 接口）
-    reconcile_probe_batch_size: int = 5
-    # 置顶/最近会话列表缓存 TTL（秒）：会话列表极少变化，无需每轮(默认5s)都打 DWS 接口。
-    # 新会话仍能被 unread / list-all / db 缓存层发现，缓存不影响消息收发。
-    top_convs_cache_ttl_seconds: int = 120
-    # 未读会话列表 TTL 缓存（秒）：未读列表唯一用途是给「实时优先 forced_ids」提供输入，
-    # 而新消息由 list-all 主通道每轮全量拉取（快通道即时派发），缓存短暂陈旧不丢消息。
-    # 命中缓存期间直接复用上次结果，把每轮 1 次的未读列表调用降到约 1/TTL 轮一次；
-    # TTL 内新出现的未读会话仍会被 list-all 发现并派发，只是不享「跳过长尾限频」的
-    # 优先权（最长延迟一个长尾限频窗口）。0 = 关闭缓存（每轮都拉，旧行为）。
-    unread_convs_cache_ttl_seconds: int = 30
-    # 长尾会话（非未读）按会话限频抓取的最小间隔（秒）：避免每个置顶/db缓存会话
-    # 每轮(默认5s)都打一次 chat_message_list。未读会话不受影响（实时优先）。
-    # list-all 主通道仍每轮保底抓取全部新消息，故不会漏消息。0 = 关闭限频。
-    min_conversation_poll_interval_seconds: int = 60
-    # 每轮 per-conversation 抓取的并发 worker 数（受控并发）。
-    # 串行轮询 102 个会话单轮 ~70s，过长会击穿上方 min_conversation_poll_interval_seconds
-    # 窗口（轮询周期 > 限频窗口 → 长尾限频永不生效）。并发化把单轮耗时压到 ~70/N 秒，
-    # 让 60s 时间窗口限频自然生效，从源头削减 chat 接口请求量。1 或 0 = 退化为串行（旧行为）。
-    poll_concurrency: int = 4
-    # 长尾/静默会话（非未读）的轮次级节流：每 N 轮才抓取一次（N=1 → 隔轮抓）。
-    # 与时间窗口限频叠加，且**不依赖轮询速度**——无论串行多慢都不会被击穿，
-    # 是「长尾限频形同虚设」的根因修复。0 = 关闭（每轮都抓，靠时间窗口限频降级）。
-    # 未读/forced 会话不受此限（实时优先），list-all 主通道每轮仍全量拉，外部好友不丢。
-    min_conversation_poll_rounds: int = 1
-    # 未读（forced）会话抓取下限间隔（秒）：未读会话仍优先于长尾，但不再"每轮必打"。
-    # per-conversation 抓取只是健壮性冗余通道（群消息/@我 的保底路径），新消息由
-    # list-all 主通道每轮全量拉取并经快通道即时派发；给 forced 抓取一个下限间隔，
-    # 把活跃时段"未读会话每轮全量重抓"的风暴压掉一半以上（钉钉 RATE_LIMIT_ERROR
-    # 与管理后台调用日志的主要来源），消息本身不丢、不慢（主通道 20s 一轮）。
-    # 0 = 关闭下限（未读会话每轮必抓，旧行为）。
-    forced_fetch_min_interval_seconds: int = 30
-    # 平台级限频退避冷却（秒）：当某平台 chat 接口返回 RATE_LIMIT_ERROR 时，
-    # 全局暂停该平台 chat 抓取冷却秒数（不推进轮询游标、不丢消息），避免继续猛打
-    # 已限流的接口、加剧限流风暴。冷却到期下一轮自动恢复。0 = 关闭退避（旧行为，不推荐）。
-    chat_rate_limit_cooldown_seconds: int = 60
-    # 单聊对方信息解析失败的负缓存 TTL（秒）：chat_conversation_info /
-    # contact_user_search 对某会话解析失败（外部好友 / 跨组织 / 瞬断 / 搜索无命中）
-    # 后，TTL 内不再重复打这两个接口，避免每轮对不可解析会话空转重试。
-    # 消息仍由 list-all 主通道投递，对方 openDingTalkId 由消息 sender 字段兜底
-    # （见 _process_conv_messages 反写），不影响收发。权限类失败另有
-    # _metadata_unavailable 内存集合做本次运行内跳过，此处兜住瞬断/无命中类失败。
-    # 0 = 关闭负缓存（失败后下轮即重试，旧行为）。
-    conv_info_negative_cache_ttl_seconds: int = 300
-
-
-
-
-
-
-class StorageConfig(BaseModel):
-    type: str = "sqlite"
-    path: str = DEFAULT_STORAGE_PATH
-    backup_enabled: bool = True
-    backup_dir: str = DEFAULT_BACKUP_DIR
-    backup_interval_hours: int = 24
-    backup_max_count: int = 5
-    backup_on_start: bool = True
-    decisions_retention_days: int = 30  # 决策追踪表留存天数（0/负数视为不清理）
-    messages_retention_days: int = 90  # 消息记录留存天数（0/负数视为不清理）
-    doc_sync_interval_hours: int = 1  # 钉钉文档自动同步间隔（小时），0/负数禁用
-    # SQLite busy_timeout（毫秒）。写库撞锁时的等待窗口。
-    # 【P0 2026-10-05】此前硬编码 5000，在双进程架构（web + worker 同时写同一批库）
-    # 下实测每分钟 20~44 次 "database is locked"，轮询器大量丢会话。
-    # 调到 20s 让短时锁竞争「等过去」而不是直接失败。
-    # ⚠️ 治标不治本：跨进程锁等待再久也是等待。根治须用
-    #    `scripts/run_linkora.py --single-process` 合并为单进程（both 模式）。
-    # ⚠️ 注意：对 SQLITE_BUSY_SNAPSHOT（陈旧读快照）**无效**，那是立即失败的，
-    #    只能靠丢弃连接重建（store.write_with_retry）恢复。
-    busy_timeout_ms: int = 20000
-
-
-class PlatformRagConfig(BaseModel):
-    """平台级 KB（RAG）覆盖配置。所有字段可选，None 表示沿用全局 rag 值。
-
-    典型场景：飞书文档较长需要更大的 chunk_size，企微消息短可缩小分块。
-    """
-
-    chunk_size: int | None = None
-    chunk_overlap: int | None = None
-    chunk_hard_max: int | None = None  # 安全天花板（字符数）；None=派生为 chunk_size*2
-    embedding_model: str | None = None
-
-
-class PlatformLLMConfig(BaseModel):
-    """平台级 LLM 覆盖配置。所有字段可选，None 表示沿用全局 llm 值。
-
-    典型场景：飞书/企微使用专属 provider/model/api_key，不配则继承全局顶层 llm。
-    """
-
-    provider: str | None = None
-    base_url: str | None = None
-    api_key: str | None = None
-    model: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
-    timeout: int | None = None
-    fallback_model: str | None = None
-    fallback_api_key: str | None = None
-    fallback_base_url: str | None = None
-
-
-class PlatformToolsConfig(BaseModel):
-    """平台级 Tools 覆盖配置。所有字段可选，None 表示沿用全局 tools 值。
-
-    典型场景：飞书/企微单独开关某些工具（如 search_enabled / file_ops_enabled），
-    不配则继承全局顶层 tools。
-    """
-
-    search_enabled: bool | None = None
-    file_ops_enabled: bool | None = None
-    enabled: bool | None = None
-
-
-class PlatformConfig(BaseModel):
-    """多平台隔离：每个 IM 平台一个独立配置（独立适配器 / 独立数据库 / 独立轮询器）。
-
-    向后兼容：若 config.yaml 无 ``platforms`` 段，``load_config`` 会用全局
-    ``dws`` / ``storage`` / ``poller`` 自动 seed 出一个 ``dingtalk`` 平台，
-    钉钉数据库路径与行为完全不变。
-    """
-
-    id: str  # dingtalk / feishu / wecom
-    display_name: str = ""
-    enabled: bool = True
-    adapter_type: Literal["dingtalk", "feishu", "wecom"] = "dingtalk"
-    storage: StorageConfig = Field(default_factory=StorageConfig)
-    poller: PollerConfig = Field(default_factory=PollerConfig)
-    # 适配器专属配置（钉钉→DwsConfig 字段；飞书/企微→cli_path/dry_run 等）
-    adapter: AdapterOverrideConfig = Field(default_factory=AdapterOverrideConfig)
-    # 平台级 KB 覆盖配置（可选；不配则沿用全局 rag）
-    rag: PlatformRagConfig | None = None
-    # 平台级 LLM 覆盖配置（可选；不配则沿用全局 llm）
-    llm: PlatformLLMConfig | None = None
-    # 平台级 Tools 覆盖配置（可选；不配则沿用全局 tools）
-    tools: PlatformToolsConfig | None = None
-
-    model_config = {"extra": "forbid"}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.display_name:
-            self.display_name = self.id
-        # 未显式配置 path 时，回退到默认库路径（./data/linkora.db）。
-        # 显式设置的 path 一律尊重，不再按平台 id 派生 <id>-ai.db（旧命名已统一为 linkora）。
-        if not self.storage.path:
-            self.storage.path = DEFAULT_STORAGE_PATH
-
-
-
-
-class LoggingConfig(BaseModel):
-    level: str = "info"
-    file: str = str(get_log_dir() / "linkora.log")
-    max_size_mb: int = 50
-    max_backups: int = 7
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class SafetyConfig(BaseModel):
-    sensitive_words: list[str] = Field(default_factory=list)
-    default_fallback: str = "抱歉，我暂时无法回答这个问题。"
-    media_fallback_text: str = "请发文字，我暂时无法处理语音/视频消息，谢谢理解～"
-
-
-class DeadLetterConfig(BaseModel):
-    """死信队列（P0-2）：LLM/发消息彻底失败时，将原始消息落库而非静默丢弃。
-
-    触发 = 主模型重试耗尽 且 备用模型也失败（或两者均不可达）。
-    落库后管理台可查看并重放（replay），避免消息石沉大海。
-    重试次数/退避见 LlmConfig.max_retries / base_backoff。
-    """
-    enabled: bool = True  # 是否启用 DLQ（关闭则退回旧行为：仅回 fallback 文本）
-
-
-
-class ProactiveConfig(BaseModel):
-    """主动触达（P4-13）：每日定时把近期对话摘要主动推送给主人。
-
-    默认关闭（enabled=False）。开启后由后台 daemon 线程在每日 hour:minute
-    （本地时区）触发一次：汇总最近 lookback_hours 内、至多 max_conversations 个
-    有缓存摘要的对话，生成中文摘要经钉钉推送给 owner（1:1）。复用既有对话缓存
-    摘要，不额外消耗 LLM。
-
-    发送目标二选一：owner_user_id（钉钉 user_id）或 owner_open_dingtalk_id
-    （钉钉 open_id）。两者皆空则调度器不启动（fail-safe）。
-    """
-
-    enabled: bool = False
-    hour: int = 9  # 每日触发小时（0-23，本地时区）
-    minute: int = 0  # 每日触发分钟（0-59）
-    owner_user_id: str = ""  # 钉钉 user_id（与 owner_open_dingtalk_id 二选一）
-    owner_open_dingtalk_id: str = ""  # 钉钉 open_dingtalk_id
-    lookback_hours: int = 24  # 回溯窗口（小时），仅纳入窗口内有更新的对话
-    max_conversations: int = 10  # 单次摘要最多纳入的对话数
-    max_summary_chars: int = 200  # 单条对话摘要截断长度（字符）
-
-
-class SummaryBackfillConfig(BaseModel):
-    """摘要连续性补跑（P4-14）：启动检测停机时长，按自然日补齐遗漏窗口的摘要。
-
-    默认开启。进程中断期间 RollingSummary / ProactiveDigest 不会写缓存也不会补跑
-    错过的那一天；本机制在启动时读 ``meta.last_run_at``（主库），与「现在」算出停机天数，
-    把遗漏窗口切成若干自然日，对每天有消息的会话现场调 LLM 生成当日摘要，写回
-    ``conversation_summaries``（与正常周期同源同格式），使「当天 / 近七天」摘要连续完整。
-    与 ProactiveDigest 共用同一份缓存，故补跑后主动推送的近七天视图自然补全。
-
-    失败全部非致命：DB/LLM 异常仅记日志，绝不拖垮主回复链路；补跑后刷新 last_run_at 防误判。
-    """
-
-    enabled: bool = True  # 是否启用启动期摘要补跑（默认开）
-    max_backfill_days: int = 14  # 最多补跑最近 N 天（防止极端停机刷爆 LLM）
-    min_messages_per_chat: int = 3  # 单会话某日不足此条数则跳过（避免噪声摘要）
-    # 摘要生成的时间上限（省 token）：早于「现在 - N 天」的旧自然日不再补生成摘要。
-    # 0 表示不启用该上限（按 max_backfill_days 处理全部遗漏窗口）。与 H2-A 滚动摘要
-    # 调度器共用同一语义，确保「过去 N 天之前的旧消息」整体不再消耗 LLM 额度。
-    max_summary_age_days: int = 7
-
-
-
-
-class WebConfig(BaseModel):
-    port: int = 8080
-    # 监听地址。安全默认仅本机回环；如需从其他设备访问应经反代并加认证，
-    # 或显式置 "0.0.0.0"（不推荐公网直曝）。
-    host: str = "127.0.0.1"
-    # 安全默认值：开启认证。历史上默认关闭会在公网暴露管理后台，属高危配置。
-    # 本地未配置 config.yaml 时也不应裸奔。部署方如需关闭须显式置 false。
-    auth_enabled: bool = True
-    auth_username: str = "admin"
-    # 安全策略：默认密码为空，启动时若 auth_enabled 为 true 且密码为空则强制报错，
-    # 防止部署方忘记修改默认密码导致管理后台裸奔。请在 config.yaml 中显式设置。
-    auth_password: str = ""
-    # JWT 令牌签名密钥。为空时运行时会生成本进程临时随机密钥（重启失效），
-    # 仅适合本地开发；生产环境务必设为固定高熵值，否则令牌可被伪造/重放风险升高。
-    jwt_secret: str = ""
-
-    @model_validator(mode="after")
-    def _enforce_non_empty_auth_password(self) -> "WebConfig":
-        """fail-closed：开启认证但密码为空或仍为已知默认值时拒绝构造（启动即退出）。
-
-        空密码下 `_auth_check` 用 hmac.compare_digest("", "") == True，任意请求
-        可用空密码登入，等同裸奔。同理，已知默认值（如 "please-change-me"）等于
-        公开口令，任何人可登入管理后台，故一并拒绝。
-        在 WebConfig 构造期即抛出，使进程无法以该不安全配置启动。
-        auth_enabled=False（信任内网/反代场景）时空密码允许（但默认值仍拒绝，
-        因其代表「未真正配置」）。
-        """
-        # 已知弱/默认口令：恢复出厂或遗漏配置时会写死这些值，等同公开，必须拒绝。
-        # 注意：先 strip() 再判定，空白口令（"   "）与空口令同等视为未配置。
-        #
-        # 【分级策略】弱口令（admin/password/changeme/…）在任何绑定下都拒绝启动；
-        # 而「出厂默认口令」是 v0.5.4 刻意设计的开箱即用默认值（见
-        # docs/CHANGELOG.md v0.5.4）——它保证 cp 模板即可登录，不因默认拒绝
-        # 造成「没默认密码、登不进去」。但该值公开在 git 跟踪的 example 里，
-        # 因此仅在**服务对外暴露**时（host 非回环/非私网）才 fail-closed：
-        # 本地/内网使用保留开箱体验，公网暴露则强制先改密码。
-        _WEAK_DEFAULT_PASSWORDS = (
-            "please-change-me", "changeme", "admin", "password",
-            "REPLACE_WITH_YOUR_STRONG_PASSWORD",
-        )
-        # config.yaml.example 随附的出厂默认口令（公开入库，仅本地/内网放行）
-        _FACTORY_DEFAULT_PASSWORD = "Admin@P0sw0rd"
-        _pw = (self.auth_password or "").strip()
-        if self.auth_enabled:
-            if not _pw or _pw in _WEAK_DEFAULT_PASSWORDS:
-                raise ValueError(
-                    "auth_enabled=True 但 auth_password 为空/空白或为已知弱口令，拒绝启动（安全默认）："
-                    "请在 config.yaml 的 web.auth_password 设置高强度密码（建议 PBKDF2 哈希，"
-                    "生成：python -c \"from web.auth_middleware import hash_password; "
-                    "print(hash_password('你的密码'))\"）"
-                ) from None
-            if _pw == _FACTORY_DEFAULT_PASSWORD and self._is_publicly_exposed():
-                raise ValueError(
-                    "web.host 绑定到对外可路由地址（当前 "
-                    f"{self.host}）但 web.auth_password 仍为公开在 "
-                    "config.yaml.example 中的出厂默认口令，拒绝启动：任何人都能登录管理后台。"
-                    "请改为自有强密码（推荐 PBKDF2 哈希：python -c \"from web.auth_middleware "
-                    "import hash_password; print(hash_password('你的密码'))\"）；"
-                    "若仅本机/内网使用，请把 web.host 保持为 127.0.0.1"
-                ) from None
-        return self
-
-    def _is_publicly_exposed(self) -> bool:
-        """判断 web.host 是否为对外可路由地址（回环/私网/本地名视为本地或内网使用）。
-
-        空 host 由运行期按 127.0.0.1 处理（见 web 启动），等同仅本地。
-        """
-        host = (self.host or "").strip()
-        if not host:
-            return False
-        # 显式「监听所有网卡」= 对外暴露
-        if host in ("0.0.0.0", "::", "*"):  # noqa: S104 — 显式通配绑定
-            return True
-        # 本地主机名：解析到回环，与 127.0.0.1 等价
-        if host.lower() in ("localhost", "localhost.localdomain", "ip6-localhost"):
-            return False
-        try:
-            import ipaddress
-
-            ip = ipaddress.ip_address(host)
-        except ValueError:
-            # 其余主机名（含 bind.example.com 等）：无法静态判定，一律按暴露处理
-            return True
-        return not (ip.is_loopback or ip.is_private)
-
-
-class OaApprovalConfig(BaseModel):
-    """OA 审批转发处理策略。
-
-    - 别人在钉钉里转给你的审批（msgType=oa）默认视为「催审批」，
-      直接回固定话术、不调 LLM（省 token，也避免啰嗦）。
-    - 若消息明显是「针对审批的提问」（含问号/怎么/为什么等标记），则交给 LLM 正常处理。
-    """
-
-    enabled: bool = True
-    # 催审批固定回复话术：直接告诉对方等待，不调 LLM
-    urge_reply_text: str = "请稍候，审批正在处理中，请耐心等待。"
-    # 含以下标记的 OA 审批消息视为「提问」而非「催审批」，转交 LLM 处理
-    question_markers: list[str] = Field(default_factory=lambda: [
-        "?", "？", "怎么", "为什么", "为何", "什么情况", "什么意思",
-        "合理吗", "对吗", "对不对", "帮我看", "帮我分析", "分析一下",
-        "查一下", "看看", "哪", "如何",
-    ])
-    # 含以下标记的 OA 审批消息视为「动作指令」（如原审批人离职需转交），
-    # 交给 LLM 调用审批工具（transfer_approval 等）处理，而非固定话术
-    action_markers: list[str] = Field(default_factory=lambda: [
-        "转给", "转交", "转由", "移交", "交接", "离职", "换人",
-        "代批", "帮忙批", "改成", "转移给",
-    ])
-
-
-class AppConfig(BaseModel):
-    dws: DwsConfig = Field(default_factory=DwsConfig)
-    platforms: list[PlatformConfig] = Field(default_factory=list)  # 多平台隔离；空 → 自动 seed 出 dingtalk
-    poller: PollerConfig = Field(default_factory=PollerConfig)
-    oa_approval: OaApprovalConfig = Field(default_factory=OaApprovalConfig)
-    llm: LlmConfig = Field(default_factory=LlmConfig)
-    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
-    memory: MemoryConfig = Field(default_factory=MemoryConfig)
-    rules: RulesConfig = Field(default_factory=RulesConfig)
-    tools: ToolsConfig = Field(default_factory=ToolsConfig)
-    storage: StorageConfig = Field(default_factory=StorageConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    ocr_postprocess: OcrPostprocessConfig = Field(default_factory=OcrPostprocessConfig)
-    safety: SafetyConfig = Field(default_factory=SafetyConfig)
-    dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
-    proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
-    summary_backfill: SummaryBackfillConfig = Field(default_factory=SummaryBackfillConfig)
-    rag: RagConfig = Field(default_factory=RagConfig)
-    skills: SkillsConfig = Field(default_factory=SkillsConfig)
-    skillhub: SkillHubConfig = Field(default_factory=SkillHubConfig)
-    web: WebConfig = Field(default_factory=WebConfig)
-    llm_throttle: LlmThrottleConfig = Field(default_factory=LlmThrottleConfig)
 
 
 def _resolve_model_cls(annotation: Any) -> type[BaseModel] | None:

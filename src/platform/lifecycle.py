@@ -341,6 +341,18 @@ def _start_dev_watcher(pid_file: str) -> None:
     logger.info("[DEV] 文件监听已启动，监视: %s", ", ".join(watch_paths))
 
 def main(root: str | None = None):
+    # ★ 项目入口显式加载 .env（2026-10-27 dotenv 搬迁专项）。
+    #   此前该动作藏在 src/platform/base.py 的导入副作用里 —— 加载时机取决于
+    #   「谁先 import base.py」，是隐式的；且 Web 进程（web/api.py）根本不经
+    #   过该路径，拿不到 .env 里的密钥。
+    #   放在**首行**：必须早于任何读取环境变量的逻辑（config 加载、LLM client
+    #   / embedding 构造等均在 main() 内部进行）。
+    #   src/platform/base.py 仍保留一次幂等兜底，覆盖「main() 之前被导入的
+    #   模块在模块级读环境变量」的场景（如 account_identity 读 DWS_BIN）。
+    from src.dotenv_loader import load_env
+
+    load_env()
+
     # 启动钩子：配置文件每日滚动备份（当天已备份 / 无变化则跳过，详见 src/config_backup.py）。
     # 用 try/except 包裹，备份失败绝不中断应用启动。
     try:

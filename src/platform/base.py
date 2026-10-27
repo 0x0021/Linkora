@@ -11,10 +11,13 @@ P2-1 步骤 2（2026-10-27）前的本文件是「星号导入枢纽」：import
 其余第三方符号此前全部是**纯重导出**（本文件内并不使用），已移除；它们各自
 的源模块在别处均有主入口，删除不改变任何模块的首次导入时机。
 
-⚠️ 本文件仍保留 ``load_dotenv()`` 调用 —— 它是 .env 的加载入口，搬迁属高危
-（``src/account_identity.py`` 在**导入期**读 ``DWS_BIN``，dotenv 时序一变，
-该环境变量覆盖会静默失效，钉钉账号隔离退化为 ``dingtalk:unknown``）。
-另开专项处理，不在本步改动。
+⚠️ 本文件仍保留一次 ``load_dotenv()`` 调用（**幂等兜底**，2026-10-27 dotenv
+搬迁专项）：真正的入口已移到 ``main()`` 首行（``src/dotenv_loader.py``），
+但 ``src/memory/account_identity.py:38`` 等 3 处仍在**模块级**读环境变量
+（``DWS_BIN`` / ``LINKORA_AUDIT_LOG`` / ``ENABLE_SEARXNG``），这些模块可能在
+``main()`` 之前被导入 —— 缺了这次兜底，``DWS_BIN`` 覆盖会静默失效
+（钉钉账号隔离退化为 ``dingtalk:unknown``）。``load_dotenv()`` 本身幂等，
+重复调用零成本、零行为差异。
 """
 from __future__ import annotations
 
@@ -26,11 +29,11 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-# 在项目入口统一加载 .env（若存在），使 LLM_API_KEY / LLM_FALLBACK_API_KEY 等
-# 密钥可经环境变量覆盖 config.yaml（.env 已在 .gitignore 中，不会进版本库）。
-from dotenv import load_dotenv
+from src.dotenv_loader import load_env
 
-load_dotenv()
+# 幂等兜底：确保在 main() 之前被导入的模块也能拿到 .env 注入的环境变量
+# （真正的入口是 main() 首行的显式调用）。
+load_env()
 
 from src.llm.client import seconds_since_rate_limit
 

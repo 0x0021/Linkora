@@ -267,6 +267,7 @@ def _download_to_file(url: str, dest: Path, timeout: float = 60.0) -> None:
     if not is_ssrf_safe(url):
         raise ValueError(f"下载源 URL 未通过 SSRF 校验，已拒绝: {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "dingtalk-bot/1.0"})
+    # ssrf-ok: 上行已过 is_ssrf_safe + 主机白名单（见 _skillhub_install_url_allowed），非用户可控
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (host 在白名单内)
         with open(dest, "wb") as f:
             while True:

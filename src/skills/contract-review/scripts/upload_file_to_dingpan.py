@@ -91,6 +91,7 @@ def upload_file_to_dingpan(
             "staffId": staff_id,
         }
 
+        # ssrf-ok: 钉盘上传 base_url 来自部署配置/环境变量（企业内网可信服务），非用户可控
         response = requests.post(url, files=files, data=data, timeout=60)
 
     if response.status_code != 200:

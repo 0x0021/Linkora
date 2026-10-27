@@ -105,6 +105,12 @@ jobs:
       # AST 精确计数）。防止静默吞噬真实错误的宽异常回潮；每收窄一批下调基线。
       run: uv run python scripts/check_no_bare_except.py
 
+    - name: Verify SSRF guard coverage
+      # 出站请求必须走 SSRF guard（src/utils/net.py 的 ssrf_safe_get / safe_http_request），
+      # 或带显式 `# ssrf-ok: <理由>` 豁免注释。防护能力早已具备，但历史上「采用率≈0」：
+      # 裸 requests/httpx 散落在技能脚本里，防护形同可选。本门禁把能力变成约束。
+      run: uv run python scripts/check_ssrf_guard.py
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

@@ -68,6 +68,7 @@ def _post_json(url: str, payload: dict, timeout: int = 60) -> dict:
     :return: 响应 JSON
     """
     headers = {"Content-Type": "application/json"}
+    # ssrf-ok: 合同审查 API base_url 来自部署配置/环境变量（企业内网可信服务），非用户可控
     response = requests.post(url, json=payload, headers=headers, timeout=timeout)
 
     if response.status_code != 200:

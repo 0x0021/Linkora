@@ -2,12 +2,13 @@
 """Linkora 多进程启动器（A1 进程分离）。
 
 用法:
-    scripts/run_linkora.py                      # 同时拉起 web(默认 8080) + worker
+    scripts/run_linkora.py                      # 默认单进程（both）同时拉起 web(8080) + worker
     scripts/run_linkora.py --web-port 9000      # 指定 Web 端口
-    scripts/run_linkora.py --no-worker          # 只跑 web（调试 Web 时常用）
+    scripts/run_linkora.py --no-worker          # 只跑 web（调试 Web 时常用，单进程下忽略）
     scripts/run_linkora.py --worker-only        # 只跑 worker（纯 ingestion）
     scripts/run_linkora.py --dev                # dev 模式（文件变更热重启，both 模式）
-    scripts/run_linkora.py --single-process     # 单进程模式（both），消除跨进程锁争用
+    scripts/run_linkora.py --single-process     # 单进程模式（both，现默认，可省略）
+    scripts/run_linkora.py --multi-process      # 显式双进程（web+worker 分离，仅大规模部署）
     scripts/run_linkora.py --no-focus           # 关闭焦点模式，恢复全量 INFO 输出
 
 进程职责:
@@ -190,9 +191,12 @@ def main() -> None:
     ap.add_argument("--dev", action="store_true", help="dev 模式（文件变更热重启，both 模式）")
     ap.add_argument("--no-dedup", action="store_true",
                     help="关闭跨进程日志去重，恢复 web/worker 逐行双显（调试两进程差异用）")
+    ap.add_argument("--multi-process", action="store_true",
+                    help="多进程模式（web+worker 分离）：仅大规模/多平台部署推荐；"
+                         "注意跨进程 SQLite 写锁争用风险（默认单进程 both）")
     ap.add_argument("--single-process", action="store_true",
-                    help="单进程模式（both）：Web 与后台轮询跑在同一进程，"
-                         "从根本上消除跨进程 SQLite 写锁争用")
+                    help="单进程模式（both，现默认）：Web 与后台轮询跑在同一进程，"
+                         "从根本上消除跨进程 SQLite 写锁争用（默认，可省略）")
     ap.add_argument("--no-focus", action="store_true",
                     help="关闭焦点模式（默认开启）：恢复全量 INFO 终端输出。"
                          "焦点模式下只显示 收到的新消息/AI 回复/WARNING 及以上，"
@@ -215,26 +219,28 @@ def main() -> None:
               f"焦点模式：仅显示 收到的新消息 / AI 回复 / 告警；"
               f"完整日志见 logs/linkora.log（--no-focus 关闭）", flush=True)
 
-    # 【P0 2026-10-05 锁争用根治】单进程模式：只 spawn 一个 both 进程。
+    # 【P0-3 2026-10-27 默认单进程】默认只 spawn 一个 both 进程，从根本上消除跨进程
+    # SQLite 写锁争用（Oct-5 生产事故的根因形态）；仅显式 --multi-process 才退回
+    # 双进程（web + worker 分离），供大规模/多平台部署。
     #
-    # 背景（生产事故）：双进程架构下 web 与 worker **同时**打开同一批 SQLite 库
-    # （实测 110MB 分库：web 进程 15 个连接、worker 进程 23 个连接），
+    # 背景（生产事故）：双进程架构下 web 与 worker **同时**打开同一批 SQLite 库，
     # 跨进程写锁争用使轮询器大量报 "database is locked"。关键结论：
     # **本进程内的自愈（discard_conn / write_with_retry）对跨进程锁完全无效**——
     # 锁在另一个进程手里，丢弃自己的连接无用。
     #
     # both 模式已在 lifecycle.py:115 完备支持（start_web 与 start_ingestion 同时为真），
-    # 故此处零业务改动即可消除跨进程争用。代价：改 Web 代码会连带重启 worker
-    # （--dev 热重载），这正是 --single-process 的取舍。
-    if args.single_process:
-        print(f"{_CYAN}[run_linkora]{_RESET} "
-              f"单进程模式（both）：Web(端口 {args.web_port}) 与后台轮询同进程，"
-              f"避免跨进程 SQLite 锁争用", flush=True)
-        p = spawn("both", args.web_port, extra)
-        procs.append(("both", p))
-        pumps.append(threading.Thread(target=_pump, args=("web+worker", _GRAY, p.stdout, False),
-                                      daemon=True))
-    else:
+    # 故默认单进程零业务改动即可消除跨进程争用。代价：改 Web 代码会连带重启 worker
+    # （--dev 热重载）。显式 --multi-process 是逃生口，但会重新引入锁争用风险，
+    # 故下方横幅对多进程模式显式告警。
+    #
+    # --single-process 保留为兼容别名（现默认，可省略）；显式 --single-process 优先于
+    # --multi-process（即两者同传仍走单进程）。
+    use_multi = args.multi_process and not args.single_process
+    if use_multi:
+        print(f"{_YELLOW}[run_linkora]{_RESET} "
+              f"⚠️ 多进程模式（web + worker 分离）：跨进程 SQLite 写锁争用风险，"
+              f"仅大规模/多平台部署推荐；如需消除锁争用请去掉 --multi-process（默认单进程）",
+              flush=True)
         if not args.worker_only:
             p = spawn("web", args.web_port, extra)
             procs.append(("web", p))
@@ -243,6 +249,14 @@ def main() -> None:
             p = spawn("worker", 0, extra)
             procs.append(("worker", p))
             pumps.append(threading.Thread(target=_pump, args=("worker", _YELLOW, p.stdout, dedup), daemon=True))
+    else:
+        print(f"{_CYAN}[run_linkora]{_RESET} "
+              f"单进程模式（both，默认）：Web(端口 {args.web_port}) 与后台轮询同进程，"
+              f"避免跨进程 SQLite 锁争用", flush=True)
+        p = spawn("both", args.web_port, extra)
+        procs.append(("both", p))
+        pumps.append(threading.Thread(target=_pump, args=("web+worker", _GRAY, p.stdout, False),
+                                      daemon=True))
 
     for t in pumps:
         t.start()

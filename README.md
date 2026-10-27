@@ -162,13 +162,14 @@ npm run build:frontend
 
 后台常驻：`nohup .venv/bin/python scripts/run_linkora.py > logs/$(date +%Y%m%d).log 2>&1 &`
 
-> **推荐：单进程模式**（`--single-process`）。默认的双进程模式（web + worker 分属两个
-> 进程）会同时打开同一个数据库文件，SQLite 只允许单写者，跨进程写锁竞争可能表现为
-> `database is locked`、轮询丢会话。单进程让 Web 与后台轮询同驻一个进程、共用同一把
-> 写锁，从根上消除这类争用：
+> **默认单进程模式**（`both`：Web 与后台轮询同进程）。跨进程双进程模式（`--multi-process`，
+> web + worker 分属两个进程）会同时打开同一个数据库文件，SQLite 只允许单写者，跨进程写锁
+> 竞争可能表现为 `database is locked`、轮询丢会话。单进程共用同一把写锁，从根上消除这类
+> 争用，故为默认（无需额外参数）；仅大规模/多平台部署才需显式 `--multi-process`：
 >
 > ```bash
-> .venv/bin/python scripts/run_linkora.py --single-process
+> .venv/bin/python scripts/run_linkora.py                  # 默认单进程（both）
+> .venv/bin/python scripts/run_linkora.py --multi-process   # 仅大规模/多平台部署
 > ```
 >
 > 停止：`pkill -f run_linkora.py`

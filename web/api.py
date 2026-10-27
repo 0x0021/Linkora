@@ -417,13 +417,57 @@ def _auth_check(username: str, password: str, cfg) -> bool:
 # 敏感端点：即便全局 auth_enabled=False，也强制要求凭据（纵深防御）。
 # 覆盖：所有非 GET 的写操作 + 显式列出的敏感只读（配置导出）。
 _SENSITIVE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_SENSITIVE_GET_PATHS = {"/api/config/export", "/api/logs"}
+# 敏感只读端点：即便全局 auth_enabled=False，也强制要求 admin 角色（纵深防御）。
+#
+# 早期实现只有 2 个路径、且用**精确相等**匹配——两个问题叠加：
+#   1. 带路径参数的端点（如 /api/kb/documents/{doc_id}）永远无法命中，
+#      在集合里登记了也等于没登记；
+#   2. 新增敏感只读端点必须手工改本集合，漏改即静默失守。
+# 现改为「精确 + 前缀」匹配（前缀以 "/" 收尾，故 /api/config 不会误伤
+# /api/config-drift），并补齐审计确认的高危只读端点。
+_SENSITIVE_GET_PATHS = {
+    # ── 原有 ──
+    "/api/config/export",   # 配置导出（YAML，含脱敏后的全量配置）
+    "/api/logs",            # 内存日志缓冲
+    # ── 内部布局与凭据 ──
+    "/api/system/paths",    # 绝对路径：config / data / logs / skills / pid
+    "/api/image-token",     # 签发图片访问 token（凭据）
+    # ── 聊天正文与身份 ──
+    "/api/messages",        # 消息正文 + sender（含 /export、/sync-history/log）
+    "/api/departments",     # 成员 user_id / name / email / mobile（PII）
+    # ── 可能含密钥的技能配置 ──
+    "/api/skills",          # SKILL.md 原文 + 技能 config.yaml 原始文本
+    # ── 批量导出（含 sender / content 预览）──
+    "/api/dead-letters",
+    "/api/decisions/export",
+    "/api/cost-quality/export",
+    "/api/metrics/export",
+    # ── 知识库 / 文档正文 ──
+    "/api/kb/documents",
+    "/api/dingtalk-docs",
+    # ── 个人画像、记忆与摘要正文 ──
+    "/api/persona",
+    "/api/memories",
+    "/api/summaries",
+}
+
+
+def _is_sensitive_get_path(path: str) -> bool:
+    """敏感只读端点判定：精确命中，或「路径 + /」前缀命中。
+
+    前缀匹配用于覆盖带路径参数的端点（``/api/kb/documents/{doc_id}``）：
+    早期用 ``path in _SENSITIVE_GET_PATHS`` 精确相等，这类端点永远无法命中。
+    前缀以 ``/`` 收尾，避免 ``/api/config`` 误伤 ``/api/config-drift``。
+    """
+    if path in _SENSITIVE_GET_PATHS:
+        return True
+    return any(path.startswith(p + "/") for p in _SENSITIVE_GET_PATHS)
 
 
 def _is_sensitive_request(request: Request) -> bool:
     if request.method in _SENSITIVE_METHODS:
         return True
-    return request.url.path in _SENSITIVE_GET_PATHS
+    return _is_sensitive_get_path(request.url.path)
 
 
 def _web_exposed_publicly(config) -> bool:

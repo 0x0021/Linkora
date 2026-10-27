@@ -55,10 +55,21 @@ def load_env() -> bool:
     try:
         from dotenv import load_dotenv
 
-        load_dotenv()
+        # ⚠️ **显式指定 .env 路径**，不依赖 dotenv 的自动查找。
+        #
+        # `load_dotenv()` 不传路径时会调 `find_dotenv()`，而后者靠**遍历调用栈帧**
+        # 推断「用户代码所在目录」：当调用链较深（如 pytest → 测试函数 → main() →
+        # load_env() → load_dotenv()），或中间帧的文件不存在时，它会一路退到栈底
+        # 触发 `assert frame.f_back is not None` → AssertionError。
+        # 该脆弱点在 python-dotenv 内部，本项目无法从调用侧控制深度；
+        # 但项目根是确定的（`src/paths.py::get_app_root()`），故直接给出路径。
+        # （传了 dotenv_path 即不会走 find_dotenv；文件不存在时 dotenv 静默返回 False。）
+        from src.paths import get_app_root
+
+        load_dotenv(dotenv_path=get_app_root() / ".env")
         return True
-    except (OSError, ValueError) as exc:
-        # .env 读取/解析失败属可预期故障（文件权限、编码、格式）。
+    except (OSError, ValueError, AssertionError) as exc:
+        # .env 读取/解析失败属可预期故障（文件权限、编码、格式、dotenv 内部断言）。
         # **不**裸捕 Exception —— 宽异常门禁只减不增，且裸捕会掩盖真实 bug。
         logger.warning("[dotenv] .env 加载失败（已忽略）: %s", exc)
         return False

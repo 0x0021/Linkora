@@ -95,41 +95,64 @@ class TestMainEntryCallsLoadEnv:
 class TestBehaviorEquivalence:
     """搬迁前后行为等价 —— 核心要求。"""
 
-    def test_main_process_still_injects_env_after_import_base(self) -> None:
-        """导入 ``src.platform.base`` 后，``.env`` 变量**仍被注入**。
+    def test_main_process_still_injects_env_after_import_base(self, tmp_path) -> None:
+        """导入 ``src/platform.base`` 后，``.env`` 变量**仍被注入**。
 
         这是 ``src/memory/account_identity.py:38``（模块级读 ``DWS_BIN``）等
         3 处模块级 env 读取的依赖 —— 若失效，钉钉账号隔离会静默退化为
         ``dingtalk:unknown``。
+
+        ⚠️ 本用例**不能依赖仓库里存在 .env**：``.env`` 在 .gitignore 中，
+        CI 的 checkout **没有**该文件（早期版本此断言在 CI 上必然失败）。
+        故改为在临时目录里造一个 .env，并让被测代码从那里加载。
         """
+        # 造一个临时 .env，key 用测试专用名（避免与真实 .env 冲突）
+        env_file = tmp_path / ".env"
+        env_file.write_text("LINKORA_TEST_DOTENV_MARKER=marker_value\n", encoding="utf-8")
+
         code = (
-            "import os\n"
-            "os.environ.pop('LLM_API_KEY', None)\n"
-            "import src.platform.base  # noqa\n"
-            "print('INJECTED' if os.environ.get('LLM_API_KEY') else 'MISSING')\n"
+            "import os, pathlib, sys\n"
+            "os.environ.pop('LINKORA_TEST_DOTENV_MARKER', None)\n"
+            # 把临时 .env 的内容接到项目根的 .env 解析路径上：
+            # 直接改 dotenv_loader 的解析根（monkeypatch get_app_root）
+            "import src.paths as paths\n"
+            f"paths.get_app_root = lambda: pathlib.Path({str(tmp_path)!r})\n"
+            "from src.dotenv_loader import load_env\n"
+            "load_env()\n"
+            "print('INJECTED' if os.environ.get('LINKORA_TEST_DOTENV_MARKER') == 'marker_value' else 'MISSING')\n"
         )
         proc = subprocess.run(
             [sys.executable, "-c", code],
             cwd=ROOT, capture_output=True, text=True, timeout=120,
         )
         assert "INJECTED" in proc.stdout, (
-            f"搬迁后主进程未注入 .env 变量（行为已变）: {proc.stdout} {proc.stderr}"
+            f"搬迁后未注入 .env 变量（行为已变）: {proc.stdout} {proc.stderr[-400:]}"
         )
 
     def test_web_process_behavior_unchanged(self) -> None:
-        """Web 进程仍**不**加载 ``.env``（搬迁不改变 Web 侧行为）。"""
+        """Web 进程仍**不**加载 ``.env``（搬迁不改变 Web 侧行为）。
+
+        验证方式：**在 ``web.api`` 被导入后**检查 ``load_env`` 是否被调用过 ——
+        而非检查某个环境变量（``.env`` 在 .gitignore 里，CI 的 checkout 没有，
+        依赖具体 .env 内容会让本用例在 CI 上必然失败）。
+
+        手法：给 ``src.dotenv_loader.load_env`` 打一个「计数桩」，导入
+        ``web.api`` 后看计数是否为 0 —— 若 Web 侧开始加载 .env，计数会 > 0。
+        """
         code = (
-            "import os\n"
-            "os.environ.pop('LLM_API_KEY', None)\n"
+            "import src.dotenv_loader as dl\n"
+            "calls = []\n"
+            "orig = dl.load_env\n"
+            "dl.load_env = lambda: (calls.append(1), orig())[1]\n"
             "import web.api  # noqa\n"
-            "print('INJECTED' if os.environ.get('LLM_API_KEY') else 'MISSING')\n"
+            "print('LOADED' if calls else 'NOT_LOADED')\n"
         )
         proc = subprocess.run(
             [sys.executable, "-c", code],
             cwd=ROOT, capture_output=True, text=True, timeout=180,
         )
-        assert "MISSING" in proc.stdout, (
-            f"搬迁意外改变了 Web 进程行为（应仍不加载 .env）: {proc.stdout}"
+        assert "NOT_LOADED" in proc.stdout, (
+            f"搬迁意外改变了 Web 进程行为（应仍不加载 .env）: {proc.stdout} {proc.stderr[-300:]}"
         )
 
     def test_base_keeps_idempotent_fallback(self) -> None:

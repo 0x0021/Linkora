@@ -223,12 +223,17 @@ def _record_alert(error_type: str, error_message: str) -> None:
     否则一次限频风暴会因重试放大计数，阈值告警被虚假触发。
 
     告警属于旁路能力：本函数吞掉自身的一切异常，绝不影响主回复链路的抛错行为。
+
+    异常类型**收窄**（而非裸 ``except Exception``）：宽异常门禁只减不增，
+    且裸捕会掩盖真正的编程错误。这里只需兜住两类可预期故障：
+    - ``ImportError``：告警模块不可用（依赖缺失 / 导入期异常）；
+    - ``RuntimeError`` / ``OSError``：告警模块内部的可预期故障（如锁失败）。
     """
     try:
         from src.alerts.manager import record_error
 
         record_error(error_type, error_message)
-    except Exception as exc:
+    except (ImportError, RuntimeError, OSError) as exc:
         logger.debug("[告警] 记录告警失败（忽略）: %s", exc)
 
 

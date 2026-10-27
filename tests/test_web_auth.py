@@ -181,13 +181,31 @@ class TestWebAuthMiddleware:
         assert resp is None
 
     def test_require_admin_role_skips_regular_get(self):
-        """RBAC：普通只读请求（非敏感）不做角色检查，任意角色放行。"""
+        """RBAC：普通只读请求（非敏感）不做角色检查，任意角色放行。
+
+        注意：个人数据类只读端点（画像 / 记忆 / 摘要 / 消息正文）自 P1-4 起已纳入
+        admin-only 敏感清单（见 ``web/api.py::_SENSITIVE_GET_PATHS``），
+        此处改用聚合类只读端点作为「非敏感」示例。
+        """
         from web.api import _require_admin_role
 
-        req = self._make_request("/api/persona", client_host="203.0.113.12")
+        req = self._make_request("/api/status", client_host="203.0.113.12")
         req.state.role = "viewer"  # type: ignore[attr-defined]
         resp = _require_admin_role(req)
         assert resp is None
+
+    def test_personal_data_get_requires_admin(self):
+        """RBAC：个人数据类只读端点 → viewer 403（锁住 P1-4 的加严策略）。
+
+        聊天正文与主人画像属敏感数据，与日志/导出同类，不应落入只读角色可读范围。
+        """
+        from web.api import _require_admin_role
+
+        for path in ("/api/persona", "/api/memories", "/api/summaries", "/api/messages"):
+            req = self._make_request(path, client_host="203.0.113.14")
+            req.state.role = "viewer"  # type: ignore[attr-defined]
+            resp = _require_admin_role(req)
+            assert resp is not None and resp.status_code == 403, path
 
     def test_sensitive_get_allowed_for_admin(self, monkeypatch):
         """RBAC：admin 角色访问敏感端点（/api/logs）→ 放行。"""

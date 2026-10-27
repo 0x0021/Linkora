@@ -119,25 +119,31 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             logger.warning(f"_index_count_matches_db: swallowed exception: {_exc}")
             return False
 
-    def _ensure_kb_meta(self) -> None:
-        """惰性建表并初始化 kb_meta.revision（KB 版本号）。"""
-        cur = self.conn.cursor()
+    def _ensure_kb_meta(self, conn: sqlite3.Connection) -> None:
+        """惰性建表并初始化 kb_meta.revision（KB 版本号）。
+
+        须传入已在写闸门内的连接（由 write_main_with_retry 提供），
+        使建表 DDL 也纳入进程内全局闸门，消除读路径裸建表的旁路。
+        """
+        cur = conn.cursor()
         cur.execute(
             "CREATE TABLE IF NOT EXISTS kb_meta (key TEXT PRIMARY KEY, value TEXT)"
         )
         cur.execute(
             "INSERT OR IGNORE INTO kb_meta (key, value) VALUES ('revision', '0')"
         )
-        self.conn.commit()
+        conn.commit()
 
     def get_kb_revision(self) -> int:
         """读取当前 KB 版本号（每次 KB 写入/重索引自增）。异常时保守返回 0。"""
         try:
-            self._ensure_kb_meta()
-            cur = self.conn.cursor()
-            cur.execute("SELECT value FROM kb_meta WHERE key = 'revision'")
-            row = cur.fetchone()
-            return int(row["value"]) if row else 0
+            def _do(conn):
+                self._ensure_kb_meta(conn)
+                cur = conn.cursor()
+                cur.execute("SELECT value FROM kb_meta WHERE key = 'revision'")
+                row = cur.fetchone()
+                return int(row["value"]) if row else 0
+            return self.write_main_with_retry(_do)
         except sqlite3.Error:
             # 仅 DB 层失败（表不存在 / 损坏 / 锁冲突）才兜底；共享状态加载错误仍向上抛
             logger.warning("[resilience] get_kb_revision failed", exc_info=True)
@@ -151,9 +157,12 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
         返回自增后的版本号；异常时保守返回 0。
 
         【P1 2026-10-05 主库写闸门收口】原直连 ``self.conn.commit()`` 绕过进程内写闸门，
-        改为经 :meth:`write_main_with_retry` 收口（与方法所在的 store 同属一个全局闸门）。
+        改为经 :meth:`write_main_with_retry` 收口（与方法所在的 store 同属一个全局闸门）；
+        【P0-1 2026-10-27】将 ``_ensure_kb_meta`` 的建表 DDL 也纳入同一把闸门
+        （接收写闸门内的 conn），消除读路径 ``get_kb_revision`` 裸建表的旁路。
         """
         def _do(conn):
+            self._ensure_kb_meta(conn)
             cur = conn.cursor()
             cur.execute(
                 "UPDATE kb_meta SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) "
@@ -169,7 +178,6 @@ class SQLiteStoreIndexMixin(SQLiteStoreBase):
             return int(row["value"]) if row else 1
 
         try:
-            self._ensure_kb_meta()
             return self.write_main_with_retry(_do)
         except sqlite3.Error:
             # 仅 DB 层失败（表不存在 / 损坏 / 锁冲突）才兜底；非 DB 错误仍向上抛

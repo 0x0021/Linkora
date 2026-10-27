@@ -33,8 +33,10 @@ class DraftRepo:
             cur = self.store.conn.cursor()
             cols = {row[1] for row in cur.execute("PRAGMA table_info(message_drafts)")}
             if "read_at" not in cols:
-                self.store.conn.execute("ALTER TABLE message_drafts ADD COLUMN read_at TEXT")
-                self.store.conn.commit()
+                def _do(conn):
+                    conn.execute("ALTER TABLE message_drafts ADD COLUMN read_at TEXT")
+                    conn.commit()
+                self.store.write_main_with_retry(_do)
                 logger.info("[迁移] message_drafts 追加 read_at 列完成")
         except sqlite3.Error as e:
             # 只捕获 SQLite 错误（迁移失败属真实问题，需留痕）；不吞其它异常。

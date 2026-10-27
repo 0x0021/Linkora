@@ -33,7 +33,7 @@ cache:
 lint:
   name: 静态检查
   stage: 静态检查
-  image: python:3.14-slim
+  image: python:3.14.6-slim
   timeout: 10m
   before_script:
     - python -m pip install --upgrade pip
@@ -84,4 +84,4 @@ PY
 test:py314:
   name: 测试 (Python 3.14)
   extends: .test_base
-  image: python:3.14-slim
+  image: python:3.14.6-slim

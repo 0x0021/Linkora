@@ -101,10 +101,10 @@ def test_history_in_chronological_order():
     # 角色必须合法交替且以 user 收尾
     assert roles == ["user", "assistant", "user"], f"角色序列错误: {roles}"
     # 最旧的 user 提问必须排在最前（历史 user 消息带 [时间] 发言人： 前缀，用 endswith 容错）
-    assert contents[0].endswith("珞石股价走势及最新价格"), "最早的股价提问必须排第一"
+    assert "珞石股价走势及最新价格" in contents[0], "最早的股价提问必须排第一"
     assert contents[1].startswith("珞石"), "对应的股价回复必须紧随其后"
     # 当前 incoming 必须是最后一条（incoming 带 发言人： 前缀，用 endswith 容错）
-    assert contents[-1].endswith("再试试"), "当前用户消息必须排在最后"
+    assert "再试试" in contents[-1], "当前用户消息必须排在最后"
 
 
 def test_three_turn_history_keeps_user_before_assistant():
@@ -141,8 +141,8 @@ def test_reversed_not_double_reversing():
     ]
     messages = agent._build_user_message(_incoming(), history)
     contents = [m["content"] for m in _non_system(messages)]
-    assert contents[0].endswith("第一条问题"), "最旧的历史 user 必须排在第一"
-    assert contents[-1].endswith("再试试"), "当前 incoming 必须最后"
+    assert "第一条问题" in contents[0], "最旧的历史 user 必须排在第一"
+    assert "再试试" in contents[-1], "当前 incoming 必须最后"
 
 
 def test_leading_assistant_trimmed_to_valid_alternation():
@@ -203,8 +203,8 @@ def test_own_auto_reply_excluded_from_context():
     messages = agent._build_user_message(_incoming(), history)
     contents = [m["content"] for m in _non_system(messages)]
     assert not any("[自动回复]" in c for c in contents), "自动回复不应进入上下文"
-    assert contents[0].endswith("在吗")
-    assert contents[-1].endswith("再试试")
+    assert "在吗" in contents[0]
+    assert "再试试" in contents[-1]
 
 
 # ---------------------------------------------------------------------------

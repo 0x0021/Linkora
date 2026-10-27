@@ -45,7 +45,7 @@
 
 ## 3. 多平台数据隔离
 
-每个平台独立 SQLite 数据库（`./data/<id>-ai.db`）、独立轮询器、独立 CLI 适配器；`PlatformContext` + 按平台的 contextvar（`set_current_platform` / `get_current_platform`）在线程内路由到正确平台库，数据不串台。存储层对 PII 做脱敏，FAISS 向量索引 / BM25 倒排 / 重排序均按库隔离。
+每个平台独立 SQLite 数据库（`./data/<id>-ai.db`）、独立轮询器、独立 CLI 适配器；`PlatformContext` + 按平台的 contextvar（`set_current_platform` / `get_current_platform`）在线程内路由到正确平台库，数据不串台。存储层对 PII 做脱敏，FAISS 向量索引 / 关键词打分 / 重排序均按库隔离。
 
 ## 4. 传输与响应头
 

@@ -17,6 +17,12 @@
    - RERAISE     : 处理器内 re-raise（含 ``raise`` / ``raise X from ...``）。
    - OTHER       : 其它（如转换为领域异常后 raise，已算 RERAISE；此处多为空 body）。
 
+3. **静默吞噬闸门**（默认 / ``count`` 子命令，与总数量闸门同时生效）：
+   ``BARE_EXCEPT_BASELINE`` 只管「宽异常总数不增」，但总数不变也可能把**有日志的
+   宽异常换成无日志的**（净数量持平、SILENT 却在涨）——这是真正的风险回潮路径。
+   故另设 ``SILENT_BASELINE``：SILENT 类数量同样只减不增，且**单列失败原因**，
+   让「静默吞噬」在 CI 可见。
+
 基线更新流程（每收敛一批后）：
   1. 修复一批：给 SILENT 处理器补日志（零行为变更），或收窄异常类型；
   2. 跑 ``python scripts/check_no_bare_except.py`` 确认 total 下降；
@@ -44,6 +50,15 @@ ROOT = Path(__file__).resolve().parents[1]
 # 639（draft_repo 收窄 except Exception 为 sqlite3.Error）→
 # 638（engine_mixins_base 收窄 playwright 探测为 (ImportError, ValueError)）。
 BARE_EXCEPT_BASELINE = 638
+
+# 静默吞噬基线（SILENT 类：既无日志、也无 re-raise）。
+# 单独设基线的理由：``BARE_EXCEPT_BASELINE`` 只锁「宽异常总数不增」，但总数持平
+# 也可能是把「有日志的宽异常」换成了「无日志的」——净数量不变、SILENT 却在涨。
+# 这才是真正会吞掉错误的回潮路径（计费/密钥/写盘/事务类失败被静默降级），
+# 生产上表现为「数据静默失真」，事后无从追溯。故单列一条只减不增的闸门。
+# 历次基线：23（2026-10-27 建立闸门时的实测值）→ 22（usage_ledger 计费降级补 warning，
+# 该处由 SILENT 转 LOGGED）。
+SILENT_BASELINE = 22
 
 # 扫描范围（生产代码；测试可另行评估，先不纳入防止误伤测试桩）
 SCAN_DIRS = ("src", "web")
@@ -162,21 +177,43 @@ def _cmd_count() -> int:
     total = count_bare_excepts(files)
     print(f"broad except (except Exception / bare) total : {total}")
     print(f"locked baseline                          : {BARE_EXCEPT_BASELINE}")
+    rc = 0
     if total > BARE_EXCEPT_BASELINE:
         print(
             f"FAIL: broad except increased by {total - BARE_EXCEPT_BASELINE} "
             f"(baseline={BARE_EXCEPT_BASELINE}). 请收敛宽异常（先修 SILENT 类），"
             f"或将基线随收敛同步下调。"
         )
-        return 1
-    if total < BARE_EXCEPT_BASELINE:
+        rc = 1
+    elif total < BARE_EXCEPT_BASELINE:
         print(
             f"PASS: broad except reduced by {BARE_EXCEPT_BASELINE - total} "
             f"(baseline={BARE_EXCEPT_BASELINE}). 建议将 BARE_EXCEPT_BASELINE 下调至 {total} 以固化收敛。"
         )
     else:
         print(f"PASS: broad except at baseline ({BARE_EXCEPT_BASELINE}), 未新增。")
-    return 0
+
+    # ── 静默吞噬闸门（与总数量闸门独立判定）──
+    # SILENT = 处理器内既无 logging 调用、也无 re-raise：**真正会吞掉错误**。
+    # 单纯锁「宽异常总数」挡不住「有日志的换成没日志的」，故单列此闸门。
+    silent = len(classify(files)["SILENT"])
+    print(f"silent swallow (no log / no re-raise)    : {silent}")
+    print(f"locked silent baseline                   : {SILENT_BASELINE}")
+    if silent > SILENT_BASELINE:
+        print(
+            f"FAIL: silent swallow increased by {silent - SILENT_BASELINE} "
+            f"(baseline={SILENT_BASELINE}). 该类处理器会真正吞掉错误，"
+            f"必须补日志（零行为变更）或收窄异常类型。"
+        )
+        rc = 1
+    elif silent < SILENT_BASELINE:
+        print(
+            f"PASS: silent swallow reduced by {SILENT_BASELINE - silent}，"
+            f"建议将 SILENT_BASELINE 下调至 {silent} 以固化收敛。"
+        )
+    else:
+        print(f"PASS: silent swallow at baseline ({SILENT_BASELINE}), 未新增。")
+    return rc
 
 
 def _cmd_report(json_path: str | None) -> int:

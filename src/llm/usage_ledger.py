@@ -140,7 +140,12 @@ def _write_through_gate(fn):
     try:
         from src.memory.sqlite_store_conn import get_main_store
         store = get_main_store()
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        # 【P1-2 2026-10-27 暴露计费失真】此前静默降级为短连接直写、无任何留痕：
+        # 一旦主库 store 取不到，全仓唯一的成本真相源会**静默**脱离写闸门串行，
+        # 计费/配额失真事后无从判断是「真没花」还是「探测失败」。此处属意外路径
+        # （应用上下文本应已注册 store），按铁律「意外→告警」补 warning。
+        logger.warning("[usage] 获取主库 store 失败，该笔用量将退回短连接直写（脱离写闸门）: %s", e)
         store = None
     if store is not None:
         return store.write_main_with_retry(fn)
@@ -161,7 +166,7 @@ def record_usage(
     platform: str | None = None,
     is_estimated: bool = False,
 ) -> None:
-    """记一笔 LLM 用量。任何失败只记 debug 日志，绝不抛出。"""
+    """记一笔 LLM 用量。任何失败记 warning 日志（计费失真必须可见），绝不抛出。"""
     try:
         if total_tokens is None:
             total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
@@ -183,8 +188,13 @@ def record_usage(
 
         # 【P1 2026-10-05 主库写闸门收口】经全局写闸门落库，复用与主库 repo 同一串行化闸门
         _write_through_gate(_do)
-    except Exception:
-        logger.debug("[usage_ledger] 记账失败（不影响主链路）", exc_info=True)
+    except Exception as e:
+        # 【P1-2 2026-10-27 暴露计费失真】原为 debug 级别：生产默认日志阈值下不可见，
+        # 而 llm_usage 是全仓唯一成本真相源 → 成本/配额报表静默失真。保持「不抛、
+        # 不中断主链路」的契约不变，仅把可见性提到 warning。
+        logger.warning(
+            "[usage_ledger] 记账失败（不影响主链路，但该笔用量未入库）: %s", e, exc_info=True
+        )
 
 
 def get_stats(hours: int | None = None) -> dict:

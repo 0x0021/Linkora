@@ -408,9 +408,15 @@ def _auth_check(username: str, password: str, cfg) -> bool:
     """
     from web.auth_middleware import verify_password
 
-    ok_u = hmac.compare_digest(username.encode("utf-8"),
-                               (cfg.web.auth_username or "").encode("utf-8"))
-    ok_p = verify_password(password, cfg.web.auth_password or "")
+    # 防御式取值：最小/测试配置（SimpleNamespace 桩）可能没有 web 段的全部字段，
+    # 直接属性访问会抛 AttributeError → 中间件 500。缺字段一律按「凭据为空」处理，
+    # 即认证失败返回 401（fail-closed），而不是 500。
+    _web_cfg = getattr(cfg, "web", None)
+    ok_u = hmac.compare_digest(
+        username.encode("utf-8"),
+        (getattr(_web_cfg, "auth_username", "") or "").encode("utf-8"),
+    )
+    ok_p = verify_password(password, getattr(_web_cfg, "auth_password", "") or "")
     return ok_u and ok_p
 
 
@@ -718,10 +724,16 @@ async def web_auth_middleware(request: Request, call_next):
         # 配置无法加载时，出于安全默认“要求认证”而非放行
         return JSONResponse(status_code=401, content={"detail": "Config unavailable"})
 
-    if not config.web.auth_enabled:
+    # 防御式取值（同上）：web 段缺字段时按「开启鉴权」处理（安全默认）。
+    # 注意：此前这里直接读 config.web.auth_enabled / .auth_username / .auth_password，
+    # 敏感端点加严后更多路径会走到本分支，最小配置桩缺字段即 500。
+    _web_cfg = getattr(config, "web", None)
+    if not getattr(_web_cfg, "auth_enabled", True):
         # 关掉全局鉴权：敏感端点若已配置凭据则仍强制 Basic Auth（纵深防御）
         if _is_sensitive_request(request):
-            has_creds = bool(config.web.auth_username) and bool(config.web.auth_password)
+            has_creds = bool(getattr(_web_cfg, "auth_username", "")) and bool(
+                getattr(_web_cfg, "auth_password", "")
+            )
             if has_creds:
                 auth_err = _require_basic_auth(request)
                 if auth_err is not None:

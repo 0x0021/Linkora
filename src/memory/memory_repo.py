@@ -431,12 +431,14 @@ class MemoryRepo:
             if emb and cosine_similarity(embedding, emb) >= _MEMORY_SUPERSEDE_THRESHOLD:
                 superseded.append(row["id"])
         if superseded:
-            with self.store._lock:
-                cur.executemany(
+            def _do(conn):
+                cur2 = conn.cursor()
+                cur2.executemany(
                     "UPDATE memories SET status = 'superseded', superseded_by = ? WHERE id = ?",
                     [(new_id, mid) for mid in superseded],
                 )
-                self.store.conn.commit()
+                conn.commit()
+            self.store.write_main_with_retry(_do)
             logger.info("记忆 #%d 作废了 %d 条语义相近旧记忆", new_id, len(superseded))
         return len(superseded)
 
@@ -472,8 +474,9 @@ class MemoryRepo:
         """
         now_iso = datetime.now().isoformat()
         emb_str = json.dumps(embedding) if embedding else None
-        with self.store._lock:
-            cur = self.store.conn.cursor()
+
+        def _do(conn):
+            cur = conn.cursor()
             cur.execute(
                 "SELECT id FROM memories WHERE scope = ? AND group_key = ? AND kind = 'summary' LIMIT 1",
                 (scope, group_key),
@@ -495,8 +498,10 @@ class MemoryRepo:
                      sender_name, emb_str, now_iso, scope, group_key, now_iso),
                 )
                 mem_id = cur.lastrowid
-            self.store.conn.commit()
-        return int(mem_id) if mem_id is not None else 0
+            conn.commit()
+            return int(mem_id) if mem_id is not None else 0
+
+        return self.store.write_main_with_retry(_do)
 
     def add_pending_fact(self, *, scope: str, group_key: str, content: str,
                          sender_name: str = "", chat_id: str = "") -> None:
@@ -618,9 +623,11 @@ class MemoryRepo:
         cutoff_date = (datetime.now().timestamp() - max_age_days * 86400)
         cutoff_iso = datetime.fromtimestamp(cutoff_date).isoformat()
 
-        # P0-1: 使用 store 级 RLock 保证清理操作原子性，避免多 daemon 线程竞态
-        with self.store._lock:
-            cur = self.store.conn.cursor()
+        # 【P0-1 2026-10-27 主库写闸门收口】原 `with self.store._lock + self.store.conn.commit()`
+        # 仅持实例锁、缺遇锁自愈重试；改为经 write_main_with_retry 统一收口（进程内全局闸门
+        # + OperationalError(locked) 丢弃连接重建重试），与 add_pending_fact 等标准路径一致。
+        def _do(conn):
+            cur = conn.cursor()
             deleted_count = 0
             if gc_superseded:
                 cur.execute("DELETE FROM memories WHERE status = 'superseded'")
@@ -638,7 +645,10 @@ class MemoryRepo:
                 "DELETE FROM memory_pending WHERE created_at < ?",
                 (cutoff_iso,),
             )
-            self.store.conn.commit()
+            conn.commit()
+            return deleted_count
+
+        deleted_count = self.store.write_main_with_retry(_do)
 
         if deleted_count > 0:
             logger.info("清理了 %d 个过期/已作废记忆（保留 %d 天）", deleted_count, max_age_days)

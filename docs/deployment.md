@@ -77,16 +77,23 @@ python scripts/run_linkora.py --no-focus
 ### 单进程模式（推荐用于生产）
 
 ```bash
-python scripts/run_linkora.py --single-process
+python scripts/run_linkora.py          # 单进程（**自 v0.8.2 起为默认**）
+python scripts/run_linkora.py --multi-process   # 显式双进程（仅大规模 / 多平台部署）
 ```
 
-**为什么推荐**：SQLite 同一时刻只允许一个写者。默认模式下 Web 与后台轮询分属两个
-进程，会同时打开同一个数据库文件，跨进程写锁竞争可能表现为日志里持续的
+**为什么默认单进程**：SQLite 同一时刻只允许一个写者。双进程模式下 Web 与后台轮询
+分属两个进程，会同时打开同一个数据库文件，跨进程写锁竞争可能表现为日志里持续的
 `database is locked`、消息轮询丢会话、索引写入退化等问题（2026-10-05 生产事故即由
 此引发，详见更新日志 v0.6.0）。
 
 单进程让 Web 与后台轮询同驻一个进程、共用同一把写锁，从根上消除跨进程争用，
-不改变任何业务行为。停止：
+不改变任何业务行为。`--single-process` 保留为兼容别名。
+
+> **升级注意**：v0.8.2 起默认从双进程改为单进程。若你的部署依赖「改管理台代码不打断
+> 消息摄入」，需显式加 `--multi-process`（并接受跨进程写锁风险）。启动横幅会以黄色
+> 提示当前是双进程模式。
+
+停止：
 
 ```bash
 pkill -f run_linkora.py

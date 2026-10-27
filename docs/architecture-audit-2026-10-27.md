@@ -268,7 +268,7 @@
   回复（刷屏 + 成本）；业务消息误判为 social → 该回的不回（业务事故）。两侧都不可接受。
   **结论：这是产品成本决策而非工程缺陷，不实施**；若日后确需，正确的触发条件应是
   「**仅** social 判定为 business 且内容为短客套」这种窄口径，而非通用置信度阈值。
-- **（dotenv 专项已完成）** `.env` 加载入口已显式化：新增 `src/dotenv_loader.py::load_env()`（幂等封装），**真正入口**移到 `main()` 首行，`base.py` 保留一次幂等兜底 —— 全仓 AST 扫描确认有 **3 处模块级** env 读取（`account_identity.py:38` 的 `DWS_BIN`、`audit.py:33`、`web_search.py:27`），这些模块可能在 `main()` 之前被导入，缺了兜底 `DWS_BIN` 覆盖会静默失效（钉钉账号隔离退化为 `dingtalk:unknown`）。**Web 进程行为刻意不变**（仍不加载 `.env`）—— 改变它会改变 Web 侧行为，属独立决策。
+- **（dotenv 专项已完成 + Web 侧边界已拍板）** Web 进程**不加载** `.env` —— **有意为之的安全默认**：`.env` 里通常是开发机的个人密钥，Web 面板是对外暴露的面，自动加载等于把本机密钥带进对外服务；需要 Web 侧密钥时用**环境变量**注入。该边界已升级为**显式契约**（`docs/configuration.md` 的「.env 加载契约」小节）+ **双层守护**（运行时计数桩 + 源码级断言：`web/` 下出现 `load_dotenv`/`dotenv_loader` 即 CI 红）。`.env` 加载入口已显式化：新增 `src/dotenv_loader.py::load_env()`（幂等封装），**真正入口**移到 `main()` 首行，`base.py` 保留一次幂等兜底 —— 全仓 AST 扫描确认有 **3 处模块级** env 读取（`account_identity.py:38` 的 `DWS_BIN`、`audit.py:33`、`web_search.py:27`），这些模块可能在 `main()` 之前被导入，缺了兜底 `DWS_BIN` 覆盖会静默失效（钉钉账号隔离退化为 `dingtalk:unknown`）。**Web 进程行为刻意不变**（仍不加载 `.env`）—— 改变它会改变 Web 侧行为，属独立决策。
 
 ---
 

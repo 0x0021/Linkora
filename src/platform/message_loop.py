@@ -3,6 +3,7 @@ from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
+from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 import logging
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ class MessageLoopMixin(EngineMixinBase):
         施加**硬性上限**：即便用户持续发消息使定时器被反复重置，批次也必在
         first_seen + HARD_CAP 内触发，绝不会无限等待（timeout 必触发）。
         """
-        base = self.config.poller.reply_cooldown_seconds
+        base = resolve_poller_config(self.config).reply_cooldown_seconds
 
         def _is_image_msg(m):
             c = m.content or ""
@@ -202,8 +203,8 @@ class MessageLoopMixin(EngineMixinBase):
                 "last_cycle_dispatched": 0,
                 "last_cycle_deferred": 0,
                 "cold_start_pending": True,
-                "max_dispatch_per_cycle": self.config.poller.max_dispatch_per_cycle,
-                "max_concurrent_replies": self.config.poller.max_concurrent_replies,
+                "max_dispatch_per_cycle": resolve_poller_config(self.config).max_dispatch_per_cycle,
+                "max_concurrent_replies": resolve_poller_config(self.config).max_concurrent_replies,
                 "platforms": {},
             }
 
@@ -399,7 +400,7 @@ class MessageLoopMixin(EngineMixinBase):
             # 文字随后被「已回复」判定压制，用户真正的需求得不到回答。
             # - 含图片且尚无文字说明：拉长窗口（cooldown+20）等待字幕/指令合并进同一批；
             # - 一旦批次里出现非图片消息（字幕/指令已到）：用较短窗口（cooldown+5）尽快合并回复。
-            base = self.config.poller.reply_cooldown_seconds
+            base = resolve_poller_config(self.config).reply_cooldown_seconds
             pending = self._pending_messages.get(key, [])
 
             # 计算防抖窗口：批次级「纯数据/不完整」判定，等后续请求合并后再回复。

@@ -280,6 +280,40 @@ def _sync_root_poller(config: AppConfig, raw: dict) -> None:
     config.poller = dt.poller
 
 
+def resolve_poller_config(config: AppConfig, platform_id: str | None = None) -> PollerConfig:
+    """按平台解析 poller 配置（多平台隔离的**读侧**）。
+
+    背景
+    ----
+    ``config.poller`` 在运行时并非独立配置，而是 **dingtalk 平台块 poller 的对象别名**
+    （见 :func:`_sync_root_poller` 的 ``config.poller = dt.poller``）。因此任何直接读
+    ``config.poller.X`` 的代码，在飞书 / 企微链路上读到的都是**钉钉**的轮询设置
+    （间隔、并发、回复冷却、历史窗口、消息过滤…）——多平台部署下属跨平台串扰。
+
+    解析顺序
+    --------
+    1. 显式传入 ``platform_id`` → 取该平台块的 poller；
+    2. 未传入 → 取当前平台上下文（``get_current_platform()``；消息链路内由
+       ``platform_scope`` 对齐，poller 每平台循环亦显式 set）；
+    3. 该平台未配置 poller / 平台不存在 / 无平台上下文 → 回落 ``config.poller``。
+
+    ⚠️ **回落即现状**：单平台部署（仅 dingtalk）解析结果与 ``config.poller`` 完全等价
+    （同一对象），行为零变化；多平台下仅在「平台上下文明确且该平台配了 poller」时切换。
+
+    本函数只治读侧串扰，**不改 config.yaml 结构、不删根级 poller 段**——写入侧仍经既有
+    别名落到 dingtalk 平台块，Web 配置页行为不变。
+    """
+    if not platform_id:
+        # 懒 import：src.memory ↔ src.platform 之间存在双向依赖，模块级 import 会成环
+        from src.memory.platform_context import get_current_platform
+        platform_id = get_current_platform()
+    if platform_id:
+        for p in getattr(config, "platforms", None) or []:
+            if getattr(p, "id", "") == platform_id and getattr(p, "poller", None) is not None:
+                return p.poller
+    return config.poller
+
+
 def get_adapter_class(adapter_type: str) -> type:
     """adapter_type → 适配器类（懒加载，避免 config 与 adapter 模块循环导入）。
 

@@ -3,6 +3,7 @@ from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
+from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 import logging
 import threading
 import time
@@ -101,7 +102,7 @@ class InboundMixin(EngineMixinBase):
         判定：conversation_repo.has_user_message_from 已用 is_bot=0 过滤，
         故 AI 分身自己代发的回复不会刷新「在场」计时（避免机器人回一句后永久静默）。
         """
-        cooldown = getattr(self.config.poller, "owner_present_cooldown_seconds", 0)
+        cooldown = getattr(resolve_poller_config(self.config), "owner_present_cooldown_seconds", 0)
         # 防御：配置缺失/被 mock/非数值时视为未启用，放行回复（不静默）
         if not isinstance(cooldown, (int, float)) or cooldown <= 0:
             return False
@@ -166,7 +167,7 @@ class InboundMixin(EngineMixinBase):
         #    新到的未读消息会让会话重新进入未读列表 → 不抑制（照常回复），
         #    从而规避“漏回追问”旧事故。仅当 DWS 未读状态失真时才可能漏回，
         #    可用 config.poller.suppress_when_owner_read=false 关闭。
-        if getattr(self.config.poller, "suppress_when_owner_read", False) \
+        if getattr(resolve_poller_config(self.config), "suppress_when_owner_read", False) \
                 and self._owner_conversation_is_read(message, fresh=fresh_read_check):
             return "DWS 判定会话已读"
         return None
@@ -245,7 +246,7 @@ class InboundMixin(EngineMixinBase):
             return cache[0]
         try:
             convs = self.dws.chat_message_list_unread_conversations(
-                getattr(self.config.poller, "unread_conversation_count", 20))
+                getattr(resolve_poller_config(self.config), "unread_conversation_count", 20))
         except Exception:
             # 查询失败：不让缓存被空结果污染，保留旧缓存（若有）
             if cache is not None:
@@ -384,8 +385,8 @@ class InboundMixin(EngineMixinBase):
             return True
 
         # === 过滤不需要回复的系统/自动消息类型 ===
-        skip_types = set(self.config.poller.skip_msg_types) - set(
-            getattr(self.config.poller, "graceful_fallback_msg_types", []))
+        skip_types = set(resolve_poller_config(self.config).skip_msg_types) - set(
+            getattr(resolve_poller_config(self.config), "graceful_fallback_msg_types", []))
         if message.msg_type in skip_types:
             logger.info(
                 "跳过 %s 类型消息（来自 %s，内容: %s）",
@@ -395,8 +396,8 @@ class InboundMixin(EngineMixinBase):
         # 窄签名层：仅拦截「以真人身份推送的纯文本机器通知」（结构层已处理其余通知）
         _sig = match_notification_signature(
             message.content, message.sender_id,
-            self.config.poller.skip_notification_patterns,
-            self.config.poller.skip_notification_sender_ids,
+            resolve_poller_config(self.config).skip_notification_patterns,
+            resolve_poller_config(self.config).skip_notification_sender_ids,
         )
         if _sig:
             logger.info("跳过通知(命中签名: %s)（来自 %s）", _sig, message.sender_name)
@@ -425,7 +426,7 @@ class InboundMixin(EngineMixinBase):
             return
 
         # === P2-G 媒体类型优雅回退：语音/视频等无法处理的消息，回复引导文字而非静默忽略 ===
-        _graceful = set(getattr(self.config.poller, "graceful_fallback_msg_types", []))
+        _graceful = set(getattr(resolve_poller_config(self.config), "graceful_fallback_msg_types", []))
         if message.msg_type in _graceful:
             self._handle_media_fallback(message)
             return
@@ -502,12 +503,12 @@ class InboundMixin(EngineMixinBase):
             sem = getattr(self._active_ctx, 'reply_semaphore', None)
             if sem is not None:
                 acquired = sem.acquire(
-                    timeout=self.config.poller.reply_concurrency_timeout_seconds)
+                    timeout=resolve_poller_config(self.config).reply_concurrency_timeout_seconds)
                 reply_slot_acquired = acquired
             if not reply_slot_acquired:
                 logger.warning(
                     "[背压] 等待回复并发槽位超时（%ds），跳过本次回复以保护并发上限：%s",
-                    self.config.poller.reply_concurrency_timeout_seconds, message.msg_id[:20])
+                    resolve_poller_config(self.config).reply_concurrency_timeout_seconds, message.msg_id[:20])
                 return
 
             # === 检查：我是否已经回复过这条消息（在对方消息之后我有发过消息） ===

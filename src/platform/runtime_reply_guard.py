@@ -3,6 +3,7 @@ from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .reply_shard import REPLY_SHARD_LIMIT_DEFAULT, shard_reply_text  # F15：超长回复分片
+from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 import logging
 from src.im_adapter.errors import IMAdapterRateLimitError  # F14：回复发送限频退避
 
@@ -52,7 +53,7 @@ class ReplyGuardMixin(EngineMixinBase):
         （如"？""展开""为什么"等简短追问），放行回复；否则合理追问被冷却拦截后
         用户的消息永久丢失，形成"发消息不回"的体验黑洞。
         """
-        cooldown_seconds = self.config.poller.reply_cooldown_seconds
+        cooldown_seconds = resolve_poller_config(self.config).reply_cooldown_seconds
         if cooldown_seconds <= 0:
             return False
         # 追问旁路：明显是追问/澄清/要求展开的短消息，冷却内也放行

@@ -3,6 +3,7 @@ from .engine_mixins_base import EngineMixinBase
 
 from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
+from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 import logging
 
 from src.im_adapter.errors import IMAdapterError
@@ -113,9 +114,9 @@ class LLMReplyMixin(EngineMixinBase):
         try:
             history = self.store._message_repo.get_conversation_history(
                 message.chat_id,
-                limit=self.config.poller.history_window,
-                days=self.config.poller.history_days,
-                session_gap_minutes=self.config.poller.history_session_gap_minutes,
+                limit=resolve_poller_config(self.config).history_window,
+                days=resolve_poller_config(self.config).history_days,
+                session_gap_minutes=resolve_poller_config(self.config).history_session_gap_minutes,
             )
             # 话题(Thread)上下文补齐：入站消息位于话题下时，主群流历史里没有话题内
             # 的对话，AI 会「不知道大家在聊什么」。此处按 thread_id 拉取话题回复并

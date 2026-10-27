@@ -208,6 +208,7 @@
 | P1-3 | ✅ 新增 `src/config.py::resolve_poller_config`，runtime 消息链路 17 处读取点平台感知 + 热重载串扰修复 | `c87297e` |
 | P1-4 | ✅ **修真实凭据泄漏**（`GET /api/config` 明文回传 `jwt_secret`）+ 敏感只读端点判定改「精确 + `/` 前缀」并补齐 16 个高危端点 + 测试对齐 | `177e397` / `4eadb52` |
 | P1-4 续 | ✅ 敏感只读端点升级为**「敏感 + 公开」全覆盖**（106 个 GET 端点全部表态：敏感 63 / 公开 43），新增端点漏表态 → CI 红 | `7737937` |
+| P1-5 | ✅ **试点**：`_normalize_chat`（唯一真重复）下沉到基类模板方法 + 差分等价性测试；其余方法经 AST 差分证实**语义真实分叉**，不合并 | `9600ea3` |
 | P2-2 | ✅ gitleaks 接入 CI（独立 job「密钥扫描」，`fetch-depth: 0`） | `08173d9` / `ded1369` |
 | P2-3 | ✅ esbuild 精确钉版 `0.28.2` + `npm run lint` 入 CI | `08173d9` |
 | P2-4 | ✅ Python 运行时钉 `3.14.6`（5 处声明统一；`lock_deps.sh` 的 `PY_FLOOR` 仍为 3.14 下限） | `08173d9` |
@@ -222,10 +223,11 @@
 4. **「ESLint 声明了但仓库无配置」不成立** —— `.eslintrc.cjs` 早已存在且 eslint 0 error（429 warning）。
 5. **`requirements.lock` / `uv.lock` 已入库**（git 跟踪），P0-2 无文件缺失风险。
 6. **「`src/` 里 68 处 `print()` 绕过脱敏滤器，应统一改 logging」不成立** —— 其中 **69 处在 `src/skills/`**，而 `src/skills/tool_wrapper.py:167-170` 是把**整个 stdout 原样作为工具结果喂给 LLM**（不是机器解析的 JSON），改 logger 会直接破坏输出契约；`platform/lifecycle.py` 的 16 处是 CLI 错误提示/启动横幅（logger 配置尚未就绪），`utils/logger.py` 的 4 处是 **logger 自身的输出实现**，`config_models.py` 的 2 处只是错误消息文本里的 `print(...)` 字样（grep 误匹配）。真问题只有一个：**内部堆栈被 stdout 喂进模型上下文**（浪费 token + 扩大提示注入面）→ 已把 15 处 `traceback.print_exc()` 改投 stderr。
+7. **「feishu/wecom 重写了 `_normalize_chat`/`_normalize_message`/`_classify_error`/`_infer_single_chat`/`_is_benign_error`，三平台 bug 修复需三处同步」不成立** —— AST 差分比对（去 docstring 后 `ast.unparse` 归一化 + difflib）显示两文件的 20 个同名方法**0 个字节相同**，最高相似度仅 `_normalize_chat` 的 0.867；`_is_benign_error` 在 wecom **根本不存在**（只有 feishu 与 base 各一份）；`_normalize_message` 的 sender 结构（feishu 嵌套 dict vs wecom 扁平字段）、content 路径、时间戳字段三处分叉；`_classify_error` 的错误包结构（feishu 嵌套 `error.code` vs wecom 扁平 `errcode`）与**分类顺序相反**（feishu retryable→permission→unsupported，wecom permission→retryable）；`run` 的重试策略相反（base 对基类错误**不重试**，wecom **会重试**）→ 合并会改变企微线上行为。
 
 **尚未实施**
 
-- **P1-5** 平台适配器归一化下沉（feishu/wecom 各抽 2~3 个最高频方法到 `im_adapter`）—— 风险最高（消息/错误解析核心路径），建议独立专项 + 逐方法等价性测试。
+- **（P1-5 试点已完成）** 唯一真重复的 `_normalize_chat` 已下沉到基类模板方法（3 个类属性注入）+ 差分等价性测试（旧实现原样复制为 legacy 基准逐条断言相等）。**其余方法不要合并**：`_normalize_message`（嵌套 vs 扁平 sender、content 路径、时间字段）、`_classify_error`（错误包结构/分类顺序/错误码集）、`run`（重试策略相反）语义真实分叉。后续低风险收益点：wecom 文件内 send/reply 的 payload 重复（`wecom.py:723-777` vs `:779-828`）+ `MAX_DOWNLOAD_SIZE` 常量重复（`base.py:301` vs `wecom.py:884`）。
 - **（P1-4 续已完成）** 端点全集改用**公开 API** `app.openapi()` 取（含 router prefix 拼接），不依赖新版 FastAPI 的私有 `_IncludedRouter` 包装；敏感/公开两张清单外即「未表态」→ CI 红。
 - **P2-1** `src/platform/base.py` 星号导入枢纽清理（13 处 `from .base import *`）+ 幽灵重导出 + `load_dotenv()` 导入副作用上移 —— 可独立成专项。
 - **（P2-6 已按真问题收窄）** 原「68 处 print 全改 logger」不成立（skills 的 stdout 是喂给 LLM 的输出契约，改 logger 会破坏契约）→ 只修「内部堆栈进 stdout」这一项：15 处 `traceback.print_exc()` 改投 stderr。

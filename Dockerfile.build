@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # 先装依赖层（利用 Docker 缓存：只有 requirements 变才重装）
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt pyinstaller
+COPY requirements.lock ./
+RUN pip install --no-cache-dir -r requirements.lock pyinstaller
 
 # 再拷源码与打包配置（.dockerignore 已排除 .venv/node_modules/data/dist 等）
 COPY . .

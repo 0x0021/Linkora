@@ -41,8 +41,8 @@ RUN useradd -m -u 1000 -s /bin/bash app && \
     mkdir -p /app/data/backups /app/logs && \
     chown -R app:app /app/data /app/logs /home/app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 COPY . .
 

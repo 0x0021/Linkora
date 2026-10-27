@@ -113,14 +113,6 @@ jobs:
       # 裸 requests/httpx 散落在技能脚本里，防护形同可选。本门禁把能力变成约束。
       run: uv run python scripts/check_ssrf_guard.py
 
-    - name: gitleaks secret scan
-      # 密钥扫描此前只在本地 pre-commit 跑，CI 缺失（.gitleaksignore 已有 21 行豁免）。
-      # 本机 gitleaks 8.30.1 全量扫描 741 commits 结果为「no leaks found」，故可安全
-      # 接入 CI 拦截新增密钥（CI 是最后一道防线，不能只靠本地 hook + .gitignore）。
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -179,12 +171,35 @@ jobs:
     - name: Frontend tests
       run: npm run test:frontend
 
+  # 密钥扫描独立成 job：gitleaks-action 在 push 事件上按 <before>^..<after> 做**增量**扫描，
+  # 需要完整 git 历史 —— 而 test/frontend job 的 checkout 是浅克隆（depth=1），
+  # 必然报 `unknown revision: <before>^` 而失败（2026-10-27 首次接入即踩到）。
+  # 故此处单独 checkout 且 fetch-depth: 0；独立成 job 也避免拉全历史拖慢主测试 job。
+  secret-scan:
+    name: 密钥扫描
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - name: gitleaks secret scan
+      # 密钥扫描此前只在本地 pre-commit 跑，CI 缺失（.gitleaksignore 已有 21 行豁免）。
+      # 本机 gitleaks 8.30.1 全量扫描 741 commits 结果为「no leaks found」，故可安全
+      # 接入 CI 拦截新增密钥（CI 是最后一道防线，不能只靠本地 hook + .gitignore）。
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # 分支保护的 required status check 就是「CI 汇总」，此前没有对应 job →
   # 该 check 永远 pending，每次合入都只能 bypass。此 job 汇聚 test/frontend
   # 结果给出真实结论：任一失败/被取消则汇总红，全部通过则绿。
   summary:
     name: CI 汇总
-    needs: [test, frontend]
+    needs: [test, frontend, "secret-scan"]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

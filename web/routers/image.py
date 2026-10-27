@@ -302,6 +302,8 @@ async def proxy_image(url: str = ""):
 
     try:
         # 不跟随重定向（防 SSRF 重定向到非白名单 host）；CDN 直链通常不重定向
+        # ssrf-ok: 上行已做 https-only + host 后缀白名单 + resolve_safe_ip 钉死公网 IP
+        # + follow_redirects=False，等价且强于统一 guard（见本函数上方注释）
         async with httpx.AsyncClient(timeout=_IMAGE_PROXY_TIMEOUT, follow_redirects=False) as client:
             r = await client.get(
                 pinned_url,

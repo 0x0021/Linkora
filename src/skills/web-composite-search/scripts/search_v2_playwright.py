@@ -17,7 +17,7 @@ import time
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 import traceback
 
 # 尝试导入 Playwright
@@ -502,6 +502,26 @@ class CompositeSearch:
             finally:
                 browser.close()
 
+    @classmethod
+    def _engine_host_allowed(cls, url: str) -> bool:
+        """校验目标 host 属于内置搜索引擎白名单（SSRF 纵深，fail-closed）。
+
+        请求 URL 主体来自 ENGINES 的固定模板（host 不可控，query 经 quote 编码），
+        但仍逐次校验 host：一旦模板被篡改 / 技能目录被外部改写，请求就可能被指向
+        内网地址。白名单由 ENGINES 现场推导，不依赖任何外部配置。
+        """
+        try:
+            host = (urlparse(url).hostname or "").lower()
+        except ValueError:
+            return False
+        allowed = {
+            (urlparse(str(tpl.get("search_url", "")).split("{")[0]).hostname or "").lower()
+            for tpl in cls.ENGINES.values()
+            if isinstance(tpl, dict)
+        }
+        allowed.discard("")
+        return bool(host) and host in allowed
+
     def _search_with_requests(self, engine_id: str, query: str, url: str) -> List[SearchResult]:
         """使用 requests 搜索 (用于不需要浏览器的引擎)"""
         import requests
@@ -516,6 +536,12 @@ class CompositeSearch:
         }
 
         try:
+            # SSRF 纵深：host 必须属于内置引擎白名单，否则 fail-closed 拒绝
+            if not self._engine_host_allowed(url):
+                print(f"[requests] {engine_id} 目标 host 不在引擎白名单，已拒绝: {url[:120]}")
+                return []
+            # ssrf-ok: URL 主体为内置 ENGINES 模板（host 已过上方白名单校验），
+            # query 经 quote() 编码；搜索引擎 302 需跟随，故不走 ssrf_safe_get
             response = requests.get(
                 url,
                 headers=headers,

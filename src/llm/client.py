@@ -260,6 +260,7 @@ class LLMClient:
         shared_http_client = None
         if _HAS_HTTPX:
             try:
+                # ssrf-ok: LLM provider base_url 由部署方配置决定（可信端点），非用户可控输入
                 shared_http_client = httpx.Client(trust_env=False)
             except Exception as _exc:
                 logger.warning("__init__: httpx 客户端创建失败，降级为系统代理: %s", _exc)
@@ -347,6 +348,7 @@ class LLMClient:
         sf_http_client = shared_http_client
         if sf_http_client is None and _HAS_HTTPX and self.secondary_fallback_base_url:
             try:
+                # ssrf-ok: 同上 —— provider base_url 来自部署配置（可信端点），非用户可控输入
                 sf_http_client = httpx.Client(trust_env=False)
             except Exception as _exc:
                 # httpx 客户端创建失败（网络/配置问题）降级为无代理模式

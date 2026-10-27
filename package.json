@@ -1,4 +1,6 @@
 {
+  "name": "linkora",
+  "version": "0.8.1",
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.0"
   },

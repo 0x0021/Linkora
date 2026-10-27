@@ -106,7 +106,7 @@ platforms:
     adapter_type: feishu
     adapter: { cli_path: lark-cli }
     rag:
-      embedding_model: BAAI/bge-base-zh-v1.5
+      embedding_model: BAAI/bge-small-zh-v1.5
       chunk_size: 800
       chunk_overlap: 120
       chunk_hard_max: 1600

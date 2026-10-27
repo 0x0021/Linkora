@@ -766,7 +766,7 @@ async function syncAndSelectDingtalkDoc(docId, title) {
                 if (preview) selectDingtalkImportDoc(synced.doc_id, preview);
             }
         } else {
-            previewEl.innerHTML = '<span style="color:var(--brand-danger)">' + (data?.message || '同步失败') + '</span>';
+            previewEl.innerHTML = '<span style="color:var(--brand-danger)">' + escapeHtml(data?.message || '同步失败') + '</span>';
         }
     } catch (e) {
         previewEl.innerHTML = '<span style="color:var(--brand-danger)">同步失败: ' + escapeHtml(e.message) + '</span>';

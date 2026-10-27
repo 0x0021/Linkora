@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      # gitleaks-action 在 pull_request 事件上需读取 PR diff 才能扫全量
+      pull-requests: read
     env:
       # faiss / numpy 各自打包 OpenMP 运行时，重复初始化会触发
       # "OMP: Error #15: Initializing libomp twice" → SIGABRT。
@@ -40,7 +42,7 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@v7
       with:
-        python-version: '3.14'
+        python-version: '3.14.6'
         enable-cache: true
 
     - name: Sync dependencies (runtime + dev)
@@ -111,6 +113,14 @@ jobs:
       # 裸 requests/httpx 散落在技能脚本里，防护形同可选。本门禁把能力变成约束。
       run: uv run python scripts/check_ssrf_guard.py
 
+    - name: gitleaks secret scan
+      # 密钥扫描此前只在本地 pre-commit 跑，CI 缺失（.gitleaksignore 已有 21 行豁免）。
+      # 本机 gitleaks 8.30.1 全量扫描 741 commits 结果为「no leaks found」，故可安全
+      # 接入 CI 拦截新增密钥（CI 是最后一道防线，不能只靠本地 hook + .gitignore）。
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -151,6 +161,12 @@ jobs:
     #   smoke:bundle  — 产物里有该有的符号（静态）
     #   smoke:runtime — jsdom 真跑一遍 HTML+bundle，抓加载期崩溃（命名空间残缺 / TDZ）
     #   test:frontend — 真实 DOM 渲染断言
+    - name: ESLint
+      # 通用 JS 质量门禁（.eslintrc.cjs 已就位）。eslint 对 warning 不阻断、
+      # 对 error 阻断 → 定位为「新增 error 立即拦截」的守门，与下面的
+      # data-args / smoke / vitest 四层护栏互补（那些管项目特有规则）。
+      run: npm run lint
+
     - name: Frontend guard (data-args concatenation)
       run: npm run lint:data-args
 

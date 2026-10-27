@@ -81,7 +81,7 @@ jobs:
       - name: 安装 uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.14'
+          python-version: '3.14.6'
           enable-cache: true
 
       - name: 判断是否涉及依赖文件

@@ -51,7 +51,13 @@ class SimpleReranker:
         return tokens
 
     def _keyword_score(self, query: str, document: str) -> float:
-        """计算查询和文档的关键词重叠度（BM25 简化版）。"""
+        """计算查询和文档的关键词重叠度（自研 2-gram 打分，**不是 BM25**）。
+        ⚠️ 与 BM25 的差异（调参时勿按 BM25 直觉）：
+        - 没有全局文档频率（df）与平均文档长度归一；
+        - 权重用的是「词在**当前这一篇**文档内出现得越少、权重越高」，
+          与 BM25 的 IDF 语义相反（BM25 是跨文档 rarer → 更重）。
+        故关键词分只作向量相似度之外的辅助信号，权重默认 0.4。
+        """
         q_tokens = self._tokenize_score(query)
         d_tokens = self._tokenize_score(document)
 

@@ -78,6 +78,38 @@ def test_sensitive_path_list_covers_audited_endpoints():
     assert missing == set(), f"敏感端点清单缺失: {sorted(missing)}"
 
 
+def test_every_get_endpoint_is_classified():
+    """每个 GET 端点都必须**明确表态**：敏感（admin-only）或公开（任意已认证角色）。
+
+    这是 P1-4 的核心闭环：两个集合之外的端点 = 未表态 → CI 直接红。
+    目的：把「新增只读端点时记得往敏感清单里加一行」这种易漏的隐式约定，
+    改成必须表态——漏表态在 CI 暴露，而不是上线后才被漏审。
+
+    端点全集用 **公开 API** ``app.openapi()`` 取（含 router prefix 拼接，
+    且不依赖新版 FastAPI 的私有 ``_IncludedRouter`` 包装）。
+    """
+    from web.api import app
+
+    gets = {p for p, ops in app.openapi().get("paths", {}).items() if "get" in ops}
+    unclassified = sorted(
+        p for p in gets
+        if not web_api._is_sensitive_get_path(p) and p not in web_api._PUBLIC_GET_PATHS
+    )
+    assert unclassified == [], (
+        "未表态的 GET 端点（请归入 _SENSITIVE_GET_PATHS 或 _PUBLIC_GET_PATHS）："
+        f"{unclassified}"
+    )
+
+
+def test_public_allowlist_entries_all_exist():
+    """公开白名单里的路径必须真实存在——防拼错造成假覆盖，也防端点删除后清单腐化。"""
+    from web.api import app
+
+    paths = set(app.openapi().get("paths", {}).keys())
+    missing = sorted(p for p in web_api._PUBLIC_GET_PATHS if p not in paths)
+    assert missing == [], f"公开白名单中的路径已不存在（请清理）：{missing}"
+
+
 # ── GET /api/config 不得泄漏 jwt_secret ────────────────────────────────────
 
 def test_get_config_masks_jwt_secret(monkeypatch):

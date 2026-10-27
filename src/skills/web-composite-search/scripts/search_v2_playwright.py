@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote, urlparse
 import traceback
+import sys
 
 # 尝试导入 Playwright
 try:
@@ -393,7 +394,7 @@ class CompositeSearch:
                         failed_engines.append(engine_id)
                         print(f"[警告] {self.ENGINES[engine_id]['name']}: 无结果")
                 except Exception as e:
-                    traceback.print_exc()  # 静默吞掉前至少打印堆栈，便于排障
+                    traceback.print_exc(file=sys.stderr)  # 静默吞掉前至少打印堆栈，便于排障（走 stderr，不污染 stdout）
                     failed_engines.append(engine_id)
                     print(f"[错误] {self.ENGINES[engine_id]['name']}: {str(e)[:80]}")
 
@@ -434,7 +435,7 @@ class CompositeSearch:
             else:
                 return self._search_with_requests(engine_id, query, url)
         except Exception as e:
-            traceback.print_exc()  # 静默吞掉前至少打印堆栈，便于排障
+            traceback.print_exc(file=sys.stderr)  # 静默吞掉前至少打印堆栈，便于排障（走 stderr，不污染 stdout）
             print(f"[{engine_id}] 搜索失败: {str(e)[:100]}")
             return []
 
@@ -555,7 +556,7 @@ class CompositeSearch:
             return self._parse_results(soup, engine_id)
 
         except Exception as e:
-            traceback.print_exc()  # 静默吞掉前至少打印堆栈，便于排障
+            traceback.print_exc(file=sys.stderr)  # 静默吞掉前至少打印堆栈，便于排障（走 stderr，不污染 stdout）
             print(f"[requests] {engine_id} 失败: {str(e)[:80]}")
             return []
 
@@ -574,7 +575,7 @@ class CompositeSearch:
                     if result:
                         results.append(result)
                 except Exception:
-                    traceback.print_exc()  # 静默吞掉前至少打印堆栈，便于排障
+                    traceback.print_exc(file=sys.stderr)  # 静默吞掉前至少打印堆栈，便于排障（走 stderr，不污染 stdout）
                     continue
 
         return results
@@ -620,7 +621,7 @@ class CompositeSearch:
                     confidence_score=0.5
                 )
         except Exception:
-            traceback.print_exc()  # 静默吞掉前至少打印堆栈，便于排障
+            traceback.print_exc(file=sys.stderr)  # 静默吞掉前至少打印堆栈，便于排障（走 stderr，不污染 stdout）
             pass
 
         return None
@@ -680,7 +681,7 @@ class CompositeSearch:
                     seen_urls.add(url_key)
                     unique_results.append(r)
             except Exception:
-                traceback.print_exc()  # 静默吞掉前至少打印堆栈，便于排障
+                traceback.print_exc(file=sys.stderr)  # 静默吞掉前至少打印堆栈，便于排障（走 stderr，不污染 stdout）
                 unique_results.append(r)
 
         # 添加排名

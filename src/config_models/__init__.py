@@ -2,8 +2,20 @@
 
 config.py 保留加载/校验/多平台 seed 逻辑，本模块只含：
 - 默认路径常量
-- 全部配置模型（AppConfig 等 26 个）
+- 全部配置模型（AppConfig 等 28 个）
 - 模型解析/重建辅助（_resolve_model_cls / _ensure_models_rebuilt / _ConfigState）
+
+P2-7（2026-10-27）：本文件原为单文件模块 ``src/config_models.py``（1127 行），
+现转为**包** ``src/config_models/``，以便按领域把配置模型拆入子模块
+（platform / llm / rules_tools / memory_skills / system / app）。
+
+当前为**第 1 步**：模型类暂留本 ``__init__.py``，因此所有类的 ``__module__``
+仍是 ``"src.config_models"``，且 ``from src.config_models import X`` 的语义
+**完全不变**（本文件即包的 ``__init__``，re-export 即为定义处）。后续步骤
+逐组外移时，必须让每个新模块**运行时 import** 其依赖类
+（不可用 ``TYPE_CHECKING``）—— Pydantic v2 依据 ``cls.__module__`` 取该模块
+globals 求值注解，仅类型检查期的导入会导致 ``model_rebuild`` 抛
+``PydanticUndefinedAnnotation``。
 """
 from __future__ import annotations
 
@@ -1125,3 +1137,46 @@ def _ensure_models_rebuilt() -> None:
         PlatformConfig.model_rebuild()
         AppConfig.model_rebuild()
         _config_state.models_rebuilt = True
+
+
+__all__ = [
+    # 默认路径常量
+    "DEFAULT_DATA_DIR",
+    "DEFAULT_STORAGE_PATH",
+    "DEFAULT_TMP_IMAGES_DIR",
+    "DEFAULT_BACKUP_DIR",
+    # 平台
+    "DwsConfig",
+    "AdapterOverrideConfig",
+    "PollerConfig",
+    "StorageConfig",
+    "PlatformRagConfig",
+    "PlatformLLMConfig",
+    "PlatformToolsConfig",
+    "PlatformConfig",
+    # 规则与工具
+    "KeywordRule",
+    "RulesConfig",
+    "OcrPostprocessConfig",
+    "ToolsConfig",
+    # LLM 与嵌入
+    "LlmAdvancedConfig",
+    "LlmConfig",
+    "LlmThrottleConfig",
+    "EmbeddingConfig",
+    # 记忆 / 技能 / 检索
+    "MemoryConfig",
+    "SkillsConfig",
+    "SkillHubConfig",
+    "RagConfig",
+    # 系统
+    "LoggingConfig",
+    "SafetyConfig",
+    "DeadLetterConfig",
+    "ProactiveConfig",
+    "SummaryBackfillConfig",
+    "WebConfig",
+    "OaApprovalConfig",
+    # 根
+    "AppConfig",
+]

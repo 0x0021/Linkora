@@ -1,7 +1,12 @@
 from __future__ import annotations
+from .base import extract_card_title
+import re
+import time
+import uuid
+from datetime import datetime
+from src.models import Message
 from .engine_mixins_base import EngineMixinBase
 
-from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .reply_shard import REPLY_SHARD_LIMIT_DEFAULT, shard_reply_text  # F15：超长回复分片
 from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 import logging

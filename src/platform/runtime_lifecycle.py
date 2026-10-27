@@ -1,9 +1,17 @@
 from __future__ import annotations
+from .base import BackgroundLLMThrottle, PlatformContext
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from src.config import load_config
+from src.dws_adapter import DwsAdapter
+from src.llm.agent import LLMAgent
+from src.memory.sqlite_store import SQLiteStore
+from src.poller import MessagePoller
+from src.shared_state import set_app_instance, set_config, set_config_reload_callback
 from typing import cast
 
 from .engine_mixins_base import EngineMixinBase
 
-from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from .base import _active_platform_ctx  # 显式下划线符号
 from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 import logging

@@ -155,6 +155,28 @@ class TestBehaviorEquivalence:
             f"搬迁意外改变了 Web 进程行为（应仍不加载 .env）: {proc.stdout} {proc.stderr[-300:]}"
         )
 
+    def test_web_module_does_not_call_dotenv_directly(self) -> None:
+        """源码级守护：Web 侧模块**不得**直接调用 dotenv。
+
+        运行时计数桩只盯 ``src.dotenv_loader.load_env`` —— 若有人绕过它，
+        直接在 web 侧写 ``from dotenv import load_dotenv; load_dotenv()``，
+        计数桩就看不见了。故补一条源码级断言。
+
+        这条边界是**有意为之的安全默认**：``.env`` 里通常是开发机的个人密钥
+        （LLM_API_KEY / HF_TOKEN），Web 面板是对外暴露的面，让它自动读本机
+        密钥文件属隐患。需要 Web 侧密钥时，用**环境变量**注入。
+        """
+        web_root = ROOT / "web"
+        offenders: list[str] = []
+        for path in sorted(web_root.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            if "load_dotenv" in text or "dotenv_loader" in text:
+                offenders.append(str(path.relative_to(ROOT)))
+        assert not offenders, (
+            f"Web 侧不得加载 .env（安全默认：Web 不读本机密钥文件）: {offenders}；"
+            "如确需 Web 侧密钥，请用环境变量注入"
+        )
+
     def test_base_keeps_idempotent_fallback(self) -> None:
         """``base.py`` 保留幂等兜底调用（不能在 main() 之前被导入的模块拿不到 env）。"""
         src = (ROOT / "src/platform/base.py").read_text(encoding="utf-8")

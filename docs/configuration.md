@@ -309,3 +309,23 @@ memory:
 | `HF_TOKEN` | HuggingFace 认证 | 2 |
 | `HF_HUB_OFFLINE` | 设为 `1` 禁用 HF Hub 访问 | 强制（代码内自动设置） |
 | `ENABLE_WEB` | Docker 环境下控制是否启动 Web 面板 | Docker 专用 |
+
+### `.env` 加载契约
+
+`.env`（在 `.gitignore` 中）由 `src/dotenv_loader.py::load_env()` 加载，**只从项目根读取**
+（`src/paths.py::get_app_root()`），且**显式指定路径** —— 不用 python-dotenv 的自动查找
+（其 `find_dotenv()` 靠遍历调用栈帧推断项目根，调用链较深时会触发内部断言）。
+
+| 进程 | 是否加载 `.env` | 原因 |
+|---|---|---|
+| 主进程（`main.py` / `scripts/run_linkora.py`） | ✅ 是 | 入口首行显式调用 `load_env()`；`src/platform/base.py` 另保留一次**幂等兜底** |
+| Web 进程（`web/api.py`） | ❌ **否**（**有意为之**） | Web 是对外暴露的面，让它读本机密钥文件属隐患；如需 Web 侧密钥，用**环境变量**注入（容器/systemd 环境）而非 `.env` |
+
+> **为何 Web 侧刻意不加载**：`.env` 里通常是开发机的个人密钥（`LLM_API_KEY` / `HF_TOKEN`）。
+> Web 面板若自动加载，等于把开发机密钥带进对外服务。**这是安全默认，不是缺陷** ——
+> `tests/test_dotenv_loader.py::test_web_process_behavior_unchanged` 会守护该边界，
+> 改动会让 CI 变红。
+
+> **幂等兜底为何不能删**：`src/memory/account_identity.py` 等 3 处仍在**模块级**读环境变量
+> （`DWS_BIN` / `LINKORA_AUDIT_LOG` / `ENABLE_SEARXNG`），这些模块可能在 `main()` 之前
+> 被导入；缺了兜底，`DWS_BIN` 覆盖会静默失效（钉钉账号隔离退化为 `dingtalk:unknown`）。

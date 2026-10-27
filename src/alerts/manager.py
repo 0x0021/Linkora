@@ -154,8 +154,11 @@ class AlertManager:
                     from src.alerts.webhook import send_webhook
 
                     send_webhook(self._config.webhook_url, alert_data)
-                except Exception as exc:
-                    logger.warning("[告警] webhook 渠道投递异常: %s", exc)
+                except ImportError as exc:
+                    # 只兜「模块不可用」；投递期的可预期异常已由 send_webhook
+                    # 内部降级为日志（那里已收窄为具体异常类型）——此处若再裸捕
+                    # Exception，会掩盖真正的编程错误，且突破宽异常只减不增的门禁。
+                    logger.warning("[告警] webhook 渠道不可用: %s", exc)
             elif value == AlertChannel.EMAIL.value:
                 # 邮件渠道尚无 SMTP 基础设施（仓库内无 smtplib 用法），
                 # 配置了也发不出去 —— 明确记录，避免「以为已发出」。

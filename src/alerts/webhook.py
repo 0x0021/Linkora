@@ -22,12 +22,29 @@ import json
 import logging
 from typing import Any
 
+import requests
+
 from src.utils.net import safe_http_request
 
 logger = logging.getLogger("linkora.alerts")
 
 # Webhook 请求超时（秒）。旁路能力，宁可超时也不拖住主链路。
 _WEBHOOK_TIMEOUT_SECONDS = 5
+
+# 投递失败的可预期异常类型（**收窄而非裸 except Exception** —— 宽异常门禁
+# 只减不增，且裸捕会掩盖真正的编程错误）：
+# - requests.RequestException：连接/超时/TLS/协议层错误（其基类继承 OSError，
+#   已覆盖 Timeout / ConnectionError / SSLError / TooManyRedirects 等全部子类）
+# - OSError：底层 socket 错误（requests 异常链的共同祖先）+ SSRF guard 的
+#   DNS 解析失败（socket.gaierror）
+# - ValueError：SSRF guard 的「私网地址 / 协议不支持」
+# - TypeError：载荷不可序列化（json.dumps 失败）
+_WEBHOOK_DELIVERY_ERRORS = (
+    requests.RequestException,
+    OSError,
+    ValueError,
+    TypeError,
+)
 
 
 def send_webhook(
@@ -64,7 +81,7 @@ def send_webhook(
             return True
         logger.warning("[告警] webhook 返回非 2xx: %s (status=%s)", url, status)
         return False
-    except Exception as exc:
+    except _WEBHOOK_DELIVERY_ERRORS as exc:
         # 旁路能力：投递失败不向上抛，避免打断主链路
         logger.warning("[告警] webhook 投递失败: %s (%s)", url, exc)
         return False

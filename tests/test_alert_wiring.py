@@ -23,6 +23,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from src.alerts.manager import AlertChannel, AlertConfig, AlertManager
 
@@ -95,8 +96,18 @@ class TestWebhookChannelConsumed:
             manager.record_error("LLMNetworkError", "boom")
         assert not req.called
 
-    def test_webhook_failure_does_not_break_alert(self) -> None:
-        """webhook 投递失败不影响告警本身（旁路能力）。"""
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            requests.ConnectionError("connection refused"),
+            requests.Timeout("timed out"),
+            requests.exceptions.SSLError("tls handshake failed"),
+            OSError("socket died"),
+            ValueError("SSRF guard: 私网地址"),
+        ],
+    )
+    def test_webhook_failure_does_not_break_alert(self, exc: Exception) -> None:
+        """webhook 投递失败（真实网络异常谱）不影响告警本身（旁路能力）。"""
         manager = AlertManager(
             AlertConfig(
                 error_threshold=1,
@@ -105,11 +116,29 @@ class TestWebhookChannelConsumed:
                 webhook_url="https://hooks.example.com/abc",
             )
         )
-        with patch("src.alerts.webhook.safe_http_request", side_effect=RuntimeError("network down")):
+        with patch("src.alerts.webhook.safe_http_request", side_effect=exc):
             manager.record_error("LLMNetworkError", "boom")  # 不应抛出
 
         stats = manager.get_stats()
         assert stats["errors"]["LLMNetworkError"]["count"] == 1
+
+    def test_unexpected_error_is_not_swallowed(self) -> None:
+        """**收窄异常的价值**：非预期的编程错误（RuntimeError）不被吞掉。
+
+        裸 ``except Exception`` 会把真实 bug 伪装成「投递失败」，静默掩盖问题；
+        收窄后它会向上抛，让问题暴露。
+        """
+        manager = AlertManager(
+            AlertConfig(
+                error_threshold=1,
+                silence_period_seconds=0,
+                channels=[AlertChannel.WEBHOOK],
+                webhook_url="https://hooks.example.com/abc",
+            )
+        )
+        with patch("src.alerts.webhook.safe_http_request", side_effect=RuntimeError("bug!")):
+            with pytest.raises(RuntimeError):
+                manager.record_error("LLMNetworkError", "boom")
 
     def test_send_webhook_uses_ssrf_guard(self) -> None:
         """webhook 出站必须走 SSRF guard（safe_http_request），不裸调 requests。"""

@@ -209,11 +209,13 @@
 | P1-4 | ✅ **修真实凭据泄漏**（`GET /api/config` 明文回传 `jwt_secret`）+ 敏感只读端点判定改「精确 + `/` 前缀」并补齐 16 个高危端点 + 测试对齐 | `177e397` / `4eadb52` |
 | P1-4 续 | ✅ 敏感只读端点升级为**「敏感 + 公开」全覆盖**（106 个 GET 端点全部表态：敏感 63 / 公开 43），新增端点漏表态 → CI 红 | `7737937` |
 | P1-5 | ✅ **试点**：`_normalize_chat`（唯一真重复）下沉到基类模板方法 + 差分等价性测试；其余方法经 AST 差分证实**语义真实分叉**，不合并 | `9600ea3` |
+| P2-1 | ✅ **步骤 1**：`src/platform` 12 处 `from .base import *` → 显式导入清单（+105/-12 行），F403/F405 豁免移除 | `b2e7999` |
 | P2-2 | ✅ gitleaks 接入 CI（独立 job「密钥扫描」，`fetch-depth: 0`） | `08173d9` / `ded1369` |
 | P2-3 | ✅ esbuild 精确钉版 `0.28.2` + `npm run lint` 入 CI | `08173d9` |
 | P2-4 | ✅ Python 运行时钉 `3.14.6`（5 处声明统一；`lock_deps.sh` 的 `PY_FLOOR` 仍为 3.14 下限） | `08173d9` |
 | P2-5 | ✅ `rag.js:769` 未转义拼接 → `escapeHtml`（前端产物已重建入仓） | `08173d9` |
 | P2-6 | ⚠️ **原判断证伪后按真问题收窄**：15 处技能脚本堆栈改投 stderr（不再把内部路径/堆栈喂进 LLM 上下文） | `7737937` |
+| P2-8 | ✅ 关键词重排口径统一：「BM25」→「自研 2-gram 打分（非 BM25）」，差异写进 docstring | `158d9db` |
 
 **本轮证伪/修正的原判断（勿再照抄原文）**
 
@@ -229,7 +231,11 @@
 
 - **（P1-5 试点已完成）** 唯一真重复的 `_normalize_chat` 已下沉到基类模板方法（3 个类属性注入）+ 差分等价性测试（旧实现原样复制为 legacy 基准逐条断言相等）。**其余方法不要合并**：`_normalize_message`（嵌套 vs 扁平 sender、content 路径、时间字段）、`_classify_error`（错误包结构/分类顺序/错误码集）、`run`（重试策略相反）语义真实分叉。后续低风险收益点：wecom 文件内 send/reply 的 payload 重复（`wecom.py:723-777` vs `:779-828`）+ `MAX_DOWNLOAD_SIZE` 常量重复（`base.py:301` vs `wecom.py:884`）。
 - **（P1-4 续已完成）** 端点全集改用**公开 API** `app.openapi()` 取（含 router prefix 拼接），不依赖新版 FastAPI 的私有 `_IncludedRouter` 包装；敏感/公开两张清单外即「未表态」→ CI 红。
-- **P2-1** `src/platform/base.py` 星号导入枢纽清理（13 处 `from .base import *`）+ 幽灵重导出 + `load_dotenv()` 导入副作用上移 —— 可独立成专项。
+- **P2-1 续**（步骤 1 已完成）：`base.py` 瘦身（移除 49 个纯重导出 + 幽灵重导出注释清理）可单独做；
+  ⚠️ **`load_dotenv()` 搬迁是最高风险项，须另开专项**：实测 Web 进程**当前根本不加载 .env**
+  （`import web.api` → 0 次调用），只在 `main.py` 加载会**改变 Web 侧行为**；且
+  `src/memory/account_identity.py:38` 在**导入期**读 `DWS_BIN`，dotenv 时序变动会让该覆盖静默失效
+  （钉钉账号隔离退化为 `dingtalk:unknown`）。
 - **（P2-6 已按真问题收窄）** 原「68 处 print 全改 logger」不成立（skills 的 stdout 是喂给 LLM 的输出契约，改 logger 会破坏契约）→ 只修「内部堆栈进 stdout」这一项：15 处 `traceback.print_exc()` 改投 stderr。
 - **P2-7** `config_models.py`（1127 行）按领域拆子包 + 保留兼容再导出层。
 - **P2-8** 重排器命名口径（"BM25" 实为自研 2-gram 打分）—— 注释/文档对齐即可。

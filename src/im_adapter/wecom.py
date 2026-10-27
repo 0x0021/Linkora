@@ -46,7 +46,13 @@ from typing import Any
 # 长时间阻塞调用线程（原逻辑 time.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS)) 无封顶）。
 MAX_BACKOFF_SECONDS = 30
 
+# 企微 ``send_message`` 单条文本的字节上限（CLI 侧限制）：超长内容会被截断。
+# 原先该数字硬编码在 send / reply 两处 payload 构造里，现提为常量并由
+# ``_send_text`` 统一使用。
+WECOM_TEXT_MAX_BYTES = 2048
+
 from .base_adapter import BaseIMAdapter
+from .constants import MAX_DOWNLOAD_SIZE
 from .errors import IMAdapterError, IMAdapterUnsupportedTypeError
 from .markdown_fix import normalize_markdown_for_platform
 
@@ -752,11 +758,26 @@ class WecomCliAdapter(BaseIMAdapter):
         if not self.supports_markdown_tables:
             content = normalize_markdown_for_platform(content, supports_tables=False)
 
+        return self._send_text(target=target, group=group, content=content, uuid=uuid)
+
+    def _send_text(self, *, target: str, group: str | None, content: str,
+                   uuid: str | None) -> dict:
+        """企微纯文本发送的**唯一实现**（``chat_message_send`` / ``chat_message_reply`` 共用）。
+
+        企微 ``send_message`` 仅支持文本，payload 结构固定为::
+
+            {"chat_type": 2 if group else 1, "chatid": target,
+             "msgtype": "text", "text": {"content": content[:WECOM_TEXT_MAX_BYTES]}}
+
+        此前 ``chat_message_send`` 与 ``chat_message_reply`` 各写了一份**完全相同**的
+        payload 构造（含截断），二者只有前置校验与告警措辞不同——现已收敛到本方法，
+        消除「改一处漏一处」的隐患。截断上限提为模块常量，便于与 CLI 限制对齐。
+        """
         payload = {
             "chat_type": 2 if group else 1,
             "chatid": target,
             "msgtype": "text",
-            "text": {"content": content[:2048]},
+            "text": {"content": content[:WECOM_TEXT_MAX_BYTES]},
         }
         result: dict = self.run(
             ["msg", "send_message", "--json",
@@ -803,20 +824,7 @@ class WecomCliAdapter(BaseIMAdapter):
         if not self.supports_markdown_tables:
             content = normalize_markdown_for_platform(content, supports_tables=False)
 
-        payload = {
-            "chat_type": 2 if group else 1,
-            "chatid": target,
-            "msgtype": "text",
-            "text": {"content": content[:2048]},
-        }
-        result: dict = self.run(
-            ["msg", "send_message", "--json",
-             json.dumps(payload, ensure_ascii=False)],
-            force_no_dry_run=True,
-        )
-        if uuid:
-            result.setdefault("noop_uuid", uuid)
-        return result
+        return self._send_text(target=target, group=group, content=content, uuid=uuid)
 
     def chat_message_update(self, *, message_id: str, text: str = "",
                            title: str = "", group: str | None = None,
@@ -872,7 +880,6 @@ class WecomCliAdapter(BaseIMAdapter):
             raise self._base_error_class()(f"wecom 媒体 base64 解码失败: {e}") from e
         out_dir = os.path.dirname(os.path.abspath(output_path)) or "."
         os.makedirs(out_dir, exist_ok=True)
-        MAX_DOWNLOAD_SIZE = 10 * 1024 * 1024  # 10MB 大小限制（防磁盘耗尽）
         if len(data) > MAX_DOWNLOAD_SIZE:
             raise self._base_error_class()(
                 f"wecom 下载文件过大 ({len(data) / 1024 / 1024:.1f}MB)，"

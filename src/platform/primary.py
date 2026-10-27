@@ -1,8 +1,28 @@
 from __future__ import annotations
+from .base import PlatformContext
+import os
+import re
+import shutil
+import sys
+import threading
+from pydantic import ValidationError
+from src.config import load_config
+from src.db_backup import DatabaseBackup, DatabaseBackupCoordinator
+from src.decision_tracker import tracker
+from src.doc_sync_scheduler import DocSyncScheduler
+from src.im_adapter.feishu import FeishuCliAdapter
+from src.im_adapter.wecom import WecomCliAdapter
+from src.intent import validate_tool_action_coverage
+from src.llm.agent import LLMAgent
+from src.memory.sqlite_store import SQLiteStore  # noqa: F401  # 兼容 patch 目标（patch.object(platform_primary, "SQLiteStore")）
+from src.llm.summary_scheduler import SummaryScheduler
+from src.poller import MessagePoller
+from src.rule_engine import RuleEngine
+from src.shared_state import set_config
+from src.utils.logger import setup_logger
 from .engine_mixins_base import EngineMixinBase
 from ._timeout import run_with_timeout
 
-from .base import *  # noqa: F403  (base re-exports 所有 src 顶层符号 + tracker/Message 等)
 from src.config_models import SummaryBackfillConfig
 import logging
 from typing import TYPE_CHECKING

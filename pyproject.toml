@@ -117,18 +117,16 @@ max-complexity = 50
 
 [tool.ruff.lint.per-file-ignores]
 # 已知待拆 / 高复杂度模块（渐进收紧，拆分或重构降复杂度后移除豁免）。
-"src/platform/runtime_*.py" = ["C901", "F405"]  # F1 拆分产物：runtime_*.py 为真实逻辑模块（222–619 行），仍含高复杂度方法，C901 继续豁免；F405 为 star-import 重导出
+"src/platform/runtime_*.py" = ["C901"]  # F1 拆分产物：runtime_*.py 为真实逻辑模块（222–619 行），仍含高复杂度方法，C901 继续豁免
+# F403/F405（星号导入）豁免已于 2026-10-27 全部移除：src/platform 下 12 处
+# `from .base import *` 已改为显式导入清单（星号枢纽拆除）。
 # poller_strategy.py / poller_core_discovery.py 的 C901/E402 豁免已于 2026-08-10 收敛移除
 # （_fetch_messages_via_list_all 抽 helper 降至阈值内；poller_strategy 的 mask_oid import 上移）。
 # web/routers/config.py 已于 2026-08-06 移除 C901 豁免（update_config 拆分出 ~27 个 domain helper）
 "src/config.py" = ["F401"]                   # config_models 重导出层（保 `from src.config import AppConfig` 旧路径兼容）
 "src/dws_adapter/__init__.py" = ["F401"]      # dws_adapter 组合根（保 `from src.dws_adapter import DwsError, is_permission_error, ...` 旧路径兼容）
 "src/platform/base.py" = ["F401", "E402"]     # 星号重导出层（被 runtime_*.py `from .base import *` 转出）；E402 因 load_dotenv() 必须在 import 之后调用
-"src/platform/lifecycle.py" = ["F403", "F405"]  # `from .base import *` 星号转出符号使用时本就不在本模块显式 import
-"src/platform/memory.py" = ["F403", "F405", "F401"]  # 同上（星号从 base.py 转出） + 多余的 _active_platform_ctx 重导出显式 line
-"src/platform/message_loop.py" = ["F403", "F405"]  # 同上
-"src/platform/primary.py" = ["F403", "F405"]  # 同上
-"src/platform/reply_helpers.py" = ["F403", "F405"]  # 同上
+"src/platform/memory.py" = ["F401"]  # 多余的 _active_platform_ctx 重导出显式 line
 # E402：以下模块存在「模块级代码之后的 import」——多为 `logger = ...` 之后的 mixin 导入，
 # 或 web/api.py / web/routers/kb.py 为规避循环导入而刻意后置的惰性 import（见 kb.py 顶部注释）。
 # 这些 import 无副作用依赖，属结构性后置，按 base.py 先例用 per-file-ignores 抑制而非强行上移。

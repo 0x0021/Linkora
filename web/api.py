@@ -449,7 +449,68 @@ _SENSITIVE_GET_PATHS = {
     "/api/persona",
     "/api/memories",
     "/api/summaries",
+    # ── 草稿正文（待发消息内容）──
+    "/api/drafts",
+    # ── 会话与决策记录（含 chat_name / sender 等身份信息）──
+    "/api/conversations",
+    "/api/decisions",
+    "/api/routing-quality",
+    # ── 外部好友与用户反馈（PII / 用户内容）──
+    "/api/external-friends",
+    "/api/feedback",
+    # ── 规则与黑名单内容 ──
+    "/api/rules",
+    "/api/gate-rules",
+    "/api/keywords",
+    # ── 系统提示词全文 / 单请求全链路 trace / 模拟样本 / 飞书文档列表 ──
+    "/api/llm/prompt",
+    "/api/metrics/by-rid",
+    "/api/simulate",
+    "/api/kb/feishu-docs",
 }
+
+
+# 显式公开的只读端点（任意已认证角色可读）。
+#
+# 它与 ``_SENSITIVE_GET_PATHS`` 构成**全覆盖**：两个集合之外的 GET 端点 =
+# 「未表态」→ 由 ``tests/test_rbac_sensitive_endpoints.py`` 在 CI 拦下（红）。
+# 目的：把「新增只读端点时记得往敏感清单里加一行」这种**易漏的隐式约定**，
+# 改成**必须明确表态**（敏感 admin-only / 公开任意已认证角色）——
+# 漏表态会在 CI 立刻暴露，而不是等端点上线后被漏审。
+#
+# 收录标准：返回**聚合统计 / 运行状态 / 公开元数据**，不含个人聊天内容、
+# 身份信息、凭据、内部绝对路径或原始日志。
+_PUBLIC_GET_PATHS = frozenset({
+    "/", "/health",
+    # 认证与平台元信息
+    "/api/auth/me",
+    "/api/platforms", "/api/platforms/health",
+    "/api/orgs",
+    # 配置读取（密钥已在响应侧脱敏：auth_password / jwt_secret / api_key 等）
+    "/api/config", "/api/config-drift",
+    "/api/tools", "/api/tools-chain", "/api/intents",
+    # 运行状态与健康度（聚合，无个人内容）
+    "/api/status", "/api/health",
+    "/api/embedding-status", "/api/poller-status",
+    "/api/models/status",
+    "/api/debounce-metrics", "/api/backpressure-metrics",
+    "/api/dashboard/stream-data",
+    "/api/history/import/status",
+    # 指标聚合（成本 / 质量 / 用量 / 路由 / 工具 / token）
+    "/api/metrics", "/api/metrics/llm-usage", "/api/llm-metrics",
+    "/api/metrics/realtime", "/api/metrics/routing", "/api/metrics/blacklist",
+    "/api/metrics/tokens", "/api/metrics/tool-staleness",
+    "/api/metrics/tools", "/api/metrics/tools/failures",
+    "/api/cost-quality/summary", "/api/cost-quality/confidence-hist",
+    "/api/cost-quality/trend", "/api/cost-quality/citations",
+    "/api/stats/messages", "/api/stats/tools",
+    # 告警（内部运维统计）
+    "/api/alerts/stats", "/api/alerts/history", "/api/alerts/config",
+    # 知识库统计
+    "/api/kb/stats",
+    # 图片（自有 SSRF 防护 / 认证白名单内）
+    "/api/image/{path}", "/api/proxy/image", "/api/skill-icons/{slug}",
+})
 
 
 def _is_sensitive_get_path(path: str) -> bool:

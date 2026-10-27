@@ -216,6 +216,10 @@
 | P2-5 | ✅ `rag.js:769` 未转义拼接 → `escapeHtml`（前端产物已重建入仓） | `08173d9` |
 | P2-6 | ⚠️ **原判断证伪后按真问题收窄**：15 处技能脚本堆栈改投 stderr（不再把内部路径/堆栈喂进 LLM 上下文） | `7737937` |
 | P2-8 | ✅ 关键词重排口径统一：「BM25」→「自研 2-gram 打分（非 BM25）」，差异写进 docstring | `158d9db` |
+| P2-1 步骤 2 | ✅ `base.py` 瘦身为只定义自有符号（移除 43 个纯重导出）+ 16 条不变量测试 | `5f86338` |
+| P2-7 | ✅ `config_models.py`（1127 行）→ **包** `src/config_models/`（`_const` / `platform` / `llm` / `rules_tools` / `memory_skills` / `system` / `app`），`__init__.py` 降到 244 行只做 re-export + 69 条不变量测试 | `c4181ca` / `01e2835` / `e78c2ad` |
+| P3-4 | ✅ **告警系统接线 + webhook 渠道消费**：修「`record_error()` 零调用方」的死代码（`/api/alerts/stats` 永远返回空） | `c2e5e67` |
+| P3-5 | ✅ 嵌入模型口径同步（`bge-base-zh` → `bge-small-zh`）+ `package.json` 补 `name`/`version` | `6357118` |
 
 **本轮证伪/修正的原判断（勿再照抄原文）**
 
@@ -227,16 +231,23 @@
 6. **「`src/` 里 68 处 `print()` 绕过脱敏滤器，应统一改 logging」不成立** —— 其中 **69 处在 `src/skills/`**，而 `src/skills/tool_wrapper.py:167-170` 是把**整个 stdout 原样作为工具结果喂给 LLM**（不是机器解析的 JSON），改 logger 会直接破坏输出契约；`platform/lifecycle.py` 的 16 处是 CLI 错误提示/启动横幅（logger 配置尚未就绪），`utils/logger.py` 的 4 处是 **logger 自身的输出实现**，`config_models.py` 的 2 处只是错误消息文本里的 `print(...)` 字样（grep 误匹配）。真问题只有一个：**内部堆栈被 stdout 喂进模型上下文**（浪费 token + 扩大提示注入面）→ 已把 15 处 `traceback.print_exc()` 改投 stderr。
 7. **「feishu/wecom 重写了 `_normalize_chat`/`_normalize_message`/`_classify_error`/`_infer_single_chat`/`_is_benign_error`，三平台 bug 修复需三处同步」不成立** —— AST 差分比对（去 docstring 后 `ast.unparse` 归一化 + difflib）显示两文件的 20 个同名方法**0 个字节相同**，最高相似度仅 `_normalize_chat` 的 0.867；`_is_benign_error` 在 wecom **根本不存在**（只有 feishu 与 base 各一份）；`_normalize_message` 的 sender 结构（feishu 嵌套 dict vs wecom 扁平字段）、content 路径、时间戳字段三处分叉；`_classify_error` 的错误包结构（feishu 嵌套 `error.code` vs wecom 扁平 `errcode`）与**分类顺序相反**（feishu retryable→permission→unsupported，wecom permission→retryable）；`run` 的重试策略相反（base 对基类错误**不重试**，wecom **会重试**）→ 合并会改变企微线上行为。
 
+8. **「`AlertConfig.webhook_url` 是死配置」判断偏轻** —— 实测问题**大得多**：整个告警系统**没有任何调用方** —— `record_error()` 与 `src/llm/client.py` 的 `_rethrow_classified()` 均**零调用**，导致 `GET /api/alerts/stats` 永远返回空、阈值告警永不触发，而 `docs/alerts.md` 明确教用户「在 `src/llm/client.py` 中集成告警」并给出 `webhook_url` 配置示例（**配了不生效**），web 端还暴露了 `/api/alerts/config` 的 PUT 写入接口进一步印证「以为配了就生效」。→ 已接线（最终失败出口记一次，重试不放大计数）+ 实现 webhook 消费（走 SSRF guard）。
+9. **「生产应关闭 sourcemap 下发」对本项目不成立** —— 实测 `bundle.*.js.map` 含完整前端源码（65 万字符），但**零绝对路径、零密钥字面量**，且前端源码本就在**公开仓库**（`github.com/0x0021/Linkora`）→ 关闭 sourcemap 不产生实质安全收益，反而丧失浏览器 DevTools 排障能力。**决定不改**。
+10. **「`TEST_COVERAGE.md` 过时」判断过时** —— 该文件**根本不存在**，无需同步。
+
 **尚未实施**
 
 - **（P1-5 试点已完成）** 唯一真重复的 `_normalize_chat` 已下沉到基类模板方法（3 个类属性注入）+ 差分等价性测试（旧实现原样复制为 legacy 基准逐条断言相等）。**其余方法不要合并**：`_normalize_message`（嵌套 vs 扁平 sender、content 路径、时间字段）、`_classify_error`（错误包结构/分类顺序/错误码集）、`run`（重试策略相反）语义真实分叉。后续低风险收益点：wecom 文件内 send/reply 的 payload 重复（`wecom.py:723-777` vs `:779-828`）+ `MAX_DOWNLOAD_SIZE` 常量重复（`base.py:301` vs `wecom.py:884`）。
 - **（P1-4 续已完成）** 端点全集改用**公开 API** `app.openapi()` 取（含 router prefix 拼接），不依赖新版 FastAPI 的私有 `_IncludedRouter` 包装；敏感/公开两张清单外即「未表态」→ CI 红。
-- **P2-1 续**（步骤 1 已完成）：`base.py` 瘦身（移除 49 个纯重导出 + 幽灵重导出注释清理）可单独做；
-  ⚠️ **`load_dotenv()` 搬迁是最高风险项，须另开专项**：实测 Web 进程**当前根本不加载 .env**
+- **（P2-1 步骤 2 已完成）** `base.py` 已瘦身（移除 43 个纯重导出，只保留 6 个自有定义 + TYPE_CHECKING 类型块）。
+  ⚠️ **`load_dotenv()` 搬迁仍是最高风险项，须另开专项**：实测 Web 进程**当前根本不加载 .env**
   （`import web.api` → 0 次调用），只在 `main.py` 加载会**改变 Web 侧行为**；且
   `src/memory/account_identity.py:38` 在**导入期**读 `DWS_BIN`，dotenv 时序变动会让该覆盖静默失效
   （钉钉账号隔离退化为 `dingtalk:unknown`）。
 - **（P2-6 已按真问题收窄）** 原「68 处 print 全改 logger」不成立（skills 的 stdout 是喂给 LLM 的输出契约，改 logger 会破坏契约）→ 只修「内部堆栈进 stdout」这一项：15 处 `traceback.print_exc()` 改投 stderr。
-- **P2-7** `config_models.py`（1127 行）按领域拆子包 + 保留兼容再导出层。
-- **P2-8** 重排器命名口径（"BM25" 实为自研 2-gram 打分）—— 注释/文档对齐即可。
-- **P3-1~P3-6** 意图分类 LLM 兜底、提示注入面、测试过度 mock、死配置（`AlertConfig.webhook_url`）、文档漂移、生产 sourcemap 下发。
+- **（P2-7 已完成）** `config_models.py` 已拆为包 `src/config_models/`（`_const` / `platform` / `llm` / `rules_tools` / `memory_skills` / `system` / `app`），导入面对消费者完全不变。
+- **（P2-8 已完成）** 重排器命名口径已统一为「自研 2-gram 打分（非 BM25）」。
+- **（P3-4 已完成）** 告警系统已接线 + webhook 渠道已消费（不再是死配置）。
+- **（P3-5 已完成）** 嵌入模型口径已同步；`package.json` 已补 `name`/`version`。
+- **（P3-6 判断证伪，不改）** sourcemap 无敏感信息且源码本就公开 → 关闭无实质收益，保留以便排障。
+- **剩余未实施**：**P3-1** 意图分类 LLM 兜底（引入延迟/成本，需产品决策）· **P3-2** 提示注入面（对话历史/用户输入正文未内容级净化，需设计避免误伤）· **P3-3** 测试过度 mock 抽样复核（376 处 mock）· **`load_dotenv()` 搬迁专项**（高危，见上）。

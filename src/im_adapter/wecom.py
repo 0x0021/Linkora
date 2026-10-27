@@ -100,6 +100,12 @@ class WecomCliAdapter(BaseIMAdapter):
     # 企微 markdown 子集同样不支持 GFM 表格：发送前转换（同钉钉）
     supports_markdown_tables = False
 
+    # ── 会话归一化的平台差异（P1-5：下沉到基类模板方法）──
+    # 企微原生会话 ID 字段为 chatid；标题缺失时回退会话 ID。
+    chat_id_fields: tuple[str, ...] = ("chatid", "id", "chat_id")
+    chat_title_fields: tuple[str, ...] = ("name", "title")
+    title_fallback_to_cid: bool = True
+
     @staticmethod
     def _resolve_cli_path(cli_path: str) -> str:
         """解析 wecom-cli 路径，兼容 Apple Silicon 与 Intel Mac Homebrew。
@@ -528,25 +534,10 @@ class WecomCliAdapter(BaseIMAdapter):
             return str(ct) == "1"
         return not bool(chat.get("is_group"))
 
-    def _normalize_chat(self, chat: dict) -> dict:
-        """将企微原生会话格式映射为 poller 兼容的通用会话格式。
-
-        poller 依赖两个 dingtalk 特有字段：
-        - ``openConversationId``: 会话唯一标识（企微用 ``chatid`` / ``id``）
-        - ``singleChat``: 是否为单聊（以企微 ``chat_type`` 字段为准）
-
-        与飞书 ``_normalize_chat`` 保持镜像，确保企微未读/最近会话能被
-        poller 的未读通道正确识别（否则 ``openConversationId`` 缺失会被跳过）。
-        """
-        cid = chat.get("chatid") or chat.get("id") or chat.get("chat_id") or ""
-        if not cid:
-            return chat
-        result = dict(chat)
-        result.setdefault("openConversationId", cid)
-        result.setdefault("title", chat.get("name") or chat.get("title") or cid)
-        if "singleChat" not in result:
-            result["singleChat"] = self._infer_single_chat(chat)
-        return result
+    # P1-5：``_normalize_chat`` 已下沉到 BaseIMAdapter 的模板方法，
+    # 平台差异由类属性注入（见类体上方）。下沉前与飞书实现保持镜像，
+    # 确保企微未读/最近会话能被 poller 的未读通道正确识别
+    # （否则 ``openConversationId`` 缺失会被跳过）。
 
     def chat_message_list_unread_conversations(self, count: int = 20) -> list[dict]:
         """获取近期会话列表。

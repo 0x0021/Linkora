@@ -29,6 +29,7 @@ import traceback
 from typing import Callable, Optional
 
 from src.paths import data_path, get_config_path, get_log_dir
+from src.config import resolve_poller_config  # P1-3：多平台读侧按平台解析 poller 配置
 
 # 状态文件：web/routers/sync.py 的 _read_sync_status 也读这个
 STATUS_FILE = str(data_path("sync_history_status.json"))
@@ -237,7 +238,7 @@ def run_sync_history(
             retries=config.dws.retries,
             dry_run=config.dws.dry_run,
             profile=config.dws.profile,
-            ai_tag_default=config.poller.ai_tag_enabled,
+            ai_tag_default=resolve_poller_config(config, platform).ai_tag_enabled,
         )
 
         store = SQLiteStore(os.path.abspath(config.storage.path))
@@ -248,7 +249,7 @@ def run_sync_history(
         rule_engine = RuleEngine(config.rules, db_store=store)
 
         poller = MessagePoller(
-            config=config.poller,
+            config=resolve_poller_config(config, platform),
             dws=dws,
             store=store,
             current_user_id=current_user_id,

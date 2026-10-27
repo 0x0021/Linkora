@@ -580,6 +580,11 @@ async def get_config(platform: str = ""):
             data["embedding"]["hf_token"] = _mask(data["embedding"].get("hf_token", ""))
         if "web" in data:
             data["web"]["auth_password"] = _mask(data["web"].get("auth_password", ""))
+            # 【P1-4 安全修复】jwt_secret 是 **JWT 签名密钥**：泄漏即可离线伪造任意
+            # 角色（含 admin）的合法令牌，且图片访问 token 的密钥也由它派生。
+            # 此前此处只 mask 了 auth_password —— jwt_secret 明文回传，属真实凭据泄漏。
+            if data["web"].get("jwt_secret"):
+                data["web"]["jwt_secret"] = _mask(data["web"]["jwt_secret"])
         for p in data.get("platforms") or []:
             if p.get("llm"):
                 p["llm"]["api_key"] = _mask(p["llm"].get("api_key", ""))

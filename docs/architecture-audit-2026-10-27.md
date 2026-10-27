@@ -222,7 +222,7 @@
 | P3-5 | ✅ 嵌入模型口径同步（`bge-base-zh` → `bge-small-zh`）+ `package.json` 补 `name`/`version` | `6357118` |
 | P3-2 | ✅ **提示注入面缓解**：RAG 片段 / 公共记忆 / 历史 user 消息加「不可信数据」边界标记（正文逐字保留、零误伤、不改消息结构） | `d66bb60` |
 | P3-3 | ✅ 补齐**双重回复防护**与**死信队列分支**的生产代码覆盖（7 条测试，**变异测试证实**：改坏生产判断 → 旧测试全漏检 / 新测试全捕获） | `938e8fc` |
-| dotenv 专项 | ✅ `.env` 加载入口**显式化**：`main()` 首行 + `base.py` 幂等兜底（3 处模块级 env 读取仍有效）；Web 进程行为刻意不变 | `8bbffe0` |
+| dotenv 专项 | ✅ `.env` 加载入口**显式化**：`main()` 首行 + `base.py` 幂等兜底（3 处模块级 env 读取仍有效）；Web 进程行为刻意不变；**显式指定 .env 路径**规避 python-dotenv 帧遍历断言 | `8bbffe0` / `c810ae5` |
 
 **本轮证伪/修正的原判断（勿再照抄原文）**
 
@@ -238,7 +238,8 @@
 9. **「生产应关闭 sourcemap 下发」对本项目不成立** —— 实测 `bundle.*.js.map` 含完整前端源码（65 万字符），但**零绝对路径、零密钥字面量**，且前端源码本就在**公开仓库**（`github.com/0x0021/Linkora`）→ 关闭 sourcemap 不产生实质安全收益，反而丧失浏览器 DevTools 排障能力。**决定不改**。
 10. **「`TEST_COVERAGE.md` 过时」判断过时** —— 该文件**根本不存在**，无需同步。
 11. **「376 处 mock，部分可能验证 mock 而非行为」数字不准但结论成立** —— 实测 mock 调用点 **1134 处**、**25%** 的测试函数含 mock（376 这个数字偏低）。但**真问题确实存在**且经**变异测试**证实：`tests/test_double_reply.py` 的「防双重回复」用例**自己重写了一遍生产消费逻辑**（`if already_sent: pass / elif reply.text: _send_reply(...)`），把 `runtime_llm_reply.py:134` 的判断改成恒假它**依然全绿**；「LLMProcessingError + DLQ 开启」的死信分支从未被覆盖，删掉 `_enqueue_dead_letter` 调用不会被发现。三处变异对**全仓库 4515 个用例零报警**。→ 已新增 7 条测试直接驱动生产方法 `_process_llm_reply`，变异后旧测试 failed=0 / 新测试各 2 failed。
-12. **「提示注入仅靠 `final_guard` 近因约束」描述不准** —— `final_guard` 防的是**输出泄漏**（不展示系统指令/思考过程），**不防注入**，二者是不同问题；项目另有 `src/gate/reply_gate.py` 关键词规则，但 `scripts/seed_gate_rules.py` **无自动调用点**（默认部署不生效）、只查**当前**消息不查历史与 RAG。真正空档是**角色错配**：RAG 片段与公共记忆被提升为 `role:"system"` 且前导语强调「最高优先级/唯一事实来源」→ 文档里的指令会被当成系统指令执行。
+12. **`.env` 自动查找不可依赖** —— `python-dotenv` 的 `load_dotenv()` 不传路径时会调 `find_dotenv()`，后者靠**遍历调用栈帧**推断「用户代码所在目录」；调用链较深时一路退到栈底，触发 `assert frame.f_back is not None` → AssertionError。该脆弱点**本机测不出来、只有 CI 暴露**（本机 `.env` 存在且调用链不同）→ 改为**显式指定路径**（`src/paths.py::get_app_root()`），传了 `dotenv_path` 即不走帧遍历。同理，**测试不能依赖仓库里存在 `.env`**（在 `.gitignore` 里，CI 的 checkout 没有）→ 改用 `tmp_path` 造文件 + 打桩解析根。
+13. **「提示注入仅靠 `final_guard` 近因约束」描述不准** —— `final_guard` 防的是**输出泄漏**（不展示系统指令/思考过程），**不防注入**，二者是不同问题；项目另有 `src/gate/reply_gate.py` 关键词规则，但 `scripts/seed_gate_rules.py` **无自动调用点**（默认部署不生效）、只查**当前**消息不查历史与 RAG。真正空档是**角色错配**：RAG 片段与公共记忆被提升为 `role:"system"` 且前导语强调「最高优先级/唯一事实来源」→ 文档里的指令会被当成系统指令执行。
 
 **尚未实施**
 

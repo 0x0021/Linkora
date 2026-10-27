@@ -135,7 +135,7 @@ def test_models_still_resolve_annotations() -> None:
 
 
 def test_model_module_identity_unchanged() -> None:
-    """模型类的 ``__module__`` 仍为 ``src.config_models``。
+    """留在 ``__init__.py`` 的模型类 ``__module__`` 仍为 ``src.config_models``。
 
     这一条同时保护两件事：
     - 包化本身未改变类的身份（``__module__`` 决定 Pydantic 求值命名空间，
@@ -151,6 +151,69 @@ def test_model_module_identity_unchanged() -> None:
             f"{cls.__name__}.__module__ 变为 {cls.__module__!r}；"
             "若已外移到子模块，需确认其依赖类为**运行时** import（非 TYPE_CHECKING），"
             "否则 model_rebuild 会抛 PydanticUndefinedAnnotation"
+        )
+
+
+# P2-7 第 2 步已外移的组 → 模型类
+EXTRACTED_GROUPS: dict[str, list[str]] = {
+    "llm": ["LlmAdvancedConfig", "LlmConfig", "LlmThrottleConfig", "EmbeddingConfig"],
+    "rules_tools": ["KeywordRule", "RulesConfig", "OcrPostprocessConfig", "ToolsConfig"],
+    "memory_skills": ["MemoryConfig", "SkillsConfig", "SkillHubConfig", "RagConfig"],
+}
+
+
+@pytest.mark.parametrize(
+    "group,member",
+    [(g, m) for g, ms in EXTRACTED_GROUPS.items() for m in ms],
+)
+def test_extracted_model_module_identity(group: str, member: str) -> None:
+    """已外移的模型类 ``__module__`` 指向其子模块。
+
+    外移会改变 ``__module__``，而 Pydantic v2 依此查找注解求值命名空间 ——
+    若该模块缺少依赖类的**运行时**绑定，注解解析会失败（表现为
+    ``PydanticUndefinedAnnotation`` 或字段类型退化为 Any）。本测试锁住
+    「类与子模块的对应关系」，配合 complete 断言共同守护该约束。
+    """
+    import src.config_models as cm
+
+    cls = getattr(cm, member)
+    assert cls.__module__ == f"src.config_models.{group}", (
+        f"{member}.__module__ = {cls.__module__!r}，期望 src.config_models.{group}"
+    )
+    assert cls.__pydantic_complete__, f"{member} 注解未解析完成（跨模块依赖需运行时 import）"
+
+
+def test_extracted_groups_have_no_missing_runtime_deps() -> None:
+    """已外移的三个组**零外部配置类依赖** → 注解解析不依赖其他模块的 globals。
+
+    若后续有人给这些组添加了对其它配置类的引用（如 RulesConfig 引用
+    PlatformConfig），必须同时在子模块里做**运行时** import，否则
+    ``__pydantic_complete__`` 会变 False。
+    """
+    import ast
+    import pathlib
+
+    pkg = pathlib.Path(__file__).resolve().parents[1] / "src" / "config_models"
+    init_tree = ast.parse((pkg / "__init__.py").read_text(encoding="utf-8"))
+    init_classes = {
+        n.name for n in init_tree.body if isinstance(n, ast.ClassDef)
+    }
+
+    for group in EXTRACTED_GROUPS:
+        tree = ast.parse((pkg / f"{group}.py").read_text(encoding="utf-8"))
+        own = {n.name for n in tree.body if isinstance(n, ast.ClassDef)}
+        referenced: set[str] = set()
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Name):
+                    referenced.add(sub.id)
+        cross = (referenced & init_classes) - own
+        assert not cross, (
+            f"{group}.py 引用了其它模块的模型类 {sorted(cross)}，"
+            "必须在该子模块做**运行时** import（不可用 TYPE_CHECKING），"
+            "否则 Pydantic 注解解析会失败"
         )
 
 

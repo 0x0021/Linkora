@@ -28,6 +28,25 @@ from pydantic import BaseModel, Field, model_validator
 
 from src.paths import data_path, get_data_dir, get_log_dir
 
+from src.config_models.llm import (  # noqa: F401
+    LlmAdvancedConfig,
+    LlmConfig,
+    LlmThrottleConfig,
+    EmbeddingConfig,
+)
+from src.config_models.rules_tools import (  # noqa: F401
+    KeywordRule,
+    RulesConfig,
+    OcrPostprocessConfig,
+    ToolsConfig,
+)
+from src.config_models.memory_skills import (  # noqa: F401
+    MemoryConfig,
+    SkillsConfig,
+    SkillHubConfig,
+    RagConfig,
+)
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_DATA_DIR = str(get_data_dir())
@@ -246,97 +265,8 @@ class PollerConfig(BaseModel):
     conv_info_negative_cache_ttl_seconds: int = 300
 
 
-class KeywordRule(BaseModel):
-    match: str
-    reply: str
 
 
-class RulesConfig(BaseModel):
-    enabled: bool = True
-    # ReDoS 防护：用户/DB 可配置的正则(黑白名单、关键词规则)匹配单次超时秒数。
-    # 使用 regex 库的 timeout 机制中断灾难性回溯，超时则跳过该规则(fail-safe)。
-    # 0 或负数表示禁用超时防护(不推荐)。
-    regex_timeout_seconds: float = 1.0
-    blacklist: dict[str, list[str]] = Field(default_factory=lambda: {"users": [], "groups": []})
-    whitelist: dict[str, Any] = Field(default_factory=lambda: {"enabled": False, "users": [], "groups": []})
-    keywords: list[KeywordRule] = Field(default_factory=list)
-    # 停用词表：用于模糊匹配时过滤无意义的 token，防止误匹配
-    # 支持逗号分隔的字符串列表（每行一组词，可加注释分类）
-    stop_words: list[str] = Field(default_factory=list)
-    # 高频关键词黑名单：从「高频关键词」词云中强制剔除的词（如 dingtalkclient / mobilelink 等机器生成 token）。
-    # 可在此免改代码添加，是抑制无意义词的长效机制。
-    keyword_denylist: list[str] = Field(default_factory=lambda: [
-        "dingtalkclient", "mobilelink", "dingtalk", "mobile",
-        "client", "link", "oauth", "callback", "redirect",
-        "android", "ios", "robot", "webbot", "miniapp",
-    ])
-
-    # 意图过滤配置：识别并跳过无业务价值的消息
-    intent_filter: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": True,
-        "thank_you": [
-            "谢谢", "感谢", "辛苦了", "辛苦", "谢了", "多谢", "太感谢了",
-            "谢谢老板", "谢谢领导", "谢谢经理", "辛苦老板", "辛苦领导",
-            "谢老板", "谢领导", "感恩", "感激", "谢谢了", "谢谢啊",
-            "谢谢啦", "多谢了", "辛苦了啊", "辛苦了啦",
-        ],
-        "acknowledge": [
-            "收到", "好的", "明白", "知道了", "了解", "清楚了",
-            "OK", "ok", "Ok", "好", "行", "没问题", "可以",
-            "好滴", "好嘞", "好哒", "好的好的", "明白了", "知道了",
-            "清楚了", "了解了", "收到收到", "收到啦", "收到了",
-        ],
-        "closing": [
-            "再见", "拜拜", "晚安", "拜拜了", "下次聊", "下次再说",
-            "先这样", "就这样", "结束吧", "收工", "下班了",
-            "先忙了", "先忙啦", "忙了", "先走了", "先撤了",
-        ],
-        "polite": [
-            "你好", "您好", "嗨", "Hi", "hi", "Hello", "hello",
-            "在吗", "在不在", "有人吗", "请问", "打扰了", "不好意思",
-            "抱歉", "抱歉打扰", "打扰一下", "请问一下", "方便吗",
-        ],
-        # 以下三个社交子型为后续扩充：默认仅给少量种子词，运维可在 config.yaml
-        # 经 rules.intent_filter.<key> 追加关键词（去重合并语义）。
-        "compliment": [
-            "厉害", "太强了", "太棒了", "牛啊", "可以啊", "可以呀",
-            "优秀", "靠谱", "给力", "绝了", "666", "yyds",
-        ],
-        "smalltalk": [
-            "在忙吗", "忙不忙", "最近好吗", "最近怎么样", "吃饭了吗",
-            "吃了吗", "周末有空吗", "还好吗",
-        ],
-        "emotion": [
-            "哈哈", "哈哈哈", "嘿嘿", "无语", "醉了", "服了", "emo", "笑死",
-        ],
-        # 混合消息检测：如果消息中同时包含业务内容和感谢，阈值用于判断是否跳过
-        # 纯感谢消息的长度阈值（超过此长度可能包含业务内容）
-        "pure_thank_max_length": 20,
-        # 纯确认收到消息的最大长度（超过此长度大概率含业务内容，不应跳过）
-        "pure_ack_max_length": 10,
-        # 消息中业务关键词占比阈值（低于此阈值则认为主要是感谢）
-        "business_ratio_threshold": 0.3,
-        # 业务关键词：用于判断消息是否包含业务内容
-        "business_keywords": [
-            "问题", "错误", "故障", "报错", "异常", "失败", "不行",
-            "怎么", "如何", "为什么", "什么", "哪里", "谁", "多少",
-            "帮我", "麻烦", "需要", "想要", "请求", "申请",
-            "配置", "设置", "安装", "部署", "调试", "排查", "解决",
-            "查询", "搜索", "查看", "确认", "核实", "验证",
-            "审批", "流程", "工单", "订单", "任务", "项目",
-            "账号", "密码", "权限", "登录", "注册", "开通",
-            "链接", "地址", "网址", "入口", "页面", "功能",
-            "数据", "报表", "统计", "分析", "报告",
-            "时间", "日期", "期限", "截止", "过期",
-            "金额", "费用", "价格", "预算", "成本",
-            "邮件", "通知", "提醒", "公告", "消息",
-            "会议", "日程", "安排", "预约", "计划",
-            "文档", "资料", "文件", "附件", "下载", "上传",
-            "接口", "API", "服务", "服务器", "系统", "平台",
-            "股票", "行情", "上市", "发行", "交易", "IPO", "股价",
-            "情况", "总结", "说明", "介绍", "对比", "推荐",
-        ],
-    })
 
 
 class StorageConfig(BaseModel):
@@ -437,22 +367,6 @@ class PlatformConfig(BaseModel):
             self.storage.path = DEFAULT_STORAGE_PATH
 
 
-class OcrPostprocessConfig(BaseModel):
-    """OCR 后处理管线配置。
-
-    每个步骤可独立开关，控制 OCR 文本清洗的粒度。
-    在 poller → OCR → message_loop 链路中，OCR 结果投喂 LLM 前执行。
-    """
-
-    enabled: bool = True  # 总开关
-    min_chars: int = 5  # 有效字符数阈值，低于此值跳过不投喂 LLM
-    enabled_steps: dict[str, bool] = Field(default_factory=lambda: {
-        "remove_invisible": True,   # 零宽/不可见控制字符剔除
-        "dedup_punctuation": True,  # 连续重复标点压缩（>2 → 1）
-        "remove_fillers": True,     # 口语填充词/语气词剔除
-        "normalize_layout": True,   # 合并空行、去除首尾空白
-        "cjk_spacing": False,       # 中文/英文/数字间加空格（默认关，避免改变原文排版）
-    })
 
 
 class LoggingConfig(BaseModel):
@@ -462,413 +376,21 @@ class LoggingConfig(BaseModel):
     max_backups: int = 7
 
 
-class LlmAdvancedConfig(BaseModel):
-    max_chars_daily_chat: int = 50  # 日常闲聊最大字数
-    max_chars_tech_issue: int = 100  # 技术问题最大字数
-    hard_truncation_chars: int = 300  # 硬性截断字符数（安全网，高于软约束上限 max_chars_tech_issue，兜底极端超长）
-    # ---------- RAG 自动注入门控 ----------
-    # 自动 RAG 注入会把知识库片段塞进 system prompt。若无条件注入，AI 会把弱相关
-    # 文档（如办公点 IP 表、配置清单）当成「需复述的事实」附在无关回答后（例：问天气却
-    # 复述打印机清单）。三层防护：
-    #   1) rag_auto_inject=false 彻底关闭自动注入（最稳，按需由 LLM 主动调 kb_search 工具）
-    #   2) rag_intent_only=true 仅当 query 含「文档/知识查询意图」时才注入，闲聊/天气/问候等不注入
-    #   3) rag_min_similarity / rag_max_results 收紧召回门槛，避免弱相关内容进 prompt
-    rag_auto_inject: bool = True  # 是否自动注入 RAG 相关知识到 system prompt
-    rag_intent_only: bool = True  # 仅当 query 含文档/知识查询意图时才注入（闲聊/天气/问候等不注入）
-    rag_min_similarity: float = 0.6  # 自动注入的最低相似度门槛（原 0.3 过低，易命中弱相关）
-    rag_max_results: int = 1  # 自动注入最多返回几条；越少越省 token，关键信息通常在最相关的前 1 条
-    rag_max_content_chars: int = 800  # 单条注入知识的展示上限；过长会挤占历史消息窗口，触发 429
-    rag_empty_fallback_enabled: bool = True  # 空-RAG 三级递进兜底总开关：知识库无匹配时，按降阈值重搜→引导追问→强制兜底三级处理
-    rag_empty_fallback_reply: str = "知识库中暂未收录相关信息。"  # 第3级兜底回复文案
-    # ---------- 三级递进 RAG 空结果处理 ----------
-    rag_fallback_min_similarity: float = 0.20  # 第1级降级重搜的最低相似度阈值
-    rag_fallback_max_results: int = 2  # 第1级降级重搜的最大结果数（不搜太多）
-    rag_max_retry_rounds: int = 1  # 最多允许几轮引导追问（超过则强制走第3级兜底）
-    # ---------- RAG 严格问答模式（智能问答，默认关） ----------
-    # 开启后：所有问答请求强制先检索知识库，回答只允许来自检索到的知识库内容，
-    # 不使用通用大模型知识；知识库无相关内容时直接返回 rag_strict_no_hit_reply
-    #（不调用 LLM、不推理、不编造）。关闭时完全恢复原有问答逻辑。
-    # 详见 src/llm/rag_strict.py 与 docs/rag.md「严格问答模式」。
-    rag_strict_mode: bool = False  # 严格问答模式总开关
-    rag_strict_min_similarity: float = 0.50  # 严格模式召回相似度门槛（覆盖 rag_min_similarity）
-    rag_strict_max_results: int = 3  # 严格模式最多注入几条知识片段
-    rag_strict_no_hit_reply: str = "知识库中暂未收录相关内容，我无法凭已有信息作答。"  # 未命中时的固定回复
-    # ---------- Prompt 长度控制 ----------
-    max_input_tokens: int = 12000  # 单条请求最大输入 token（含 system + history + user）；超限则从最早历史开始截断
-    # ---------- H5/H6 历史分级注入（注入 LLM 的近期完整条数） ----------
-    # 原 _apply_history_tiering 硬编码 6；现经配置暴露，未配置时默认 6 保持向后兼容。
-    # 调小（如 4）可直接削减注入 LLM 的近期完整消息条数、省 token；
-    # 同时因 history_window >= max_recent 才触发摘要，调小也是激活 H2-A 异步摘要的前提。
-    history_tiering_recent: int = 6
-    # ---------- H2-A 后台异步摘要（state machine 写回） ----------
-    # 总开关：是否启用后台异步摘要（True=主回复链路只快读缓存，摘要计算在 daemon 线程写回）。
-    summary_async_enabled: bool = True
-    # 缓存摘要新鲜度窗口（秒）：超过则视为过期，降级为 recent 仅并触发补算。
-    summary_max_age_seconds: int = 600
-    # 缓存摘要采用阈值：缓存摘要须覆盖当前 older 段的 >= 该比例才采用（避免旧摘要漏掉新 older 导致失忆）。
-    summary_min_coverage_ratio: float = 0.6
-    # 透传给 summarize_conversation 的 max_messages（0=不限制，由调用方裁剪 older）。
-    summary_max_messages: int = 0
-    # older 段至少 N 条才压摘要（沿用原 len(older) >= 2；不足则仅注入 recent，避免无意义的单条摘要）。
-    summary_min_older: int = 2
-    # ---------- 低置信度转人工/草稿（Feature A） ----------
-    # 当 RAG 未命中（或最佳相似度低于阈值）且消息属"知识/问题类"查询时，
-    # 不硬答、不答"未找到"，而是把草稿推送给主人审签（人工接管）。
-    low_confidence_handoff_enabled: bool = True
-    low_confidence_threshold: float = 0.35  # RAG 最佳相似度低于此值视为低置信（默认放宽以减少草稿审签打扰）
-    # ---------- RAG 引文溯源 + 置信度产品化（Phase 2） ----------
-    # 在真实回复末尾可选追加「依据：《标题》（相关度88%）」页脚，让回答可溯源。
-    # 默认关闭（灰度）；开启后仅在 RAG 命中且相关度达阈值时追加，低置信不追加。
-    citation_enabled: bool = False        # 引文页脚总开关，默认关（生产 config.yaml 已置 true 开启）
-    citation_in_group: bool = False       # 群聊是否也附引文，默认关（更克制）
-    citation_high_threshold: float = 0.75  # ≥此值标「依据」，[low,high) 标「参考」
-    citation_low_threshold: float = 0.50  # 低于此值不追加页脚
-    citation_max_items: int = 2           # 页脚最多列几条引文
-    # 引文页脚是否展示内部相关性分数（相关度XX%）。属实现细节，默认隐藏
-    # 避免把系统指标（相似度）泄露给最终用户；溯源仍靠《文档名》呈现。
-    citation_show_score: bool = False
-    # 是否剥离 LLM 自行生成的「—— 依据：《doc》（相关度XX%）」引文（历史自污染回灌）。
-    # 默认开：LLM 若从历史坏回复学会输出引文格式，属提示词/推理泄漏，应由
-    # reply_helpers 页脚作为唯一真相源；统一剥离避免双引文 + 内部分数泄漏。
-    citation_hide_generated: bool = True
-    # ---------- BGE 本地离线重排（Phase 2 · P2-6，默认关） ----------
-    # 对 RAG 召回候选做 cross-encoder 重排，仅调整顺序（reorder-only，
-    # 不改原相似度 score），提升注入质量；默认关，开启需本地有模型权重。
-    rerank_enabled: bool = False          # 重排总开关，默认关（opt-in 高级特性：开启需 BGE 权重、引入推理开销，有意默认关）
-    rerank_model: str = "BAAI/bge-reranker-base"  # 重排模型
-    rerank_offline: bool = False          # 纯离线加载（local_files_only）
-    rerank_top_k: int = 10                # 参与重排的候选窗口（None/0=全部）
-    rerank_timeout: float = 2.0           # 重排超时（秒），超时降级原始顺序
-
-
-class LlmConfig(BaseModel):
-    provider: str = "openai-compatible"
-    base_url: str = "https://api.openai.com/v1"
-    # 允许为空/None：本地或免密代理可不填；远程服务才需要真实 key。
-    # 运行期 LLMClient 已用 `api_key or "dummy"` 兜底，None 不会崩。
-    api_key: str | None = None
-    model: str = "gpt-4o"
-    temperature: float = 0.7
-    max_tokens: int = 512
-    timeout: int = 60
-    max_tool_rounds: int = 5
-    # 工具收敛护栏：当连续 N 轮 LLM 都在调用工具（尤其搜索）却仍未综合作答时，
-    # 强制收敛——移除“继续检索类”工具并注入“基于已有结果直接作答”的系统提示，
-    # 防止免费/弱模型陷入“换关键词反复搜”循环，直到 max_tool_rounds 耗尽才降级。
-    # 0 = 关闭护栏（完全依赖 max_tool_rounds）。默认 3 表示：第 3 轮若仍在调工具则收敛。
-    converge_after_tool_rounds: int = 3
-    system_prompt: str = (
-        "你是 {user_name} 的 {platform} 数字分身，代表 {user_name} 回复消息。"
-        "语气、口吻与表达习惯以注入的【主人沟通风格】段落为准，请贴合 {user_name} 本人的真实风格沟通，不要套用任何固定人设。"
-    )
-    advanced: LlmAdvancedConfig = Field(default_factory=LlmAdvancedConfig)
-    # —— 同服务商模型池（免费额度轮换）——
-    # 与主模型共用 base_url / api_key 的备选模型列表（不含主模型 model 本身）。
-    # 主模型 429/超时/失败时，按列表顺序在同池内逐个轮换（每次调用一次），
-    # 仍失败则降级到跨服务商的 fallback_*（见下）。用于把同一服务商的多个免费模型
-    # 额度都用起来（例如 mimo-v2-5:free、kimi-k2-7-code:free、hy3:free、deepseek-v4-flash:free）。
-    # 顺序即优先级：排在前面的先被尝试。
-    model_pool: list[str] = Field(default_factory=list)
-    # 备用模型（跨服务商兜底，主模型+模型池全部失败后切换）
-    # 单备用模型（旧）：直接填 fallback_model。
-    # 备用模型池（新）：fallback_model_pool 内逐个轮换（共用 fallback_base_url/fallback_api_key）。
-    # 两者并存时优先用池；池为空则回退到单 fallback_model。
-    fallback_model: str = ""
-    fallback_model_pool: list[str] = Field(default_factory=list)
-    fallback_api_key: str | None = None
-    fallback_base_url: str = ""
-    # 第二层备用模型（跨服务商兜底，fallback 全部失败后切换）
-    secondary_fallback_model: str = ""
-    secondary_fallback_model_pool: list[str] = Field(default_factory=list)
-    secondary_fallback_api_key: str | None = None
-    secondary_fallback_base_url: str = ""
-    # few-shot 本人语气样例（用于让数字分路口吻更像本人）
-    few_shot_examples: list[dict] = Field(default_factory=list)
-    # 主人沟通风格（数字分身口吻）：手动覆盖注入 system prompt；
-    # 留空则由 sqlite_store 的 style_profiles 自动画像（启动时从主人历史消息抽取）兜底。
-    persona_style_prompt: str = ""
-    # 主人沟通风格按平台覆盖：key 为 platform_id（dingtalk/feishu/wecom），
-    # value 为该平台专属的口吻覆盖。优先级高于全局 persona_style_prompt。
-    # 例：{"feishu": "飞书场景更活泼口语", "wecom": "企业微信场景更正式"}
-    # 多平台隔离：各平台独立 DB 已隔离自动画像；此处再支持手动覆盖也按平台区分。
-    persona_style_prompts: dict[str, str] = Field(default_factory=dict)
-    # 画像历史版本最大保留数：每次写入新版本后滚动删除超量旧版本，保留最新的 N 个。
-    persona_history_max_versions: int = 10
-    # 动态 few-shot（按场景检索主人历史原话，注入 system prompt，让真实回复更像本人）。
-    # 默认关闭：保持历史静态 few_shot_examples 行为（build_system_prompt 取 [:1] 截断样例）。
-    # 开启后：每次生产回复基于当前消息做场景相似检索，从主人历史里取最像的 N 条
-    # (user→assistant) 配对注入，替代固定样例。算法由 dynamic_few_shot_method 控制：
-    #   - "trigram": 纯文本 trigram 相似粗筛（零延迟，语义弱）
-    #   - "embedding": 基于 embedding 余弦相似精排（需 query_vec，每条消息已在 agent 处算过）
-    #   - "hybrid": trigram 粗筛 + embedding 精排（默认，兼顾召回与语义）
-    dynamic_few_shot: bool = False
-    dynamic_few_shot_n: int = 4
-    dynamic_few_shot_method: str = "hybrid"
-    # 回测评委口径：默认严格（字面口吻重合度，口语极简回复易低分）；
-    # 开启 loose 后改为评「意图匹配 + 风格类别一致」，容忍措辞差异，
-    # 还原度回测更接近真实观感（避免主人极简口语被过度惩罚）。默认关。
-    backtest_judge_loose: bool = False
-    # 模型单价自定义（USD / 百万 token）。key 为模型标识子串（小写），
-    # value = {"input": float, "output": float}。用于覆盖/补充内置价目表
-    # （src.llm.history._MODEL_PRICING），让内置表未收录的收费模型、或想调整
-    # 单价的模型也能正确估算成本。优先级高于内置表。
-    # 例：{"gpt-4o": {"input": 5.0, "output": 15.0}, "my-custom-model": {"input": 1.0, "output": 2.0}}
-    model_pricing: dict[str, dict[str, float]] = Field(default_factory=dict)
-    # 回复硬截断上限覆盖：0=沿用 advanced.hard_truncation_chars(默认300)；
-    # >0 时覆盖普通回复的截断上限（用于按主人风格放宽/收紧，避免极简主人被
-    # 300 字上限无意义截断，或灌水主人被放过）。结构化卡片仍放宽到 1300。
-    brevity_hard_cap: int = 0
-    # —— 重试与退避（P0-2）：主模型瞬时故障时的有限重试 ——
-    # 可重试故障：429 限流 / 超时 / 5xx 服务端错误 / 连接错误 / 网关错误。
-    # 不可重试（直接进 DLQ）：401/403 鉴权失败、400 格式错误等。
-    max_retries: int = 3  # 主模型单轮最大重试次数（含首次；耗尽后切备用模型）
-    base_backoff: float = 2.0  # 退避基数（秒）：第 n 次等待 base_backoff * 2**n
-    # 退避 jitter：0=固定退避；>0 时在 [base_backoff, base_backoff*2^(n+1)] 内随机取值，
-    # 避免多个并发请求在同一时刻重试（惊群效应）。免费 LLM 建议 0.3-0.5。
-    backoff_jitter: float = 0.3
-    # 429 限频后模型冷却秒数。若服务端返回 Retry-After 头则优先使用。
-    rate_limit_cooldown: float = 30.0
-    # 超时/瞬时故障重试耗尽后，给该模型的短冷却期（秒），防止下一轮继续砸同一个模型。
-    timeout_cooldown: float = 10.0
-    # 全局 LLM 并发上限（所有 LLMClient 实例共享）。0=不限制；免费/低并发模型建议 3-5。
-    max_concurrency: int = 0
-
-
-class LlmThrottleConfig(BaseModel):
-    """后台 LLM 任务（对话摘要 / 记忆提取）的限速与空闲降频配置。
-
-    目的：免费 LLM 额度有严格频次限制，后台任务若无节流会在启动/空闲时
-    持续轰炸接口（已观察到 deepseek-v4-flash:free 触发 429 rate_limit_exceeded）。
-    """
-    enabled: bool = True
-    # 两次后台 LLM 调用之间的最小间隔（秒）。活跃时以此为准，避免突发 burst。
-    background_min_interval_seconds: int = 20
-    # 多久无真实消息处理算"空闲"。空闲时后台任务进一步降频。
-    idle_threshold_seconds: int = 300
-    # 空闲时两次后台 LLM 调用的最小间隔（秒），应明显大于活跃间隔。
-    idle_min_interval_seconds: int = 180
-    # 主模型触发 429/超时后，后台任务暂停的时长（秒）。保护免费额度。
-    rate_limit_backoff_seconds: int = 600
-    # 同一会话记忆提取的最小冷却（秒）：避免每条回复都额外调一次 LLM。
-    extract_memory_cooldown_seconds: int = 600
-    # 本轮新增内容低于此字符数则不提取记忆（纯短句无意义）。
-    extract_memory_min_new_chars: int = 30
-    # 单个调度周期内最多处理的摘要会话数（安全上限，防止一次性排空）。
-    max_summaries_per_cycle: int = 20
-    # 摘要时最多取的非归档近期消息条数（控制 prompt token）。
-    summary_history_limit: int = 40
-
-
-class ToolsConfig(BaseModel):
-    enabled: bool = True
-    # 是否允许技能引擎把「未显式声明 allowed_tools」的技能自动包装为标准 Tool，
-    # 使其绕过 tools.available 白名单被 LLM 调用（技能工具名不在 tools.available 中，
-    # 故必须特例放行，属有意设计）。设为 False 则强制严格白名单：技能不再被自动包装为
-    # Tool（仅保留其 system prompt 注入），运维可借此收紧攻击面。
-    allow_skill_tools: bool = True
-    # 是否将【全部】已启用工具的 schema 每轮都暴露给 LLM。
-    # True（默认）：LLM 始终能看到所有工具，由其自行判断是否调用。
-    #   配合现代大上下文窗口，token 成本可忽略，且能消除关键字路由“藏起工具”导致的“工具没用”问题。
-    # False：退回到 _filter_tools_by_intent 的精确关键字过滤（仅 BASE/FALLBACK + 命中关键字的工具可见）。
-    expose_all_tools: bool = True
-    # 工具按需暴露策略（取代 expose_all_tools 的二值开关，粒度更细）：
-    #   - "smart"  （默认，推荐）：明确意图用 intent_keywords 精准暴露相关工具
-    #     （零额外 LLM 调用、省 token、减少乱调）；关键词无法确定意图时回退全量
-    #     让主模型自选，保证不漏工具。不加剧免费模型 429 限频。
-    #   - "all"    ：每轮全量暴露所有工具（= 旧 expose_all_tools=True 行为）。
-    #   - "keyword"：纯 intent_keywords 过滤，无命中时回退少量 FALLBACK 工具
-    #     （= 旧 expose_all_tools=False 行为，语义盲区最大）。
-    # 兼容：若 config 显式设了 expose_all_tools 但未设 tool_routing_mode，则按
-    # expose_all_tools 映射（True→all / False→keyword）；两者都未设时默认 "smart"。
-    tool_routing_mode: str = "smart"
-    # Phase 2 语义路由：子串快路径未命中时，用本地 embedding 语义相似度兜底补充相关工具，
-    # 覆盖同义/错别字/口语化表达。embedding 不可用时（未启用或 kb_search 未注册）自动降级为纯子串匹配。
-    semantic_routing: bool = True
-    # 工具语义命中阈值（余弦相似度，0~1），高于此值视为语义相关。
-    semantic_tool_threshold: float = 0.42
-    # 是否注册 RAG 知识库检索工具 kb_search。设为 False 时 register_builtin_tools
-    # 直接跳过注册（连带热重载重建也不再注册），用于完全关闭 RAG 能力。
-    # 注意：这是关闭 kb_search 的【唯一】入口——register_builtin_tools 不读
-    # tools.available（available 只在向 LLM 暴露 schema 时做白名单过滤，工具仍已注册）。
-    # 此字段此前只被 runtime_setup 以 hasattr 探测、却从未在模型中声明，导致用户在
-    # config.yaml 写 tools.kb_search_enabled: false 被 pydantic 静默丢弃、开关恒失效。
-    kb_search_enabled: bool = True
-    available: list[str] = Field(default_factory=lambda: [
-        "kb_search", "send_message", "search_doc", "get_doc_content", "search_contact",
-        "get_calendar_events", "create_todo", "list_todos", "complete_todo",
-        "schedule_meeting",
-        "recall_memory", "save_memory",
-        "web_search", "get_weather", "system_status", "message_stats",
-        "keyword_rules", "config_manage",
-        "get_unread", "get_conversation_info", "search_messages",
-        "get_my_profile", "list_orgs", "get_current_org",
-        "transfer_approval",
-        "get_attendance", "send_ding",
-        "upload_image",
-        "list_minutes", "get_minutes",
-        "wiki_space_list", "wiki_space_search", "wiki_node_list", "wiki_node_search",
-        "approval_list_forms", "approval_search_forms", "approval_get_detail",
-        "approval_get_form_schema",
-        "approval_list_pending", "approval_list_tasks", "approval_list_initiated",
-        "approval_list_executed", "approval_list_org", "approval_list_cc",
-        "list_reports", "get_report_detail", "list_report_templates",
-        "search_enterprise_content", "search_enterprise_behavior"
-    ])
-    rate_limit: dict[str, dict] = Field(default_factory=lambda: {
-        "send_message": {"per_hour": 30},
-        "create_todo": {"per_hour": 20},
-        "web_search": {"per_hour": 50},
-        "get_weather": {"per_hour": 30},
-        "get_unread": {"per_hour": 60},
-        "get_conversation_info": {"per_hour": 60},
-        "search_messages": {"per_hour": 60},
-        "get_my_profile": {"per_hour": 30},
-        "list_orgs": {"per_hour": 30},
-        "get_current_org": {"per_hour": 30},
-        # 转交是写操作，限得更紧
-        "transfer_approval": {"per_hour": 10},
-        "get_attendance": {"per_hour": 20},
-        "send_ding": {"per_hour": 20},
-        "upload_image": {"per_hour": 30},
-    })
-    # 禁止 AI 主动联系第三方（默认开启）：在工具编排层硬拦截所有"向当前对话之外
-    # 的人/会话"发起的主动外联。
-    #   - send_ding：一律拦截（DING 本质是跨会话强提醒，必属外联）。
-    #   - send_message：仅允许发往"当前对话"（message.chat_id），任何发往其他会话
-    #     /第三方单聊的调用都被拒绝，并返回提示让 LLM 改为口头转述。
-    # 这是硬护栏（等价于工具不可用），关闭需显式设 False；开启时系统提示也会同步
-    # 告知模型"不要主动联系第三方"，避免浪费一轮工具调用。
-    # 注意：不做白名单（用户明确不要联系第三方），因此无例外列表。
-    block_outbound_to_third_party: bool = True
-    # 工具执行的统一外层超时（秒）：防止单个工具卡死（无限循环 / 无超时的网络调用 /
-    # 子进程挂起）永久阻塞 ToolRouter 共享线程（轮询主线程或 Web worker），进而拖垮
-    # 整条消息处理链路。0/负数表示不启用外层护栏（退回各工具自带超时，如 SkillTool 的
-    # 60s 子进程超时）。实现上在 daemon 子线程中执行并用 join(timeout) 等待；超时仅停止
-    # 等待、不真正中断同步调用，故阈值应远大于正常耗时（默认 120s，留出子进程超时余量）。
-    # 用 contextvars 把调用方平台隔离上下文带入子线程，避免超时执行丢失平台上下文。
-    max_tool_seconds: float = 120.0
-
-
-class EmbeddingConfig(BaseModel):
-    enabled: bool = False
-    provider: str = "local"
-    base_url: str = ""
-    api_key: str = ""
-    hf_token: str = ""
-    model: str = "BAAI/bge-small-zh-v1.5"
-    top_k: int = 5
-    # 是否纯离线：True 时禁止联网下载，仅用本地缓存；False 时允许按需下载（带进度）
-    offline: bool = False
-    # 本地推理设备：auto / cpu / mps / cuda。
-    #   auto（默认）：Apple Silicon→mps，有 CUDA→cuda，否则 cpu。
-    #   cpu：强制 CPU 推理。MPS 后端首次分配即常驻约 1GB 驱动显存且
-    #        torch.mps.empty_cache() 实测无法回收；bge-small 这类小模型在 CPU 上
-    #        单条仅约 20ms，内存吃紧时设 cpu 可省下约 2GB 常驻内存。
-    device: str = "auto"
-    # 心跳保活间隔（秒）：模型就绪后周期性 dummy 推理，防止长时间闲置被卸载。
-    # 下限 30s（start_heartbeat 内强制），0/负数视为使用默认 300s。
-    heartbeat_interval: float = 300.0
-
-
-class MemoryConfig(BaseModel):
-    cleanup: dict = Field(default_factory=lambda: {
-        "enabled": True,
-        "max_age_days": 90,
-        "min_similarity_threshold": 0.3,
-        "check_interval_days": 7,
-    })
-    retrieval: dict = Field(default_factory=lambda: {
-        "min_similarity": 0.6,
-    })
-    conversation_summary: dict = Field(default_factory=lambda: {
-        "enabled": True,
-        "max_messages_per_conversation": 50,
-        "summary_interval_hours": 24,
-        "summary_ratio": 0.4,
-        # 动态（信号驱动）摘要：取代原固定 1 小时周期轮询（H2-B RollingSummaryScheduler）
-        "dynamic": {
-            "enabled": True,
-            "check_interval_seconds": 60,   # 轻量评估心跳（仅 DB 查询，不调 LLM）
-            "quiet_minutes": 10,            # 会话静默达到该时长且有新内容 → 摘要
-            "min_messages": 3,             # 自上次摘要以来的未摘要消息数下限
-            "max_messages_per_chat": 100,   # 未摘要消息达上限 → 立即摘要（防无限增长）
-            "max_age_hours": 24,           # 距上次摘要超该时长且有新内容 → 刷新
-            "scan_days": 7,                # 扫描最近 N 天内有更新的会话
-        },
-    })
-    # F18 RAG 检索规模化：向量索引类型与幽灵向量自动清理。
-    # vector_index_type: "flat"（默认，IndexFlatIP 精确 O(N) 暴力检索）
-    #   或 "hnsw"（IndexHNSWFlat 近似检索，规模增长时提速显著）。
-    #   默认 flat 保证存量部署行为零变化；记忆规模增长后显式切 hnsw 即可。
-    vector_index_type: str = "flat"
-    # HNSW 的 efConstruction / efSearch（越大召回越高、构建与查询越慢）。仅 hnsw 生效。
-    vector_index_hnsw_ef: int = 64
-    # 幽灵向量（remove 后底层 faiss 向量未删）占有效向量的比例超过此阈值时，
-    # 索引在下次 add 时自动用内存缓存重建、回收底层空间。0 表示禁用自动重建
-    # （始终由调用方显式 rebuild）。默认 0.3（沿用历史 MAX_FAILED_RATIO 语义）。
-    vector_phantom_rebuild_ratio: float = 0.3
-    # 是否在索引内缓存归一化后的 embedding，支撑自动重建与精确重建。
-    # 开启会增加内存（≈ dim×4×N 字节）。关闭后 maybe_rebuild 退化为无操作。
-    vector_cache_embeddings: bool = True
-    # 摘要化记忆（2026-09-23）：自动提取的事实先入 memory_pending 缓冲，
-    # 由「记忆汇总调度器」周期性把同组 pending 事实 + 已有摘要经 LLM 合并为整合摘要。
-    # 取代原先「每条事实单独存一行」的逐条记忆模式。
-    summary_merge: dict = Field(default_factory=lambda: {
-        "enabled": True,
-        "interval_minutes": 10,        # 汇总调度器检查周期（分钟）
-        "max_facts_per_merge": 50,    # 单组合并的事实上限（防止 prompt 过长）
-        "min_facts_to_merge": 1,      # 至少多少条 pending 才触发合并
-    })
 
 
 
-class SkillsConfig(BaseModel):
-    """技能引擎配置。
-
-    技能文件位于项目根目录下 data/skills/{name}/SKILL.md（兼容 .agents/skills/ 旧路径）。
-    每个 SKILL.md 声明 intent_keywords（意图关键词）和 weight（权重 0-1），
-    由智能引擎根据用户消息意图自动调度激活。
-
-    - enabled: 是否启用技能引擎
-    - auto_activate: 是否允许关键词自动激活技能（关闭后仅手动「用 XX 技能」方式激活）
-    - hot_reload: 是否启用热加载（后台轮询 skills 目录变更，无需重启即可加载新 skill）。
-      生产默认关闭——避免运行时自动加载 skills 目录中的新文件（供应链/越权执行风险）；
-      开发态可显式设为 true。
-    - hot_reload_interval: 热加载轮询间隔（秒），越小越灵敏但耗 CPU
-    """
-    enabled: bool = True
-    auto_activate: bool = True
-    # Phase 2 语义路由：技能评分由纯关键词（hits×weight）升级为
-    # max(关键词命中, 语义相似度×weight)，覆盖口语/同义改写。embedding 不可用时自动回退纯关键词。
-    semantic_routing: bool = True
-    # 技能语义命中阈值（余弦相似度，0~1）。
-    semantic_skill_threshold: float = 0.40
-    # Phase 3 组合激活：允许 score 接近平局（top1 - top2 <= combo_gap）的多个
-    # composable 技能被同时激活，使复合意图能编排多技能。仅当技能显式声明
-    # composable: true 时生效；关闭 combo_enabled 则退回纯单激活（行为同 Phase 2）。
-    combo_enabled: bool = True
-    combo_gap: float = 0.12
-    hot_reload: bool = False  # 生产安全默认：关闭运行时自动加载 skills 目录新文件；开发态显式开启
-    hot_reload_interval: float = 15.0
-    # 模块级热重载（开发态）：监控 src/tools/、src/llm/style.py 等无状态模块的 .py 变更，
-    # 自动 importlib.reload() + 重建工具注册表。生产必须关闭（有 importlib 副作用风险）。
-    module_hot_reload: bool = False
-    module_hot_reload_interval: float = 5.0
-    # AI 意图词生成：启用后可通过接口让 LLM 分析每个 SKILL.md 自动生成意图词。
-    # 默认关闭——避免意外消耗 LLM 额度；需用时显式开启或走手动触发接口。
-    ai_intent_generation_enabled: bool = False
 
 
-class SkillHubConfig(BaseModel):
-    """SkillHub 市场（skill 榜单）相关配置。
 
-    - auto_install: 是否允许 Web 运行时自动拉取并执行 skillhub 安装脚本。
-      **默认关闭**。开启后仅当 skillhub CLI 未安装时，才会下载白名单内的安装脚本
-      并做 SHA256 钉值校验后以非 shell 方式执行（见 web/dependencies._ensure_skillhub_cli）。
-      普通 API 请求默认绝不触发远端代码拉取；生产建议由 Dockerfile/部署脚本预装 CLI。
-    """
 
-    auto_install: bool = False
+
+
+
+
+
+
+
+
 
 
 class SafetyConfig(BaseModel):
@@ -931,14 +453,6 @@ class SummaryBackfillConfig(BaseModel):
     max_summary_age_days: int = 7
 
 
-class RagConfig(BaseModel):
-    chunk_size: int = 500  # 分块软目标/上限参考（字符数）；语义分块优先在此长度附近断块
-    chunk_overlap: int = 50  # 分块重叠大小（字符数）
-    chunk_hard_max: int | None = None  # 安全天花板（字符数）；None=派生为 chunk_size*2。
-    # 仅拦截病态超长单元（巨型无标点段落/URL/哈希），达到时仍优先语义边界断开。
-    # 建议设在 embedding 模型有效字符容量之下，杜绝模型侧截断。
-    llm_clean_enabled: bool = True  # 入库文档是否用 LLM 做语义清洗（正则仅作预清洗/回退）
-    llm_clean_max_chars: int = 8000  # 单次 LLM 清洗字符上限；超长文档按段落分片，超单段上限的段回退正则
 
 
 class WebConfig(BaseModel):

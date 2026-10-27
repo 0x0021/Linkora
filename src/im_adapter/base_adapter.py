@@ -55,6 +55,19 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
     supports_native_quote_reply: bool = False
 
     # ==================================================================
+    # 会话归一化的平台差异注入点（P1-5）
+    # ==================================================================
+    # 会话 ID 字段候选链（按优先级）。子类覆写以适配平台原生字段名
+    # （飞书 chat_id / 企微 chatid）。
+    chat_id_fields: tuple[str, ...] = (
+        "chat_id", "chatid", "id", "openConversationId", "chatId",
+    )
+    # 标题字段候选链（按优先级）。
+    chat_title_fields: tuple[str, ...] = ("name", "title", "chat_name", "chatName")
+    # 标题兜底：True=回退到会话 ID；False=回退到空串（飞书用空串，企微用会话 ID）。
+    title_fallback_to_cid: bool = True
+
+    # ==================================================================
     # 通用工具（平台无关，可直接复用）
     # ==================================================================
 
@@ -160,15 +173,20 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
         - ``openConversationId``: 会话唯一标识
         - ``singleChat``: 是否为单聊
 
-        子类无需覆写本方法；本方法会自动提取 ``chat_id``、``chat_name``，
-        并调用 ``_infer_single_chat`` 判定单聊类型。
+        平台差异通过三个类属性注入，**子类无需覆写本方法**：
+        - ``chat_id_fields``：会话 ID 字段候选链（按优先级）
+        - ``chat_title_fields``：标题字段候选链（按优先级）
+        - ``title_fallback_to_cid``：标题兜底（True=回退到会话 ID，False=空串）
+
+        ⚠️ 取值**不做 str 转换**——与飞书 / 企微既有实现保持字节级等价
+        （会话 ID 可能是非字符串类型，转换会改变下游比较行为）。
         """
-        # 提取 chat_id：各平台常用字段依次尝试
+        # 提取 chat_id：按平台声明的字段候选链依次尝试
         cid = ""
-        for field in ("chat_id", "chatid", "id", "openConversationId", "chatId"):
+        for field in self.chat_id_fields:
             val = chat.get(field)
             if val:
-                cid = str(val)
+                cid = val
                 break
         if not cid:
             return chat
@@ -176,12 +194,12 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
         result.setdefault("openConversationId", cid)
         # 提取标题
         title = ""
-        for field in ("name", "title", "chat_name", "chatName"):
+        for field in self.chat_title_fields:
             val = chat.get(field)
             if val:
-                title = str(val)
+                title = val
                 break
-        result.setdefault("title", title or cid)
+        result.setdefault("title", title or (cid if self.title_fallback_to_cid else ""))
         # 单聊判定
         if "singleChat" not in result:
             result["singleChat"] = self._infer_single_chat(chat)

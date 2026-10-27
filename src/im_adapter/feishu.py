@@ -83,6 +83,12 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
     方法以当前 App/Tenant 作为伪组织返回。
     """
 
+    # ── 会话归一化的平台差异（P1-5：下沉到基类模板方法）──
+    # 飞书原生会话 ID 字段为 chat_id；标题缺失时回退空串（不回落会话 ID）。
+    chat_id_fields: tuple[str, ...] = ("chat_id", "id")
+    chat_title_fields: tuple[str, ...] = ("name", "title")
+    title_fallback_to_cid: bool = False
+
     def __init__(self, cli_path: str = "lark-cli", timeout: int = 30,
                  retries: int = 2, dry_run: bool = True, profile: str = ""):
         # 默认 CLI 二进制为 lark-cli（而非基类的 dws）
@@ -279,22 +285,9 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         chat_mode = (chat.get("chat_mode") or "").lower()
         return chat_mode == "p2p"
 
-    def _normalize_chat(self, chat: dict) -> dict:
-        """将飞书原生会话格式映射为 poller 兼容的通用会话格式。
-
-        poller 依赖两个 dingtalk 特有字段：
-        - ``openConversationId``: 会话唯一标识（飞书用 ``chat_id``）
-        - ``singleChat``: 是否为单聊（以飞书 API 的 ``chat_mode`` 字段为准）
-        """
-        cid = chat.get("chat_id") or chat.get("id") or ""
-        if not cid:
-            return chat
-        result = dict(chat)
-        result.setdefault("openConversationId", cid)
-        result.setdefault("title", chat.get("name") or chat.get("title") or "")
-        if "singleChat" not in result:
-            result["singleChat"] = self._infer_single_chat(chat)
-        return result
+    # P1-5：``_normalize_chat`` 已下沉到 BaseIMAdapter 的模板方法，
+    # 平台差异由类属性 ``chat_id_fields`` / ``chat_title_fields`` /
+    # ``title_fallback_to_cid`` 注入（见类体上方）。
 
     def chat_message_list_unread_conversations(self, count: int = 20) -> list[dict]:
         """获取「未读/最近」会话列表。

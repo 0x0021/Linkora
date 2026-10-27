@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from src.llm.rag_strict import StrictModeConfig, build_strict_block
 from src.llm.style import _RAG_GROUND_SIMILARITY, _RE_HAS_TEXT, Citation
+from src.llm.untrusted import wrap_untrusted
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,14 @@ def inject_rag_knowledge(
             "⚠️ 若用户问题与下方文档主题不相关（如问天气却注入了 VPN 文档），"
             "则忽略本区块正常回答；否则必须严格基于下方内容作答。"
         )
-        _rag_block = _rag_preamble + f"\n\n{relevant_knowledge}"
+        # P3-2 提示注入缓解：文档片段是**外部可控内容**（任何能上传文档的人
+        # 都能写入），而本区块被提升为 role:"system" 且前导语强调「最高优先级/
+        # 唯一事实来源」→ 文档里写着的指令会被模型当成系统指令执行。
+        # 用「不可信数据」边界包裹（**正文逐字保留**，只加前后标记），让模型
+        # 知道这是**待引用的资料**而非**下达的指令**。零误伤（不改写正文）。
+        _rag_block = _rag_preamble + "\n\n" + wrap_untrusted(
+            relevant_knowledge, "知识库文档片段"
+        )
         _rag_block += (
             "\n\n【降级兜底】若本轮【相关知识】区块为空或未注入——"
             "表示知识库中未检索到相关内容，此时你才可调用 kb_search 工具自行检索。"

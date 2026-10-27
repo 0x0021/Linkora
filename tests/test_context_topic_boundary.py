@@ -351,8 +351,8 @@ class TestHistoryOrdering:
         messages = pb.build_user_message(incoming, history)
         contents = _users(messages)
         # 时间正序：旧（新消息A）→ 新（老消息C）
-        assert contents[0].endswith("新消息A"), contents
-        assert contents[-1].endswith("老消息C"), contents
+        assert "新消息A" in contents[0], contents
+        assert "老消息C" in contents[-1], contents
 
     def test_desc_input_tiering_keeps_newest(self, monkeypatch):
         """归一化后 tiering 切片保留『最新的 N 条』，而非 DESC 下的『最老的 N 条』。

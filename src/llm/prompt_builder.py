@@ -16,6 +16,7 @@ from src.llm.message_wrap import wrap_incoming_message
 from src.llm.rag_inject import inject_rag_knowledge
 from src.llm.rag_strict import STRICT_BLOCK_MARK, resolve_strict_mode
 from src.llm.timeline import format_time_label, gap_notice, incoming_gap_notice
+from src.llm.untrusted import wrap_untrusted
 
 if TYPE_CHECKING:
     from src.llm.agent import LLMAgent
@@ -271,8 +272,12 @@ class PromptBuilder:
                     head = f"[{label}] " if label else ""
                     if h.sender_name:
                         head += f"{h.sender_name}："
-                    if head:
-                        content = f"{head}{content}"
+                    # P3-2 提示注入缓解：历史 user 消息是外部可控内容，且**跨轮
+                    # 持久生效**（当前消息过门禁，历史里的埋点不受任何检查）。
+                    # 只包裹正文，**发言人/时间前缀留在包裹外** —— 模型仍需据此
+                    # 判断「谁说了什么」，包裹整个字符串会破坏该能力。
+                    # assistant 侧不包裹（那是自家模型自己的输出）。
+                    content = f"{head}{wrap_untrusted(content, '历史消息')}"
             history_msgs.append({
                 "role": role,
                 "content": content,

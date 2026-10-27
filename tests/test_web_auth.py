@@ -180,6 +180,42 @@ class TestWebAuthMiddleware:
         resp = _require_admin_role(req)
         assert resp is None
 
+    def test_minimal_web_config_does_not_crash(self, monkeypatch):
+        """最小 web 配置（只有 auth_enabled=False）→ 不得抛 AttributeError（500）。
+
+        敏感端点加严后，更多路径会走进「auth_enabled=False 且是否已配凭据」的判定分支；
+        该分支此前直接读 config.web.auth_username / .auth_password，配置桩缺字段即崩
+        （CI 上表现为 GET /api/keywords 500）。修复后缺字段按「凭据为空」处理，
+        本机/私网沿用既有语义放行（由网络边界负责隔离）。
+        """
+        from web.api import web_auth_middleware
+
+        class _Web:
+            auth_enabled = False
+
+        class _Cfg:
+            web = _Web()
+
+        monkeypatch.setattr("web.api._get_cfg", lambda: _Cfg())
+        req = self._make_request("/api/keywords", client_host="203.0.113.15")
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp == "PASSED"
+
+    def test_minimal_web_config_with_auth_enabled_returns_401(self, monkeypatch):
+        """最小 web 配置 + auth_enabled=True → 401（缺凭据按 fail-closed 处理）。"""
+        from web.api import web_auth_middleware
+
+        class _Web:
+            auth_enabled = True
+
+        class _Cfg:
+            web = _Web()
+
+        monkeypatch.setattr("web.api._get_cfg", lambda: _Cfg())
+        req = self._make_request("/api/keywords", client_host="203.0.113.16")
+        resp = asyncio.run(web_auth_middleware(req, self._call_next()))
+        assert resp.status_code == 401
+
     def test_require_admin_role_skips_regular_get(self):
         """RBAC：普通只读请求（非敏感）不做角色检查，任意角色放行。
 

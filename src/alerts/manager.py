@@ -130,12 +130,41 @@ class AlertManager:
         # 记录日志
         logger.warning("🚨 告警触发: %s", alert_data["message"])
 
+        # 按配置渠道投递（此前 channels/webhook_url 是死字段，配了不生效）
+        self._dispatch(alert_data)
+
         # 调用回调
         for callback in self._alert_callbacks:
             try:
                 callback(alert_data)
             except Exception as e:
                 logger.error("告警回调执行失败: %s", e)
+
+    def _dispatch(self, alert_data: dict[str, Any]) -> None:
+        """按 ``AlertConfig.channels`` 投递告警到各渠道。
+
+        每个渠道独立 try/except：任一渠道失败不影响其他渠道，也不影响主链路
+        （webhook 自身的失败已在 ``send_webhook`` 内部降级为日志）。
+        """
+        channels = self._config.channels or [AlertChannel.LOG]
+        for channel in channels:
+            value = channel.value if isinstance(channel, AlertChannel) else str(channel)
+            if value == AlertChannel.WEBHOOK.value:
+                try:
+                    from src.alerts.webhook import send_webhook
+
+                    send_webhook(self._config.webhook_url, alert_data)
+                except Exception as exc:
+                    logger.warning("[告警] webhook 渠道投递异常: %s", exc)
+            elif value == AlertChannel.EMAIL.value:
+                # 邮件渠道尚无 SMTP 基础设施（仓库内无 smtplib 用法），
+                # 配置了也发不出去 —— 明确记录，避免「以为已发出」。
+                if self._config.email_recipients:
+                    logger.warning(
+                        "[告警] email 渠道尚未实现（缺少 SMTP 配置），"
+                        "已跳过 %d 个收件人", len(self._config.email_recipients),
+                    )
+            # LOG 渠道：上面的 logger.warning 已完成，无需额外动作
 
     def _get_severity(self, error_type: str) -> str:
         """根据错误类型确定严重程度。"""

@@ -192,6 +192,46 @@ def _rethrow_classified(e: Exception) -> None:
         raise LLMNetworkError(str(e)) from e
 
 
+def _alert_type_for_exception(e: Exception | None) -> str:
+    """把一次失败映射为告警系统使用的错误类型名。
+
+    映射目标与 ``AlertConfig.monitored_errors`` 的默认集合一致
+    （LLMNetworkError / LLMRateLimitError / LLMAuthError），使告警的严重程度
+    分级（见 ``AlertManager._get_severity``）真正生效 —— 鉴权错误判 CRITICAL，
+    网络错误判 ERROR，其余判 WARNING。
+    """
+    if e is None:
+        return "LLMNetworkError"
+    if isinstance(e, LLMRateLimitError) or isinstance(e, RateLimitError):
+        return "LLMRateLimitError"
+    if isinstance(e, LLMAuthError):
+        return "LLMAuthError"
+    if isinstance(e, (APIStatusError,)) and getattr(e, "status_code", None) in (401, 403):
+        return "LLMAuthError"
+    return "LLMNetworkError"
+
+
+def _record_alert(error_type: str, error_message: str) -> None:
+    """把一次**最终失败**（模型池与降级池全部耗尽）记入告警系统。
+
+    P3-4 修复（2026-10-27）：``src/alerts/manager.py`` 的 ``record_error`` 此前
+    **零调用方** —— 整个告警系统是死代码：``/api/alerts/stats`` 永远返回空，
+    而 ``docs/alerts.md`` 明确教用户在 LLM 客户端集成告警（并给出本函数应处的
+    位置）。本函数补上这条缺失的接线。
+
+    调用点纪律：**只在最终失败出口调用一次**，不在每次重试尝试时调用 ——
+    否则一次限频风暴会因重试放大计数，阈值告警被虚假触发。
+
+    告警属于旁路能力：本函数吞掉自身的一切异常，绝不影响主回复链路的抛错行为。
+    """
+    try:
+        from src.alerts.manager import record_error
+
+        record_error(error_type, error_message)
+    except Exception as exc:
+        logger.debug("[告警] 记录告警失败（忽略）: %s", exc)
+
+
 def _is_retryable_error(e: Exception) -> bool:
     """判定是否为「瞬时故障」值得重试(P0-2)。
 
@@ -613,14 +653,17 @@ class LLMClient:
         if not self.fallback_clients:
             if state.total_attempts >= global_max_attempts:
                 if state.rate_limited_observed:
+                    _record_alert("LLMRateLimitError", f"全局最大尝试次数已达: {state.last_err}")
                     raise LLMRateLimitExhaustedError(
                         f"LLM 全局最大尝试次数 ({global_max_attempts}) 已达，"
                         f"主模型池全部因限流失败。最后错误: {state.last_err}"
                     ) from state.last_err
+                _record_alert("LLMNetworkError", f"全局最大尝试次数已达: {state.last_err}")
                 raise RuntimeError(
                     f"LLM 全局最大尝试次数 ({global_max_attempts}) 已达，最后错误: {state.last_err}"
                 ) from state.last_err
             if state.rate_limited_observed:
+                _record_alert("LLMRateLimitError", f"主模型池全部因限流失败: {state.last_err}")
                 raise LLMRateLimitExhaustedError(
                     f"主模型池全部因限流(429)失败，且无备用模型池。最后错误: {state.last_err}"
                 ) from state.last_err
@@ -634,11 +677,16 @@ class LLMClient:
             # 都会踩中——而这恰恰是系统最需要优雅降级的时刻。
             if state.last_err is None:
                 cooled = [m for _, m in attempts if self._is_in_cooldown(m)]
+                _record_alert(
+                    "LLMRateLimitError",
+                    f"全部 {len(attempts)} 个主模型均处于冷却期，无可用模型",
+                )
                 raise LLMRateLimitExhaustedError(
                     f"全部 {len(attempts)} 个主模型均处于冷却期（{', '.join(cooled) or '未知'}），"
                     f"无可用模型；未配置 fallback_model。请稍后重试或调大 "
                     f"rate_limit_cooldown / timeout_cooldown 配置。"
                 ) from None
+            _record_alert(_alert_type_for_exception(state.last_err), str(state.last_err))
             raise state.last_err
 
         fb = self._try_fallback_pool(
@@ -655,10 +703,18 @@ class LLMClient:
             return sf
 
         if state.rate_limited_observed:
+            _record_alert(
+                "LLMRateLimitError",
+                f"主模型池与备用池全部因限流耗尽: {state.last_fallback_err}",
+            )
             raise LLMRateLimitExhaustedError(
                 f"主模型池与跨服务商备用池全部因限频(429/rate_limit)耗尽。"
                 f"Last primary: {state.last_err}, Last fallback: {state.last_fallback_err}"
             ) from state.last_fallback_err
+        _record_alert(
+            _alert_type_for_exception(state.last_fallback_err or state.last_err),
+            f"主模型池与备用池全部失败: {state.last_fallback_err}",
+        )
         raise RuntimeError(
             f"All primary pool and fallback LLM failed. "
             f"Last primary: {state.last_err}, Last fallback: {state.last_fallback_err}"

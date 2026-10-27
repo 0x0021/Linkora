@@ -207,10 +207,12 @@
 | P1-2 | ✅ `check_no_bare_except.py` 增设 `SILENT_BASELINE=22` 闸门 + `usage_ledger` 两处静默降级补 warning | `1862796` |
 | P1-3 | ✅ 新增 `src/config.py::resolve_poller_config`，runtime 消息链路 17 处读取点平台感知 + 热重载串扰修复 | `c87297e` |
 | P1-4 | ✅ **修真实凭据泄漏**（`GET /api/config` 明文回传 `jwt_secret`）+ 敏感只读端点判定改「精确 + `/` 前缀」并补齐 16 个高危端点 + 测试对齐 | `177e397` / `4eadb52` |
+| P1-4 续 | ✅ 敏感只读端点升级为**「敏感 + 公开」全覆盖**（106 个 GET 端点全部表态：敏感 63 / 公开 43），新增端点漏表态 → CI 红 | `7737937` |
 | P2-2 | ✅ gitleaks 接入 CI（独立 job「密钥扫描」，`fetch-depth: 0`） | `08173d9` / `ded1369` |
 | P2-3 | ✅ esbuild 精确钉版 `0.28.2` + `npm run lint` 入 CI | `08173d9` |
 | P2-4 | ✅ Python 运行时钉 `3.14.6`（5 处声明统一；`lock_deps.sh` 的 `PY_FLOOR` 仍为 3.14 下限） | `08173d9` |
 | P2-5 | ✅ `rag.js:769` 未转义拼接 → `escapeHtml`（前端产物已重建入仓） | `08173d9` |
+| P2-6 | ⚠️ **原判断证伪后按真问题收窄**：15 处技能脚本堆栈改投 stderr（不再把内部路径/堆栈喂进 LLM 上下文） | `7737937` |
 
 **本轮证伪/修正的原判断（勿再照抄原文）**
 
@@ -219,13 +221,14 @@
 3. **「`check_no_bare_except.py` 只管数量不管 SILENT 类别」不成立** —— SILENT/LOGGED/RERAISE 分类与 `report` 子命令早已存在，缺的是**基线门禁**（CI 只跑 count）。
 4. **「ESLint 声明了但仓库无配置」不成立** —— `.eslintrc.cjs` 早已存在且 eslint 0 error（429 warning）。
 5. **`requirements.lock` / `uv.lock` 已入库**（git 跟踪），P0-2 无文件缺失风险。
+6. **「`src/` 里 68 处 `print()` 绕过脱敏滤器，应统一改 logging」不成立** —— 其中 **69 处在 `src/skills/`**，而 `src/skills/tool_wrapper.py:167-170` 是把**整个 stdout 原样作为工具结果喂给 LLM**（不是机器解析的 JSON），改 logger 会直接破坏输出契约；`platform/lifecycle.py` 的 16 处是 CLI 错误提示/启动横幅（logger 配置尚未就绪），`utils/logger.py` 的 4 处是 **logger 自身的输出实现**，`config_models.py` 的 2 处只是错误消息文本里的 `print(...)` 字样（grep 误匹配）。真问题只有一个：**内部堆栈被 stdout 喂进模型上下文**（浪费 token + 扩大提示注入面）→ 已把 15 处 `traceback.print_exc()` 改投 stderr。
 
 **尚未实施**
 
 - **P1-5** 平台适配器归一化下沉（feishu/wecom 各抽 2~3 个最高频方法到 `im_adapter`）—— 风险最高（消息/错误解析核心路径），建议独立专项 + 逐方法等价性测试。
-- **P1-4 续** 敏感 GET 改由路由元数据**自动归集**。注意：新版 FastAPI 的 `include_router` 不再把子路由扁平化进 `app.routes`，而是塞入私有 `_IncludedRouter` 包装器 → **不要依赖 `type(r).__name__ == '_IncludedRouter'` 探测**；用公开途径（`include_router` 调用点显式登记 + 公开的 `router.routes`）。
+- **（P1-4 续已完成）** 端点全集改用**公开 API** `app.openapi()` 取（含 router prefix 拼接），不依赖新版 FastAPI 的私有 `_IncludedRouter` 包装；敏感/公开两张清单外即「未表态」→ CI 红。
 - **P2-1** `src/platform/base.py` 星号导入枢纽清理（13 处 `from .base import *`）+ 幽灵重导出 + `load_dotenv()` 导入副作用上移 —— 可独立成专项。
-- **P2-6** `print()` → `logging`（约 68 处，集中在 skills 脚本）：需逐文件确认 logger 注入方式，非纯机械替换。
+- **（P2-6 已按真问题收窄）** 原「68 处 print 全改 logger」不成立（skills 的 stdout 是喂给 LLM 的输出契约，改 logger 会破坏契约）→ 只修「内部堆栈进 stdout」这一项：15 处 `traceback.print_exc()` 改投 stderr。
 - **P2-7** `config_models.py`（1127 行）按领域拆子包 + 保留兼容再导出层。
 - **P2-8** 重排器命名口径（"BM25" 实为自研 2-gram 打分）—— 注释/文档对齐即可。
 - **P3-1~P3-6** 意图分类 LLM 兜底、提示注入面、测试过度 mock、死配置（`AlertConfig.webhook_url`）、文档漂移、生产 sourcemap 下发。

@@ -98,7 +98,10 @@ def test_base_does_not_reexport_third_party_symbols() -> None:
         "annotations",  # from __future__ import annotations
         "logging", "re", "threading", "time",
         "ContextVar", "dataclass", "TYPE_CHECKING",
-        "load_dotenv",  # .env 加载入口（搬迁另开专项）
+        # .env 加载的**幂等兜底**（真正入口在 main() 首行，见 src/dotenv_loader.py）。
+        # 保留原因：src/memory/account_identity.py 等 3 处仍在**模块级**读环境变量，
+        # 这些模块可能在 main() 之前被导入 —— 缺了兜底，DWS_BIN 覆盖会静默失效。
+        "load_env",
         "seconds_since_rate_limit",  # BackgroundLLMThrottle 真实使用
     }
     allowed_type_checking = EXPECTED_ANNOTATION_TYPES

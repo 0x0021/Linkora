@@ -1,19 +1,30 @@
+"""多平台运行期核心类型与共享工具。
+
+P2-1 步骤 2（2026-10-27）前的本文件是「星号导入枢纽」：import 40+ 个第三方
+符号供 12 个消费者用 `from .base import *` 转出。步骤 1 已把 12 处消费者改为
+显式导入清单；本步骤进一步把本文件瘦身为**只定义自己拥有的东西**：
+
+- 真实定义：``_active_platform_ctx`` / ``PlatformContext`` /
+  ``BackgroundLLMThrottle`` / ``extract_card_title`` / ``SEND_RETRY_BACKOFF_SECONDS``
+- 仅供类型注解：``TYPE_CHECKING`` 块（运行时零成本，pyright 仍可解析）
+
+其余第三方符号此前全部是**纯重导出**（本文件内并不使用），已移除；它们各自
+的源模块在别处均有主入口，删除不改变任何模块的首次导入时机。
+
+⚠️ 本文件仍保留 ``load_dotenv()`` 调用 —— 它是 .env 的加载入口，搬迁属高危
+（``src/account_identity.py`` 在**导入期**读 ``DWS_BIN``，dotenv 时序一变，
+该环境变量覆盖会静默失效，钉钉账号隔离退化为 ``dingtalk:unknown``）。
+另开专项处理，不在本步改动。
+"""
 from __future__ import annotations
 
 import logging
-import os
 import re
-import shutil
-import signal
-import sys
-import tempfile
 import threading
 import time
-import uuid
-from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 # 在项目入口统一加载 .env（若存在），使 LLM_API_KEY / LLM_FALLBACK_API_KEY 等
 # 密钥可经环境变量覆盖 config.yaml（.env 已在 .gitignore 中，不会进版本库）。
@@ -21,43 +32,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from pydantic import ValidationError
-from src.config import load_config, DEFAULT_STORAGE_PATH
-from src.db_backup import DatabaseBackup, DatabaseBackupCoordinator
-from src.llm.summary_scheduler import SummaryScheduler
-from src.llm.dynamic_summary_scheduler import DynamicSummaryScheduler
-from src.llm.display_summary_scheduler import DisplaySummaryScheduler
-from src.doc_sync_scheduler import DocSyncScheduler
-# 注意：本模块被 runtime_*.py 以 `from .base import *` 星号转导入，DwsAdapter 由
-# runtime_lifecycle._build_dws() 在运行时实际构造使用（本文件内不再直接引用，但
-# 不是死导入，删除会导致 LifecycleMixin NameError）。
-from src.dws_adapter import DwsAdapter
-from src.im_adapter.feishu import FeishuCliAdapter
-from src.im_adapter.wecom import WecomCliAdapter
-from src.llm.agent import LLMAgent
-from src.llm.client import LLMClient, seconds_since_rate_limit
-from src.llm.exceptions import LLMProcessingError, LLMRateLimitExhaustedError
+from src.llm.client import seconds_since_rate_limit
+
+if TYPE_CHECKING:  # pragma: no cover - 仅供类型检查，运行时不导入
+    from src.im_adapter.base_adapter import BaseIMAdapter
+    from src.llm.agent import LLMAgent
+    from src.llm.display_summary_scheduler import DisplaySummaryScheduler
+    from src.llm.dynamic_summary_scheduler import DynamicSummaryScheduler
+    from src.llm.summary_scheduler import SummaryScheduler
+    from src.memory.sqlite_store import SQLiteStore
+    from src.poller import MessagePoller
+
+logger = logging.getLogger(__name__)
 
 # 瞬时发送失败（DWS 异常）后的退避窗口：避免每条消息每轮轮询(5s)硬刷重发刷日志。
 SEND_RETRY_BACKOFF_SECONDS = 30
-from src.memory.embedding import EmbeddingClient
-from src.memory.sqlite_store import SQLiteStore
-from src.im_adapter.base_adapter import BaseIMAdapter
-from src.skills.manager import SkillManager
-from src.models import Message
-from src.poller import MessagePoller
-from src.rule_engine import RuleEngine
-from src.intent import validate_tool_action_coverage
-from src.decision_tracker import tracker
-from src.shared_state import set_app_instance, set_config, set_config_reload_callback
-from src.tools.base import ToolRouter
-# KBSearchTool 仍在 _rebuild_kb_search_tool 中直接重建使用；其余内置工具改由
-# src/tools/registry.py 自动发现注册，故此处不再逐类导入。
-from src.tools.kb_search import KBSearchTool
-from src.utils.logger import setup_logger
-from src.utils.request_id import request_id_scope, get_request_id, install_log_filter
-
-logger = logging.getLogger(__name__)
 
 # ============ 多平台隔离：运行期平台上下文 ============
 # 与 Phase 2（web 层 ?platform= ContextVar）对称，主进程用独立 ContextVar 在
@@ -89,7 +78,6 @@ class PlatformContext:
     summary_scheduler: "SummaryScheduler | None" = None  # H2-A 后台异步摘要调度器
     dynamic_summary_scheduler: "DynamicSummaryScheduler | None" = None  # 动态（信号驱动）摘要调度器
     display_summary_scheduler: "DisplaySummaryScheduler | None" = None  # 展示用全量摘要调度器（供 Web 摘要页）
-
 
 
 class BackgroundLLMThrottle:
@@ -164,5 +152,3 @@ def extract_card_title(text: str, default_title: str = "回复") -> tuple[str, s
             body = text[heading_match.end():].lstrip("\n")
             return extracted, body
     return default_title, text
-
-

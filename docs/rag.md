@@ -98,7 +98,7 @@ llm:
 - 加速：Apple Silicon 自动启用 MPS
 - 存储：本地 `models/` 目录或 `./data/models/` 目录缓存
 - 本地 embedding 服务：默认 `http://127.0.0.1:8910/v1`（provider=`api` 时走此地址）；**该服务不在时 RAG 自动降级为不检索**，不影响对话主流程
-- 如需更强模型可切换为 `./data/models/bge-m3`（当前 `data/models/` 下实际提供的模型）
+- 如需更强模型可切换为 `./data/models/bge-m3`（多语、1024 维；需自行把权重放到本地模型目录）
 
 ## 相关配置
 

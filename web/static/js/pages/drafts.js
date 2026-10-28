@@ -304,10 +304,13 @@ async function loadDraftsPage() {
 
             var actions;
             if (item.status === 'pending') {
+                // data-* 属性值必须用模板字符串 ${} 插值。教训同 rag.js 分块列表：
+                // data-args=\'["\' + item.draft_id + ... 里的 \' 是转义引号而非字符串边界，
+                // "+ item.draft_id +" 成为字面文本从不插值 → JSON.parse 失败 → 按钮收不到 draft_id。
                 actions = '<div class="draft-actions">' +
-                    '<button class="btn-draft-approve" data-action="_draftApprove" data-args=\'["\' + item.draft_id + \'", "@el"]\' data-stop-propagation><i class="fa-solid fa-circle-check"></i> \u6279\u51c6\u53d1\u9001</button>' +
-                    '<button class="btn-draft-edit" data-action="_draftShowEditModal" data-args=\'["\' + item.draft_id + \'"]\' data-stop-propagation><i class="fa-solid fa-pen-to-square"></i> \u7f16\u8f91\u5e76\u53d1\u9001</button>' +
-                    '<button class="btn-draft-discard" data-action="_draftDiscard" data-args=\'["\' + item.draft_id + \'", "@el"]\' data-stop-propagation><i class="fa-solid fa-trash"></i></button>' +
+                    `<button class="btn-draft-approve" data-action="_draftApprove" data-args='["${item.draft_id}", "@el"]' data-stop-propagation><i class="fa-solid fa-circle-check"></i> \u6279\u51c6\u53d1\u9001</button>` +
+                    `<button class="btn-draft-edit" data-action="_draftShowEditModal" data-args='["${item.draft_id}"]' data-stop-propagation><i class="fa-solid fa-pen-to-square"></i> \u7f16\u8f91\u5e76\u53d1\u9001</button>` +
+                    `<button class="btn-draft-discard" data-action="_draftDiscard" data-args='["${item.draft_id}", "@el"]' data-stop-propagation><i class="fa-solid fa-trash"></i></button>` +
                     '</div>';
             } else if (item.status === 'approved') {
                 actions = '<span style="font-size:11px;color:var(--text-tertiary);">\u5df2\u53d1\u9001</span>';

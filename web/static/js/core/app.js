@@ -37,7 +37,13 @@ const api = window.api || new ApiClient();
     if (!action) return;
     let args = [];
     if (el.dataset.args) {
-      try { args = JSON.parse(el.dataset.args); } catch (_) { args = []; }
+      try { args = JSON.parse(el.dataset.args); }
+      catch (_) {
+        // 不静默：data-args 坏值（如历史 bug 的字面量拼接渲染出 data-args='['），
+        // 动作将收到空参数，必须有 console 痕迹可查。
+        args = [];
+        console.warn('[Linkora] data-args JSON.parse 失败:', action, JSON.stringify(el.dataset.args));
+      }
     }
     if (!Array.isArray(args)) args = [];
     args = args.map((a) => {

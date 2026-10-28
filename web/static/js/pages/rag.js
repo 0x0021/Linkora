@@ -309,7 +309,11 @@ async function loadKbChunksPage() {
 
         container.innerHTML = data.documents.map(function(d) {
             var isActive = selectedChunkDocId && String(selectedChunkDocId) === String(d.id);
-            return '<div class="chunk-doc-item' + (isActive ? ' active' : '') + '" data-action="selectChunkDoc" data-args=\'[\' + d.id + \']\'>' +
+            // data-* 属性值必须用模板字符串 ${} 插值（见 scripts/check_data_args_concat.mjs）。
+            // 历史教训：写成 data-args=\'[\' + d.id + \']\' 时，单引号字符串里的 \' 是转义引号、
+            // 不是字符串边界，"+ d.id +" 整段成为字面文本从不插值，渲染出 data-args='['
+            // → JSON.parse 失败 → 点击动作收不到文档 id → 右侧内容页永不更新。
+            return `<div class="chunk-doc-item${isActive ? ' active' : ''}" data-action="selectChunkDoc" data-args="[${d.id}]">` +
                 '<div class="chunk-doc-item-title" title="' + escapeHtml(d.title) + '">' + escapeHtml(d.title) + '</div>' +
                 '<div class="chunk-doc-item-meta">' +
                     '<span><i class="fa-solid fa-puzzle-piece"></i> ' + (d.chunk_count || 0) + ' \u5757</span>' +

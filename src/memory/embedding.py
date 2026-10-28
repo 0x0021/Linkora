@@ -327,6 +327,10 @@ class EmbeddingClient:
             self._provider = "local"
             self._load_status["state"] = "ready"
             self._load_status["progress"] = 100.0
+            # 【修复】加载成功后必须清除中间态 message（如"正在从本地加载模型文件…"）。
+            # 此前此处只改 state/progress 而保留 message，导致前端按 state=ready 显示
+            # "已加载"徽标的同时，底部残留加载中提示——两种状态信息不一致。
+            self._load_status["message"] = ""
             _persist_status(self)
 
             dim = self._model.get_embedding_dimension()

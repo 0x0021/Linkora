@@ -636,3 +636,28 @@ class TestBackgroundDownload:
                 assert status["state"] == "ready"
                 assert captured["tqdm_class"] is not None
                 assert c.get_load_status()["progress"] == 100.0
+
+    def test_background_offline_load_clears_loading_message(self):
+        """回归：offline + background 加载成功后必须清除中间态 message。
+
+        此前 _init_local 成功分支只把 state 置 ready / progress 置 100，
+        未清除构造期写入的「正在从本地加载模型文件…」，导致前端按 state=ready
+        显示「已加载」徽标的同时，底部仍残留加载中提示（状态信息不一致）。
+        """
+        mock_st = MagicMock()
+        mock_st.SentenceTransformer.return_value.get_embedding_dimension.return_value = 384
+        with patch.dict(sys.modules, {"sentence_transformers": mock_st}):
+            c = EmbeddingClient(
+                _cfg(enabled=True, provider="local", model="m", offline=True),
+                background=True,
+            )
+            # 等待后台线程完成
+            status = c.get_load_status()
+            for _ in range(100):
+                status = c.get_load_status()
+                if status["state"] in ("ready", "error"):
+                    break
+                time.sleep(0.02)
+            assert status["state"] == "ready"
+            # 关键回归点：成功加载后 message 必须被清空，不应残留加载中提示
+            assert status["message"] == ""

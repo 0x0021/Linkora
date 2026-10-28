@@ -379,6 +379,29 @@ def _split_recursive(text: str, pats: tuple[re.Pattern, ...], hard_max: int) -> 
     return out
 
 
+# 重叠切口对齐用的语义边界（句子/子句结束符或换行；ASCII 点/逗号需跟空白才算，
+# 避免 "3.4" / "10.0.2.3" 这类编号、IP 在点号处被误当边界切开）
+_TAIL_BOUNDARY = re.compile(r'[。！？!?…\n，、；：,;]|(\.(?=\s))')
+
+
+def _semantic_tail(text: str, budget: int) -> str:
+    """取 ``text`` 末尾 ≤ budget 字符的窗口，并把切口对齐到语义边界。
+
+    旧实现直接 ``text[-budget:]`` 会在句子/词语中间硬切，把「3.4 选择添加方式」
+    切成「.4 选择添加方式」这类无意义碎片送进向量库。这里先取窗口，再丢弃窗口
+    开头到第一个边界符之间的残句；窗口内无任何边界符则返回空串——宁可不带重叠，
+    也不注入垃圾碎片。
+    """
+    if budget <= 0 or not text:
+        return ""
+    window = text if len(text) <= budget else text[-budget:]
+    m = _TAIL_BOUNDARY.search(window)
+    if m is None:
+        return ""
+    snapped = window[m.end():].strip()
+    return snapped
+
+
 def split_text(
     text: str,
     max_len: int = 500,
@@ -396,6 +419,11 @@ def split_text(
       巨型 URL / 哈希）。达到 ``hard_max`` 时仍优先在最佳语义边界断开，仅当无更细
       边界才字符级兜底。默认 ``max(max_len * 2, 800)``。
       *建议*：将该值设在所用 embedding 模型有效字符容量之下，可彻底杜绝模型侧截断。
+    - **重叠严格不超过 ``overlap``**：且切口对齐到语义边界（句子/子句/换行），
+      不在词语中间硬切产生无意义碎片。
+    - **块内紧凑**：语义单元之间用单个 ``\\n`` 连接（不用空行 ``\\n\\n``），
+      避免导出文档「每行一个段落」时空行刷屏、白白消耗 embedding token；
+      同时让 Markdown 表格行在块内保持连续。
     - 标题行（# 标题 / 第X章 / 1. xxx / 一、xxx）仍与紧随其后的正文粘连，避免孤立。
 
     >>> split_text("第一段。第二段。", max_len=5)
@@ -406,7 +434,7 @@ def split_text(
         return []
 
     hard_max = hard_max or max(max_len * 2, 800)
-    SEP = "\n\n"
+    SEP = "\n"
 
     text = _clean_text(text)
 
@@ -456,17 +484,24 @@ def split_text(
     if current:
         chunks.append(SEP.join(current))
 
-    # —— 重叠：取上一块尾部作为上下文前缀，且整体不超 hard_max ——
+    # —— 重叠：取上一块尾部作为上下文前缀 ——
+    # 旧实现 max_ov = hard_max - len(chunk) 会让重叠膨胀到「几乎整块前文」
+    # （hard_max≈2*chunk_size 时前一块近乎全部重复拼进下一块），严重污染向量库；
+    # 且 prev[-max_ov:] 在字符中间硬切，产生「成添加」「.4 选择添加方式」类碎片。
+    # 现修复：重叠严格 ≤ 配置的 overlap，且切口对齐语义边界（_semantic_tail）。
     if overlap > 0 and len(chunks) > 1:
         overlapped = [chunks[0]]
         for idx in range(1, len(chunks)):
             prev = chunks[idx - 1]
-            max_ov = hard_max - len(SEP) - len(chunks[idx])
-            if max_ov <= 0:
+            budget = min(overlap, hard_max - len(SEP) - len(chunks[idx]))
+            if budget <= 0:
                 overlapped.append(chunks[idx])
                 continue
-            tail = prev[-max_ov:] if len(prev) > max_ov else prev
-            overlapped.append(tail + SEP + chunks[idx])
+            tail = _semantic_tail(prev, budget)
+            if tail:
+                overlapped.append(tail + SEP + chunks[idx])
+            else:
+                overlapped.append(chunks[idx])
         chunks = overlapped
 
     record_chunk(count=len(chunks))

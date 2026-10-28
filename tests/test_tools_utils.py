@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 
-from src.tools.utils import split_text
+from src.tools.utils import _semantic_tail, split_text
 from src.tools.utils import safe_float
 from src.tools.utils import safe_int
 
@@ -117,21 +117,43 @@ class TestSplitText:
         assert len(result) >= 2
 
     def test_overlap(self):
-        # use sentences to force multi-chunk with overlap
-        a = "开头。" + "A" * 300 + "。"
-        b = "B" * 300 + "。结尾。"
-        result = split_text(a + b, max_len=200, overlap=20)
+        # 多个短句打包成块 → 重叠窗口内才有真实边界可用
+        text = "".join(f"第{i}句内容。" for i in range(1, 41))
+        result = split_text(text, max_len=60, overlap=20)
         assert len(result) > 1
-        # second chunk should contain overlap from first
-        first_end = result[0][-20:]
-        second_start = result[1][:len(first_end)]
-        assert first_end == second_start
+        # 第二块开头应是第一块尾部「语义对齐」的重叠（切口落在句子边界）
+        tail = _semantic_tail(result[0], 20)
+        assert tail
+        assert result[1].startswith(tail)
+        # 不应在词语中间硬切出碎片：重叠的每个片段都应是完整句子
+        assert all(s.endswith("。") for s in tail.split("\n") if s)
+
+    def test_overlap_capped_at_configured_overlap(self):
+        """旧 bug：重叠上限误用 hard_max 派生值（≈整块前文重复拼入下一块）。
+        修复后重叠严格 ≤ 配置的 overlap，块长不再随重叠滚雪球增长。"""
+        text = "".join(f"第{i}句内容。" for i in range(1, 61))  # 每句 6 字
+        result = split_text(text, max_len=60, overlap=20)
+        assert len(result) > 2
+        # 旧实现下 chunk 长度会滚雪球到 100+ / 180+；新实现每块 ≤ max_len+overlap 富余
+        assert max(len(c) for c in result) <= 60 + 20 + 15
+
+    def test_semantic_tail_snaps_to_boundary(self):
+        # 窗口在词语中间截断时，丢弃开头残句、对齐到边界
+        prev = "三、添加打印机。3.4 选择添加方式\n点击下一步。"
+        # 窗口恰好切在 "选择添加方式" 中间 → 应回退到句号/换行边界
+        tail = _semantic_tail(prev, 12)
+        assert tail == "点击下一步。"
+
+    def test_semantic_tail_no_boundary_returns_empty(self):
+        # 窗口内无任何边界符（无标点长串）→ 返回空，宁可不带重叠也不注入碎片
+        assert _semantic_tail("A" * 100, 20) == ""
+        assert _semantic_tail("", 20) == ""
+        assert _semantic_tail("abc", 0) == ""
 
     def test_short_paras_accumulated_then_long_para_triggers_flush(self):
-        """line 91/103: 积累短段落后溢出 → flush + 新段落独立开始。"""
+        """短段落累积到软上限即 flush；溢出后的段落独立成块。"""
         text = "段落A\n\n段落B\n\n段落C\n\n段落D"
-        result = split_text(text, max_len=18)
-        # 段落A+B+C 累积到溢出，触发 flush(line 91)後段落D单独(line 103)
+        result = split_text(text, max_len=12)
+        # 块内用单个 \n 连接：A+B+C=11 ≤12；再加 D 超限 → flush
         assert len(result) >= 2
-        # 第一个 chunk 含 A+B+C，第二个含 D
         assert "段落D" in result[-1]

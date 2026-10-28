@@ -180,7 +180,7 @@ async function loadModelsPage() {
     try {
         const r = await api.fetch('/api/models/status');
         if (!r || r.error) {
-            body.innerHTML = `<div class="models-error"><i class="fa-solid fa-triangle-exclamation"></i> 无法获取模型状态（${r && r.error ? r.error : '未知错误'}）</div>`;
+            body.innerHTML = `<div class="models-error"><i class="fa-solid fa-triangle-exclamation"></i> 无法获取模型状态（${r && r.error ? escapeHtml(r.error) : '未知错误'}）</div>`;
             return;
         }
         const cards = `

@@ -534,7 +534,7 @@ async function renderThread(chatId, conversations) {
             // 文字：如果有实际指令文本则追加；如果只是"识别图片内容"之类就省略或弱化
             const caption = (g.text.content || '').replace(/\s/g, '') === '识别图片内容' ? '' : txtContent;
             const ocrHint = (g.img.content && /\[图片识别中/.test(g.img.content)) ? '' : renderMsgContent(g.img.content, g.img.image_path_map);
-            bubbleContent = `${mediaBadge}${ocrHint}${caption ? '<div class="merged-caption">' + caption + '</div>' : ''}`;
+            bubbleContent = `${mediaBadge}${ocrHint}${caption ? '<div class="merged-caption">' + escapeHtml(caption) + '</div>' : ''}`;
         } else {
             // ★ 普通单条消息
             const content = renderMsgContent(m.content, m.image_path_map);

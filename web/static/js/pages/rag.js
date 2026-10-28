@@ -332,7 +332,9 @@ function selectChunkDoc(docId) {
     // 更新左侧列表高亮
     var items = document.querySelectorAll('.chunk-doc-item');
     items.forEach(function(item) {
-        item.classList.toggle('active', item.getAttribute('onclick') === ('selectChunkDoc(' + docId + ')'));
+        // 元素通过 data-action / data-args 绑定（无 onclick 属性），
+        // 故不能用 getAttribute('onclick') 判断；改为比对 data-args 中的文档 id。
+        item.classList.toggle('active', item.dataset.action === 'selectChunkDoc' && item.dataset.args === '[' + String(docId) + ']');
     });
 
     selectedChunkDocId = docId;

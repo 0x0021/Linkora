@@ -225,12 +225,12 @@ class TestSelfReferencePronoun:
 
     def test_owner_name_variable_not_hardcoded(self):
         """变量化：换主人姓名后禁止示例随之变化，不得残留旧名字。"""
-        p_a = build_system_prompt_core(_fake_agent(user_title="IT运维", user_name="主人"))
+        p_a = build_system_prompt_core(_fake_agent(user_title="IT运维", user_name="王五"))
         p_b = build_system_prompt_core(_fake_agent(user_title="财务经理", user_name="李四"))
-        assert "主人刚才发你的" in p_a
+        assert "王五刚才发你的" in p_a
         assert "李四刚才发你的" in p_b
         # 不得写死某个具体人名
-        assert "主人" not in p_b
+        assert "王五" not in p_b
         assert "李四" not in p_a
 
     def test_third_party_explicitly_allowed(self):

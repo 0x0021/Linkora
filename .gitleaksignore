@@ -19,3 +19,6 @@ d17784c8ae8c48fc815bbbf1472f12ebbd7fb648:tests/test_feishu_adapter.py:generic-ap
 # 原文为 TOKEN="<JWT 头部.载荷.签名，已截断>" 形式，不入库。
 5f43e16f1aa8eb42fab79346c36eae010e4d6b92:docs/deployment-guide.md:generic-api-key:33
 5f43e16f1aa8eb42fab79346c36eae010e4d6b92:docs/deployment-guide.md:generic-api-key:95
+# 全历史重写后 SHA 变化，补登 deployment-guide.md 的文档占位 JWT 示例（新历史 SHA）
+fa24e48a790f18a8c6fcfc32f0876e385159d608:docs/deployment-guide.md:generic-api-key:33
+fa24e48a790f18a8c6fcfc32f0876e385159d608:docs/deployment-guide.md:generic-api-key:95

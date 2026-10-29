@@ -145,7 +145,7 @@ function _renderMarketplaceCard(s) {
 
     const btn = installed
         ? `<button class="btn btn-sm mk-installed" disabled><i class="fa-solid fa-check"></i> 已安装</button>`
-        : `<button class="btn btn-sm btn-primary" data-action="installFromMarketplace" data-args='["${escapeHtml(slug)}"]'><i class="fa-solid fa-download"></i> 安装</button>`;
+        : `<button class="btn btn-sm btn-primary" data-action="installFromMarketplace" data-args='${jsonAttr([slug])}'><i class="fa-solid fa-download"></i> 安装</button>`;
 
     return `
     <div class="mk-card" data-slug="${escapeHtml(slug)}">
@@ -540,26 +540,26 @@ async function loadSkillsPage() {
 
                 // 配置按钮：仅当技能存在 config.yaml 时显示（Task 2）
                 const configBtn = s.has_config
-                    ? `<button class="btn btn-sm btn-outline" data-action="openSkillConfig" data-args='["${escapeHtml(s.name)}"]'>配置</button>`
+                    ? `<button class="btn btn-sm btn-outline" data-action="openSkillConfig" data-args='${jsonAttr([s.name])}'>配置</button>`
                     : '';
 
-                // 关键词数组序列化为 HTML 属性安全的字符串（转义 & 和 "，避免提前闭合 onclick）
-                const kwJson = JSON.stringify(s.intent_keywords || [])
-                    .replace(/&/g, '&amp;')
-                    .replace(/"/g, '&quot;');
+                // 关键词数组：交给 jsonAttr 统一做「JSON.stringify + HTML 转义」。
+                // 旧实现手工 replace 转义 & 与 "，但漏了单引号/换行等，
+                // 且与整体 data-args 的转义规则不一致，易再次拼出坏 JSON。
+                const kwArr = Array.isArray(s.intent_keywords) ? s.intent_keywords : [];
 
                 // 平台标签 + 公开/专有切换
                 const platforms = s.platforms || [];
                 const platformToggle = platforms.length > 0
                     ? `<span class="platform-badge platform-badge-${escapeHtml(platforms[0])}">${escapeHtml(_platformLabel(platforms[0]))}</span>
-                       <button class="btn btn-xs platform-action-btn" data-action="setSkillPublic" data-args='["${escapeHtml(s.name)}"]' title="设为通用技能，所有平台可见">设为公开</button>`
+                       <button class="btn btn-xs platform-action-btn" data-action="setSkillPublic" data-args='${jsonAttr([s.name])}' title="设为通用技能，所有平台可见">设为公开</button>`
                     : `<span class="platform-badge platform-badge-common">通用</span>
                        <div class="platform-toggle-wrap">
-                         <button class="btn btn-xs platform-action-btn" data-action="togglePlatformDropdown" data-args='["@event", "${escapeHtml(s.name)}"]'>设为专有 ▾</button>
+                         <button class="btn btn-xs platform-action-btn" data-action="togglePlatformDropdown" data-args='${jsonAttr(["@event", s.name])}'>设为专有 ▾</button>
                          <div class="platform-dropdown" id="pdd-${escapeHtml(s.name)}" style="display:none;">
-                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='["${escapeHtml(s.name)}", "dingtalk"]'><i class="fa-solid fa-message" style="margin-right:4px;color:#1677ff;"></i>钉钉专属</div>
-                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='["${escapeHtml(s.name)}", "feishu"]'><i class="fa-solid fa-feather" style="margin-right:4px;color:#3370ff;"></i>飞书专属</div>
-                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='["${escapeHtml(s.name)}", "wecom"]'><i class="fa-solid fa-building" style="margin-right:4px;color:#8b5cf6;"></i>企微专属</div>
+                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='${jsonAttr([s.name, "dingtalk"])}'><i class="fa-solid fa-message" style="margin-right:4px;color:#1677ff;"></i>钉钉专属</div>
+                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='${jsonAttr([s.name, "feishu"])}'><i class="fa-solid fa-feather" style="margin-right:4px;color:#3370ff;"></i>飞书专属</div>
+                           <div class="platform-dropdown-item" role="button" tabindex="0" data-action="setSkillPlatform" data-args='${jsonAttr([s.name, "wecom"])}'><i class="fa-solid fa-building" style="margin-right:4px;color:#8b5cf6;"></i>企微专属</div>
                          </div>
                        </div>`;
 
@@ -574,21 +574,21 @@ async function loadSkillsPage() {
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <label title="${s.enabled !== false ? '已启用，点击禁用' : '已禁用，点击启用'}" style="display:flex;align-items:center;cursor:pointer;">
-                                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} data-action="toggleSkillEnabled" data-args='["@el", "${escapeHtml(s.name)}"]' style="display:none;">
+                                <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} data-action="toggleSkillEnabled" data-args='${jsonAttr(["@el", s.name])}' style="display:none;">
                                 <span style="display:inline-block;width:40px;height:22px;background:${s.enabled !== false ? '#2563eb' : '#cbd5e1'};border-radius:11px;position:relative;transition:background 0.2s;">
                                     <span style="display:inline-block;width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:${s.enabled !== false ? '20px' : '2px'};transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></span>
                                 </span>
                             </label>
-                            <button class="btn btn-sm btn-outline" data-action="openSkillIntent" data-args='["${escapeHtml(s.name)}", ${kwJson}]' title="手动维护意图关键词"><i class="fa-solid fa-tags"></i> 意图词</button>
-                            <button class="btn btn-sm btn-outline" data-action="openSkillAiIntent" data-args='["${escapeHtml(s.name)}"]' title="AI 分析 SKILL.md 并生成意图词，展示生成过程"><i class="fa-solid fa-wand-magic-sparkles"></i> AI生成意图词</button>
+                            <button class="btn btn-sm btn-outline" data-action="openSkillIntent" data-args='${jsonAttr([s.name, ...kwArr])}' title="手动维护意图关键词"><i class="fa-solid fa-tags"></i> 意图词</button>
+                            <button class="btn btn-sm btn-outline" data-action="openSkillAiIntent" data-args='${jsonAttr([s.name])}' title="AI 分析 SKILL.md 并生成意图词，展示生成过程"><i class="fa-solid fa-wand-magic-sparkles"></i> AI生成意图词</button>
                             ${configBtn}
-                            <button class="btn btn-sm btn-outline" data-action="uninstallSkill" data-args='["${escapeHtml(s.name)}"]' style="color:#ef4444;border-color:#ef4444;">卸载</button>
+                            <button class="btn btn-sm btn-outline" data-action="uninstallSkill" data-args='${jsonAttr([s.name])}' style="color:#ef4444;border-color:#ef4444;">卸载</button>
                         </div>
                     </div>
                     <p style="color:#666;margin:0 0 10px 0;font-size:13px;">${escapeHtml(s.description)}</p>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">
                         <span style="color:#999;white-space:nowrap;">权重：</span>
-                        <input type="range" min="0" max="100" value="${pct}" data-old-weight="${pct}" data-action="updateSkillWeight" data-args='["@el", "${escapeHtml(s.name)}"]' 
+                        <input type="range" min="0" max="100" value="${pct}" data-old-weight="${pct}" data-action="updateSkillWeight" data-args='${jsonAttr(["@el", s.name])}' 
                             style="flex:1;max-width:120px;height:6px;accent-color:#2563eb;cursor:pointer;">
                         <span class="skill-weight-val" style="min-width:36px;text-align:right;font-weight:600;color:#16a34a;">${pct}%</span>
                     </div>

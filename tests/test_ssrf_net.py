@@ -149,3 +149,91 @@ class TestPlaywrightLaunchArgs:
     def test_ip_literal_no_map(self):
         args = net.build_playwright_launch_args("https://192.0.2.5")
         assert not any(a.startswith("--host-resolver-rules") for a in args)
+
+
+class TestPinningSupportGuard:
+    """SSRF「IP 钉死」失效时必须 fail-closed，不得静默降级。
+
+    IP 钉死是 SSRF 防护的最后一环（消除 DNS 重绑定 TOCTOU）。若 urllib3 改了
+    ``PoolManager.pool_classes_by_scheme`` 的存在性/类型，我们改不动 → 连接会走
+    普通 DNS 解析 → TOCTOU 窗口重新打开，而外部看不出任何异常。
+    故守卫必须抛可读错误，并给出明确的修复版本。
+    """
+
+    def test_clean_env_passes(self):
+        # 当前环境（urllib3 2.8.0）支持替换池类 → 不应抛异常
+        from urllib3.poolmanager import PoolManager
+
+        net._ensure_pinning_supported(PoolManager(num_pools=1))
+
+    def test_unsupported_poolmanager_raises_readable_error(self):
+        import pytest
+
+        class _FakeManager:
+            """模拟 urllib3 改版后不再暴露 pool_classes_by_scheme。"""
+
+            pool_classes_by_scheme = None
+
+        with pytest.raises(RuntimeError) as exc:
+            net._ensure_pinning_supported(_FakeManager())
+        msg = str(exc.value)
+        assert "urllib3" in msg
+        assert "urllib3==2.8.0" in msg  # 修复命令必须给出明确版本
+        assert "SSRF" in msg  # 必须说明这是 SSRF 防护失效
+
+
+class TestIssue46Urllib3Compat:
+    """issue #46 回归：出站建连不得因 urllib3 内部签名差异而崩溃。
+
+    根因（2026-10-29）：``_PinnedAdapter.init_poolmanager`` 往
+    ``PoolManager(**kwargs)`` 注入了 urllib3 不认识的 ``pool_classes_by_scheme``，
+    该参数残留在 ``connection_pool_kw`` → 被拷进 ``request_context`` →
+    ``_default_key_normalizer`` 给每个 key 加 ``key_`` 前缀 →
+    ``PoolKey.__new__() got an unexpected keyword argument 'key_pool_classes_by_scheme'``
+    → 所有走 SSRF 钉 IP 的工具（天气等）整批崩溃，用户侧表现为「什么工具都没法用」。
+    """
+
+    def test_pin_session_pool_kwargs_are_clean(self):
+        """建连用的 connection_pool_kw 不得含 urllib3 不认识的参数。"""
+        from unittest.mock import patch
+
+        with patch("src.utils.net.socket.getaddrinfo") as mock_gai:
+            mock_gai.return_value = _gai("1.1.1.1")
+            session, _ = net._pin_session("https://example.com/x")
+
+        manager = session.get_adapter("https://example.com").poolmanager
+        assert "pool_classes_by_scheme" not in manager.connection_pool_kw
+
+    def test_pin_session_builds_pool_without_typeerror(self):
+        """完整走一遍 urllib3 的建池路径，不得抛 TypeError。"""
+        from unittest.mock import patch
+
+        with patch("src.utils.net.socket.getaddrinfo") as mock_gai:
+            mock_gai.return_value = _gai("1.1.1.1")
+            session, _ = net._pin_session("https://example.com/x")
+
+        manager = session.get_adapter("https://example.com").poolmanager
+        # 旧实现在此抛 TypeError: PoolKey.__new__() got an unexpected keyword
+        # argument 'key_pool_classes_by_scheme'
+        pool = manager.connection_from_host("example.com", 443, "https")
+        assert pool is not None
+
+    def test_pinned_pool_class_is_installed(self):
+        """SSRF 的「IP 钉死」必须真正生效：连接池的 ConnectionCls 应被换成钉死版。
+
+        旧实现覆盖的是 ``HTTPAdapter._new_pool``，而 requests ≥2.34 已删除该方法
+        → 覆盖是死代码 → 钉死从未生效（DNS 重绑定 TOCTOU 窗口实际存在）。
+        """
+        from unittest.mock import patch
+
+        with patch("src.utils.net.socket.getaddrinfo") as mock_gai:
+            mock_gai.return_value = _gai("1.1.1.1")
+            session, _ = net._pin_session("https://example.com/x")
+
+        manager = session.get_adapter("https://example.com").poolmanager
+        for scheme in ("http", "https"):
+            pool_cls = manager.pool_classes_by_scheme[scheme]
+            assert pool_cls.__name__.startswith("_Pinned"), (
+                f"{scheme} 的连接池类未被替换，IP 钉死未生效"
+            )
+            assert pool_cls.ConnectionCls.__name__ == "_PinnedConnection"

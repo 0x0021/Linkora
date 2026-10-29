@@ -77,11 +77,47 @@ def is_ssrf_safe(url: str) -> bool:
     return bool(resolved_ips) and all(_ip_is_public(ip) for ip in resolved_ips)
 
 
+def _ensure_pinning_supported(pool_manager: Any) -> None:
+    """守卫：确认 urllib3 允许替换「建池用的连接池类」，否则 IP 钉死会**静默失效**。
+
+    IP 钉死是 SSRF 防护的最后一环（消除 DNS 重绑定 TOCTOU）。若上游 urllib3 改了
+    ``PoolManager.pool_classes_by_scheme`` 的存在性或类型，我们改不动 → 连接会走
+    普通 DNS 解析 → TOCTOU 窗口重新打开，而外部**看不出任何异常**。
+    故此处 fail-closed：抛可读错误，绝不静默降级。
+    """
+    classes = getattr(pool_manager, "pool_classes_by_scheme", None)
+    if not isinstance(classes, dict):
+        raise RuntimeError(
+            "当前 urllib3 的 PoolManager 不支持替换 pool_classes_by_scheme，"
+            "SSRF 的「IP 钉死」无法生效（会出现 DNS 重绑定 TOCTOU 窗口），已拒绝发起请求。\n"
+            "请检查 urllib3 版本：requirements.txt 已钉 urllib3==2.8.0，"
+            "建议执行 `pip install -U 'urllib3==2.8.0'` 后重试。"
+        )
+
+
 def _pin_session(url: str, **kwargs):
     """解析+校验+钉死 IP，返回 ``(Session, url)``；任一 IP 私网/保留即抛 ``ValueError``。
 
     供 ``ssrf_safe_get`` / ``safe_http_request`` 复用，确保「校验」与「建连」使用同一地址，
     消除 DNS 重绑定 TOCTOU 窗口。
+
+    实现要点（均为真实踩过的坑，勿回退）：
+
+    1. **禁止**往 ``PoolManager(**kwargs)`` 塞 urllib3 不认识的参数（如
+       ``pool_classes_by_scheme``）。urllib3 会把未知参数留在 ``connection_pool_kw`` 里，
+       随后被拷进 ``request_context``，``_default_key_normalizer`` 再给每个 key 加
+       ``key_`` 前缀 → ``PoolKey`` 收到未知字段 →
+       ``TypeError: PoolKey.__new__() got an unexpected keyword argument
+       'key_pool_classes_by_scheme'`` → **全站出站工具瘫痪**（见 issue #46）。
+    2. ``HTTPAdapter._new_pool`` 在 requests ≥ 2.34 已被删除，覆盖它是**死代码**——
+       真正的建池入口是 urllib3 ``PoolManager._new_pool``，池用什么连接类由
+       ``PoolManager.pool_classes_by_scheme``（实例属性）决定。故改池类，而非覆盖
+       adapter 方法（旧实现等于「SSRF 钉死从未真正生效」）。
+    3. 钉 IP 靠替换 ``HTTPConnectionPool.ConnectionCls``：在 ``_new_conn``（真正建 socket）
+       期间把 ``self._dns_host`` 换成钉死 IP（urllib3 1.26 / 2.x 建连都读 ``_dns_host``），
+       建完立即还原 → Host 头与 TLS SNI 仍是原域名，证书校验不受影响。
+    4. **代理场景不钉 IP**：走代理时由代理解析域名，socket 应连代理而非目标 IP。
+       故只替换直连 ``poolmanager`` 的池类，代理 manager 保持默认（与旧行为一致）。
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
@@ -106,64 +142,48 @@ def _pin_session(url: str, **kwargs):
     from urllib3.connection import HTTPConnection, HTTPSConnection
     from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 
-    class _FixedHostHTTPConnection(HTTPConnection):
-        def __init__(self, *args, _dest_ip=None, _orig_host=None, **kwargs):
-            self._dest_ip = _dest_ip
-            self._orig_host = _orig_host
-            super().__init__(*args, **kwargs)
+    def _make_pinned_connection_cls(base_cls: Any) -> Any:
+        """生成「建连时把 socket 目标换成钉死 IP」的连接类。
 
-        def connect(self):
-            saved = self.host
-            if self._dest_ip:
-                self.host = self._dest_ip
-            try:
-                super().connect()
-            finally:
-                self.host = saved  # 还原，供 putrequest 写原 Host 头
+        只在 ``_new_conn``（真正建 socket）期间替换 ``_dns_host``，建完立即还原：
+        这样 Host 头与 TLS SNI 仍是原始域名（证书校验、SNI 均不受影响），
+        而 TCP 连接的目标是已校验过的公网 IP。
+        """
 
-    class _FixedHostHTTPSConnection(HTTPSConnection):
-        def __init__(self, *args, _dest_ip=None, _orig_host=None, **kwargs):
-            self._dest_ip = _dest_ip
-            self._orig_host = _orig_host
-            super().__init__(*args, **kwargs)
+        class _PinnedConnection(base_cls):  # type: ignore[misc, valid-type]
+            def _new_conn(self) -> Any:
+                saved = self._dns_host
+                self._dns_host = dest_ip
+                try:
+                    return super()._new_conn()
+                finally:
+                    self._dns_host = saved  # 还原，Host 头 / SNI 仍用原域名
 
-        def connect(self):
-            saved = self.host
-            if self._dest_ip:
-                self.host = self._dest_ip
-                self.server_hostname = self._orig_host or saved
-            try:
-                super().connect()
-            finally:
-                self.host = saved
+        return _PinnedConnection
+
+    class _PinnedHTTPConnectionPool(HTTPConnectionPool):  # type: ignore[misc, valid-type]
+        ConnectionCls = _make_pinned_connection_cls(HTTPConnection)
+
+    class _PinnedHTTPSConnectionPool(HTTPSConnectionPool):  # type: ignore[misc, valid-type]
+        ConnectionCls = _make_pinned_connection_cls(HTTPSConnection)
 
     class _PinnedAdapter(HTTPAdapter):
-        def __init__(self, dest_ip=None, orig_host=None, **kwargs):
-            self._dest_ip = dest_ip
-            self._orig_host = orig_host
-            super().__init__(**kwargs)
-
-        def init_poolmanager(self, *args, **kwargs):
-            kwargs["pool_classes_by_scheme"] = {
-                "http": HTTPConnectionPool,
-                "https": HTTPSConnectionPool,
-            }
+        def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
+            # 注意：这里**不能**往 kwargs 里加 urllib3 不认识的参数（见函数 docstring 第 1 点）。
             super().init_poolmanager(*args, **kwargs)
-
-        def _new_pool(self, scheme, host, port, request_context=None):
-            manager: Any = super()
-            pool = manager._new_pool(scheme, host, port, request_context)
-            if scheme == "http":
-                pool.ConnectionCls = lambda *a, **kw: _FixedHostHTTPConnection(
-                    *a, _dest_ip=self._dest_ip, _orig_host=self._orig_host, **kw)
-            else:
-                pool.ConnectionCls = lambda *a, **kw: _FixedHostHTTPSConnection(
-                    *a, _dest_ip=self._dest_ip, _orig_host=self._orig_host, **kw)
-            return pool
+            # 建池用的连接池类由 PoolManager 的实例属性决定，替换它即可让直连请求
+            # 走「钉死 IP」的连接类（见 docstring 第 2、3 点）。
+            manager = getattr(self, "poolmanager", None)
+            if manager is not None:
+                _ensure_pinning_supported(manager)
+                manager.pool_classes_by_scheme = {
+                    "http": _PinnedHTTPConnectionPool,
+                    "https": _PinnedHTTPSConnectionPool,
+                }
 
     session = Session()
-    session.mount("http://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
-    session.mount("https://", _PinnedAdapter(dest_ip=dest_ip, orig_host=parsed.hostname))
+    session.mount("http://", _PinnedAdapter())
+    session.mount("https://", _PinnedAdapter())
     pinned_url = url
     is_ssrf_safe(pinned_url)  # 双保险：私网/保留地址直接抛 ValueError，阻断后续建连
     return session, pinned_url

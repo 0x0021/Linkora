@@ -25,6 +25,11 @@ python-multipart==0.0.32
 # ---- 向量检索 / OCR ----
 faiss-cpu==1.15.1
 requests==2.34.2
+# urllib3 必须显式钉版：requests 只约束 >=1.21.1,<3，不钉会导致部署环境复用已有旧
+# urllib3(<2.0) 时 poolmanager(≥2.0) 与 connectionpool.PoolKey(<2.0) 被解析成不同版本，
+# 触发 `PoolKey.__new__() got an unexpected keyword argument 'key_pool_classes_by_scheme'`，
+# 使所有走 SSRF 钉 IP 的工具崩溃（见 issue #46）。
+urllib3==2.8.0
 jieba==0.42.1
 regex==2026.9.29
 rapidocr-onnxruntime==1.2.3

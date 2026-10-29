@@ -745,7 +745,7 @@ async function searchDingtalkImport() {
             return `
                 <div class="remote-doc-item">
                     <span>${escapeHtml(title)}</span>
-                    <button class="btn btn-sm btn-outline-secondary" data-action="syncAndSelectDingtalkDoc" data-args='["${docId}", "${escapeHtml(title)}"]'><i class="fa-solid fa-download"></i> 同步并导入</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-action="syncAndSelectDingtalkDoc" data-args='${jsonAttr([docId, title])}'><i class="fa-solid fa-download"></i> 同步并导入</button>
                 </div>
             `;
         }).join('');
@@ -854,7 +854,7 @@ async function searchFeishuDocs() {
             return `
                 <div class="remote-doc-item">
                     <span>${escapeHtml(title)}</span>
-                    <button class="btn btn-sm btn-primary" data-action="selectFeishuImportDoc" data-args='["${escapeHtml(token)}", "${escapeHtml(title)}", "${escapeHtml(etype)}", "@el"]'>导入此文档</button>
+                    <button class="btn btn-sm btn-primary" data-action="selectFeishuImportDoc" data-args='${jsonAttr([token, title, etype, "@el"])}'>导入此文档</button>
                 </div>
             `;
         }).join('');

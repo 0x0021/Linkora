@@ -44,7 +44,36 @@
         return clean;
     }
 
+    /**
+     * 生成可安全嵌入 HTML 属性、并能被 JSON.parse 还原的参数字符串。
+     *
+     * 背景（真实故障）：模拟测试页把历史消息渲染成
+     *   data-args='["${escapeHtml(content)}", "${escapeHtml(name)}"]'
+     * 「先 HTML 转义、再手工拼 JSON」。浏览器解析属性时会**还原 HTML 实体**，
+     * 于是内容里的 `"` 变回裸引号、内容里的**真实换行**原样留在 JSON 字符串里：
+     *   - 裸引号 → JSON 结构被截断（Expecting ',' delimiter）
+     *   - 裸换行 → JSON 规范禁止字符串内出现控制字符（Invalid control character）
+     * 两者都会让 data-args JSON.parse 抛错 → 动作收到空参数 → 输入框被填成 undefined。
+     *
+     * 正确做法：先 JSON.stringify（它会正确转义引号/换行/反斜杠），再整体做 HTML 转义。
+     * 浏览器还原实体后拿到的正是那段合法 JSON。
+     *
+     * 用法：data-args='${jsonAttr([content, name])}'
+     * 注意：不要与 escapeHtml 混用——escapeHtml 适合纯文本节点，不适合 JSON 参数。
+     */
+    function jsonAttr(value) {
+        let json;
+        try {
+            json = JSON.stringify(value);
+        } catch (_) {
+            json = '[]';
+        }
+        if (json === undefined) json = '[]';
+        return escapeHtml(json);
+    }
+
     global.escapeHtml = escapeHtml;
+    global.jsonAttr = jsonAttr;
     global.setText = setText;
     global.sanitizeUrl = sanitizeUrl;
 

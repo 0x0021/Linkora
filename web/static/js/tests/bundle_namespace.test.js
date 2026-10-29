@@ -49,13 +49,26 @@ describe('生产 bundle 包含 Phase 0 解锁机制', () => {
     // 回归：updateSkillWeight 动作签名 (el, name)，runAction 经 fn.apply(el, args)
     // 传参，data-args 必须以 @el 把 DOM 元素作为首参传入；否则 el 会拿到技能名字符串、
     // name 为 undefined → Number("名字".value)/100 = NaN → PUT {weight:null} 被拒 → 滑块假死。
+    //
+    // 2026-10-29：data-args 改用 jsonAttr() 生成（先 JSON.stringify 再 HTML 转义），
+    // 修复「用户自由文本里的引号/换行破坏 JSON 结构」的历史 bug，渲染形态随之变化。
+    // 断言同步更新为新形态，并**继续校验 @el 位于首元素**（这才是本条回归的真正意图）。
     if (!bundle) return;
-    expect(bundle).toContain('updateSkillWeight" data-args=\'["@el"');
+    expect(bundle).toContain('updateSkillWeight" data-args=\'${jsonAttr(["@el"');
   });
 
   it('技能开关 data-args 含 @el（与滑块同一参数错位根因）', () => {
     if (!bundle) return;
-    expect(bundle).toContain('toggleSkillEnabled" data-args=\'["@el"');
+    expect(bundle).toContain('toggleSkillEnabled" data-args=\'${jsonAttr(["@el"');
+  });
+
+  it('data-args 统一用 jsonAttr 生成（用户自由文本不得手工拼 JSON）', () => {
+    // 回归：手工拼 JSON + escapeHtml 会被浏览器还原 HTML 实体 →
+    // 内容里的裸引号/真实换行破坏 JSON 结构 → JSON.parse 失败 → 动作收到空参数。
+    if (!bundle) return;
+    expect(bundle).toContain('jsonAttr');
+    // 不得再有「escapeHtml 直接插进 data-args 的 JSON 数组」这种写法
+    expect(bundle).not.toMatch(/data-args='\["\$\{escapeHtml\(/);
   });
 
   it('产物附 sourcemap（Phase 1 调试增强）', () => {

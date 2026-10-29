@@ -273,8 +273,11 @@ function renderSimHistory(history) {
 
     container.innerHTML = items.map(item => {
         const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString('zh-CN') : '';
+        // data-args 必须是「JSON.stringify 后再 HTML 转义」，不能手工拼 JSON 字符串：
+        // 浏览器会还原 HTML 实体，内容里的裸引号/真实换行会破坏 JSON 结构，
+        // 导致点击历史记录时 JSON.parse 失败、输入框被填成 undefined（见 jsonAttr 注释）。
         return `
-            <div class="sim-history-item" data-action="useHistory" data-args='["${escapeHtml(item.content)}", "${escapeHtml(item.sender_name || '')}"]'>
+            <div class="sim-history-item" data-action="useHistory" data-args='${jsonAttr([item.content, item.sender_name || ''])}'>
                 <div class="sim-history-content">${escapeHtml(item.content)}</div>
                 <div class="sim-history-meta">
                     <span><i class="fa-solid fa-user"></i> ${escapeHtml(item.sender_name || '测试用户')}</span>

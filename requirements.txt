@@ -4,9 +4,9 @@
 
 # ---- 配置 / 环境 ----
 PyYAML==6.0.3
-pydantic==2.14.1
+pydantic==2.14.2
 python-dotenv==1.2.4
-platformdirs==4.13.5
+platformdirs==4.14.0
 
 # ---- LLM / 嵌入模型 ----
 openai==2.54.0
@@ -16,7 +16,7 @@ huggingface_hub==1.33.0
 tokenizers==0.23.3
 
 # ---- Web 服务 ----
-fastapi==0.161.1
+fastapi==0.162.0
 uvicorn==0.54.0
 pyjwt==2.15.1
 jinja2==3.1.6
@@ -55,6 +55,6 @@ rich==15.0.0
 psutil==7.2.2
 
 # ---- 测试（构建二进制时不会被打包，仅在开发/CI 安装）----
-pytest==9.1.1
+pytest==9.2.0
 pytest-cov==7.1.0
 pytest-timeout==2.4.0

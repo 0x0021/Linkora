@@ -144,7 +144,8 @@ class TestTokenize:
         assert _tokenize("珞") == ["珞"]
 
     def test_mixed(self):
-        toks = _tokenize("Rokae 珞石")
+        # 英文词与断言统一用中性代称 Acme（隐私中性化后的夹具同步）。
+        toks = _tokenize("Acme 珞石")
         assert "acme" in toks
         assert "珞石" in toks
 

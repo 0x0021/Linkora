@@ -47,7 +47,9 @@ def test_is_garbled_accepts_normal_chinese():
 
 
 def test_tokenize_chinese_bigrams_and_english():
-    toks = _tokenize("Rokae 上市 招股")
+    # 英文词用中性代称 Acme，与断言保持同一来源（隐私中性化后曾只改断言、
+    # 未改输入，导致分词结果 rokae 与期望 acme 不一致）。
+    toks = _tokenize("Acme 上市 招股")
     assert "acme" in toks
     assert "上市" in toks
     assert "招股" in toks

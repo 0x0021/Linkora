@@ -409,8 +409,8 @@ class ReplyDispatchMixin(EngineMixinBase):
             self._mark_inbound_processed(message)
             return False
 
-        self._mark_read_before_reply(message)
-
+        # 标记已读改为「回复成功发出后延迟 N 秒」执行（_schedule_mark_read_after_reply），
+        # 不再在发送前清掉会话未读状态——见 2026-11-06 追问漏回事故。
         # AI 标记（--ai-tag）由 DwsAdapter.ai_tag_default 统一控制（来自 config.poller.ai_tag_enabled）
         try:
             sent, result = self._dispatch_reply_send(message, reply_title, filtered, reply_uuid)
@@ -428,6 +428,13 @@ class ReplyDispatchMixin(EngineMixinBase):
                         "dry-run" if self.dws.dry_run else "real")
 
             self._record_reply_success(message, filtered, reply_uuid, result)
+            # 仅在回复确实发出后才调度延迟标记；发送失败 / 被门控拦下时会话保持未读。
+            # 调度异常不得把「已发送成功」误报成发送失败（否则下一轮会重复发送），
+            # 故收窄异常类型就地兜住，不向上传播。
+            try:
+                self._schedule_mark_read_after_reply(message)
+            except (RuntimeError, OSError, ValueError) as e:
+                logger.warning("[已读延迟] 调度失败（回复已发出，不影响本次结果）: %s", e)
             return True
         except Exception as e:
             if self._is_rate_limit_exception(e):

@@ -64,6 +64,10 @@ class LifecycleMixin(EngineMixinBase):
         self._replying_since: dict[str, float] = {}
         # 回复锁竞争重试计数：chat_id -> 已重试次数（避免无限重入）。
         self._reply_lock_retries: dict[str, int] = {}
+        # 回复后延迟标记已读：chat_id -> (调度令牌, Timer)。同会话再次回复会取消旧计时器，
+        # 以最新回复重新计时，避免刚回完就被上一次的定时器把会话标成已读。
+        self._mark_read_timers: dict[str, tuple[str, threading.Timer]] = {}
+        self._mark_read_timer_lock = threading.Lock()
         # 平台级并发控制已迁移到 PlatformContext.reply_semaphore，
         # 每个平台独立维护回复槽位，避免全局信号量被跨平台滥用。
         # 瞬时发送失败退避：msg_key -> 退避截止时间戳，避免同一条消息每轮硬刷重发

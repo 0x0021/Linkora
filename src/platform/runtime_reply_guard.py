@@ -1,6 +1,7 @@
 from __future__ import annotations
 from .base import extract_card_title
 import re
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -26,6 +27,10 @@ REPLY_SEND_RATE_LIMIT_BACKOFF_DEFAULT = 60.0
 # 而非 IMAdapterRateLimitError，故需文本兜底才能识别流控）。
 _RATE_LIMIT_HINTS = ("rate limit", "ratelimit", "429", "rate_limit",
                      "频控", "too many requests", "throttl", "quota exceeded")
+
+# 延迟标记已读调度状态的惰性初始化锁：测试宿主 / 裸实例未走 lifecycle.__init__ 时，
+# 仍需保证 _mark_read_timers 与 _mark_read_timer_lock 只被创建一次。
+_MARK_READ_STATE_INIT_LOCK = threading.Lock()
 
 
 
@@ -168,10 +173,85 @@ class ReplyGuardMixin(EngineMixinBase):
         filtered = re.sub(r'\n+', '\n', filtered)
         filtered = ''.join(c for c in filtered if ord(c) >= 32 or c == '\n')
         return reply_title, filtered
-    def _mark_read_before_reply(self, message: Message) -> None:
-        """标记已读：在即将回复的时刻标记，而非轮询到消息时立即标记。
+    def _mark_read_delay_seconds(self) -> int:
+        """读取「回复后延迟标记已读」秒数。
 
-        避免对方看到"已读"但迟迟收不到回复的糟糕体验。
+        配置缺失 / 非法值一律回落默认 120 秒（宁可保守延迟，也不立刻把会话标已读
+        而把追问吞掉）；0 或负数表示回复发出后立即标记（旧行为）。
+        """
+        poller_cfg = getattr(getattr(self, "config", None), "poller", None)
+        try:
+            value = int(getattr(poller_cfg, "mark_read_delay_seconds", 120))
+        except (TypeError, ValueError):
+            return 120
+        return max(0, value)
+
+    def _mark_read_state(self) -> tuple[dict[str, tuple[str, threading.Timer]], threading.Lock]:
+        """延迟标记调度表（惰性初始化，兼容未走 lifecycle.__init__ 的测试宿主）。"""
+        if not hasattr(self, "_mark_read_timers"):
+            with _MARK_READ_STATE_INIT_LOCK:
+                if not hasattr(self, "_mark_read_timers"):
+                    self._mark_read_timers = {}
+                    self._mark_read_timer_lock = threading.Lock()
+        return self._mark_read_timers, self._mark_read_timer_lock
+
+    def _schedule_mark_read_after_reply(self, message: Message) -> None:
+        """回复成功发出后，延迟 N 秒再把该会话标记已读。
+
+        从前是「发送前立刻 mark_read」，AI 自己把会话清成已读；同一会话在回复窗口内
+        到达、但尚未被轮询处理的追问，会被前置过滤的「DWS 判定会话已读」闸门整条吞掉
+        （2026-11-06 殷锡迷 SRM 追问漏回）。延迟标记让会话在这段时间保持未读，
+        追问因此能正常进入 LLM。
+
+        - 0 / 负数：回复发出后立即标记（旧行为）。
+        - 同一会话在窗口内再次回复：取消旧计时器、以最新回复重新计时，避免刚回完
+          就被上一次的定时器把会话标成已读。
+        - Timer 携带的是当时那条入站消息的 msg_id，mark-read 只标记「该消息及之前」，
+          不会把窗口内新到达的消息一并标为已读。
+        """
+        poller_cfg = getattr(getattr(self, "config", None), "poller", None)
+        if not getattr(poller_cfg, "mark_read_after_process", True):
+            return
+        delay = self._mark_read_delay_seconds()
+        if delay <= 0:
+            self._mark_read_before_reply(message)
+            return
+        chat_id = getattr(message, "chat_id", "") or ""
+        if not chat_id or not getattr(message, "msg_id", ""):
+            return
+        timers, lock = self._mark_read_state()
+        token = uuid.uuid4().hex
+        # Timer 在新线程触发，不继承父线程的 platform ContextVar；复制当前上下文带入，
+        # 与回复锁重试同一处理，避免跨平台适配器选错。
+        import contextvars as _cv
+        ctx = _cv.copy_context()
+
+        def _fire() -> None:
+            with lock:
+                current = timers.get(chat_id)
+                if not current or current[0] != token:
+                    return
+                timers.pop(chat_id, None)
+            ctx.run(self._mark_read_before_reply, message)
+            logger.info("[已读延迟] 会话 %s 延迟 %ss 标记已读完成",
+                        getattr(message, "chat_name", "") or chat_id[:20], delay)
+
+        timer = threading.Timer(delay, _fire)
+        timer.daemon = True
+        with lock:
+            old = timers.get(chat_id)
+            if old:
+                old[1].cancel()
+            timers[chat_id] = (token, timer)
+        timer.start()
+        logger.info("[已读延迟] 回复已发出，会话 %s 将在 %ss 后标记已读",
+                    getattr(message, "chat_name", "") or chat_id[:20], delay)
+
+    def _mark_read_before_reply(self, message: Message) -> None:
+        """执行 mark_read（历史方法名保留，兼容既有调用方与测试桩）。
+
+        现由 _schedule_mark_read_after_reply 在「回复成功发出后、延迟 N 秒」调用，
+        不再是发送前的同步动作。命名沿用旧称，避免破坏组合类声明与测试桩。
         """
         if message.msg_id and message.chat_id:
             try:

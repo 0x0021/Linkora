@@ -82,6 +82,7 @@ platforms:
       suppress_when_owner_read: true                 # 已读闸门：DWS 判定会话已读(无未读)则 AI 不回；新未读消息仍照常回。失真漏回时设 false
       read_grace_seconds: 3                         # 已读反悔窗口（秒）：回复生成好后先等这么久再发，期间你标记已读则直接取消发送（我已读的会话绝不发自动回复）。0=不等待
       mark_read_after_process: true                  # 处理完后将该会话消息标记为已读
+      mark_read_delay_seconds: 120                   # 回复发出后延迟 N 秒再标记会话已读（默认120）：给追问留出未读窗口，避免 AI 自己标已读把后续消息吞掉。0=立即标记（旧行为）
       # —— 背压 / 并发 ——
       max_dispatch_per_cycle: 30                     # 单轮最多派发给 handler 的消息数（0=不限制）
       max_concurrent_replies: 4                      # 同时进行的回复（LLM 调用）上限
@@ -170,6 +171,7 @@ platforms:
   #     poll_new_message_max_age_hours: 24
   #     suppress_when_owner_read: true
   #     mark_read_after_process: true
+  #     mark_read_delay_seconds: 120
   #     max_dispatch_per_cycle: 30
   #     max_concurrent_replies: 4
   #     reply_concurrency_timeout_seconds: 30
@@ -236,6 +238,7 @@ platforms:
   #     poll_new_message_max_age_hours: 24
   #     suppress_when_owner_read: true
   #     mark_read_after_process: true
+  #     mark_read_delay_seconds: 120
   #     max_dispatch_per_cycle: 30
   #     max_concurrent_replies: 4
   #     reply_concurrency_timeout_seconds: 30

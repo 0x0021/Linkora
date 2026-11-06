@@ -187,6 +187,7 @@ class _SendReplyFake(RuntimeMixin):
             reply_send_min_interval=0.0,
             reply_send_rate_limit_backoff_seconds=60.0,
             reply_shard_limit=4000,
+            mark_read_delay_seconds=0,
         ))
         self.dws = MagicMock()
         self.dws.dry_run = False

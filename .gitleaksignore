@@ -22,3 +22,6 @@ d17784c8ae8c48fc815bbbf1472f12ebbd7fb648:tests/test_feishu_adapter.py:generic-ap
 # 全历史重写后 SHA 变化，补登 deployment-guide.md 的文档占位 JWT 示例（新历史 SHA）
 fa24e48a790f18a8c6fcfc32f0876e385159d608:docs/deployment-guide.md:generic-api-key:33
 fa24e48a790f18a8c6fcfc32f0876e385159d608:docs/deployment-guide.md:generic-api-key:95
+# 再次重写后的历史 SHA（同上：文档教学占位 JWT 示例，非真实密钥）
+87d947be557468bcc6015c9dfc2a7ea4dc124d8c:docs/deployment-guide.md:generic-api-key:33
+87d947be557468bcc6015c9dfc2a7ea4dc124d8c:docs/deployment-guide.md:generic-api-key:95

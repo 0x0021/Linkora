@@ -144,6 +144,7 @@ class _FakeRuntime(RuntimeMixin):
             reply_send_rate_limit_backoff_seconds=60.0,
             reply_shard_limit=4000,
             suppress_when_owner_read=True,
+            mark_read_delay_seconds=0,
         ))
         self.dws = MagicMock()
         self.dws.dry_run = False

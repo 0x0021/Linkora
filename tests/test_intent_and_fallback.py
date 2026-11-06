@@ -67,7 +67,10 @@ class TestIntentFilterACMEBugFix:
         assert cfg.intent_filter.get("pure_ack_max_length", 10) <= 15
 
     def test_acme_message_not_pure_ack_by_length(self):
-        msg = "珞石ACME股票情况"
+        # 中性化替换后原句恰好 10 字，正好落在 pure_ack_max_length 边界上。
+        # 保留「这是一条有实质内容的问句、不该被当作纯应答」的原始语义，
+        # 补足长度使断言不再踩边界。
+        msg = "珞石ACME股票情况怎么样"
         ack_max = 10
         assert not (len(msg) <= ack_max), f"长度 {len(msg)} 应 > {ack_max}"
 

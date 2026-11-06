@@ -47,13 +47,13 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   pytest
     #   tqdm
     #   typer
-coverage==7.17.0
+coverage==7.17.2
     # via pytest-cov
 cryptography==50.0.2
     # via pdfminer-six
-cuda-bindings==13.4.4 ; python_full_version < '3.15' and sys_platform == 'linux'
+cuda-bindings==13.5.0 ; python_full_version < '3.15' and sys_platform == 'linux'
     # via torch
-cuda-pathfinder==1.8.5 ; python_full_version < '3.15' and sys_platform == 'linux'
+cuda-pathfinder==1.8.6 ; python_full_version < '3.15' and sys_platform == 'linux'
     # via cuda-bindings
 cuda-toolkit==13.2.2 ; sys_platform == 'linux'
     # via torch
@@ -145,7 +145,7 @@ nvidia-cublas==13.4.1.3 ; sys_platform == 'linux'
     #   cuda-toolkit
     #   nvidia-cudnn-cu13
     #   nvidia-cusolver
-nvidia-cuda-cccl==13.3.4.3.1 ; sys_platform == 'linux'
+nvidia-cuda-cccl==13.3.5.0.6 ; sys_platform == 'linux'
     # via nvidia-nvshmem-cu13
 nvidia-cuda-cupti==13.2.86 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
     # via cuda-toolkit
@@ -171,7 +171,7 @@ nvidia-cusparselt-cu13==0.8.1 ; sys_platform == 'linux'
     # via torch
 nvidia-nccl-cu13==2.30.7 ; sys_platform == 'linux'
     # via torch
-nvidia-nvjitlink==13.4.92 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
+nvidia-nvjitlink==13.5.37 ; (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')
     # via
     #   cuda-toolkit
     #   nvidia-cufft
@@ -300,13 +300,13 @@ six==1.17.0
     # via rapidocr-onnxruntime
 sniffio==1.3.1
     # via openai
-soupsieve==3.0.4
+soupsieve==4.0.1
     # via beautifulsoup4
 starlette==1.10.0
     # via fastapi
 sympy==1.14.0
     # via torch
-threadpoolctl==3.7.0
+threadpoolctl==3.8.0
     # via scikit-learn
 tokenizers==0.23.3
     # via
@@ -343,7 +343,7 @@ typing-extensions==4.16.0
     #   sentence-transformers
     #   torch
     #   typing-inspection
-typing-inspection==0.4.4
+typing-inspection==0.4.5
     # via
     #   fastapi
     #   pydantic

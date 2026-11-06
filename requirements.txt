@@ -54,6 +54,12 @@ openpyxl==3.1.5
 rich==15.0.0
 psutil==7.2.2
 
+# ---- 安全钉版（传递依赖 CVE）----
+# msgpack 是 cachecontrol 的传递依赖，uv.lock 曾解析到 1.2.1，命中
+# CVE-2026-114613（strict_map_key 校验失败时 C 扩展无界内存泄漏，high）。
+# 上游约束不含下限，故显式钉到首个修复版，锁文件由 CI 流水线重生成。
+msgpack==1.2.3
+
 # ---- 测试（构建二进制时不会被打包，仅在开发/CI 安装）----
 pytest==9.2.0
 pytest-cov==7.1.0

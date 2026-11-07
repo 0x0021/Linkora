@@ -14,6 +14,11 @@ import uuid
 from datetime import timedelta
 
 from src.poller_utils import match_notification_signature
+from src.self_identity import (
+    collect_self_ids,
+    collect_self_names,
+    is_self_message as _check_self_message,
+)
 
 logger = logging.getLogger("src.platform.runtime")
 
@@ -279,34 +284,24 @@ class InboundMixin(EngineMixinBase):
         """
         # 防御性取值：发送前复核（_should_reply_now）也会调用本方法，消息对象可能
         # 来自非标准构造（如测试桩），缺字段时按“非自身”处理，不抛异常。
-        sender_id = getattr(message, "sender_id", "") or ""
-        sender_name = getattr(message, "sender_name", "") or ""
-        raw = getattr(message, "raw", None) or {}
-        # 匹配 sender_id：openDingTalkId 或 userId
-        if sender_id:
-            oid = getattr(self, "current_open_dingtalk_id", "")
-            uid = getattr(self, "current_user_id", "")
-            if (oid and sender_id == oid) or (uid and sender_id == uid):
-                return True
-        # 匹配 sender_name（strip 后比较，兼容首尾空格）
-        # 注意：此匹配为弱兜底，若群内有同名用户可能导致误过滤。
-        # sender_id 匹配已覆盖主体场景，name 匹配仅作为辅助手段。
-        user_name = getattr(self, "current_user_name", "")
-        if sender_name and user_name:
-            if sender_name.strip() == user_name.strip():
-                logger.warning(
-                    "检测到同名用户 %s，sender_id 匹配优先，name 匹配仅作弱兜底",
-                    sender_name,
-                )
-                return True
-        # 兜底：raw 消息里的 senderOpenDingTalkId / senderId
-        raw_sid = raw.get("senderOpenDingTalkId") or raw.get("senderId") or ""
-        if raw_sid:
-            oid = getattr(self, "current_open_dingtalk_id", "")
-            uid = getattr(self, "current_user_id", "")
-            if (oid and raw_sid == oid) or (uid and raw_sid == uid):
-                return True
-        return False
+        # 2026-11-06 起与 poller 共用 src/self_identity.py 的同一口径：ID 集合
+        # 覆盖 openDingTalkId + userId，姓名集合覆盖正式姓名 + 昵称别名。
+        self_ids = collect_self_ids(
+            getattr(self, "current_open_dingtalk_id", ""),
+            getattr(self, "current_user_id", ""),
+            getattr(self, "current_user_user_id", ""),
+        )
+        self_names = collect_self_names(
+            getattr(self, "current_user_name", ""),
+            getattr(self, "self_sender_names", ()),
+        )
+        return _check_self_message(
+            sender_id=getattr(message, "sender_id", "") or "",
+            sender_name=getattr(message, "sender_name", "") or "",
+            raw=getattr(message, "raw", None) or {},
+            self_ids=self_ids,
+            self_names=self_names,
+        )
     def _is_internal_confirmation(self, text: str) -> bool:
         """检查回复是否为纯内部操作确认（如记忆写入的"已记录"），不应对外发送。
 

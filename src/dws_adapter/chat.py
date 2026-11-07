@@ -643,6 +643,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
     def chat_message_send(self, *, group: str | None = None,
                           user: str | None = None,
                           open_dingtalk_id: str | None = None,
+                          conversation_id: str | None = None,
                           title: str = "", text: str = "",
                           uuid: str | None = None,
                           ai_tag: bool | None = None,
@@ -666,15 +667,22 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         if ai_tag is None:
             ai_tag = self.ai_tag_default
 
-        # 目标
-        if group:
+        # 目标。conversation_id 走 --conversation-id **稳定 ID 直通**（--group 是
+        # 其别名，但在部分子命令里会走群名语义解析）。单聊优先按会话 ID 发送：
+        # --open-dingtalk-id 是「按人发」，一旦 peer_oid 被污染就会把回复投进
+        # 「我」窗口（2026-11-06 自言自语事故）；按入站会话 ID 发则物理上不可能
+        # 串到别的会话。dws v1.0.63 的 dry-run 已验证单聊 cid 会组装成
+        # send_personal_message(openConversationId=<cid>)。
+        if conversation_id:
+            target = ["--conversation-id", conversation_id]
+        elif group:
             target = ["--group", group]
         elif user:
             target = ["--user", user]
         elif open_dingtalk_id:
             target = ["--open-dingtalk-id", open_dingtalk_id]
         else:
-            raise ValueError("group, user, or open_dingtalk_id must be specified")
+            raise ValueError("conversation_id, group, user, or open_dingtalk_id must be specified")
 
         args = ["chat", "message", "send"] + target
 

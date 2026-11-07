@@ -54,6 +54,13 @@ class BaseIMAdapter(_CLIEngine, abc.ABC):
     # 调用方据此决定是否走引用回复通道（避免传入对方不认的 kwargs 触发 TypeError）。
     supports_native_quote_reply: bool = False
 
+    # 是否支持 ``chat_message_send(conversation_id=...)`` 按会话 ID 直通发送。
+    # 钉钉 dws 的 ``--conversation-id`` 同时支持群聊与单聊 openConversationId
+    # （v1.0.63 dry-run 实测：单聊 cid 会组装成 send_personal_message 的
+    # openConversationId）；飞书 / 企微的发送实现不接受该 kwarg，故默认 False。
+    # 单聊优先按会话 ID 发送可物理杜绝「peer_oid 被污染 → 回复投进自己窗口」。
+    supports_conversation_id_send: bool = False
+
     # ==================================================================
     # 会话归一化的平台差异注入点（P1-5）
     # ==================================================================

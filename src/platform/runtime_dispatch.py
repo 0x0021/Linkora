@@ -12,6 +12,11 @@ import time
 
 from src.poller_utils import is_read_receipt_content
 from src.im_adapter.errors import IMAdapterError
+from src.self_identity import (
+    collect_self_ids,
+    collect_self_names,
+    is_self_message as _check_self_message,
+)
 
 logger = logging.getLogger("src.platform.runtime")
 
@@ -123,24 +128,50 @@ class ReplyDispatchMixin(EngineMixinBase):
     def _send_single_chat_reply(self, message: Message, reply_title: str,
                                 filtered: str, reply_uuid: str) -> tuple[bool, object]:
         """单聊发送：解析 peer、防自发护栏、脏数据纠错、按优先级选择发送通道。"""
+        # 自身身份统一口径（openDingTalkId + userId、正式姓名 + 昵称）。
+        # 2026-11-06 事故里 current_open_dingtalk_id 为空，self_ids 只含 userId，
+        # 护栏对「按 openDingTalkId 发给自己」形同虚设。
+        self_ids = collect_self_ids(
+            getattr(self, "current_open_dingtalk_id", ""),
+            getattr(self, "current_user_id", ""),
+            getattr(self, "current_user_user_id", ""),
+        )
+        self_names = collect_self_names(
+            getattr(self, "current_user_name", ""),
+            getattr(self, "self_sender_names", ()),
+        )
+
+        # 【P0硬闸门】入站消息本身就是自己发的：绝不生成外发动作。
+        # poller 与 _should_skip_inbound 是前两道防线，这里是发送前最后一道。
+        if _check_self_message(
+            sender_id=message.sender_id, sender_name=message.sender_name,
+            raw=message.raw, self_ids=self_ids, self_names=self_names,
+        ):
+            logger.warning(
+                "[护栏 _send_reply] 入站消息来自自身，拒绝发送并标记已处理"
+                "（sender_id=%s, sender_name=%s, chat_id=%s）",
+                message.sender_id, message.sender_name, message.chat_id,
+            )
+            self._mark_inbound_processed(message)
+            return False, None
+
         # 单聊：需要用 userId 或 openDingTalkId，从数据库缓存取
         conv = self.store._conversation_repo.get_conversation(message.chat_id)
         peer_user_id = (conv or {}).get("peer_user_id", "") or ""
         peer_oid = (conv or {}).get("peer_open_dingtalk_id", "") or ""
 
-        # 【P1护栏】防「自发自」：peer_oid 命中机器人自己的 ID 时拒绝发送。
+        # 【P1护栏】防「自发自」：peer 命中机器人自己的 ID 时拒绝发送。
         # chat.py 的 SendMessageTool 已有此护栏，但 _send_reply 是另一条
         # 独立发送路径（非 agent tool 调用），且 DB 中的 peer_open_dingtalk_id
         # 可能在外部好友注册前被 contact_user_search 误写，缺乏纠错机会。
         # 此护栏作为最后防线：即使 DB 被污染，也绝不发给自己形成回声死循环。
-        self_ids = [x for x in [getattr(self, "current_open_dingtalk_id", ""),
-                                getattr(self, "current_user_id", "")] if x]
-        if peer_oid and self_ids and peer_oid in self_ids:
+        if self_ids and ((peer_oid and peer_oid in self_ids)
+                         or (peer_user_id and peer_user_id in self_ids)):
             logger.warning(
-                "[护栏 _send_reply] 拒绝发往自身：peer_oid=%s 命中机器人自己 ID"
+                "[护栏 _send_reply] 拒绝发往自身：peer_oid=%s / peer_user_id=%s 命中机器人自己 ID"
                 "（conversations.peer_open_dingtalk_id 可能被污染，chat_id=%s，"
                 "sender_id=%s）。跳过本次回复并标记消息为已处理。",
-                peer_oid, message.chat_id, message.sender_id,
+                peer_oid, peer_user_id, message.chat_id, message.sender_id,
             )
             self._mark_inbound_processed(message)
             return False, None
@@ -158,11 +189,13 @@ class ReplyDispatchMixin(EngineMixinBase):
         # 若 peer_oid（来自DB缓存）与 sender_id 不一致，说明 DB 的
         # peer_open_dingtalk_id 被污染（如 contact_user_search 误匹配到
         # 机器人自己）。此时以 sender_id 为准覆盖 peer_oid，并修复 DB。
+        # ⚠️ 旧实现要求 sender_id.startswith("ou_")，那是飞书 open_id 的格式；
+        # 钉钉 openDingTalkId 是 DDn1...，此纠错在钉钉上从未生效过。改为只要求
+        # 「非空且不是自身 ID」，跨平台通用。
         sender_id = message.sender_id or ""
         if (peer_oid and sender_id
-                and sender_id.startswith("ou_")
                 and sender_id != peer_oid
-                and self_ids and sender_id not in self_ids):
+                and sender_id not in self_ids):
             logger.warning(
                 "[纠错 _send_reply] peer_oid=%s 与 sender_id=%s 不一致，"
                 "以 sender_id 为准覆盖（DB中chat_id=%s的peer_open_dingtalk_id可能被污染）",
@@ -208,6 +241,24 @@ class ReplyDispatchMixin(EngineMixinBase):
             filtered=filtered,
             reply_uuid=reply_uuid,
         )
+
+        # === 结构性护栏：单聊优先按入站会话 ID 直通 ===
+        # 按人发送（--open-dingtalk-id）是「发给某个人」，一旦 peer_oid 被污染
+        # 成自己的 ID，回复就会全部落进「我」窗口（2026-11-06 自言自语事故）。
+        # 按入站 openConversationId 发送则物理上只可能回到原会话，不可能串会话。
+        # 若 dws 版本不支持该路径（或会话 ID 形态不符），异常后自动降级到
+        # 下方原有「按人发送」链路，保证回复永不丢失。
+        _cid = message.chat_id or ""
+        if (_cid.startswith(("cid", "oc_"))
+                and getattr(self.dws, "supports_conversation_id_send", False)):
+            try:
+                result = _send(conversation_id=_cid)
+                logger.info("[发送] 单聊按会话 ID 直通: chat_id=%s", _cid[:24])
+                logger.info("[发送] DWS 返回: %s", result)
+                return True, result
+            except _SEND_DEGRADABLE_ERRORS as e:
+                logger.warning("[发送] 按会话 ID 发送失败，降级为按人发送: %s", e)
+
         if is_external and message.chat_id.startswith("oc_"):
             logger.info("[发送] 外部好友（跨租户），使用 chat_id=%s 发送", message.chat_id)
             result = _send(group=message.chat_id)

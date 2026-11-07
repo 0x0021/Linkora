@@ -38,3 +38,6 @@ class DwsAdapter(DwsAdapterBaseMixin, DwsAdapterChatMixin,
     # 钉钉 dws 支持原生引用回复（chat message reply 按 ref-msg-id + ref-sender +
     # conversation-id 定位并展示引用气泡），且 v1.0.63 起支持话题(Thread)内回复。
     supports_native_quote_reply = True
+    # 单聊也可按入站 openConversationId 直通发送（chat_message_send 的
+    # conversation_id kwarg → dws --conversation-id），防止按人发送串会话。
+    supports_conversation_id_send = True

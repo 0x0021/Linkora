@@ -70,6 +70,10 @@ class PrimaryMixin(EngineMixinBase):
         self.current_user_org = ""
         self.current_user_title = ""
         self.current_open_dingtalk_id = ""
+        # 自身姓名别名（昵称），由 _resolve_own_open_dingtalk_id 启动期自动学习；
+        # poller / runtime / 发送护栏共用，避免「正式姓名 ≠ 昵称」导致自我漏判。
+        self._self_sender_aliases: set[str] = set()
+        self.self_sender_names: frozenset[str] = frozenset()
         self._init_config()
         logger.info("[初始化] 步骤 1/8: 加载配置... 完成")
         # 先构造主平台(dingtalk)的 store/dws，使后续 _init_rules/_init_llm/_init_scheduler
@@ -221,6 +225,14 @@ class PrimaryMixin(EngineMixinBase):
         self.current_open_dingtalk_id = (
             user_info.get("openDingTalkId") or self._resolve_own_open_dingtalk_id() or ""
         )
+        # 正式姓名 + 启动期学到的昵称，供 poller / 自我过滤 / 发送护栏统一使用。
+        from src.self_identity import collect_self_names
+        self.self_sender_names = collect_self_names(
+            self.current_user_name, self._self_sender_aliases
+        )
+        if len(self.self_sender_names) > 1:
+            logger.info("[初始化] 已学习到 %d 个自身姓名别名（正式姓名 + 昵称）",
+                        len(self.self_sender_names) - 1)
         _oid = self.current_open_dingtalk_id
         _uid = self.current_user_id
         _dept = self.current_user_dept or ""
@@ -266,6 +278,7 @@ class PrimaryMixin(EngineMixinBase):
             current_user_user_id=self.current_user_id,
             rule_engine=self.rule_engine,
             platform_id="dingtalk",
+            current_user_aliases=self.self_sender_names,
         )
         llm_client_for_clean = None
         if getattr(self.config.rag, "llm_clean_enabled", False) and self.config.llm.api_key:

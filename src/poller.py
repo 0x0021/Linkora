@@ -17,6 +17,7 @@ from src.im_adapter.base_adapter import BaseIMAdapter
 from src.im_adapter.errors import IMAdapterError
 from src.memory.sqlite_store import SQLiteStore
 from src.models import Message
+from src.self_identity import collect_self_ids, collect_self_names
 from src.dws_adapter.event_stream import EventStreamConsumer
 from src.poller_core_ocr import OcrMixin
 from src.poller_core_parse import ParseMixin
@@ -37,13 +38,20 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
                  current_user_name: str,
                  current_user_user_id: str = "",
                  rule_engine=None, platform_id: str = "",
-                 load_processed_ids: bool = True, skip_ocr: bool = False):
+                 load_processed_ids: bool = True, skip_ocr: bool = False,
+                 current_user_aliases=()):
         self.config = config
         self.dws = dws
         self.store = store
         self.current_user_id = current_user_id
         self.current_user_name = current_user_name
         self.current_user_user_id = current_user_user_id
+        # 自身身份统一口径：ID 集合含 openDingTalkId + userId，姓名集合含
+        # 正式姓名 + 昵称（别名由启动期 _resolve_own_open_dingtalk_id 自动学习）。
+        # 判定逻辑收敛到 src/self_identity.py，避免各 mixin 各写一套导致口径漂移。
+        self._self_ids = collect_self_ids(current_user_id, current_user_user_id)
+        self._self_names = collect_self_names(current_user_name, current_user_aliases)
+        self.current_user_aliases = collect_self_names("", current_user_aliases)
         self._rule_engine = rule_engine
         self.platform_id = platform_id
         # 由 platform_id 推导平台类型（platform_id 形如 dingtalk / dingtalk__<account>），

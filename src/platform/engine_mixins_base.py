@@ -74,6 +74,8 @@ class EngineMixinBase(LinkoraComponentBase):
     config_path: Any
     current_open_dingtalk_id: Any
     current_user_dept: Any
+    self_sender_names: Any
+    _self_sender_aliases: Any
     current_user_org: Any
     current_user_title: Any
     db_backup: Any

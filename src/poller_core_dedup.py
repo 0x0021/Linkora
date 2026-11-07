@@ -9,6 +9,7 @@ from src.models import Message
 from src.memory.platform_context import get_current_platform
 from src.poller_mixins_base import PollerMixinBase
 from src.im_adapter.errors import IMAdapterError
+from src.self_identity import is_self_message as _check_self_message, normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -92,55 +93,66 @@ class DedupMixin(PollerMixinBase):
                 logger.warning("mark_message_processed failed for orig_id=%s", orig_id, exc_info=True)
 
     def _is_self_message(self, message: Message) -> bool:
-        """判断是否是自己发的消息（用于过滤，避免自己回自己）。"""
-        # 判断1：sender_id 匹配当前登录用户的 openDingTalkId 或 userId
-        if message.sender_id and (
-            message.sender_id == self.current_user_id
-            or message.sender_id == self.current_user_user_id
-        ):
+        """判断是否是自己发的消息（用于过滤，避免自己回自己）。
+
+        判定口径统一收敛到 ``src/self_identity.py``：ID 集合同时覆盖
+        openDingTalkId / userId，姓名集合同时覆盖正式姓名 / 昵称。
+        2026-11-06 事故的漏判点：消息 sender 是昵称、senderId 是 openDingTalkId，
+        而旧逻辑只比 userId、姓名兜底又要求 sender_id 为空 → 本人消息被当成对方。
+        """
+        sid = str(message.sender_id or "").strip()
+        name = normalize_name(message.sender_name)
+        raw = message.raw if isinstance(message.raw, dict) else {}
+        self_ids = getattr(self, "_self_ids", None) or {
+            x for x in (self.current_user_id, self.current_user_user_id) if x
+        }
+        self_names = getattr(self, "_self_names", None) or {normalize_name(self.current_user_name)}
+
+        if _check_self_message(sender_id=sid, sender_name=name, raw=raw,
+                               self_ids=self_ids, self_names=self_names):
             return True
-        # 判断2：仅当消息没有可用 sender_id 时，才用姓名兜底（避免同名用户碰撞，
-        # 例如组织内有两个「张旭」时，不能仅凭姓名把他人消息误判为自己发的）。
-        if (not message.sender_id) and message.sender_name and self.current_user_name:
-            if message.sender_name.strip() == self.current_user_name.strip():
-                return True
-        # 判断3：AI 助手发的消息（sender_name="AI助手" 或 sender_id="ai"）
-        if message.sender_name == "AI助手" or message.sender_id == "ai":
+
+        # 强证据兜底：姓名命中（含昵称）但 sender_id 还不在已知自身 ID 集合时，
+        # 若该消息实为刚发出的 AI 回复被 list-all 回灌，就把这个 ID 学成自身 ID。
+        # 这样即使启动期 openDingTalkId 解析失败，一次回灌后自我检测即自愈，
+        # 后续真人消息也不会再被误判为对方（防同名误杀：要求姓名命中 + DB 证据）。
+        if (name and name in self_names and sid and sid not in self_ids
+                and callable(getattr(self.store, "conv_conn", None))
+                and self._check_if_bot_message(message)):
+            self._self_ids = frozenset(set(self_ids) | {sid})
+            logger.warning(
+                "[自我检测] 从 AI 回复回灌中学习到自身 sender_id=%s（姓名=%s），"
+                "后续同 ID 消息将按自我消息过滤",
+                sid[:12], name,
+            )
             return True
-        # 兜底：检查 raw 里可能的 ID 字段
-        raw = message.raw or {}
-        raw_sender_id = (
-            raw.get("senderOpenDingTalkId") or
-            raw.get("senderId") or
-            raw.get("openDingTalkId") or
-            ""
+
+        raw_sender_id = next(
+            (str(raw.get(k) or "") for k in
+             ("senderOpenDingTalkId", "senderId", "openDingTalkId") if raw.get(k)),
+            "",
         )
-        if raw_sender_id and (
-            raw_sender_id == self.current_user_id
-            or raw_sender_id == self.current_user_user_id
-        ):
-            return True
         # 所有判断都未命中时的诊断日志（帮助定位「明明是自己发的却漏判」的极端情况）
         logger.debug(
-            "[自我检测] 未识别为自我消息 — sender_id=%s (self=%s) | sender_name=%s (self=%s) | "
+            "[自我检测] 未识别为自我消息 — sender_id=%s (self_ids=%s) | sender_name=%s (self_names=%s) | "
             "raw_sid=%s | msg_type=%s",
-            message.sender_id[:30] if message.sender_id else "(空)",
-            (self.current_user_id or "")[:30],
-            message.sender_name or "(空)",
-            self.current_user_name or "(空)",
+            sid[:30] if sid else "(空)",
+            ",".join(sorted(x[:12] for x in self_ids)) or "(空)",
+            name or "(空)",
+            ",".join(sorted(self_names)) or "(空)",
             raw_sender_id[:30] if raw_sender_id else "(空)",
             message.msg_type,
         )
         return False
 
     def _is_self_sender(self, sender_id: str) -> bool:
-        """判断 sender_id 是否是自己。"""
+        """判断 sender_id 是否是自己（openDingTalkId 或 userId）。"""
         if not sender_id:
             return False
-        return (
-            sender_id == self.current_user_id
-            or sender_id == self.current_user_user_id
-        )
+        self_ids = getattr(self, "_self_ids", None) or {
+            x for x in (self.current_user_id, self.current_user_user_id) if x
+        }
+        return str(sender_id).strip() in self_ids
 
     def _check_if_bot_message(self, msg: Message) -> bool:
         """判断自己发的消息是否是 AI 代发的。

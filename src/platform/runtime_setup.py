@@ -17,6 +17,8 @@ import sqlite3
 from src.paths import get_skills_root
 from src.utils.security import mask_oid
 from src.im_adapter.errors import IMAdapterError
+from src.memory.platform_context import get_current_platform
+from src.self_identity import collect_self_names, learn_self_from_single_chats, normalize_name
 
 # 最小/测试配置可能没有 summary_backfill 段；缺省回退到模型定义的默认值（单一真源）。
 _BF_MAX_AGE_DEFAULT = SummaryBackfillConfig.model_fields["max_summary_age_days"].default
@@ -521,47 +523,133 @@ class SetupMixin(EngineMixinBase):
             else:
                 logger.error("无法获取当前用户: %s", e)
             return {"userId": "", "userName": "个人用户", "orgName": "", "dept": "", "title": ""}
-    def _resolve_own_open_dingtalk_id(self) -> str | None:
-        """通过拉取最近消息，从自己发的消息中提取 openDingTalkId。
+    def _learn_self_identity_from_conversations(self) -> tuple[str, frozenset[str]]:
+        """会话缓存兜底：从「我」会话反推自身 openDingTalkId 与昵称。
 
-        contact_user_get_self 不返回 openDingTalkId，只能从消息记录中反推。
+        与自己对话的 1:1 会话（标题通常是昵称）里，``peer_user_id`` 恰好等于
+        通讯录 userId、``peer_open_dingtalk_id`` 是本人 openDingTalkId，
+        ``chat_name`` 就是昵称。这是纯本地查询，零网络、不弹窗，可在 list-all
+        无结果时补上身份证据。
+        """
+        uid = str(getattr(self, "current_user_id", "") or "").strip()
+        if not uid:
+            return "", frozenset()
+        # 启动期平台上下文可能尚未设置，两种命名空间都试一遍（当前账号库 /
+        # 默认 dingtalk 库），任一命中即可，避免多账号部署漏查。
+        try:
+            current = get_current_platform() or ""
+        except (RuntimeError, AttributeError):
+            current = ""
+        for pid in dict.fromkeys(p for p in (current, "dingtalk") if p):
+            try:
+                conn = self.store.conv_conn(pid)
+                cur = conn.cursor()
+                try:
+                    cur.execute(
+                        "SELECT chat_name, peer_open_dingtalk_id FROM conversations "
+                        "WHERE peer_user_id = ? AND peer_open_dingtalk_id <> '' LIMIT 5",
+                        (uid,),
+                    )
+                    for row in cur.fetchall():
+                        oid = str(row[1] or "").strip()
+                        if oid and oid != uid:
+                            return oid, collect_self_names("", [row[0]])
+                finally:
+                    cur.close()
+            except (sqlite3.Error, AttributeError, RuntimeError) as e:
+                logger.debug("[初始化] 会话缓存兜底解析自身身份失败(%s): %s", pid, e)
+        return "", frozenset()
+
+    def _resolve_own_open_dingtalk_id(self) -> str | None:
+        """通过拉取最近消息，从自己发的消息中提取 openDingTalkId 与姓名别名。
+
+        contact_user_get_self / 本地 profile 都不返回 openDingTalkId，只能从消息
+        记录中反推。2026-11-06 事故：旧实现把 ``senderId`` 与
+        ``senderOpenDingTalkId`` 混合成一个变量去比 userId，且姓名只比正式姓名
+        （消息里是昵称），两条判定必然双双落空 → 自身 ID 长期为空 → 自我检测
+        全线失效。现改为三路证据（按开销从低到高）：
+          0. 本地会话缓存里「我」会话的 peer 信息（零网络，顺带学昵称）；
+          1. 消息里直接带 userId / 正式姓名；
+          2. 单聊覆盖度统计（本人 oid 必横跨几乎所有单聊会话），顺带学昵称。
+
         每次 CLI 调用限时 10s，总超时 60s，超时后返回 None 不阻塞启动。
         """
+        def _remember(aliases) -> None:
+            """累加本次学到的昵称别名（正式姓名由 current_user_name 提供）。"""
+            if not aliases:
+                return
+            known = getattr(self, "_self_sender_aliases", None)
+            if known is None:
+                known = set()
+                self._self_sender_aliases = known
+            known.update(normalize_name(a) for a in aliases if normalize_name(a))
+
         def _do_resolve():
             try:
+                # 0) 本地会话缓存优先：零网络、毫秒级，且能直接学到昵称。
+                #    线上实测纯网络解析要跑满 ~60s 才返回（紧贴总超时边界），
+                #    一旦偶发变慢就会超时降级为「自身 ID 为空」，因此把本地
+                #    证据提到最前面，网络拉取只作为新账号/空库的兜底。
+                db_oid, db_aliases = self._learn_self_identity_from_conversations()
+                if db_oid:
+                    _remember(db_aliases)
+                    logger.info(
+                        "[初始化] 从会话缓存反推到自己的 openDingTalkId: %s（学到 %d 个姓名别名）",
+                        mask_oid(db_oid), len(db_aliases),
+                    )
+                    return db_oid
+
                 import datetime
+                # 3 天 / 8 页足够覆盖统计法所需样本（≥3 个单聊且覆盖比 ≥0.6），
+                # 同时把最坏耗时压到远低于 60s 总超时。
                 data = self.dws.chat_message_list_all(
-                    start=(datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S"),
+                    start=(datetime.datetime.now() - datetime.timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
                     end=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    limit=50,
+                    limit=30,
                     timeout=10,
-                    max_pages=20,
+                    max_pages=8,
                 )
                 # _get_result 会解包一层 result
                 raw = data.get("conversationMessagesList", []) if "conversationMessagesList" in data else data
-                if isinstance(raw, list):
-                    conv_list = raw
-                else:
-                    conv_list = []
+                conv_list = raw if isinstance(raw, list) else []
                 logger.debug("[初始化] 拉取到 %d 个会话用于提取 openDingTalkId", len(conv_list))
-                # 遍历所有单聊会话的所有消息，找自己发的
+
+                # 1) 直接证据：消息里带 userId 或通讯录正式姓名。
+                #    senderId 与 senderOpenDingTalkId 必须**分别**比对，旧实现把
+                #    两者用 or 合并，永远拿 oid 去比 userId，恒不相等。
                 for conv in conv_list:
-                    for msg in conv.get("messages", []):
-                        sender = msg.get("sender", "")
-                        sid = msg.get("senderId") or msg.get("senderOpenDingTalkId") or ""
-                        # 优先用唯一 ID 匹配（避免组织内重名时误取他人 openDingTalkId）：
-                        # 消息的 senderId 即当前登录用户的 userId；openDingTalkId 直接相等。
-                        if sid and (sid == self.current_user_id or sid == self.current_open_dingtalk_id):
-                            oid = msg.get("senderOpenDingTalkId", "")
-                            if oid:
-                                logger.info("[初始化] 从消息中提取到自己的 openDingTalkId: %s", mask_oid(oid))
-                                return oid
-                        # 兜底：仅当无法用 ID 判定时，才用姓名匹配
-                        if sender and sender == self.current_user_name:
-                            oid = msg.get("senderOpenDingTalkId", "")
-                            if oid:
-                                logger.info("[初始化] 从消息中提取到自己的 openDingTalkId(姓名兜底): %s", mask_oid(oid))
-                                return oid
+                    for msg in conv.get("messages", []) or []:
+                        if not isinstance(msg, dict):
+                            continue
+                        sender = normalize_name(msg.get("sender"))
+                        sid_user = str(msg.get("senderId") or "").strip()
+                        oid = str(msg.get("senderOpenDingTalkId") or "").strip()
+                        if not oid:
+                            continue
+                        if (sid_user and sid_user == self.current_user_id
+                                or oid == self.current_user_id
+                                or sender and sender == normalize_name(self.current_user_name)):
+                            logger.info("[初始化] 从消息中提取到自己的 openDingTalkId: %s", mask_oid(oid))
+                            return oid
+
+                # 2) 单聊覆盖度统计：本人 oid 会出现在几乎所有 1:1 会话里。
+                try:
+                    learned_oid, aliases = learn_self_from_single_chats(
+                        conv_list,
+                        known_ids=[self.current_user_id, self.current_open_dingtalk_id],
+                        known_names=[self.current_user_name],
+                    )
+                except (TypeError, ValueError, AttributeError) as e:
+                    logger.debug("[初始化] 单聊覆盖度统计失败: %s", e)
+                    learned_oid, aliases = "", frozenset()
+                if learned_oid:
+                    _remember(aliases)
+                    logger.info(
+                        "[初始化] 单聊覆盖度反推到自己的 openDingTalkId: %s（学到 %d 个姓名别名）",
+                        mask_oid(learned_oid), len(aliases),
+                    )
+                    return learned_oid
+
                 logger.warning("[初始化] 无法从消息中提取 openDingTalkId（遍历了 %d 个会话），自我检测可能不准确", len(conv_list))
                 return ""
             except Exception as e:

@@ -367,7 +367,11 @@ class DiscoveryMixin(PollerMixinBase):
                 # 供回复 SendMessageTool 与 list-direct 补拉使用。外部好友的会话详情
                 # 接口（chat_conversation_info）拿不到对方信息，但消息 sender 里就带
                 # 正确的 openDingTalkId——这是好友单聊可靠收发的关键。
-                if is_single and msg.sender_id and not self._is_self_sender(msg.sender_id):
+                # 护栏：绝不把自身标识写成 peer_oid。2026-11-06 事故里自我消息漏判
+                # 导致 400 个会话的 peer_open_dingtalk_id 被写成本人 openDingTalkId，
+                # 单聊回复按人发送后全部落进「我」窗口。这里用完整自我判定（含
+                # 昵称 / raw ID）而非仅比对 sender_id，写缓存前多一道保险。
+                if is_single and msg.sender_id and not self._is_self_message(msg):
                     self.store._conversation_repo.upsert_conversation(
                         conv_id, title or msg.sender_name, "single",
                         peer_open_dingtalk_id=msg.sender_id,

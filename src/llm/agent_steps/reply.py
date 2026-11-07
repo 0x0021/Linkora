@@ -16,11 +16,42 @@ from src.llm.usage_ledger import purpose_scope
 from src.llm.rag_strict import resolve_strict_mode
 from src.llm.reply import enforce_brevity, gate_reply, strip_internal_artifacts
 from src.llm.reply_helper import ensure_complete_reply
+from src.llm.reaction_resolution import (
+    build_resolution_note,
+    collect_owner_resolved_msg_ids,
+)
+from src.im_adapter.errors import IMAdapterError
 from src.models import Message
 from src.utils.llm_json import extract_json
 from src.utils.request_id import request_id_scope
 
 logger = logging.getLogger(__name__)
+
+
+def _owner_ids_from_adapter(adapter) -> set[str]:
+    """从适配器取主人自身的 user id 集合（openDingTalkId/userId/unionId/staffId 等）。
+
+    用于判定 reaction 是否由主人本人发出。取不到（适配器未实现 / 抛错 / 个人钉钉模式）
+    返回空集合——此时仅依赖 owner_name 匹配，仍能在绝大多数 1:1 / 群聊场景正确识别主人。
+    """
+    getter = getattr(adapter, "contact_user_get_self", None)
+    if not callable(getter):
+        return set()
+    try:
+        info = getter()
+    except (IMAdapterError, OSError, RuntimeError, AttributeError):
+        # 适配器未实现该能力 / CLI 调用失败：降级为空集合，仅依赖姓名匹配。
+        logger.debug("[摘要] 读取当前用户标识失败，表情回应按姓名匹配", exc_info=True)
+        return set()
+    if not isinstance(info, dict):
+        return set()
+    ids: set[str] = set()
+    for key in ("openDingTalkId", "openId", "userId", "unionId", "staffId",
+                "userid", "open_id"):
+        v = info.get(key)
+        if isinstance(v, str) and v.strip():
+            ids.add(v.strip())
+    return ids
 
 
 def make_reply(
@@ -392,6 +423,26 @@ def summarize_conversation(
         conversation_text.append(f"[{time_str}] {role}: {msg.content[:300]}")
     conversation_str = "\n".join(conversation_text)
 
+    # === 表情回复 → 「已办」信号（仅钉钉；非致命，失败静默降级）===
+    # 钉钉的表情回应是消息元数据、不进消息流，主人回 Done/✅ 等时纯 LLM 摘要无法感知，
+    # 导致对方请求长期显示为待处理。此处拉取本批消息的 reaction，挑出被主人用完成类
+    # 表情标记的消息，注入摘要提示词让它标注（已办）。见 src/llm/reaction_resolution。
+    resolution_note = ""
+    platform_id = (getattr(agent, "platform_id", "dingtalk") or "dingtalk").lower()
+    adapter = getattr(agent, "im_adapter", None)
+    if platform_id == "dingtalk" and adapter is not None:
+        msg_ids = [m.msg_id for m in messages if getattr(m, "msg_id", "")]
+        if msg_ids:
+            try:
+                reactions = adapter.chat_message_list_emotion_replies(msg_ids)
+                if reactions:
+                    owner_ids = _owner_ids_from_adapter(adapter)
+                    resolved = collect_owner_resolved_msg_ids(
+                        reactions, owner_ids=owner_ids, owner_name=owner_name)
+                    resolution_note = build_resolution_note(resolved, messages)
+            except (IMAdapterError, OSError, RuntimeError, AttributeError) as e:
+                logger.debug("[摘要] 读取表情回复信号失败（忽略）: %s", e)
+
     summary_prompt = [
         {"role": "system", "content": f"""你是对话摘要助手。请严格站在「我」（对话主人）的第一人称视角，对以下对话进行简洁摘要。
 
@@ -433,6 +484,8 @@ def summarize_conversation(
 只输出摘要内容，不要其他内容。"""},
         {"role": "user", "content": f"请对以下对话进行摘要：\n\n{conversation_str}"},
     ]
+    if resolution_note:
+        summary_prompt[0]["content"] += resolution_note
 
     try:
         with purpose_scope("summary"):

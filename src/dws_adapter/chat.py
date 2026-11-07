@@ -15,8 +15,13 @@
   带 ``--at-me`` 参数（见该方法），可与时间窗/会话范围组合检索，表达力强于
   ``list-mentions``；且 Linkora 的消息发现主链路是未读会话轮询
   （``chat_message_list_unread_conversations``，见 poller_strategy），不靠 @ 检索驱动。
-- ``add-emoji`` / ``add-favorite`` / ``flag-*``（表情回应、收藏）：属互动装饰能力，
-  与「自动回复助手」定位无关，无调用方。
+- ``add-emoji`` / ``add-favorite`` / ``flag-*``（表情回应、收藏）：
+  - ``add-emoji`` / ``remove-emoji``（**写**表情回应）：属互动装饰能力，与「自动回复助手」
+    定位无关，无调用方（不主动给别人贴表情）。
+  - ``list-emotion-replies``（**读**表情回应）：**已接入**。主人用 Done/✅/OK 等表情回应
+    一条「对方请求」时，是「这件事已办」的强信号——摘要链路（src/llm/reaction_resolution）
+    据此把对应请求标注为（已办），否则请求会永久显示为待处理（2026-11-03 一次「导出权限」
+    请求案例：主人回 Done 表情，纯 LLM 摘要无法感知）。仅只读消费，不写不改。
 - ``set-pin-msg`` / ``set-top-msg``（钉住/置顶）：属会话管理动作，需人工判断置顶哪条，
   交由 LLM 自动置顶风险高，无调用方。
 - ``combine-forward``（合并转发）：Linkora 转发纪要走 ``forward`` 语义，未使用合并转发。
@@ -31,6 +36,7 @@ import time
 from datetime import datetime, timedelta
 
 from src.dws_adapter.core import DwsError
+from src.im_adapter.errors import IMAdapterError
 from src.im_adapter.markdown_fix import normalize_markdown_for_platform
 from src.im_adapter.message_format import classify_message_format
 
@@ -272,6 +278,84 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                 len(result.get("messages", []) or []),
             )
         return result.get("messages", []) or []
+
+    def chat_message_list_emotion_replies(self, msg_ids: list[str],
+                                         timeout: int | None = None) -> dict[str, list[dict]]:
+        """批量拉取一批消息的表情回复 / 文字表情回复（只读、幂等、低风险）。
+
+        底层 ``dws chat message list-emotion-replies --msg-ids <csv>``。返回归一化结构：
+        ``{msg_id: [{"emoji": str, "sender_id": str, "sender_name": str}, ...]}``，
+        供摘要链路判定「主人用 Done/✅ 等表情标记了哪条消息」（见 src/llm/reaction_resolution）。
+
+        ⚠️ 容错：任何异常（CLI 失败 / 解析异常 / 字段缺失）一律返回 ``{}`` 并 debug 日志，
+        绝不抛到摘要链路（摘要失败不应被 reaction 读取拖垮）。
+        ⚠️ 只取「表情/文字表情回复」（emotionReplies / textEmotionReplies），不取纯文本回复
+        正文；归一化层对钉钉返回字段名做了多候选兜底（不同版本 key 名不一致）。
+        """
+        if not msg_ids:
+            return {}
+        # 控制单次请求规模：展示摘要可能覆盖整段对话，超出部分取最近 N 条
+        # （最可能与「刚办完」相关的消息）。
+        capped = list(msg_ids)[-100:]
+        ids_csv = ",".join(capped)
+        try:
+            data = self.run([
+                "chat", "message", "list-emotion-replies",
+                "--msg-ids", ids_csv,
+            ], operation="chat_message_list_emotion_replies", force_no_dry_run=True,
+               timeout=timeout or self.timeout)
+        except (IMAdapterError, OSError, RuntimeError) as e:
+            logger.debug("[DWS] 拉取表情回复失败（降级为空）: %s", e)
+            return {}
+        return self._normalize_emotion_replies(self._get_result(data))
+
+    @staticmethod
+    def _normalize_emotion_replies(result: object) -> dict[str, list[dict]]:
+        """把 dws 返回的 reaction 列表归一化为 {msg_id: [{emoji,sender_id,sender_name}]}。
+
+        对条目与 reaction 的字段名做多候选兜底（emotionReplies / reactions /
+        textEmotionReplies 等），缺失字段填空字符串，绝不因字段名差异静默丢数据或抛错。
+        """
+        def _pick(d: dict, keys: tuple[str, ...]) -> str:
+            for k in keys:
+                v = d.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+            return ""
+
+        out: dict[str, list[dict]] = {}
+        if not isinstance(result, list):
+            return out
+        for entry in result:
+            if not isinstance(entry, dict):
+                continue
+            msg_id = _pick(entry, ("msgId", "msg_id", "messageId",
+                                   "message_id", "openMessageId"))
+            if not msg_id:
+                continue
+            raw_reactions: list = []
+            for key in ("emotionReplies", "textEmotionReplies", "reactions",
+                        "reactionList", "items", "textReplies"):
+                val = entry.get(key)
+                if isinstance(val, list):
+                    raw_reactions.extend(val)
+            norm_list: list[dict] = []
+            for r in raw_reactions:
+                if not isinstance(r, dict):
+                    continue
+                norm_list.append({
+                    "emoji": _pick(r, ("emoji", "emojiName", "name", "code",
+                                      "reactionEmoji", "text", "title")),
+                    "sender_id": _pick(r, ("senderId", "sender_id", "openDingTalkId",
+                                          "userId", "user_id", "operatorId",
+                                          "operatorUnionId", "unionId")),
+                    # 注意：sender_name 只取 senderName/sender_name，不取 name
+                    # （name 在 reaction 条目里可能是表情名而非发送者名）。
+                    "sender_name": _pick(r, ("senderName", "sender_name")),
+                })
+            if norm_list:
+                out[msg_id] = norm_list
+        return out
 
     def chat_message_list(self, group: str, time_str: str,
                           limit: int = 50,

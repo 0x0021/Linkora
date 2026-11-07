@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.8.3：分身不再跟自己说话了 · 0x0021</title>
+<meta name="description" content="v0.8.3 小版本：统一自身身份判定、单聊按会话 ID 直通发送，根治回复发回本人窗口的「自言自语」；新增 Done 表情=已办的摘要信号；连续追问第二句不再被已读门控吞掉。零数据迁移、零配置改动。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<div class="post-progress" aria-hidden="true"></div>
+
+<nav>
+  <a href="../index.html" class="nav-brand">0x0021</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-11-07 · 发布记录</div>
+    <h1>Linkora v0.8.3：分身不再跟自己说话了</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.8.3</span>
+      <span class="tag">钉钉</span>
+      <span class="tag">修复</span>
+    </div>
+  </header>
+
+  <article class="post-content">
+    <p>一个以「身份识别」为主的小版本。起因是我自己的 1:1 窗口里连着冒出两条 AI 回复，中间没有任何对方消息；查下来不是模型问题，是本人消息被当成对方、回复又被投递回本人窗口。</p>
+
+    <blockquote>
+      <p><strong>本文要点</strong></p>
+      <ul>
+        <li>统一自身身份判定：ID + 正式姓名 + 昵称 + 原始字段一起比，零配置自动反推 openDingTalkId 与昵称</li>
+        <li>单聊回复按<strong>入站会话 ID 直通</strong>发送，加两道拒发护栏；存量 657 条污染缓存已备份清洗</li>
+        <li>启动期身份解析从约 60 秒（且常失败）降到 <strong>1.8 秒</strong></li>
+        <li>新增：主人用 Done / ✅ 表情标过的请求，摘要标为（已办）</li>
+        <li>新增 <code>mark_read_delay_seconds</code>（默认 120）：修复连续追问第二句被已读门控永久吞掉</li>
+      </ul>
+    </blockquote>
+
+    <h2>问题链路</h2>
+    <p>钉钉消息里的 <code>sender</code> 是昵称，通讯录 <code>userName</code> 是正式姓名，<code>senderId</code> 是 openDingTalkId，三者字面都不同。旧逻辑只比 userId、姓名兜底又要求 sender_id 为空，于是本人单聊消息全部被判成「对方发的」。</p>
+    <p>连带三层：启动时自身 openDingTalkId 解析失败（旧实现把两个 ID 字段 <code>or</code> 合并后拿 oid 比 userId，恒不成立）→ 漏判的 sender_id 写进会话缓存 <code>peer_open_dingtalk_id</code>，657 条会话的对端全指向本人 → 单聊按「人」发 1:1，回复落进本人窗口。对方收不到，回复回灌后还成了 user 消息，污染上下文与长期记忆。</p>
+
+    <h2>修复</h2>
+    <p><strong>一个口径。</strong>新增 <code>src/self_identity.py</code>，poller、运行时、发送护栏共用同一套判定，并防同名误杀。自身 openDingTalkId 与昵称在启动期从本地「我」会话缓存反推，不依赖配置、不硬编码姓名；另留一条「本人 ID 必横跨几乎所有 1:1 会话」的统计法兜底。</p>
+    <p><strong>一条通道。</strong><code>chat_message_send</code> 支持 <code>conversation_id</code>（<code>--conversation-id</code> 稳定 ID 直通），单聊优先按入站会话 ID 发，失败才降级按人发——物理上不可能串会话。飞书 / 企微适配器按能力位保持原路径。</p>
+    <p><strong>三道护栏。</strong>入站来自本人拒发；缓存 peer 命中本人 ID 拒发；peer 与 sender 不一致时以 sender 为准（顺手修掉旧纠错只认 <code>ou_</code> 前缀、对钉钉 <code>DDn1…</code> 从未生效的老 bug）。</p>
+    <p>存量 657 条污染记录备份后清洗，未删任何消息；服务重启后复查 15 个会话库，污染数为 0。</p>
+
+    <h2>另外三处</h2>
+    <p><strong>表情回应 → 已办信号。</strong>钉钉表情回应是消息元数据、不进轮询流，纯文本摘要看不到「这件事已办」。现在摘要链路只读拉取本批消息的 reaction，把主人本人用完成类表情标记的请求标为（已办）；第三人回的不算，赞 / 感谢不算，读取失败静默降级。</p>
+    <p><strong>延迟标记已读。</strong>回复成功发出后延迟 120 秒再标已读，给追问留出未读窗口；同会话二次回复重新计时，发送失败或被门控拦下不标记。设 0 恢复旧行为。</p>
+    <p><strong>两处回归修复。</strong>出站防护残留参数导致所有联网工具抛 <code>PoolKey</code> TypeError 整批崩溃（并补齐此前空转的 DNS 重绑定保护）；管理台「模拟测试」历史回填因先转义后拼 JSON 变成 <code>undefined</code>，改为先序列化再统一转义。</p>
+
+    <h2>升级注意</h2>
+    <p>无数据迁移、无破坏性配置变更，<code>config.yaml</code> 零改动，工具数仍 49，<strong>不需要补工具白名单</strong>。拉代码重启即可。若此前用 <code>requirements.txt</code> 安装依赖，建议按 <code>requirements.lock</code> 重装一次以对齐 urllib3 钉版。</p>
+    <p>可选调整：<code>poller.mark_read_delay_seconds</code>（默认 120，0 = 立即标记）。</p>
+
+    <h2>验证</h2>
+    <p>ruff 全路径通过；pyright 零错误；依赖一致性、宽异常基线 638 / 静默 22、SSRF 出站门禁、gitleaks、前端构建与清单门禁全绿。受影响回归 837 例全过，6 处变异测试全部让新测试变红并按字节还原。CI 四个 job、CodeQL、Pages 全部 success，开放告警 0。</p>
+
+    <h2>延伸阅读</h2>
+    <ul>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">完整变更日志（CHANGELOG）</a>——本次全部变更条目</li>
+      <li><a href="https://github.com/0x0021/Linkora/releases/tag/v0.8.3" target="_blank" rel="noopener">GitHub Release v0.8.3</a></li>
+      <li><a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">项目源码</a>——<a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </article>
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+<script src="../assets/main.js"></script>
+</body>
+</html>

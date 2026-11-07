@@ -34,7 +34,7 @@
 | 内置工具 | **49 个**（Tool Calling，单一真源 `BUILTIN_TOOL_MANIFEST`） |
 | 意图分类 | **41 个**（9 处置 + 7 动作 + 25 领域） |
 | Web 管理台 | **18 个页面（SPA）** / 35 个路由模块 / 182 端点 |
-| 代码规模 | 216 个 `src` Python 模块 / 294 测试文件 / 4465 个测试用例 / 告警中心 Web 页面 |
+| 代码规模 | 228 个 `src` Python 模块 / 310 测试文件 / 4714 个测试用例 / 告警中心 Web 页面 |
 
 ---
 
@@ -253,9 +253,9 @@ platforms:
 ```
 linkora/
 ├── main.py                 # 兼容门面；真实入口在 src/platform/lifecycle.py
-├── scripts/run_linkora.py  # 多进程启动器：web(:8080) + worker
+├── scripts/run_linkora.py  # 启动器：默认单进程 both；--multi-process 才分离 web / worker
 ├── config.yaml(.example)   # 核心配置 / 完整示例
-├── src/                    # ~170 个 Python 模块
+├── src/                    # 228 个 Python 模块
 │   ├── platform/           #   运行时层：启动、生命周期、消息循环
 │   ├── im_adapter/         #   多平台适配层（CLI 执行 + 适配器）
 │   ├── dws_adapter/        #   钉钉 CLI 适配器包（chat/media/oa/wiki…）
@@ -267,7 +267,7 @@ linkora/
 │   └── poller*.py          #   消息轮询器与核心子模块
 ├── web/                    # FastAPI 管理台（api.py / routers/ / static SPA）
 ├── docs/                   # 文档（见下方索引）
-├── tests/                  # 200+ 测试文件
+├── tests/                  # 310 个测试文件
 └── data/ · logs/ · docker/
 ```
 

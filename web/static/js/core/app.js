@@ -249,7 +249,11 @@ function formatTime(timestamp) {
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     if (!toast) return;
-    toast.textContent = message;
+    // 错误提示脱敏收口：后端 4xx detail / CLI stderr / 异常原文经这里统一净化，
+    // 剥离内部路径、堆栈与凭据并限长；正常业务文案不受影响。
+    const text = typeof window.safeErrorText === 'function'
+        ? window.safeErrorText(message) : message;
+    toast.textContent = text;
     toast.className = `toast show ${type}`;
     toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
     setTimeout(() => { toast.className = 'toast'; toast.setAttribute('role', 'status'); }, 3000);
@@ -426,6 +430,7 @@ function switchPage(page) {
         simulate: '模拟测试',
         summaries: '对话摘要',
         'gate-rules': '答复门禁',
+        guard: '安全防护',
     };
     document.getElementById('page-title').textContent = titles[page] || page;
     currentPage = page;
@@ -456,6 +461,7 @@ function switchPage(page) {
     }
     if (page === 'keywords') loadKeywords();
     if (page === 'gate-rules') loadGateRules();
+    if (page === 'guard') loadGuardPage();
     if (page === 'rag') loadRagPage();
     if (page === 'messages') { loadMessages(); loadDepartments(); startMessageRefresh(); window.loadMessagesAnalytics && loadMessagesAnalytics(); }
     else { stopMessageRefresh(); }

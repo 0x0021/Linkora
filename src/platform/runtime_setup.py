@@ -669,10 +669,21 @@ class SetupMixin(EngineMixinBase):
         return result
     def _filter_sensitive_words(self, text: str) -> str | None:
         words = self.config.safety.sensitive_words
-        if not words:
-            return text
-        for w in words:
+        for w in words or []:
             if w and w in text:
                 logger.warning("检测到敏感词: %s", w)
                 return None
+        # 输出内容过滤：剥离可能被模型复述出来的密钥 / 令牌 / 私钥块。
+        # 只做替换不拦截，不改变「是否发出回复」的业务判定。
+        try:
+            guard_cfg = getattr(self.config.safety, "guard", None)
+            if guard_cfg is None or getattr(guard_cfg, "redact_output_secrets", True):
+                from src.guard.output import redact_secrets
+
+                redacted, count = redact_secrets(text)
+                if count:
+                    logger.warning("[提示词防护] 回复正文已脱敏 %d 处凭据", count)
+                return redacted
+        except (ImportError, AttributeError, TypeError, ValueError) as e:
+            logger.warning("[提示词防护] 输出脱敏失败，沿用原文: %s", e)
         return text

@@ -77,6 +77,84 @@
     global.setText = setText;
     global.sanitizeUrl = sanitizeUrl;
 
+    // ============ 统一输入卫生 / 错误提示脱敏（全站两个收口点） ============
+    // guardValidateRequest 由 core/api.js 的 fetch() 在**每个写请求前**调用；
+    // safeErrorText 由 core/app.js 的 showToast() 在**每条提示上屏前**调用。
+    // 二者都不改接口契约：拦截时返回既有 {error, message} 结构，展示时只净化文案。
+    //
+    // 刻意**不做**语义/关键词检测：管理台的系统提示词、知识库正文里出现
+    // 「忽略以上」之类措辞是正常的业务内容，前端只管长度、结构与不可见字符。
+    const MAX_FIELD_CHARS = 200000;
+    const MAX_BODY_CHARS = 2000000;
+    const MAX_JSON_DEPTH = 20;
+    const MAX_ARRAY_ITEMS = 2000;
+    const MAX_KEYS = 500;
+    const MAX_ERROR_CHARS = 160;
+    const _UNSAFE_CONTROL_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u202a-\u202e\u2066-\u2069]/;
+
+    /** 校验请求体；返回中文脱敏拦截文案，或 null（通过）。 */
+    function guardValidateRequest(value) {
+        if (value === null || value === undefined) return null;
+        let serialized;
+        try {
+            serialized = JSON.stringify(value);
+        } catch (_) {
+            return '提交内容无法解析，请检查输入';
+        }
+        if (serialized && serialized.length > MAX_BODY_CHARS) {
+            return '提交内容过大，请精简后重试';
+        }
+        function walk(node, depth) {
+            if (depth > MAX_JSON_DEPTH) return '提交内容层级过深，请检查输入';
+            if (typeof node === 'string') {
+                if (node.length > MAX_FIELD_CHARS) return '输入内容过长，请精简后重试';
+                if (_UNSAFE_CONTROL_RE.test(node)) return '输入包含不可见控制字符，请检查输入';
+                return null;
+            }
+            if (Array.isArray(node)) {
+                if (node.length > MAX_ARRAY_ITEMS) return '提交内容条目过多，请精简后重试';
+                for (let i = 0; i < node.length; i++) {
+                    const r = walk(node[i], depth + 1);
+                    if (r) return r;
+                }
+                return null;
+            }
+            if (node && typeof node === 'object') {
+                const keys = Object.keys(node);
+                if (keys.length > MAX_KEYS) return '提交内容字段过多，请检查输入';
+                for (let i = 0; i < keys.length; i++) {
+                    const r = walk(node[keys[i]], depth + 1);
+                    if (r) return r;
+                }
+            }
+            return null;
+        }
+        return walk(value, 0);
+    }
+
+    /** 错误提示脱敏：剥离内部路径 / 堆栈 / 凭据，并限长，防止后端 detail 原样上屏。 */
+    function safeErrorText(message) {
+        let s = message === null || message === undefined ? '' : String(message);
+        if (!s) return '';
+        // FastAPI 422 结构化校验错误数组整段丢掉，不给用户看字段名与内部类型
+        if (s.indexOf('[{"') === 0) return '输入格式有误，请检查后重试';
+        s = s
+            .replace(/Traceback \(most recent call last\)[\s\S]*/i, '[内部错误详情已隐藏]')
+            .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[已脱敏]')
+            .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, '[已脱敏]')
+            .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*/gi, '[已脱敏]')
+            .replace(/\b(?:sk|ak)-[A-Za-z0-9_-]{16,}/g, '[已脱敏]')
+            .replace(/(?:\/Users\/|\/home\/|\/srv\/|\/opt\/|C:\\)[^\s"',，。]+/gi, '[路径已脱敏]')
+            .replace(/(?:File|at)\s+"?[A-Za-z]?[:\\/][^\s"']+"?/g, '[路径已脱敏]')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (s.length > MAX_ERROR_CHARS) s = s.slice(0, MAX_ERROR_CHARS) + '…';
+        return s || '操作失败，请稍后重试';
+    }
+
+    global.guardValidateRequest = guardValidateRequest;
+    global.safeErrorText = safeErrorText;
+
     // ============ 消息内容纯文本清洗（仪表盘紧凑列表预览） ============
     // 钉钉/飞书落库的原始 content 混着大量机器占位符：mediaId、本地缓存路径、
     // OCR 区块标记、dws 下载提示、卡片/文件标签、app 裸 JSON……消息页用富文本

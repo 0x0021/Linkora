@@ -473,6 +473,8 @@ _SENSITIVE_GET_PATHS = {
     "/api/metrics/by-rid",
     "/api/simulate",
     "/api/kb/feishu-docs",
+    # ── 入站消息防护事件（含消息原文预览 / 发送者身份）──
+    "/api/guard",
 }
 
 
@@ -1486,6 +1488,7 @@ from web.routers.dashboard_live import router as _dashboard_live_router
 from web.routers.models import router as _models_router
 from web.routers.summaries import router as _summaries_router
 from web.routers.alerts import router as _alerts_router
+from web.routers.guard import router as _guard_router
 
 app.include_router(_dead_letters_router)
 app.include_router(_drafts_router)
@@ -1521,4 +1524,5 @@ app.include_router(_dashboard_live_router)
 app.include_router(_models_router)
 app.include_router(_summaries_router)
 app.include_router(_alerts_router)
+app.include_router(_guard_router)
 

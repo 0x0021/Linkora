@@ -94,6 +94,7 @@ const JS_ORDER = [
   'js/pages/intent.js',
   'js/pages/keywords.js',
   'js/pages/gate_rules.js',
+  'js/pages/guard.js',
   'js/pages/messages.js',
   'js/pages/rag.js',
   'js/pages/skills.js',

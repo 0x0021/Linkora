@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.guard.config import GuardConfig  # 运行时 import：Pydantic v2 按模块 globals 求值注解
 from src.paths import get_log_dir
 
 
@@ -22,6 +23,9 @@ class SafetyConfig(BaseModel):
     sensitive_words: list[str] = Field(default_factory=list)
     default_fallback: str = "抱歉，我暂时无法回答这个问题。"
     media_fallback_text: str = "请发文字，我暂时无法处理语音/视频消息，谢谢理解～"
+    # 入站 IM 消息提示词注入防护（结构化检测 + 边界隔离，不做语义启发式）。
+    # 纯新增可选段：旧 config.yaml 不含 guard 时由 default_factory 兜底，行为不变。
+    guard: GuardConfig = Field(default_factory=GuardConfig)
 
 
 

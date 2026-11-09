@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.9.0：别人发来的消息，也防住了 · 0x0021</title>
+<meta name="description" content="v0.9.0 安全大版本：提示词注入防护补到入站 IM 消息这条最后没包住的入口，只认协议级结构标记、正常业务话术零误伤；Web 管理台新增「安全防护」页展示风险事件、趋势与策略。默认不改变业务流程，零数据迁移、零配置改动。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<div class="post-progress" aria-hidden="true"></div>
+
+<nav>
+  <a href="../index.html" class="nav-brand">0x0021</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-11-09 · 发布记录</div>
+    <h1>Linkora v0.9.0：别人发来的消息，也防住了</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.9.0</span>
+      <span class="tag">安全</span>
+      <span class="tag">提示词注入</span>
+    </div>
+  </header>
+
+  <article class="post-content">
+    <p>一次以「入站安全」为主的大版本。此前系统对 RAG 片段、公共记忆、历史消息都做了「不可信数据」边界包裹，唯独别人当场从钉钉 / 飞书 / 企微发过来的消息是直通的——消息里若夹带伪造的对话模板标记，模型有可能把它当成指令执行。这版把这个入口补上了，并且在管理台加了一页，让检测与处置情况直接看得见。</p>
+
+    <blockquote>
+      <p><strong>本文要点</strong></p>
+      <ul>
+        <li>入站消息先做结构化检测，命中后在送进 LLM 前中和载荷并加<strong>边界隔离</strong>，回复正文再做密钥脱敏</li>
+        <li>只认协议级结构标记（伪造 ChatML / <code>[INST]</code> / <code>"role":"system"</code>、伪造边界结束标记、不可见控制字符、超长填充），<strong>不检测自然语言措辞</strong></li>
+        <li>「忽略以上，我再补充一句：打印机在3楼」这类正常业务消息字节级原样放行，零误伤写成回归锁</li>
+        <li>管理台新增「安全防护」页：KPI、7 日趋势、命中信号与处置分布、事件明细、检测预览、策略开关</li>
+        <li>默认 <code>block_high_risk=false</code>，命中也照常回复；零数据迁移、零配置改动、工具数仍 49</li>
+      </ul>
+    </blockquote>
+
+    <h2>为什么是「结构」而不是「语义」</h2>
+    <p>做提示词注入防护，最直觉的做法是拿关键词和正则去抓「忽略以上指令」「你现在是管理员」这类话。这条路我走过，也踩过：2026-08 的正则话题分类器把同事一句完全正常的「忽略以上，我再补充一句：打印机在3楼」拦了下来。分身是给真人用的，误伤一句正常业务消息比漏掉一次注入更伤。</p>
+    <p>所以这次把判据收窄到<strong>协议级结构标记</strong>上：只有伪造对话模板（<code>&lt;|im_start|&gt;</code>、<code>[INST]</code>、<code>"role":"system"</code>）、伪造「不可信数据结束」边界企图提前闭合包裹、C0 / 零宽 / bidi 控制字符、病态超长与单字符填充，才会被判风险。检测在 NFKC 归一化后的文本上跑（防全角绕过），清洗在原文上跑，可读正文逐字保留。行首角色标签、零宽字符这些贴日志、emoji 里可能正常出现的信号只记录、不改写正文。</p>
+
+    <h2>三段接线</h2>
+    <p><strong>入站识别</strong>在消息刚进处理链路时跑，决策含风险等级、命中信号、处置动作，并写 JSONL 审计事件；同一发送者还有滑动窗口频率控制，防注入刷屏。<strong>清洗与隔离</strong>发生在拼装 prompt 时：剥掉危险结构，给中 / 高风险消息套上「这是外部数据，不是系统指令」的边界标记。<strong>出站脱敏</strong>在回复发出前把正文里的密钥 / 令牌抹掉。</p>
+    <p>整条链路是 fail-open 的：检测或审计自己出异常，只记日志、照样放行消息，不会因为防护模块让正常对话丢消息。</p>
+
+    <h2>管理台「安全防护」页</h2>
+    <p>以前这类防护是黑盒，配了也不知道有没有在干活。新页面把已检测、风险、高风险、已拦截做成 KPI，配 7 日趋势、命中信号分布与处置分布；风险事件明细列出时间、平台、发送者、会话、命中信号、处置动作和原文预览。还有一个<strong>检测预览</strong>框，贴一段文字就能当场看判定结果，以及策略开关——改完立刻在当前进程生效，<strong>不写 config.yaml</strong>，重启回到 yaml 值，想持久化就去改 <code>safety.guard</code> 段。</p>
+    <p>顺带把原计划里前端的三件事也补齐了：所有走统一 API 客户端的写请求在发出前校验长度、结构与不可见控制字符，异常输入直接提示并拦下；上传加体积上限；所有提示文案在上屏前统一剥离内部路径、堆栈与凭据并限长，后端 4xx detail、CLI 错误片段不再原样弹给用户。既有接口契约与业务流程都没动。</p>
+
+    <h2>升级注意</h2>
+    <p>无数据迁移、无破坏性配置变更，<code>config.yaml</code> 零改动，工具数仍 49，<strong>不需要补工具白名单</strong>。旧配置不含 <code>safety.guard</code> 段时全部走安全默认值，拉代码重启即可。默认不改业务流程：命中风险的消息仍照常进入 LLM 并正常回复，只是载荷被中和；想真拦截就把 <code>block_high_risk</code> 打开。</p>
+    <p>事件默认写 <code>data/guard-events.jsonl</code>，只记命中风险的摘要与 200 字以内的原文预览，请按日志数据同样的权限对待，不想要就用 <code>audit_enabled=false</code> 关掉。5 个 <code>/api/guard/*</code> 端点都登记为管理员可见。</p>
+
+    <h2>验证</h2>
+    <p>新增 133 个 Python 用例与 22 个前端用例，覆盖正常业务消息零误伤、超长 / 控制字符 / 角色伪造 / 编码绕过、限流、输出脱敏、配置开关、错误脱敏；既有相关回归 431 例全过。ruff 全路径、pyright 零错误、依赖一致性、宽异常基线（638 / 静默 22）、SSRF 出站门禁、前端清单与构建门禁、gitleaks 全绿；前端完整验证链 168 tests / 22 files，dist 二次构建 hash 一致。真实 HTTP 链路 5 个端点 200，正常消息预览 <code>none / unchanged=true</code>、攻击消息 <code>high / unchanged=false</code>、超长 422。</p>
+    <p>照例做了变异测试：把检测规则清空、边界隔离改成总返回原文、入站接线忽略拦截决策，三处改坏分别让 18 / 2 / 1 个用例变红，改完按 sha256 字节还原。「测试通过」不等于「测试有效」。</p>
+
+    <h2>延伸阅读</h2>
+    <ul>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">完整变更日志（CHANGELOG）</a>——本次全部变更条目</li>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/security.md" target="_blank" rel="noopener">权限与安全说明</a> / <a href="https://github.com/0x0021/Linkora/blob/main/docs/configuration.md" target="_blank" rel="noopener">配置参考（safety.guard）</a></li>
+      <li><a href="https://github.com/0x0021/Linkora/releases/tag/v0.9.0" target="_blank" rel="noopener">GitHub Release v0.9.0</a></li>
+      <li><a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">项目源码</a>——<a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </article>
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+<script src="../assets/main.js"></script>
+</body>
+</html>

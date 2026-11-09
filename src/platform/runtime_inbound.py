@@ -414,6 +414,35 @@ class InboundMixin(EngineMixinBase):
         if self._should_skip_inbound(message):
             return
 
+        # === 入站提示词注入防护：防护对象是「别人从 IM 发过来的消息」===
+        # 默认只留痕 + 在 prompt 组装层做清洗/边界隔离，不拦截本条消息；
+        # 仅显式开启 guard.block_high_risk 或触发频率控制时才跳过 LLM 处理，
+        # 因此既有业务流程与回复行为保持原样。
+        # 检测本身 fail-open：防护模块异常时保守放行，绝不拖垮主回复链路。
+        _guard_blocked = False
+        try:
+            from src.guard.service import inspect_inbound  # 惰性导入，规避启动期循环
+
+            _decision = inspect_inbound(
+                message.content or "",
+                platform=_active_platform_ctx.get(),
+                chat_id=message.chat_id or "",
+                chat_name=message.chat_name or "",
+                sender_id=message.sender_id or "",
+                sender_name=message.sender_name or "",
+                msg_id=message.msg_id or "",
+            )
+            _guard_blocked = _decision.blocked
+            if _guard_blocked:
+                logger.warning(
+                    "[提示词防护] 拦截消息 msg_id=%s 风险=%s 处置=%s，跳过 LLM 处理",
+                    (message.msg_id or "")[:20], _decision.risk, _decision.action,
+                )
+        except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
+            logger.warning("[提示词防护] 检测失败，保守放行: %s", e)
+        if _guard_blocked:
+            return
+
         # 标记一次真实消息到达（用于后台 LLM 任务的空闲判断：有消息=活跃，否则空闲降频）
         self._bg_throttle.note_real_message()
 

@@ -315,6 +315,20 @@ class PromptBuilder:
             truncate_fn=agent._truncate_long_message,
         )
 
+        # === 提示词注入防护：只在这里改写「送入 LLM 的 user 消息」===
+        # 入站层（runtime_inbound）已完成检测与事件留痕；此处只对命中结构化风险
+        # 的消息做载荷清洗 + 不可信边界隔离。正常业务消息 isolate_for_prompt
+        # 原样返回（含署名前缀），字节级不变 —— 零误伤、不动 provider 契约。
+        # fail-open：隔离模块异常时沿用原文，绝不中断回复链路。
+        if isinstance(incoming, str):
+            try:
+                from src.guard.isolation import isolate_for_prompt
+                from src.guard.service import get_guard_config
+
+                incoming = isolate_for_prompt(incoming, get_guard_config())
+            except (ImportError, AttributeError, TypeError, ValueError) as e:
+                logger.warning("[提示词防护] prompt 隔离失败，沿用原文: %s", e)
+
         # v2 防泄漏护栏：在 user 消息前插入系统级 guard，利用近因效应强化约束。
         # 模型在生成回复前最后看到的 system 级指令就是这条——比埋在上文任何位置都强。
         final_guard = (

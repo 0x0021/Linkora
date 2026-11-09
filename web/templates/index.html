@@ -168,6 +168,10 @@
                         <span class="nav-icon" data-page-node-id="CCZghAoeuYqFGpIqaER8Zs"><i class="fa-solid fa-scroll" data-page-node-id="89iBjPPhGAKZZ90Zwnjy7f"></i></span>
                         <span class="nav-text" data-page-node-id="1xfL0f8CAmvRAsSpYGiNEM">运行日志</span>
                     </a>
+                    <a href="#" class="nav-item" data-page="guard">
+                        <span class="nav-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                        <span class="nav-text">安全防护</span>
+                    </a>
                 </div>
                 <div class="nav-section" data-page-node-id="TGAzByOOkZtHFnKvAHHnOP">
                     <div class="nav-section-title" data-page-node-id="XrFZA2tUEFC5RX9ZCUO5UE">主人画像</div>
@@ -2304,6 +2308,99 @@
                         </div>
                     </div>
                 </div>
+                <!-- Prompt Guard Page：别人发来的消息 → 注入检测结果 / 处置 / 策略 -->
+                <div class="page" id="page-guard">
+                    <div class="page-header">
+                        <div class="page-header-text">
+                            <div class="page-header-icon" style="background:linear-gradient(135deg,#dc2626,#f97316)"><i class="fa-solid fa-shield-halved"></i></div>
+                            <div>
+                                <h2 class="page-header-title">安全防护</h2>
+                                <p class="page-header-desc">别人发来的消息：提示词注入检测、处置记录与防护策略</p>
+                            </div>
+                        </div>
+                        <div class="page-header-actions">
+                            <select id="guard-days" class="form-control form-control-sm" style="width:auto">
+                                <option value="1">近 1 天</option>
+                                <option value="7" selected>近 7 天</option>
+                                <option value="30">近 30 天</option>
+                                <option value="0">全部</option>
+                            </select>
+                            <span class="badge badge-secondary" id="guard-override-badge" style="font-size:11px">config.yaml 配置</span>
+                            <button class="btn btn-sm btn-outline-secondary" id="guard-refresh"><i class="fa-solid fa-rotate"></i> 刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-body">
+                        <div class="stats-grid" id="guard-kpis"></div>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-top:16px">
+                            <div class="panel">
+                                <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-chart-column"></i> 风险事件趋势</span></div>
+                                <div class="panel-body" id="guard-trend"></div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-bullseye"></i> 命中信号分布</span></div>
+                                <div class="panel-body">
+                                    <div id="guard-signals"></div>
+                                    <div style="border-top:1px solid var(--border-color,#e5e7eb);margin-top:12px;padding-top:10px">
+                                        <div style="font-size:12px;font-weight:600;margin-bottom:6px">处置分布</div>
+                                        <div id="guard-actions"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel" style="margin-top:16px">
+                            <div class="panel-header">
+                                <span class="panel-title"><i class="fa-solid fa-sliders"></i> 防护策略</span>
+                                <span style="font-size:11px;color:var(--text-muted,#888)">只识别协议级结构标记，不做语义检测；正常业务消息零改写</span>
+                            </div>
+                            <div class="panel-body" id="guard-policy"></div>
+                        </div>
+
+                        <div class="panel" style="margin-top:16px">
+                            <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-flask"></i> 检测预览</span></div>
+                            <div class="panel-body">
+                                <textarea id="guard-preview-input" class="form-control" rows="3" placeholder="粘贴一段别人发来的消息，看看会被怎么判定（纯计算，不进 LLM、不落盘）"></textarea>
+                                <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                                    <button class="btn btn-sm btn-primary" id="guard-preview-run"><i class="fa-solid fa-magnifying-glass"></i> 检测</button>
+                                    <button class="btn btn-sm btn-ghost" id="guard-preview-sample">填入正常业务消息</button>
+                                </div>
+                                <div id="guard-preview-result" style="margin-top:12px"></div>
+                            </div>
+                        </div>
+
+                        <div class="panel" style="margin-top:16px">
+                            <div class="panel-header">
+                                <span class="panel-title"><i class="fa-solid fa-list"></i> 风险事件明细</span>
+                                <div class="panel-actions" style="display:flex;gap:6px;flex-wrap:wrap">
+                                    <select id="guard-risk-filter" class="form-control form-control-sm" style="width:auto">
+                                        <option value="">全部风险</option>
+                                        <option value="high">高风险</option>
+                                        <option value="medium">中风险</option>
+                                        <option value="low">低风险</option>
+                                    </select>
+                                    <select id="guard-action-filter" class="form-control form-control-sm" style="width:auto">
+                                        <option value="">全部处置</option>
+                                        <option value="isolated">已清洗并隔离</option>
+                                        <option value="sanitized">已清洗载荷</option>
+                                        <option value="detected">已记录，正文零改写</option>
+                                        <option value="blocked">已拦截</option>
+                                        <option value="rate_limited">频率控制拦截</option>
+                                        <option value="observed">仅记录</option>
+                                    </select>
+                                    <select id="guard-platform-filter" class="form-control form-control-sm" style="width:auto">
+                                        <option value="">全部平台</option>
+                                        <option value="dingtalk">钉钉</option>
+                                        <option value="feishu">飞书</option>
+                                        <option value="wecom">企业微信</option>
+                                    </select>
+                                    <input id="guard-keyword" class="form-control form-control-sm" placeholder="搜索发送者 / 会话 / 内容" style="width:190px">
+                                </div>
+                            </div>
+                            <div class="panel-body" id="guard-events"></div>
+                        </div>
+                    </div>
+                </div>
                 <!-- Draft Review Page -->
                 <div class="page" id="page-drafts" data-page-node-id="cspfU3wStneAP6oNhqlGiB">
                     <div class="page-header" data-page-node-id="vPpRdPJwxGy5NCDU5oEDnN">
@@ -3824,6 +3921,7 @@
     <script src="/static/js/pages/intent.js?v={{ intent_js_v }}"></script>
     <script src="/static/js/pages/keywords.js?v={{ keywords_js_v }}"></script>
     <script src="/static/js/pages/gate_rules.js?v={{ gate_rules_js_v }}"></script>
+    <script src="/static/js/pages/guard.js?v={{ guard_js_v }}"></script>
     <script src="/static/js/pages/messages.js?v={{ messages_js_v }}"></script>
     <script src="/static/js/pages/rag.js?v={{ rag_js_v }}"></script>
     <script src="/static/js/pages/skills.js?v={{ skills_js_v }}"></script>

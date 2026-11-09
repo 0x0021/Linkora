@@ -323,6 +323,15 @@ class ApiClient {
     }
 
     async fetch(url, method = 'GET', body = null, options = {}) {
+        // 提交前统一输入校验：全站写请求的唯一收口点。命中时返回既有的
+        // {error, message} 结构，不发请求、不改任何接口契约与业务流程。
+        if (body !== null && body !== undefined && typeof window.guardValidateRequest === 'function') {
+            const guardMsg = window.guardValidateRequest(body);
+            if (guardMsg) {
+                this._notifyGlobalError(guardMsg);
+                return { error: 'guard_blocked', message: guardMsg };
+            }
+        }
         const { useCache = false, cacheTTL = this._cacheTTL, timeoutMs } = options;
 
         // 透明注入平台参数（含缓存键隔离，避免跨平台缓存串味）
@@ -367,6 +376,18 @@ class ApiClient {
     }
 
     async upload(url, formData) {
+        // 上传体积上限（宽松，正常文档/配置导入不会触发）
+        if (formData && typeof formData.forEach === 'function') {
+            let total = 0;
+            formData.forEach(function (v) {
+                if (v && typeof v.size === 'number') total += v.size;
+            });
+            if (total > 50 * 1024 * 1024) {
+                const msg = '上传文件过大，请压缩后重试';
+                this._notifyGlobalError(msg);
+                return { error: 'guard_blocked', message: msg };
+            }
+        }
         const requestId = Math.random().toString(36).substr(2, 9);
         const controller = new AbortController();
         this._pendingRequests.set(requestId, controller);

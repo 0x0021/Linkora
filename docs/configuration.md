@@ -18,7 +18,8 @@
 | `tools` | `enabled` / `available` / `rate_limit` / `allow_skill_tools` / `expose_all_tools` / `kb_search_enabled` / `tool_routing_mode` / `semantic_routing` / `semantic_tool_threshold` / `block_outbound_to_third_party` | 工具白名单、速率限制与按需暴露（smart/all/keyword）；`kb_search_enabled`（默认 true）控制是否注册 RAG 检索工具 `kb_search`；`block_outbound_to_third_party`（默认 true）硬拦截 AI 主动联系第三方 |
 | `rag` | `chunk_size` / `chunk_overlap` | 知识库分块（默认 500 / 50）；检索走向量 0.6 + 关键词 0.4 混合重排序 |
 | `skills` | `enabled` / `auto_activate` / `semantic_routing` / `combo_enabled` / `combo_gap` / `hot_reload` / `ai_intent_generation_enabled` | 技能引擎：自动激活 / 语义路由 / 组合激活 / 热加载 |
-| `safety` | `default_fallback` / `media_fallback_text` / `sensitive_words` | 兜底与敏感词 |
+| `safety` | `default_fallback` / `media_fallback_text` / `sensitive_words` / `guard` | 兜底、敏感词与入站消息防护 |
+| `safety.guard` | `enabled` / `mode` / `block_high_risk` / `detect_*` / `sanitize_payload` / `wrap_untrusted_inbound` / `rate_limit_*` / `audit_enabled` | 入站消息提示词注入防护（见下文专节） |
 | `dead_letter` | `enabled` | 死信队列：LLM/发消息彻底失败时落库而非静默丢弃，可重放 |
 | `storage` | `type` / `path` / `backup_enabled` / `backup_*` / `decisions_retention_days` / `messages_retention_days` / `doc_sync_interval_hours` | SQLite 路径与自动备份（legacy 兼容段，**运行期以 platforms.dingtalk.storage 为准**） |
 | `logging` | `level` / `file` / `max_size_mb` / `max_backups` | 日志 |
@@ -154,6 +155,45 @@ platforms:
 ## 速率限制
 
 `tools.rate_limit.<tool>.per_hour` 防止工具被滥用（如 `send_message` 防刷屏、`web_search` 防配额耗尽）。
+`safety.guard.rate_limit_*` 另管**入站消息**的同一发送者频率，见下节。
+
+## 入站消息防护（`safety.guard`）
+
+防护对象是**别人从钉钉 / 飞书 / 企微发过来的消息**。系统此前已对 RAG 片段、公共记忆、
+历史消息做「不可信数据」边界包裹，本段补齐最后一个入口：入站先做结构化检测，命中后
+中和载荷、在送进 LLM 前加边界隔离，回复正文再做密钥脱敏。
+
+检测**只认协议级结构标记**：伪造的 ChatML / `[INST]` / `"role":"system"` 模板标记、
+伪造的「不可信数据结束」边界标记、C0 / 零宽 / bidi 控制字符、病态超长与单字符填充。
+**不检测自然语言措辞**——「忽略以上，我再补充一句：打印机在3楼」这类正常业务消息
+字节级原样放行。检测在 NFKC 归一化文本上跑（防全角绕过），清洗在原文上跑（可读正文逐字保留）。
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `enabled` | `true` | 总开关 |
+| `mode` | `enforce` | `enforce` = 清洗 + 隔离；`observe` = 只记录、不改写正文（灰度观察） |
+| `block_high_risk` | `false` | 是否整条拦截高风险消息。**默认 false，命中仍正常进入 LLM 并回复** |
+| `detect_role_spoofing` | `true` | 伪造对话角色 / 模板标记 |
+| `detect_boundary_escape` | `true` | 伪造边界结束标记，企图提前闭合包裹 |
+| `detect_control_chars` | `true` | 不可见控制字符 |
+| `detect_oversize` | `true` | 超长与单字符填充 |
+| `sanitize_payload` | `true` | 剥离危险结构（可读正文保留） |
+| `wrap_untrusted_inbound` | `true` | 对中 / 高风险消息加「不可信数据」边界标记 |
+| `redact_output_secrets` | `true` | 回复正文里的密钥 / 令牌脱敏 |
+| `max_message_chars` | `8000` | 命中消息清洗后的截断上限 |
+| `max_repeat_ratio` / `min_repeat_length` | `0.85` / `200` | 单字符重复占比阈值与判定下限 |
+| `audit_enabled` | `true` | 写 `data/guard-events.jsonl` |
+| `log_all_messages` | `false` | 连无风险消息也记（默认只记命中） |
+| `max_events` | `5000` | 事件文件滚动保留上限 |
+| `content_preview_chars` | `200` | 事件里保留的原文预览长度 |
+| `rate_limit_enabled` | `true` | 同一发送者频率控制（防注入刷屏） |
+| `rate_limit_window_seconds` / `rate_limit_max_messages` | `60` / `60` | 滑动窗口与窗口内上限 |
+| `rate_limit_block` | `true` | 超限时跳过该条消息的 LLM 处理 |
+
+管理台「安全防护」页可查看 KPI、7 日趋势、命中信号与处置分布、事件明细，并提供检测预览和
+策略开关。**页面上改的策略只在当前进程生效、不写入 `config.yaml`**，重启后回到本段的值；
+需要持久化请编辑 `config.yaml`。旧配置不含本段时全部走上述默认值，无需数据迁移。
+5 个 `/api/guard/*` 端点均为管理员可见（详见 [安全说明](./security.md)）。
 
 ## 规则引擎
 

@@ -36,7 +36,7 @@ charset-normalizer==3.5.2
     # via
     #   pdfminer-six
     #   requests
-click==8.5.0
+click==8.5.1
     # via
     #   huggingface-hub
     #   uvicorn
@@ -108,7 +108,7 @@ jinja2==3.1.6
     # via
     #   -r requirements.txt
     #   torch
-jiter==0.18.0
+jiter==0.19.0
     # via openai
 joblib==1.6.0
     # via scikit-learn
@@ -124,7 +124,7 @@ mdurl==0.1.2
     # via markdown-it-py
 mpmath==1.3.0
     # via sympy
-msgpack==1.2.3
+msgpack==1.2.4
     # via -r requirements.txt
 narwhals==2.28.0
     # via scikit-learn
@@ -214,7 +214,7 @@ pillow==13.0.0
     #   pytesseract
     #   python-pptx
     #   rapidocr-onnxruntime
-platformdirs==4.14.0
+platformdirs==4.14.5
     # via -r requirements.txt
 pluggy==1.7.0
     # via
@@ -228,12 +228,12 @@ pyclipper==1.4.0
     # via rapidocr-onnxruntime
 pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
-pydantic==2.14.2
+pydantic==2.14.3
     # via
     #   -r requirements.txt
     #   fastapi
     #   openai
-pydantic-core==2.50.2
+pydantic-core==2.50.4
     # via pydantic
 pygments==2.21.0
     # via
@@ -260,7 +260,7 @@ python-docx==1.2.0
     # via -r requirements.txt
 python-dotenv==1.2.4
     # via -r requirements.txt
-python-multipart==0.0.32
+python-multipart==0.0.33
     # via -r requirements.txt
 python-pptx==1.0.2
     # via -r requirements.txt
@@ -324,11 +324,11 @@ tqdm==4.69.0
     #   openai
     #   sentence-transformers
     #   transformers
-transformers==5.22.1
+transformers==5.22.2
     # via sentence-transformers
 triton==3.9.0 ; python_full_version < '3.16' and sys_platform == 'linux'
     # via torch
-typer==0.27.3
+typer==0.28.0
     # via transformers
 typing-extensions==4.16.0
     # via

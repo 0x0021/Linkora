@@ -1,21 +1,25 @@
-"""入站消息的**结构化**注入风险识别与载荷清洗。
+"""入站消息的结构化注入风险识别与载荷清洗。
 
-设计边界（重要，勿改成语义检测器）
-----------------------------------
-本项目 2026-08 曾用正则话题分类器识别「忽略之前的指令」这类**自然语言措辞**，
-结果误杀了「忽略以上，我再补充一句：打印机在3楼」这类完全正常的业务消息。
-``tests/test_prompt_injection.py::TestZeroFalsePositive`` 已把「零误伤」写成回归锁。
+两层检测，互补且不重叠
+----------------------
+1. **协议级结构标记**（本模块）：LLM 客户端 / 模板渲染器真正会解析的控制序列，
+   正常聊天里不会出现 —— ``<|im_start|>`` / ``[INST]`` / ``### System:`` /
+   ``"role":"system"``、伪造本系统边界标记、不可见控制字符、病态超长与填充。
+2. **越权指令编排**（``src/guard/commands.py``）：用自然语言写出来的完整越狱
+   模板。它**不是**语义/关键词启发式检测：把攻击拆成 5 个独立意图部件，
+   只匹配语义完整的短语，并强制要求至少 3 个不同部件共现才判高风险。
+   孤立措辞（「忽略以上，我再补充一句：打印机在3楼」「请无视之前那版方案」）
+   命中 0 个部件，永远原样放行。
 
-因此本模块**只识别协议级结构标记**，这些是 LLM 客户端 / 模板渲染器真正会解析的
-控制序列，正常聊天里不会出现：
+零误伤是硬约束
+--------------
+2026-08 曾用正则话题分类器识别「忽略之前的指令」这类**自然语言措辞**，
+误杀了「忽略以上，我再补充一句：打印机在3楼」这类完全正常的业务消息。
+``tests/test_prompt_injection.py::TestZeroFalsePositive`` 与
+``tests/test_guard_commands.py`` 把「零误伤」写成回归锁。
 
-- 对话模板标记：``<|im_start|>`` / ``[INST]`` / ``### System:`` / ``"role":"system"``
-- 伪造本系统边界标记：``<<<【不可信数据结束】>>>``（企图提前闭合包裹）
-- 不可见控制字符：C0 / 零宽 / bidi 覆盖 / Unicode tag（用于视觉欺骗与绕过）
-- 病态超长与单字符填充（资源耗尽）
-
-**不检测**：「忽略以上」「你现在是」「请扮演」「无视之前」等任何自然语言措辞。
-这些一律原样放行（``risk="none"``、正文零改动），由既有边界包裹机制交给模型判断。
+因此：单个措辞、单个意图部件都不判风险；``risk="none"`` 时调用方必须
+**原样使用原文**（不改写、不包裹、不 trim）。
 
 检测在 NFKC 归一化文本上做（防全角 / 兼容字符混淆绕过），清洗在**原文**上做，
 保证可读正文逐字保留。
@@ -26,6 +30,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from src.guard.commands import detect_categories
 from src.guard.config import GuardConfig
 
 # ── 协议模板标记：确定性控制序列，不是自然语言关键词 ──────────────────
@@ -88,6 +93,7 @@ class Assessment:
     risk: str  # none / low / medium / high
     findings: tuple[Finding, ...]
     char_count: int
+    categories: tuple[str, ...] = ()  # 越权指令编排命中的意图部件（展示用）
 
     @property
     def signals(self) -> tuple[str, ...]:
@@ -192,7 +198,27 @@ def assess(text: str, cfg: GuardConfig | None = None) -> Assessment:
             if _RISK_ORDER["low"] > _RISK_ORDER[risk]:
                 risk = "low"
 
-    return Assessment(risk=risk, findings=tuple(findings), char_count=len(text))
+    # 越权指令编排：只有多个独立意图部件共现才算攻击。孤立措辞命中 0~2 个部件，
+    # 一律不产生信号、不改正文 —— 这是零误伤的关键闸门。
+    command_categories: tuple[str, ...] = ()
+    if cfg.detect_injection_commands:
+        command_categories = detect_categories(normalized)
+        if len(command_categories) >= max(1, cfg.injection_min_categories):
+            findings.append(
+                Finding(
+                    signal="injection_command",
+                    severity="high",
+                    count=len(command_categories),
+                )
+            )
+            risk = "high"
+
+    return Assessment(
+        risk=risk,
+        findings=tuple(findings),
+        char_count=len(text),
+        categories=command_categories,
+    )
 
 
 def is_invisible_char(ch: str) -> bool:

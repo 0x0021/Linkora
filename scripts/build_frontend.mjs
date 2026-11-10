@@ -65,6 +65,7 @@ const CSS_ORDER = [
   'css/pages/tools.css',
   'css/pages/intent.css',
   'css/pages/summaries.css',
+  'css/pages/guard.css',
   'css/motion.css',
 ];
 

@@ -1,0 +1,857 @@
+/* pages/guard.css — 安全防护页专属版式
+ *
+ * 目标：统一与设计系统（variables.css / panel.css / form.css）对齐的间距、字号、
+ * 层级与暗色主题；消除 6 列 KPI 网格导致的右侧空白、策略开关过密、空态卡片过高、
+ * 筛选控件挤在标题栏等问题。作用域限定 #page-guard，不影响其他页面。
+ */
+
+/* ── 页面节奏 ─────────────────────────────────────────────── */
+#page-guard .page-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding-bottom: var(--space-xl);
+}
+
+#page-guard .page-header-actions {
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.guard-status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-right: var(--space-xs);
+}
+
+.guard-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.guard-status-pill::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--brand-success);
+    flex-shrink: 0;
+}
+
+.guard-status-pill.is-override {
+    color: var(--brand-warning);
+    border-color: var(--brand-warning);
+}
+
+.guard-status-pill.is-override::before {
+    background: var(--brand-warning);
+}
+
+.guard-updated,
+.guard-days-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+/* ── 区块标题 ─────────────────────────────────────────────── */
+.guard-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-sm);
+}
+
+.guard-section-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--text-primary);
+    letter-spacing: 0.01em;
+}
+
+.guard-section-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* ── KPI：覆盖全局 6 列网格，四卡等分 ───────────────────────── */
+#page-guard .guard-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-md);
+    margin-bottom: 0;
+}
+
+.guard-kpi {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    min-height: 88px;
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+}
+
+.guard-kpi::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: var(--guard-accent, var(--brand-primary));
+}
+
+.guard-kpi-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-light);
+    color: var(--guard-accent, var(--brand-primary));
+    font-size: var(--icon-lg);
+    flex-shrink: 0;
+}
+
+.guard-kpi-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.guard-kpi-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.guard-kpi-value {
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.guard-kpi-sub {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── 面板通用：标题层级、内边距 ─────────────────────────────── */
+#page-guard .panel {
+    border-radius: var(--radius-md);
+}
+
+#page-guard .panel-header {
+    min-height: 44px;
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+}
+
+#page-guard .panel-title {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+#page-guard .panel-title i {
+    color: var(--text-tertiary);
+    font-size: var(--icon-sm);
+}
+
+#page-guard .panel-body {
+    padding: var(--space-md);
+    overflow: visible;
+}
+
+.guard-panel-meta,
+.guard-panel-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.guard-analytics-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: var(--space-lg);
+    align-items: stretch;
+}
+
+/* 两张分析卡等高时，趋势区内容垂直居中，避免空态贴顶留下大片空白 */
+#page-guard #guard-trend {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 176px;
+}
+
+/* ── 统一空态 ─────────────────────────────────────────────── */
+.guard-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 124px;
+    padding: var(--space-lg);
+    text-align: center;
+}
+
+.guard-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 2px;
+    border-radius: 50%;
+    background: var(--bg-subtle);
+    color: var(--text-disabled);
+    font-size: var(--icon-lg);
+}
+
+.guard-empty-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.guard-empty-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    line-height: 1.5;
+}
+
+.guard-empty--inline {
+    min-height: 0;
+    padding: var(--space-sm) 0;
+    align-items: flex-start;
+    text-align: left;
+    gap: 2px;
+}
+
+.guard-empty--inline .guard-empty-icon {
+    width: 24px;
+    height: 24px;
+    font-size: var(--icon-sm);
+}
+
+/* ── 趋势柱状图 ───────────────────────────────────────────── */
+.guard-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    min-height: 124px;
+    padding-top: var(--space-xs);
+    overflow-x: auto;
+}
+
+.guard-bar-col {
+    flex: 1;
+    min-width: 28px;
+    text-align: center;
+}
+
+.guard-bar-track {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: 92px;
+}
+
+.guard-bar {
+    position: relative;
+    width: 22px;
+    background: var(--brand-primary);
+    opacity: 0.32;
+    border-radius: 4px 4px 0 0;
+}
+
+.guard-bar-high {
+    position: absolute;
+    inset: auto 0 0 0;
+    background: var(--brand-danger);
+    border-radius: 4px 4px 0 0;
+}
+
+.guard-bar-label {
+    margin-top: 6px;
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.guard-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.guard-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+    border-radius: 2px;
+    background: var(--brand-danger);
+}
+
+.guard-legend-dot.is-total {
+    background: var(--brand-primary);
+    opacity: 0.32;
+}
+
+/* ── 命中信号分布 ─────────────────────────────────────────── */
+.guard-subblock--divided {
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border-light);
+}
+
+.guard-subblock-label {
+    margin-bottom: var(--space-xs);
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--text-secondary);
+}
+
+.guard-signal-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 4px 0;
+    font-size: 0.75rem;
+}
+
+.guard-signal-name {
+    width: 108px;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+
+.guard-signal-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--bg-subtle);
+    overflow: hidden;
+}
+
+.guard-signal-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--brand-secondary);
+}
+
+.guard-signal-value {
+    width: 32px;
+    text-align: right;
+    font-weight: 650;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.guard-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* ── 防护策略 ─────────────────────────────────────────────── */
+.guard-policy-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+}
+
+.guard-field-inline {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.guard-field-inline select {
+    width: auto;
+    min-width: 210px;
+}
+
+#page-guard .page-header-actions #guard-days {
+    width: auto;
+    min-width: 112px;
+}
+
+.guard-policy-tip {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    line-height: 1.5;
+}
+
+.guard-policy-group + .guard-policy-group {
+    margin-top: var(--space-md);
+}
+
+.guard-policy-group-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: var(--space-sm);
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--text-tertiary);
+}
+
+.guard-policy-group-title i {
+    font-size: var(--icon-xs);
+}
+
+.guard-policy-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-sm);
+}
+
+.guard-switch-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.guard-switch-row:hover {
+    border-color: var(--border-color);
+    background: var(--bg-subtle);
+}
+
+.guard-switch-row:focus-within {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 1px;
+}
+
+.guard-switch-row input {
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    flex-shrink: 0;
+    accent-color: var(--brand-primary);
+    cursor: pointer;
+}
+
+.guard-switch-row--master {
+    background: var(--bg-subtle);
+    border-color: var(--border-color);
+}
+
+.guard-switch-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.guard-switch-title {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    line-height: 1.35;
+    color: var(--text-primary);
+}
+
+.guard-switch-hint {
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--text-tertiary);
+}
+
+.guard-policy-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border-light);
+}
+
+.guard-dirty {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--brand-warning);
+}
+
+.guard-dirty.is-visible {
+    display: inline-flex;
+}
+
+.guard-policy-note {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.guard-save.is-dirty {
+    box-shadow: 0 0 0 3px var(--brand-primary-glow);
+}
+
+/* ── 检测预览 ─────────────────────────────────────────────── */
+.guard-field-label {
+    display: block;
+    margin-bottom: var(--space-xs);
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--text-secondary);
+}
+
+#page-guard .guard-preview-input {
+    min-height: 88px;
+    resize: vertical;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+}
+
+.guard-preview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-top: var(--space-sm);
+}
+
+.guard-preview-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.guard-preview-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.guard-shortcut {
+    padding: 2px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+}
+
+.guard-result-card {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--guard-result-accent, var(--brand-success));
+    border-radius: var(--radius-sm);
+    background: var(--bg-subtle);
+}
+
+.guard-result-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.guard-result-conclusion {
+    font-size: 0.875rem;
+    font-weight: 650;
+    color: var(--text-primary);
+}
+
+.guard-result-meta {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.guard-result-section {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-top: var(--space-sm);
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.guard-result-card details {
+    margin-top: var(--space-sm);
+}
+
+.guard-result-card summary {
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--text-secondary);
+}
+
+.guard-result-card pre {
+    max-height: 180px;
+    margin: var(--space-xs) 0 0;
+    padding: var(--space-sm);
+    overflow: auto;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ── 风险徽标（明暗主题均可读） ───────────────────────────── */
+.guard-risk-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 650;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.guard-risk-high {
+    color: var(--brand-danger);
+    background: rgba(220, 38, 38, 0.10);
+    border-color: rgba(220, 38, 38, 0.25);
+}
+
+.guard-risk-medium {
+    color: var(--brand-warning);
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.28);
+}
+
+.guard-risk-low {
+    color: var(--brand-primary);
+    background: rgba(37, 99, 235, 0.10);
+    border-color: rgba(37, 99, 235, 0.25);
+}
+
+.guard-risk-none {
+    color: var(--brand-success);
+    background: rgba(22, 163, 74, 0.10);
+    border-color: rgba(22, 163, 74, 0.25);
+}
+
+[data-theme="dark"] .guard-risk-high {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.18);
+}
+
+[data-theme="dark"] .guard-risk-medium {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.18);
+}
+
+[data-theme="dark"] .guard-risk-low {
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.18);
+}
+
+[data-theme="dark"] .guard-risk-none {
+    color: #86efac;
+    background: rgba(34, 197, 94, 0.18);
+}
+
+/* ── 筛选栏与事件表格 ─────────────────────────────────────── */
+.guard-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-subtle);
+    transition: background 0.15s ease;
+}
+
+.guard-filter-bar.is-active {
+    background: var(--brand-primary-light);
+}
+
+.guard-filter-fields {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.guard-filter-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+#page-guard .guard-filter-bar .form-control {
+    width: auto;
+    height: 30px;
+    font-size: 0.75rem;
+}
+
+#page-guard .guard-filter-bar #guard-keyword {
+    width: 200px;
+}
+
+.guard-table {
+    width: 100%;
+    font-size: 0.8125rem;
+}
+
+.guard-table th {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+    font-size: 0.75rem;
+    font-weight: 650;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+}
+
+.guard-table td {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+    color: var(--text-secondary);
+}
+
+.guard-table tbody tr:hover {
+    background: var(--bg-subtle);
+}
+
+.guard-cell-sub {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+}
+
+.guard-cell-preview {
+    max-width: 320px;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 60px;
+    overflow: auto;
+}
+
+.guard-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-top: var(--space-md);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.guard-inline-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* ── 响应式 ───────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+    .guard-analytics-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .guard-policy-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    #page-guard .guard-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    #page-guard .guard-kpi-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    #page-guard .page-header-actions {
+        justify-content: flex-start;
+    }
+    .guard-panel-hint,
+    .guard-panel-meta,
+    .guard-policy-note {
+        white-space: normal;
+    }
+    .guard-result-meta {
+        margin-left: 0;
+    }
+    #page-guard .guard-filter-bar #guard-keyword {
+        width: 100%;
+    }
+    .guard-status-line {
+        margin-right: 0;
+    }
+}
+
+@keyframes guard-spin {
+    to { transform: rotate(360deg); }
+}
+
+#page-guard .btn.is-loading i {
+    animation: guard-spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .guard-switch-row,
+    .guard-filter-bar {
+        transition: none;
+    }
+    #page-guard .btn.is-loading i {
+        animation: none;
+    }
+}

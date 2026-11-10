@@ -11,11 +11,13 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.guard.commands import CATEGORY_LABELS
 from src.guard.config import GuardConfig
 from src.guard.events import list_events, stats
 from src.guard.inspect import assess
 from src.guard.isolation import isolate_for_prompt
 from src.guard.service import (
+    decide_action,
     get_guard_config,
     get_guard_config_override,
     set_guard_config_override,
@@ -31,6 +33,7 @@ _SIGNAL_LABELS = {
     "control_chars": "不可见控制字符",
     "oversize": "超长消息",
     "repeat_flood": "病态字符填充",
+    "injection_command": "越权指令编排（提示词注入）",
 }
 
 
@@ -116,16 +119,21 @@ def preview_guard(req: GuardPreviewRequest):
     cfg = get_guard_config()
     result = assess(req.text, cfg)
     isolated = isolate_for_prompt(req.text, cfg, result)
+    action, blocked = decide_action(result, cfg)
     return {
         "success": True,
         "risk": result.risk,
         "signals": list(result.signals),
         "signal_labels": [_SIGNAL_LABELS.get(s, s) for s in result.signals],
+        "categories": list(result.categories),
+        "category_labels": [CATEGORY_LABELS.get(c, c) for c in result.categories],
         "char_count": result.char_count,
         "unchanged": isolated == req.text,
         "isolated": isolated,
         "mode": cfg.mode,
         "block_high_risk": cfg.block_high_risk,
+        "would_block": blocked,
+        "action": action,
     }
 
 

@@ -3,9 +3,9 @@
 被 ``src/platform/runtime_inbound.py::_handle_message_with_rid`` 在入站最前端调用；
 Web 管理台经 ``web/routers/guard.py`` 读取 ``src.guard.events`` 展示结果。
 
-**默认不改变业务流程**：``block_high_risk=False``，命中风险的消息只被清洗 +
-隔离，仍然进入 LLM 并正常回复；只有显式开启 ``block_high_risk`` 或
-``rate_limit_block`` 才会跳过处理。
+**不误伤正常消息**；命中结构标记的消息默认只清洗 + 边界隔离，照常进入 LLM。
+只有「多部件共现的越权指令编排」（见 ``src/guard/commands.py``）默认整条拦截，
+``mode=observe`` 时任何情况都不拦截。
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from typing import Any
 
 from src.guard.config import DEFAULT_GUARD_CONFIG, GuardConfig
 from src.guard.events import append_event, note_inspected
-from src.guard.inspect import assess, preview
+from src.guard.inspect import Assessment, assess, preview
 
 logger = logging.getLogger("linkora.guard")
 
@@ -32,6 +32,7 @@ _SIGNAL_LABELS: dict[str, str] = {
     "oversize": "超长消息",
     "repeat_flood": "病态字符填充",
     "rate_limited": "触发频率控制",
+    "injection_command": "越权指令编排（提示词注入）",
 }
 
 _ACTION_LABELS: dict[str, str] = {
@@ -154,6 +155,49 @@ _ALLOW_DECISION = GuardDecision(
 )
 
 
+def would_block_inbound(result: Assessment, cfg: GuardConfig) -> bool:
+    """判定该检测结果是否会被整条拦截（入站链路与 Web 预览共用同一套规则）。
+
+    抽成函数是为了避免「预览显示不拦、实际链路却拦了」这类判定漂移。
+    频率控制是独立的有状态分支，不在此函数内（预览不消耗计数）。
+    """
+    if cfg.mode == "observe" or not cfg.enabled:
+        return False
+    # 确证的多部件越权指令编排 —— 默认拦截，可用 block_injection_commands 关闭。
+    if "injection_command" in result.signals and cfg.block_injection_commands:
+        return True
+    # 结构标记类高风险 —— 默认仍只隔离，由 block_high_risk 显式开启拦截。
+    return result.risk == "high" and cfg.block_high_risk
+
+
+def decide_action(
+    result: Assessment,
+    cfg: GuardConfig,
+    *,
+    over_limit: bool = False,
+) -> tuple[str, bool]:
+    """返回 ``(action, blocked)`` —— 入站链路与 Web 预览共用的**唯一判定真源**。
+
+    抽成纯函数是为了避免「预览显示不拦、实际链路却拦了」这类判定漂移。
+    频率控制的计数是有状态的，由调用方算出 ``over_limit`` 后传入；预览恒传 False。
+    """
+    if not cfg.enabled:
+        return "allow", False
+    if over_limit and cfg.rate_limit_block:
+        return "rate_limited", True
+    if cfg.mode == "observe":
+        return ("observed" if result.risk != "none" else "allow"), False
+    if would_block_inbound(result, cfg):
+        return "blocked", True
+    if result.risk == "none":
+        return "allow", False
+    if result.risk == "low":
+        return "detected", False
+    if cfg.wrap_untrusted_inbound:
+        return "isolated", False
+    return "sanitized", False
+
+
 def inspect_inbound(
     content: str,
     *,
@@ -188,23 +232,7 @@ def inspect_inbound(
         if over_limit and "rate_limited" not in signals:
             signals.append("rate_limited")
 
-    blocked = False
-    if over_limit and cfg.rate_limit_block:
-        action = "rate_limited"
-        blocked = True
-    elif cfg.mode == "observe":
-        action = "observed" if result.risk != "none" else "allow"
-    elif result.risk == "high" and cfg.block_high_risk:
-        action = "blocked"
-        blocked = True
-    elif result.risk == "none":
-        action = "allow"
-    elif result.risk == "low":
-        action = "detected"
-    elif cfg.wrap_untrusted_inbound:
-        action = "isolated"
-    else:
-        action = "sanitized"
+    action, blocked = decide_action(result, cfg, over_limit=over_limit)
 
     decision = GuardDecision(
         risk=result.risk,
@@ -235,6 +263,7 @@ def inspect_inbound(
             "risk": result.risk,
             "signals": decision.signals,
             "signal_labels": decision.signal_labels,
+            "categories": list(result.categories),
             "action": decision.action,
             "action_label": decision.action_label,
             "blocked": decision.blocked,
@@ -270,9 +299,11 @@ def inspect_inbound(
 __all__ = [
     "GuardDecision",
     "SlidingWindowLimiter",
+    "decide_action",
     "get_guard_config",
     "get_guard_config_override",
     "inspect_inbound",
     "reset_rate_limiter",
     "set_guard_config_override",
+    "would_block_inbound",
 ]

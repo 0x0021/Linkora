@@ -6,9 +6,12 @@
 
 设计原则（与项目既有铁律一致）：
 
-- **不阻断正常业务消息**：默认 ``block_high_risk=False``、``mode=enforce`` 时
-  只做「清洗 + 边界隔离」，消息照常进入 LLM，业务流程零变更。
-- **可降级为纯观测**：``mode=observe`` 时只记录事件用于 Web 展示，正文一字不改。
+- **不误伤正常业务消息**：孤立措辞永不判风险；越权指令编排要求多个独立
+  意图部件共现（默认 3 个）。正常消息字节级原样放行。
+- **确证攻击才拦截**：``block_injection_commands=True`` 只对「多部件共现的
+  完整越权指令」整条拦截；结构标记类高风险默认仍只清洗 + 隔离、照常回复。
+- **可降级为纯观测**：``mode=observe`` 时只记录事件用于 Web 展示，正文一字不改，
+  且任何情况下都不拦截。
 - **频率控制默认宽松**：阈值按「单个发送者每分钟」计，正常聊天不会触发。
 """
 from __future__ import annotations
@@ -21,8 +24,8 @@ from pydantic import BaseModel
 class GuardConfig(BaseModel):
     """入站消息提示词注入防护策略。
 
-    所有字段都有安全默认值，``config.yaml`` 未写本段时行为等价于「只记录 +
-    清洗结构化攻击载荷、不拦截整条消息」。
+    所有字段都有安全默认值，``config.yaml`` 未写本段时行为等价于「记录 +
+    清洗结构化攻击载荷 + 拦截确证的多部件越权指令」。
     """
 
     # ── 总开关与模式 ──
@@ -32,11 +35,16 @@ class GuardConfig(BaseModel):
     # 是否整条拦截 high 风险消息（默认 False —— 不改变现有业务流程）
     block_high_risk: bool = False
 
-    # ── 检测项开关（全部是结构性信号，无自然语言语义判断）──
+    # ── 检测项开关（结构标记层）──
     detect_role_spoofing: bool = True
     detect_boundary_escape: bool = True
     detect_control_chars: bool = True
     detect_oversize: bool = True
+
+    # ── 检测项开关（自然语言越权指令编排层）──
+    detect_injection_commands: bool = True
+    injection_min_categories: int = 3  # 至少几个独立意图部件共现才判攻击
+    block_injection_commands: bool = True  # 确证攻击整条拦截（不进 LLM）；mode=observe 时不生效
 
     # ── 处置 ──
     sanitize_payload: bool = True  # 剥离协议标记 / 不可见控制字符

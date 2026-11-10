@@ -599,19 +599,27 @@ safety:
   # ------------------------------------------------------------------
   # 入站消息提示词注入防护（防护对象 = 别人从钉钉/飞书/企微发过来的消息）
   # ------------------------------------------------------------------
-  # 只识别**协议级结构标记**：伪造对话角色/模板标记、伪造「不可信数据」边界、
-  # 不可见控制字符、病态超长填充。绝不检测「忽略以上指令」这类自然语言措辞
-  # —— 那是正常业务消息，语义检测器必然误伤（2026-08 事故）。
-  # 正常消息字节级原样放行；只有命中结构的消息才被清洗 + 边界隔离。
+  # 两层检测：
+  #   ① 协议级结构标记 —— 伪造对话角色/模板标记、伪造「不可信数据」边界、
+  #      不可见控制字符、病态超长填充。
+  #   ② 越权指令编排 —— 用自然语言写出的完整越狱模板。不是语义检测器：
+  #      把攻击拆成 5 类独立意图部件，只匹配语义完整的短语，且必须
+  #      injection_min_categories 个不同部件共现才判高风险。
+  #      「忽略以上，我再补充一句：打印机在3楼」「请无视之前那版方案」命中 0 类，
+  #      字节级原样放行（2026-08 正则话题分类器误杀事故的回归锁）。
+  # 确证的多部件越权指令默认整条拦截（不进 LLM）；其余命中只清洗 + 边界隔离、照常回复。
   # 检测事件 / 统计 / 策略开关在 Web 管理台「安全防护」页展示。
   guard:
     enabled: true                                    # 总开关
-    mode: enforce                                    # enforce=清洗+隔离；observe=只记录不改写（灰度观察用）
-    block_high_risk: false                           # true 才整条拦截高风险消息；默认 false 不改变业务流程
+    mode: enforce                                    # enforce=清洗+隔离/拦截；observe=只记录不改写（灰度观察用）
+    block_high_risk: false                           # true 才整条拦截「结构标记类」高风险消息；默认 false
     detect_role_spoofing: true                       # 伪造 ChatML/[INST]/"role":"system" 等模板标记
     detect_boundary_escape: true                     # 伪造 <<<【不可信数据结束】>>> 企图提前闭合包裹
     detect_control_chars: true                       # C0 / 零宽 / bidi 覆盖 / Unicode tag
     detect_oversize: true                            # 超长与单字符填充
+    detect_injection_commands: true                  # 自然语言越权指令编排（多部件共现）
+    injection_min_categories: 3                     # 至少几类攻击意图共现才判高风险（调低会更敏感、误伤风险上升）
+    block_injection_commands: true                   # 确证越权指令整条拦截，不进入 LLM；observe 模式不拦截
     sanitize_payload: true                           # 剥离危险结构（可读正文逐字保留）
     wrap_untrusted_inbound: true                     # 对中/高风险消息加「不可信数据」边界标记
     redact_output_secrets: true                      # 回复正文里的密钥/令牌脱敏

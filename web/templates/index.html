@@ -56,6 +56,7 @@
     <link rel="stylesheet" href="/static/css/pages/intent.css?v={{ intent_css_v }}" data-page-node-id="x2B86v8FeGwi3cfnkT52Bh">
     <link rel="stylesheet" href="/static/css/pages/summaries.css?v={{ summaries_css_v }}" data-page-node-id="CZ8qQyldNGMdR8AVjkmwBz">
     <link rel="stylesheet" href="/static/css/pages/models.css?v={{ models_css_v }}" data-page-node-id="models-page">
+    <link rel="stylesheet" href="/static/css/pages/guard.css?v={{ guard_css_v }}" data-page-node-id="guard-page">
     <!-- 微交互与动效体系 -->
     <link rel="stylesheet" href="/static/css/motion.css?v={{ motion_v }}" data-page-node-id="2OCuOUvgUqePbzH0B4cJVR">
     {% endif %}
@@ -2315,71 +2316,103 @@
                             <div class="page-header-icon" style="background:linear-gradient(135deg,#dc2626,#f97316)"><i class="fa-solid fa-shield-halved"></i></div>
                             <div>
                                 <h2 class="page-header-title">安全防护</h2>
-                                <p class="page-header-desc">别人发来的消息：提示词注入检测、处置记录与防护策略</p>
+                                <p class="page-header-desc">入站消息 · 提示词注入检测 · 处置记录与防护策略</p>
                             </div>
                         </div>
                         <div class="page-header-actions">
-                            <select id="guard-days" class="form-control form-control-sm" style="width:auto">
+                            <div class="guard-status-line">
+                                <span class="guard-status-pill" id="guard-override-badge">config.yaml 配置</span>
+                                <span class="guard-updated" id="guard-updated" aria-live="polite"></span>
+                            </div>
+                            <label class="guard-days-label" for="guard-days">时间范围</label>
+                            <select id="guard-days" class="form-control form-control-sm">
                                 <option value="1">近 1 天</option>
                                 <option value="7" selected>近 7 天</option>
                                 <option value="30">近 30 天</option>
                                 <option value="0">全部</option>
                             </select>
-                            <span class="badge badge-secondary" id="guard-override-badge" style="font-size:11px">config.yaml 配置</span>
                             <button class="btn btn-sm btn-outline-secondary" id="guard-refresh"><i class="fa-solid fa-rotate"></i> 刷新</button>
                         </div>
                     </div>
                     <div class="page-body">
-                        <div class="stats-grid" id="guard-kpis"></div>
+                        <section class="guard-section">
+                            <div class="guard-section-head">
+                                <h3 class="guard-section-title">态势概览</h3>
+                                <span class="guard-section-hint" id="guard-overview-hint"></span>
+                            </div>
+                            <div class="stats-grid guard-kpi-grid" id="guard-kpis"></div>
+                        </section>
 
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-top:16px">
+                        <div class="guard-analytics-grid">
                             <div class="panel">
-                                <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-chart-column"></i> 风险事件趋势</span></div>
+                                <div class="panel-header">
+                                    <span class="panel-title"><i class="fa-solid fa-chart-column"></i> 风险事件趋势</span>
+                                    <span class="guard-panel-meta" id="guard-trend-meta"></span>
+                                </div>
                                 <div class="panel-body" id="guard-trend"></div>
                             </div>
                             <div class="panel">
                                 <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-bullseye"></i> 命中信号分布</span></div>
                                 <div class="panel-body">
-                                    <div id="guard-signals"></div>
-                                    <div style="border-top:1px solid var(--border-color,#e5e7eb);margin-top:12px;padding-top:10px">
-                                        <div style="font-size:12px;font-weight:600;margin-bottom:6px">处置分布</div>
+                                    <div class="guard-subblock">
+                                        <div class="guard-subblock-label">命中信号</div>
+                                        <div id="guard-signals"></div>
+                                    </div>
+                                    <div class="guard-subblock guard-subblock--divided">
+                                        <div class="guard-subblock-label">处置分布</div>
                                         <div id="guard-actions"></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="panel" style="margin-top:16px">
+                        <div class="panel">
                             <div class="panel-header">
                                 <span class="panel-title"><i class="fa-solid fa-sliders"></i> 防护策略</span>
-                                <span style="font-size:11px;color:var(--text-muted,#888)">只识别协议级结构标记，不做语义检测；正常业务消息零改写</span>
+                                <span class="guard-panel-hint">只识别协议级结构标记，不做语义检测；正常业务消息零改写</span>
                             </div>
                             <div class="panel-body" id="guard-policy"></div>
                         </div>
 
-                        <div class="panel" style="margin-top:16px">
-                            <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-flask"></i> 检测预览</span></div>
+                        <div class="panel">
+                            <div class="panel-header">
+                                <span class="panel-title"><i class="fa-solid fa-flask"></i> 检测预览</span>
+                                <span class="guard-panel-hint">纯计算：不进 LLM、不写事件、不落盘</span>
+                            </div>
                             <div class="panel-body">
-                                <textarea id="guard-preview-input" class="form-control" rows="3" placeholder="粘贴一段别人发来的消息，看看会被怎么判定（纯计算，不进 LLM、不落盘）"></textarea>
-                                <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                                    <button class="btn btn-sm btn-primary" id="guard-preview-run"><i class="fa-solid fa-magnifying-glass"></i> 检测</button>
-                                    <button class="btn btn-sm btn-ghost" id="guard-preview-sample">填入正常业务消息</button>
+                                <label class="guard-field-label" for="guard-preview-input">待检测消息</label>
+                                <textarea id="guard-preview-input" class="form-control guard-preview-input" rows="3" placeholder="粘贴一段别人发来的消息，看看会被怎么判定"></textarea>
+                                <div class="guard-preview-toolbar">
+                                    <div class="guard-preview-actions">
+                                        <button class="btn btn-sm btn-primary" id="guard-preview-run"><i class="fa-solid fa-magnifying-glass"></i> 检测</button>
+                                        <button class="btn btn-sm btn-ghost" id="guard-preview-sample">填入正常业务消息</button>
+                                        <button class="btn btn-sm btn-ghost" id="guard-preview-attack">填入注入样本</button>
+                                        <button class="btn btn-sm btn-ghost" id="guard-preview-clear">清空</button>
+                                    </div>
+                                    <div class="guard-preview-meta">
+                                        <span id="guard-preview-count">0 字</span>
+                                        <span class="guard-shortcut">Ctrl / ⌘ + Enter</span>
+                                    </div>
                                 </div>
-                                <div id="guard-preview-result" style="margin-top:12px"></div>
+                                <div id="guard-preview-result" class="guard-preview-result" role="status" aria-live="polite"></div>
                             </div>
                         </div>
 
-                        <div class="panel" style="margin-top:16px">
+                        <div class="panel">
                             <div class="panel-header">
                                 <span class="panel-title"><i class="fa-solid fa-list"></i> 风险事件明细</span>
-                                <div class="panel-actions" style="display:flex;gap:6px;flex-wrap:wrap">
-                                    <select id="guard-risk-filter" class="form-control form-control-sm" style="width:auto">
+                                <span class="guard-panel-meta" id="guard-events-count"></span>
+                            </div>
+                            <div class="guard-filter-bar" id="guard-filter-bar">
+                                <div class="guard-filter-fields">
+                                    <span class="guard-filter-label">筛选</span>
+                                    <select id="guard-risk-filter" class="form-control form-control-sm" aria-label="按风险等级筛选">
                                         <option value="">全部风险</option>
                                         <option value="high">高风险</option>
                                         <option value="medium">中风险</option>
                                         <option value="low">低风险</option>
                                     </select>
-                                    <select id="guard-action-filter" class="form-control form-control-sm" style="width:auto">
+                                    <select id="guard-action-filter" class="form-control form-control-sm" aria-label="按处置结果筛选">
                                         <option value="">全部处置</option>
                                         <option value="isolated">已清洗并隔离</option>
                                         <option value="sanitized">已清洗载荷</option>
@@ -2388,14 +2421,15 @@
                                         <option value="rate_limited">频率控制拦截</option>
                                         <option value="observed">仅记录</option>
                                     </select>
-                                    <select id="guard-platform-filter" class="form-control form-control-sm" style="width:auto">
+                                    <select id="guard-platform-filter" class="form-control form-control-sm" aria-label="按平台筛选">
                                         <option value="">全部平台</option>
                                         <option value="dingtalk">钉钉</option>
                                         <option value="feishu">飞书</option>
                                         <option value="wecom">企业微信</option>
                                     </select>
-                                    <input id="guard-keyword" class="form-control form-control-sm" placeholder="搜索发送者 / 会话 / 内容" style="width:190px">
+                                    <input id="guard-keyword" class="form-control form-control-sm" aria-label="搜索发送者、会话或内容" placeholder="搜索发送者 / 会话 / 内容">
                                 </div>
+                                <button class="btn btn-sm btn-ghost" id="guard-filter-reset"><i class="fa-solid fa-xmark"></i> 清除筛选</button>
                             </div>
                             <div class="panel-body" id="guard-events"></div>
                         </div>

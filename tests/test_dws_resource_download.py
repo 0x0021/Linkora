@@ -39,7 +39,8 @@ class _FakeDws(DwsAdapter):
         self._calls: list[tuple[list[str], str | None]] = []
         self._produce = produce
 
-    def _run_download(self, args, output_path, *, timeout=None, retries=None, cwd=None):
+    def _run_download(self, args, output_path, *, timeout=None, retries=None,
+                      cwd=None, locate_from_dir=False):
         self._calls.append((list(args), cwd))
         if not self._produce:
             raise IMAdapterError("dws exit 1: download failed")
@@ -67,7 +68,11 @@ def test_uses_shortcut_command():
 
 
 def test_output_is_relative_filename_with_cwd():
-    """--output 传相对文件名，cwd 切到目标目录（满足 Shortcut 的路径沙箱要求）。"""
+    """--output 传相对文件名，cwd 切到目标目录（满足 Shortcut 的路径沙箱要求）。
+
+    dws v1.0.68+ 会按媒体类型补/规范化扩展名，故 --output 传期望文件名即可，
+    产物名差异由 _run_download 的 locate_from_dir 兜底。
+    """
     a = _FakeDws()
     with tempfile.TemporaryDirectory() as d:
         target_dir = os.path.join(d, "nested", "chatdir")
@@ -165,5 +170,69 @@ def test_download_failure_propagates():
             )
         except IMAdapterError:
             pass
+        else:
+            raise AssertionError("应当抛出 IMAdapterError")
+
+
+# ============ 3. 真实 _run_download 行为（v1.0.68 目录语义 + 错误检测） ============
+
+import json  # noqa: E402
+import subprocess  # noqa: E402
+
+
+class _Res:
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def test_download_locates_and_renames_from_dir(monkeypatch):
+    """dws v1.0.68 把文件以自动命名写到 cwd 内：定位后重命名到期望名并补扩展名。"""
+    adapter = DwsAdapter()
+
+    def fake_run(cmd, **kw):
+        cwd = kw.get("cwd")
+        assert cwd, "cwd 必须切到目标目录"
+        # dws 以自动命名（含扩展名）落盘，而非 output_path 期望名
+        with open(os.path.join(cwd, "auto_abc123.mp4"), "wb") as f:
+            f.write(b"\x00\x01" * 1024)
+        return _Res(0, "{}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with tempfile.TemporaryDirectory() as d:
+        # 期望名无扩展名（如消息 fileName=video 的情况）
+        out = os.path.join(d, "video")
+        result = adapter.download_media(
+            media_id="@m", message_id="msg", conversation_id="cid", output_path=out,
+        )
+        assert result == os.path.join(d, "video.mp4"), result
+        assert os.path.isfile(result)
+        # 自动命名的临时文件已被重命名走
+        assert not os.path.exists(os.path.join(d, "auto_abc123.mp4"))
+
+
+def test_download_surfaces_api_error_on_exit0(monkeypatch):
+    """dws 即便 API 失败也返回 0，把错误塞进 stdout JSON：必须上抛真实错误而非『未生成有效文件』。"""
+    adapter = DwsAdapter()
+    err_json = json.dumps({
+        "error": {
+            "message": "invalid openMsgId: msgX",
+            "code": 1,
+            "category": "api",
+            "reason": "invalid_request",
+        }
+    })
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Res(0, err_json))
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            adapter.download_media(
+                media_id="@m", message_id="msg", conversation_id="cid",
+                output_path=os.path.join(d, "x.mp4"),
+            )
+        except IMAdapterError as e:
+            # 真实错误原因必须出现在异常串里，而不是笼统的「未生成有效文件」
+            assert "未生成有效文件" not in str(e)
+            assert "invalid openMsgId" in str(e) or "invalid_request" in str(e)
         else:
             raise AssertionError("应当抛出 IMAdapterError")

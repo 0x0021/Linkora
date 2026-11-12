@@ -265,7 +265,8 @@ class BaseIMAdapter:
     def _run_download(self, args: list[str], output_path: str,
                       *, timeout: int | None = None,
                       retries: int | None = None,
-                      cwd: str | None = None) -> str:
+                      cwd: str | None = None,
+                      locate_from_dir: bool = False) -> str:
         """通用文件下载执行器：拼命令 → subprocess → 校验产物非空。
 
         各平台把「下载命令尾参」作为 ``args`` 传入即可复用重试与文件校验逻辑。
@@ -273,10 +274,17 @@ class BaseIMAdapter:
 
         返回写入的本地文件路径；命令退出非 0 或产物文件不存在 / 为空时抛
         ``IMAdapterError``（或其子类）。
+
+        ``locate_from_dir``：部分 CLI（如 dws v1.0.68+ 的
+        ``chat +messages-resource-download``）把 ``--output`` 当作【目标目录】，
+        文件以自动命名落在该目录内；此时无法预知最终文件名，故下载后在目录里
+        定位「本轮新产生的文件」并把它重命名到 ``output_path``（保留扩展名）。
         """
         timeout = timeout or self.timeout
         retries = retries if retries is not None else self.retries
         cmd = self._build_command(args, force_no_dry_run=True)
+        dl_dir = cwd or os.path.dirname(os.path.abspath(output_path)) or "."
+        before: set[str] | None = self._snapshot_dir(dl_dir) if locate_from_dir else None
         last_error: IMAdapterError | None = None
         for attempt in range(retries + 1):
             try:
@@ -296,6 +304,27 @@ class BaseIMAdapter:
                             f"{self.cli_path} terminated by signal {sig}: {stderr}")
                     error_class = self._classify_error(stderr)
                     raise error_class(f"{self.cli_path} exit {_result.returncode}: {stderr}")
+                # 部分 CLI（dws v1.0.68+）即便 API 失败也返回 0，把错误塞进 stdout
+                # JSON（{"error": {...}} 或 {"success": false, "error": {...}}）。
+                # 不在此拦截会被误判成「未生成有效文件」，掩盖真实原因（失效的
+                # message id / 资源过期 / 鉴权失败等），故先解析 stdout 报真实错误。
+                _stdout = (_result.stdout or "").strip()
+                if _stdout:
+                    _data = self._extract_json(_stdout)
+                    if isinstance(_data, dict):
+                        _err = _data.get("error")
+                        if _err is not None or _data.get("success") is False:
+                            _msg = self._format_cli_error(_err if _err is not None
+                                                          else _data.get("error", {}))
+                            raise self._classify_error(_msg)(
+                                f"{self.cli_path} error: {_msg}")
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    pass  # 旧语义：CLI 直接写到 output_path
+                elif locate_from_dir:
+                    # 新语义：CLI 把文件以自动命名写到 dl_dir，定位后重命名到 output_path
+                    produced = self._locate_new_file(dl_dir, before, output_path)
+                    if produced:
+                        output_path = self._finalize_output(produced, output_path)
                 if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
                     raise self._base_error_class()(
                         f"{self.cli_path} 下载未生成有效文件: {output_path}")
@@ -346,3 +375,78 @@ class BaseIMAdapter:
                     logger.error("%s 下载未知错误: %s", self.cli_path, e)
                 raise
         raise last_error  # type: ignore[possibly-undefined]  # retry 分支均对 last_error 赋值，但 pyright 在所有 path 分析后仍报可能未绑定
+
+    # ------------------------------------------------------------------
+    # 下载辅助：目录定位 / 产物重命名 / CLI 错误串拼装
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _snapshot_dir(d: str) -> set[str]:
+        """记录目录下已有常规文件名集合（供 locate_from_dir 找「新文件」）。"""
+        try:
+            if not os.path.isdir(d):
+                return set()
+            return {n for n in os.listdir(d) if os.path.isfile(os.path.join(d, n))}
+        except OSError:
+            return set()
+
+    @staticmethod
+    def _locate_new_file(d: str, before: set[str] | None,
+                         exclude: str) -> str | None:
+        """在目录 ``d`` 内找出本轮下载新产生的常规文件（before 快照里没有的）。
+
+        命中多个时取 mtime 最新者。返回其绝对路径；找不到返回 ``None``。
+        """
+        if not os.path.isdir(d):
+            return None
+        exclude_name = os.path.basename(exclude)
+        candidates: list[tuple[float, str]] = []
+        try:
+            for name in os.listdir(d):
+                if name == exclude_name:
+                    continue
+                if before is not None and name in before:
+                    continue
+                p = os.path.join(d, name)
+                if not os.path.isfile(p):
+                    continue
+                candidates.append((os.path.getmtime(p), p))
+        except OSError:
+            return None
+        if not candidates:
+            return None
+        candidates.sort()
+        return candidates[-1][1]
+
+    @staticmethod
+    def _finalize_output(produced: str, target: str) -> str:
+        """把定位到的产物 ``produced`` 重命名到期望路径 ``target``。
+
+        若 ``target`` 缺扩展名而产物带扩展名（如 dws 自动命名 ``xxx.mp4``），
+        则补上扩展名，避免下游按扩展名识别媒体类型时失效。返回最终路径。
+        """
+        t_ext = os.path.splitext(target)[1]
+        s_ext = os.path.splitext(produced)[1]
+        if not t_ext and s_ext:
+            target = target + s_ext
+        if os.path.abspath(produced) != os.path.abspath(target):
+            os.replace(produced, target)
+        return target
+
+    @staticmethod
+    def _format_cli_error(err: Any) -> str:
+        """把 CLI 返回的 error 对象拼成可分类诊断串（与 ``run`` 一致）。
+
+        CLI 常在 ``error.message`` 只给笼统的 "business error: success=false"，
+        真正原因藏在 ``technical_detail / reason / server_error_code / category /
+        code`` 里；不把这些喂给 ``_classify_error`` 会令瞬时错误被误判为不可重试。
+        """
+        if isinstance(err, dict):
+            parts = [str(err.get("message", ""))]
+            for key in ("technical_detail", "reason",
+                        "server_error_code", "category", "code"):
+                v = err.get(key)
+                if v:
+                    parts.append(f"{key}={v}")
+            return " | ".join(p for p in parts if p)
+        return str(err)

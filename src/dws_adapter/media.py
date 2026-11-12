@@ -131,9 +131,12 @@ class DwsAdapterMediaMixin(DwsAdapterBase):
         ]
         logger.info("[DWS] 下载媒体(Shortcut): mediaId=%s msg=%s conv=%s -> %s",
                     media_id[:20], message_id[:20], conversation_id[:20], target)
-        # cwd 切到目标目录 → --output 传文件名即「工作目录内相对路径」。
-        # _run_download 负责校验产物存在且非空（含 10MB 上限）。
-        return self._run_download(args, target, cwd=target_dir)
+        # cwd 切到目标目录 → --output 传文件名即「工作目录内相对路径」（满足 Shortcut 路径沙箱）。
+        # ⚠️ dws v1.0.68+ 会按媒体真实类型【规范化/补扩展名】：传入 "video"（无扩展名）时，
+        # 实际落盘为 "video.mp4"；传入 "ocr_xxx.png" 时保持该名。因此产物文件名可能不等于
+        # output_path（尤其缺扩展名时），_run_download 用 locate_from_dir 定位刚落盘的产物、
+        # 重命名到期望名（缺扩展名则补上真实扩展名）。
+        return self._run_download(args, target, cwd=target_dir, locate_from_dir=True)
 
     def chat_conversation_info(self, chat_id: str) -> dict:
         """获取会话详情。chat_id 即 openConversationId。

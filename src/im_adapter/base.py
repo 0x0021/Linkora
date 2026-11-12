@@ -109,6 +109,53 @@ class BaseIMAdapter:
         from src.utils.llm_json import extract_last_json
         return extract_last_json(output)
 
+    @staticmethod
+    def _extract_cli_failure(data: Any) -> str | None:
+        """从 CLI 响应里提取失败原因串；非失败返回 ``None``。
+
+        各平台 CLI 的失败外壳不统一，且同一平台跨版本也会变（如钉钉 dws 在
+        v1.0.68-beta.1 把失败外壳从 ``{"success": false, ...}`` 改成
+        ``{"ok": false, "outcome": "failure", ...}`` 或裸 ``{"error": {...}}``）。
+        若不统一识别，失败会被当成成功原样返回、下游静默取到空结果。
+
+        覆盖三种外壳（飞书/企微的成功响应用 ``errcode``/``code``/``msg``，不含
+        ``ok``/``outcome``/嵌套 ``error``，不会被误判）：
+
+        - 旧 dws / 通用：``{"success": false, "error": {...}}``
+        - 新 dws      ：``{"ok": false, "outcome": "failure", "error": {...}}``
+        - 裸 error    ：``{"error": {...}}``（dws 业务/鉴权错误，exit 0 返回）
+
+        真正原因常只写在 ``error.message`` 里（笼统的 "business error"），细节
+        藏在 ``technical_detail``/``reason``/``server_error_code``/``category``/
+        ``type``/``subtype``/``code``/``exit_code`` 中——不把这些喂给
+        ``_classify_error`` 会让瞬时抖动（TIMEOUT_ERROR 等）被误判为不可重试、
+        一次后端抖动就永久失败（见 2026-09-02 线上 dws exit 1 事故）。
+        """
+        if not isinstance(data, dict):
+            return None
+
+        def _fmt(err: Any) -> str | None:
+            if not isinstance(err, dict):
+                return str(err) if err else None
+            parts = [str(err.get("message", "") or "")]
+            for key in ("technical_detail", "reason", "server_error_code",
+                        "category", "type", "subtype", "code", "exit_code"):
+                v = err.get(key)
+                if v not in (None, ""):
+                    parts.append(f"{key}={v}")
+            msg = " | ".join(p for p in parts if p)
+            return msg or None
+
+        if data.get("success") is False:
+            return _fmt(data.get("error")) or "success=false"
+        if data.get("ok") is False or data.get("outcome") == "failure":
+            return _fmt(data.get("error")) or "ok=false"
+        err = data.get("error")
+        if isinstance(err, dict):
+            # 空 error({}) 或仅含 null 字段 → 不误判成功
+            return _fmt(err)
+        return None
+
     def _classify_error(self, error_msg: str) -> type[IMAdapterError]:
         """把 CLI 错误文本映射为异常类。通用版：一律 ``IMAdapterError``（不可重试）。
 
@@ -189,25 +236,16 @@ class BaseIMAdapter:
                     raise IMAdapterError(
                         f"Failed to parse JSON from {self.cli_path} stdout\n{output[:500]}")
 
-                if isinstance(data, dict) and data.get("success") is False:
-                    err = data.get("error", {})
-                    # 拼装「可分类诊断串」：DWS/iPaaS 常在 error.message 只给笼统的
-                    # "business error: success=false"，真正原因藏在 technical_detail /
-                    # reason / server_error_code / category 里（如 COMM_ERROR、连接被关闭）。
-                    # 不把这些喂给 _classify_error 会导致瞬时连接断开被误判为不可重试、
-                    # 一次后端抖动就永久失败（见 2026-09-02 线上 dws exit 1 事故）。
-                    if isinstance(err, dict):
-                        parts = [str(err.get("message", ""))]
-                        for key in ("technical_detail", "reason",
-                                    "server_error_code", "category"):
-                            v = err.get(key)
-                            if v:
-                                parts.append(f"{key}={v}")
-                        msg = " | ".join(p for p in parts if p)
-                    else:
-                        msg = str(err)
-                    error_class = self._classify_error(msg)
-                    raise error_class(f"{self.cli_path} error: {msg}")
+                # 统一失败检测：覆盖 dws 多版本不一致的错误外壳（2026-11-06 dws 升级到
+                # v1.0.68-beta.1 后，失败外壳从 {"success": false, ...} 变为
+                # {"ok": false, "outcome": "failure", ...} 或裸 {"error": {...}}，
+                # success 字段消失 → 旧逻辑不再判失败，CLI 报错被当成成功原样返回、
+                # 下游静默取到空结果）。飞书/企微成功响应用 errcode/code/msg，不含
+                # ok/outcome/嵌套 error，不会被误判。
+                failure_msg = self._extract_cli_failure(data)
+                if failure_msg is not None:
+                    error_class = self._classify_error(failure_msg)
+                    raise error_class(f"{self.cli_path} error: {failure_msg}")
 
                 return data
 

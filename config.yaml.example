@@ -361,7 +361,7 @@ llm:
     citation_max_items: 2                          # 页脚最多列几条引文
     citation_show_score: false                     # 引文页脚是否显示相关度分数
     citation_hide_generated: true                  # 隐藏「由 AI 生成」标记
-    max_input_tokens: 12000                        # 单次请求最大输入 Token 数
+    max_input_tokens: 15000                        # 单次请求最大输入 Token 数
     rag_fallback_min_similarity: 0.2               # RAG 兜底最小相似度
     rag_fallback_max_results: 2                    # RAG 兜底最大返回条数
     rag_max_retry_rounds: 1                        # RAG 检索最大重试轮次

@@ -446,7 +446,7 @@ class PromptBuilder:
                 messages.append({"role": "user", "content": incoming})
             if total_tokens > max_input_tokens:
                 # 极端兜底：即便砍光用户消息仍超阈值（主 system 本身极长），才降级比例砍 system
-                # 并告警——正常查询远不到 12000 阈值，几乎不会触发。
+                # 并告警——正常查询远不到 15000 阈值，几乎不会触发。
                 logger.warning(
                     "PromptBuilder: 主 system 超出 token 预算(%d>%d)，降级比例截断（罕见）",
                     total_tokens, max_input_tokens,

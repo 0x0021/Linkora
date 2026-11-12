@@ -41,7 +41,7 @@ class LlmAdvancedConfig(BaseModel):
     rag_strict_max_results: int = 3  # 严格模式最多注入几条知识片段
     rag_strict_no_hit_reply: str = "知识库中暂未收录相关内容，我无法凭已有信息作答。"  # 未命中时的固定回复
     # ---------- Prompt 长度控制 ----------
-    max_input_tokens: int = 12000  # 单条请求最大输入 token（含 system + history + user）；超限则从最早历史开始截断
+    max_input_tokens: int = 15000  # 单条请求最大输入 token（含 system + history + user）；超限则从最早历史开始截断
     # ---------- H5/H6 历史分级注入（注入 LLM 的近期完整条数） ----------
     # 原 _apply_history_tiering 硬编码 6；现经配置暴露，未配置时默认 6 保持向后兼容。
     # 调小（如 4）可直接削减注入 LLM 的近期完整消息条数、省 token；

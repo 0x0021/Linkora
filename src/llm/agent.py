@@ -185,7 +185,7 @@ class LLMAgent:
         self._rerank_offline = bool(getattr(adv, "rerank_offline", False) if adv else False)
         self._rerank_top_k = _as_int(getattr(adv, "rerank_top_k", 10) if adv else 10, 10)
         self._rerank_timeout = _as_float(getattr(adv, "rerank_timeout", 2.0) if adv else 2.0, 2.0)
-        self._max_input_tokens = getattr(adv, "max_input_tokens", 12000) if adv else 12000
+        self._max_input_tokens = getattr(adv, "max_input_tokens", 15000) if adv else 15000
         # H5/H6：注入 LLM 的近期完整条数（原硬编码 6；未配置时默认 6 = 向后兼容原行为）。
         self._history_tiering_recent = _as_int(
             getattr(adv, "history_tiering_recent", 6) if adv else 6, 6,

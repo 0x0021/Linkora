@@ -9,7 +9,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "jsdom": "^25.0.1",
-    "prettier": "^3.9.10",
+    "prettier": "^3.10.1",
     "vitest": "^4.1.12"
   },
   "overrides": {

@@ -63,11 +63,21 @@ dependencies = [
     # ---- 系统 / 工具 ----
     "rich==15.0.0",
     "psutil==7.2.2",
-    # ---- 安全钉版（传递依赖 CVE）----
+    # ---- 安全钉版（传递依赖 CVE / DoS）----
     # msgpack 是 cachecontrol 的传递依赖，uv.lock 曾解析到 1.2.1，命中
     # CVE-2026-114613（strict_map_key 校验失败时 C 扩展无界内存泄漏，high）。
     # 上游约束不含下限，故显式钉到首个修复版，锁文件由 CI 流水线重生成。
     "msgpack==1.2.4",
+    # soupsieve 是 beautifulsoup4 的传递依赖（无版本上限），uv.lock 停在 2.9.2，
+    # 命中 Dependabot #48/#49/#50/#51（CSS 选择器 ReDoS/DoS，含 4.0 才全修）。
+    # 显式钉到 4.1.1 清掉 4 条告警，并让 uv.lock 与 requirements.lock 统一版本
+    # （两份锁历史漂移：requirements.lock 已 4.1.1、uv.lock 仍 2.9.2）。
+    # 项目只用 html.parser + 基础 select，不依赖 4.0 改变语义的 <template>/<iframe>
+    # 边界行为，无破坏性影响。
+    "soupsieve==4.1.1",
+    # opentelemetry-api 是 fastapi 的传递依赖，uv.lock 停在 1.45.1，命中
+    # Dependabot #52（traceparent 解析二次时间复杂度 DoS），钉到修复版 1.45.2。
+    "opentelemetry-api==1.45.2",
 ]
 
 [project.optional-dependencies]

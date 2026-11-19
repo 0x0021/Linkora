@@ -9,10 +9,15 @@ python-dotenv==1.2.4
 platformdirs==4.14.7
 
 # ---- LLM / 嵌入模型 ----
-openai==3.55.1
+# openai / sentence-transformers / huggingface_hub 保持 2.x / 5.x / 1.x：
+# 2026-11-19 曾试升 3.55.1 / 6.3.0 / 2.4.0，但 openai 3.x 的 http_client 改用
+# 私有 httpx2.Client（含 _request_api_list 方法），传入项目的 httpx.Client 会在
+# 翻页 API 运行时崩溃；ST 6.x encode() 返回类型改联合（dict/list[Tensor]），
+# 与 embedding.py 的 ndarray 假设冲突。三者均为破坏性大版本，维持已验证版本。
+openai==2.54.0
 numpy==2.5.5
-sentence-transformers==6.3.0
-huggingface_hub==2.4.0
+sentence-transformers==5.7.0
+huggingface_hub==1.33.0
 tokenizers==0.23.3
 
 # ---- Web 服务 ----
@@ -25,9 +30,10 @@ python-multipart==0.0.34
 # ---- 向量检索 / OCR ----
 faiss-cpu==1.16.0
 requests==2.34.2
-# httpx 必须显式钉版：openai 3.x 起改用新包名 httpx2，不再带入 httpx；但本项目
-# src/llm/client.py、web/routers/image.py 及多数 Web 测试仍直接 import httpx。
-# 不显式声明会让 CI 全新 sync 后 13 个测试模块收集失败（ModuleNotFoundError: httpx）。
+# httpx 显式钉版：src/llm/client.py、web/routers/image.py 及多数 Web 测试直接
+# import httpx。曾试升 openai 3.x（改用私有 httpx2，不再带入 httpx）导致 CI 全新
+# sync 后 13 个测试模块收集失败；openai 已回退 2.x，此处显式钉版保证任何情况下
+# httpx 都在，避免传递依赖变化再次让收集失败。
 httpx==0.28.1
 # urllib3 必须显式钉版：requests 只约束 >=1.21.1,<3，不钉会导致部署环境复用已有旧
 # urllib3(<2.0) 时 poolmanager(≥2.0) 与 connectionpool.PoolKey(<2.0) 被解析成不同版本，

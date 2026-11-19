@@ -22,7 +22,6 @@ anyio==4.16.0
     # via
     #   fastapi
     #   httpx
-    #   httpx2
     #   openai
     #   starlette
 beautifulsoup4==4.15.0
@@ -59,6 +58,8 @@ cuda-pathfinder==1.9.0 ; python_full_version < '3.15' and sys_platform == 'linux
     # via cuda-bindings
 cuda-toolkit==13.2.2 ; sys_platform == 'linux'
     # via torch
+distro==1.9.0
+    # via openai
 et-xmlfile==2.0.0
     # via openpyxl
 faiss-cpu==1.16.0
@@ -80,23 +81,17 @@ fsspec==2026.9.0
 h11==0.16.0
     # via
     #   httpcore
-    #   httpcore2
     #   uvicorn
-hf-xet==1.8.0 ; platform_machine == 'AMD64' or platform_machine == 'ARM64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
+hf-xet==1.8.0 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
     # via huggingface-hub
 httpcore==1.0.9
     # via httpx
-httpcore2==2.16.2 ; sys_platform != 'emscripten'
-    # via httpx2
 httpx==0.28.1
-    # via -r requirements.txt
-httpx2==2.16.2
     # via
+    #   -r requirements.txt
     #   huggingface-hub
     #   openai
-httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
-    # via httpx2
-huggingface-hub==2.4.0
+huggingface-hub==1.33.0
     # via
     #   -r requirements.txt
     #   sentence-transformers
@@ -106,7 +101,6 @@ idna==3.20
     # via
     #   anyio
     #   httpx
-    #   httpx2
     #   requests
 iniconfig==2.3.1
     # via pytest
@@ -195,7 +189,7 @@ onnxruntime==1.32.0
     # via
     #   -c (workspace)
     #   rapidocr-onnxruntime
-openai==3.55.1
+openai==2.54.0
     # via -r requirements.txt
 opencv-python==5.1.0.95
     # via
@@ -303,7 +297,7 @@ scipy==1.18.1
     # via
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==6.3.0
+sentence-transformers==5.7.0
     # via -r requirements.txt
 setuptools==84.2.1
     # via torch
@@ -336,6 +330,7 @@ tqdm==4.70.1
     # via
     #   -c (workspace)
     #   huggingface-hub
+    #   openai
     #   rapidocr-onnxruntime
     #   sentence-transformers
     #   transformers
@@ -343,10 +338,6 @@ transformers==5.23.0
     # via sentence-transformers
 triton==3.9.0 ; python_full_version < '3.16' and sys_platform == 'linux'
     # via torch
-truststore==0.10.5 ; sys_platform != 'emscripten'
-    # via
-    #   httpcore2
-    #   httpx2
 typer==0.29.2
     # via transformers
 typing-extensions==4.16.0

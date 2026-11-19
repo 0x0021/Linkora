@@ -26,10 +26,13 @@ dependencies = [
     "python-dotenv==1.2.4",
     "platformdirs==4.14.7",
     # ---- LLM / 嵌入模型 ----
-    "openai==3.55.1",
+    # openai/ST/hf-hub 维持 2.x/5.x/1.x：3.x/6.x/2.x 是破坏性大版本
+    # （openai 3.x 私有 httpx2.Client、ST 6.x encode 返回联合类型），详见
+    # requirements.txt 同段注释 / 2026-11-19 工作日志。
+    "openai==2.54.0",
     "numpy==2.5.5",
-    "sentence-transformers==6.3.0",
-    "huggingface_hub==2.4.0",
+    "sentence-transformers==5.7.0",
+    "huggingface_hub==1.33.0",
     "tokenizers==0.23.3",
     # ---- Web 服务 ----
     "fastapi==0.165.0",
@@ -40,9 +43,8 @@ dependencies = [
     # ---- 向量检索 / OCR ----
     "faiss-cpu==1.16.0",
     "requests==2.34.2",
-    # httpx 必须显式钉版：openai 3.x 改用新包名 httpx2，不再带入 httpx；但本项目
-    # llm/client.py、web/routers/image.py 及多数 Web 测试仍直接 import httpx，
-    # 不声明会让 CI 全新 sync 后测试收集失败（见 requirements.txt 同条注释）。
+    # httpx 显式钉版：llm/client.py、web/routers/image.py 及多数 Web 测试直接
+    # import httpx，显式声明避免传递依赖变化导致 CI 测试收集失败（详见 requirements.txt）。
     "httpx==0.28.1",
     # urllib3 必须显式钉版：requests 只约束 `>=1.21.1,<3`，不钉会导致部署环境
     # 复用已有旧 urllib3（<2.0）时，poolmanager(≥2.0) 与 connectionpool.PoolKey(<2.0)

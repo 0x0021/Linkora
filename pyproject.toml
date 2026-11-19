@@ -24,18 +24,18 @@ dependencies = [
     "PyYAML==6.0.3",
     "pydantic==2.14.3",
     "python-dotenv==1.2.4",
-    "platformdirs==4.14.5",
+    "platformdirs==4.14.7",
     # ---- LLM / 嵌入模型 ----
-    "openai==2.54.0",
-    "numpy==2.5.4",
-    "sentence-transformers==5.7.0",
-    "huggingface_hub==1.33.0",
+    "openai==3.55.1",
+    "numpy==2.5.5",
+    "sentence-transformers==6.3.0",
+    "huggingface_hub==2.4.0",
     "tokenizers==0.23.3",
     # ---- Web 服务 ----
-    "fastapi==0.162.5",
+    "fastapi==0.165.0",
     "uvicorn==0.54.0",
     "jinja2==3.1.6",
-    "python-multipart==0.0.33",
+    "python-multipart==0.0.34",
     "pyjwt==2.15.1",
     # ---- 向量检索 / OCR ----
     "faiss-cpu==1.16.0",
@@ -46,11 +46,12 @@ dependencies = [
     # 'key_pool_classes_by_scheme'`，使所有走 SSRF 钉 IP 的工具崩溃（见 issue #46）。
     "urllib3==2.8.0",
     "jieba==0.42.1",
-    "regex==2026.11.9",
-    "rapidocr-onnxruntime==1.2.3",
-    # OpenCV 5.x / 4.12+ 的 KleidiCV resize 在 ARM64 macOS 多线程下 native SIGSEGV，
-    # 钉回无 KleidiCV 的 4.11.x（详见 requirements.txt 同条注释 / 2026-11-19 崩溃报告）。
-    "opencv-python==4.11.0.86",
+    "regex==2026.11.19",
+    "rapidocr-onnxruntime==1.4.4",
+    # OpenCV 钉 5.1.0.95：5.0/4.14 的 KleidiCV resize 在 ARM64 macOS 缩放比例略小
+    # 于 1.0 时 SIGSEGV（opencv#29794）；PR #30486 已修，5.1 经真实图压测全过。
+    # 详见 requirements.txt 同条注释 / 2026-11-19 崩溃报告。
+    "opencv-python==5.1.0.95",
     # ---- 文档解析 ----
     "beautifulsoup4==4.15.0",
     "pdfplumber==0.11.10",
@@ -77,7 +78,7 @@ dependencies = [
     # （两份锁历史漂移：requirements.lock 已 4.1.1、uv.lock 仍 2.9.2）。
     # 项目只用 html.parser + 基础 select，不依赖 4.0 改变语义的 <template>/<iframe>
     # 边界行为，无破坏性影响。
-    "soupsieve==4.1.1",
+    "soupsieve==4.1.2",
     # opentelemetry-api 是 fastapi 的传递依赖，uv.lock 停在 1.45.1，命中
     # Dependabot #52（traceparent 解析二次时间复杂度 DoS），钉到修复版 1.45.2。
     "opentelemetry-api==1.45.2",
@@ -101,12 +102,15 @@ dev = [
 # （如 onnxruntime 1.27→1.28 会影响 OCR 链路）。为保证 uv.lock 与 requirements.lock
 # 解析出同一套版本、且与已验证环境一致，这里显式约束。
 # 升级方式：单独放开某一条 → 跑全量测试 → 通过后再更新此处版本号。
+# 2026-11-19 全量升级：以上传递依赖同步到最新已验证版本。onnxruntime 曾因
+# 1.27→1.28 影响 OCR 链路而钉版，本次升到 1.32.0 后已跑 OCR 测试 + 真实图端到端
+# 识别验证（见 2026-11-19 工作日志），确认无回归。
 constraint-dependencies = [
-    "annotated-doc==0.0.4",
-    "filelock==4.2.1",
-    "fsspec==2026.6.0",
-    "onnxruntime==1.27.0",
-    "tqdm==4.69.0",
+    "annotated-doc==0.0.7",
+    "filelock==4.2.12",
+    "fsspec==2026.9.0",
+    "onnxruntime==1.32.0",
+    "tqdm==4.70.1",
 ]
 
 [tool.ruff]

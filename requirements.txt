@@ -6,21 +6,21 @@
 PyYAML==6.0.3
 pydantic==2.14.3
 python-dotenv==1.2.4
-platformdirs==4.14.5
+platformdirs==4.14.7
 
 # ---- LLM / 嵌入模型 ----
-openai==2.54.0
-numpy==2.5.4
-sentence-transformers==5.7.0
-huggingface_hub==1.33.0
+openai==3.55.1
+numpy==2.5.5
+sentence-transformers==6.3.0
+huggingface_hub==2.4.0
 tokenizers==0.23.3
 
 # ---- Web 服务 ----
-fastapi==0.162.5
+fastapi==0.165.0
 uvicorn==0.54.0
 pyjwt==2.15.1
 jinja2==3.1.6
-python-multipart==0.0.33
+python-multipart==0.0.34
 
 # ---- 向量检索 / OCR ----
 faiss-cpu==1.16.0
@@ -31,15 +31,16 @@ requests==2.34.2
 # 使所有走 SSRF 钉 IP 的工具崩溃（见 issue #46）。
 urllib3==2.8.0
 jieba==0.42.1
-regex==2026.11.9
-rapidocr-onnxruntime==1.2.3
+regex==2026.11.19
+rapidocr-onnxruntime==1.4.4
 # opencv-python：RapidOCR 的传递依赖，图片缩放（cv2.resize）底层实现。
-# 必须钉在 4.11.x：4.12+ / 5.x 在 ARM64 macOS 上默认启用 KleidiCV 后端，
-# 其 resize 经 GCD 多线程并行时越界访问触发 native SIGSEGV（2026-11-19 生产崩溃，
-# 崩溃栈 kleidicv_resize_generic_stripe_u8 → hal::parallel → cv::resize）。
-# cv2.setNumThreads(1) 无法规避（KleidiCV 走自有 GCD 线程池），只能版本钉回。
-# 4.11.0.86 无 KleidiCV，压力测试 6 轮 × 8 线程 resize 全通过。
-opencv-python==4.11.0.86
+# 钉在 5.1.0.95：5.0.0.93 / 4.14.x 的 KleidiCV resize 在 ARM64 macOS 上，
+# 当 CV_8UC3 + INTER_LINEAR 且缩放比例略小于 1.0 时会 native SIGSEGV
+# （opencv#29794，2026-11-19 生产崩溃）。官方 PR #30486 把 KleidiCV pin 升到
+# 26.06 已修复，5.1.0.95 经 159 张真实生产图精确复现测试全通过。
+# 雷区：≤4.11.x 无 KleidiCV 但也可用；4.12~5.0 为崩溃区，永不钉。
+# 升级前必须重跑「略小于 1.0 缩放」压测，不能只看普通 resize。
+opencv-python==5.1.0.95
 
 # ---- 文档解析 ----
 # beautifulsoup4：HTML 正文抽取。URL 入库（web/routers/kb.py）、文档解析器
@@ -72,7 +73,7 @@ msgpack==1.2.4
 # （两份锁历史漂移：requirements.lock 已 4.1.1、uv.lock 仍 2.9.2）。
 # 项目只用 html.parser + 基础 select，不依赖 4.0 改变语义的 <template>/<iframe>
 # 边界行为，无破坏性影响。
-soupsieve==4.1.1
+soupsieve==4.1.2
 # opentelemetry-api 是 fastapi 的传递依赖，uv.lock 停在 1.45.1，命中
 # Dependabot #52（traceparent 解析二次时间复杂度 DoS），钉到修复版 1.45.2。
 opentelemetry-api==1.45.2

@@ -21,13 +21,17 @@ annotated-types==0.8.0
 anyio==4.16.0
     # via
     #   fastapi
+    #   httpx
     #   httpx2
     #   openai
     #   starlette
 beautifulsoup4==4.15.0
     # via -r requirements.txt
 certifi==2026.10.23
-    # via requests
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via cryptography
 charset-normalizer==3.5.2
@@ -75,12 +79,17 @@ fsspec==2026.9.0
     #   torch
 h11==0.16.0
     # via
+    #   httpcore
     #   httpcore2
     #   uvicorn
 hf-xet==1.8.0 ; platform_machine == 'AMD64' or platform_machine == 'ARM64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'
     # via huggingface-hub
+httpcore==1.0.9
+    # via httpx
 httpcore2==2.16.2 ; sys_platform != 'emscripten'
     # via httpx2
+httpx==0.28.1
+    # via -r requirements.txt
 httpx2==2.16.2
     # via
     #   huggingface-hub
@@ -96,6 +105,7 @@ huggingface-hub==2.4.0
 idna==3.20
     # via
     #   anyio
+    #   httpx
     #   httpx2
     #   requests
 iniconfig==2.3.1

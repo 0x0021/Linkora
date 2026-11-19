@@ -48,6 +48,9 @@ dependencies = [
     "jieba==0.42.1",
     "regex==2026.11.9",
     "rapidocr-onnxruntime==1.2.3",
+    # OpenCV 5.x / 4.12+ 的 KleidiCV resize 在 ARM64 macOS 多线程下 native SIGSEGV，
+    # 钉回无 KleidiCV 的 4.11.x（详见 requirements.txt 同条注释 / 2026-11-19 崩溃报告）。
+    "opencv-python==4.11.0.86",
     # ---- 文档解析 ----
     "beautifulsoup4==4.15.0",
     "pdfplumber==0.11.10",

@@ -33,6 +33,13 @@ urllib3==2.8.0
 jieba==0.42.1
 regex==2026.11.9
 rapidocr-onnxruntime==1.2.3
+# opencv-python：RapidOCR 的传递依赖，图片缩放（cv2.resize）底层实现。
+# 必须钉在 4.11.x：4.12+ / 5.x 在 ARM64 macOS 上默认启用 KleidiCV 后端，
+# 其 resize 经 GCD 多线程并行时越界访问触发 native SIGSEGV（2026-11-19 生产崩溃，
+# 崩溃栈 kleidicv_resize_generic_stripe_u8 → hal::parallel → cv::resize）。
+# cv2.setNumThreads(1) 无法规避（KleidiCV 走自有 GCD 线程池），只能版本钉回。
+# 4.11.0.86 无 KleidiCV，压力测试 6 轮 × 8 线程 resize 全通过。
+opencv-python==4.11.0.86
 
 # ---- 文档解析 ----
 # beautifulsoup4：HTML 正文抽取。URL 入库（web/routers/kb.py）、文档解析器

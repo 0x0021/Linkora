@@ -457,6 +457,8 @@ _SENSITIVE_GET_PATHS = {
     "/api/summaries",
     # ── 草稿正文（待发消息内容）──
     "/api/drafts",
+    # ── 工作时间外未回复消息（含 sender 身份 + 消息正文预览 + 建单记录）──
+    "/api/offhours-todos",
     # ── 会话与决策记录（含 chat_name / sender 等身份信息）──
     "/api/conversations",
     "/api/decisions",

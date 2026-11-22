@@ -1,6 +1,6 @@
 # Web API 概览
 
-`web/api.py` 提供 188 个端点（含 36 个路由模块），均为 HTTP JSON 接口。默认端口 8080，可通过 `config.web.port` 调整。
+`web/api.py` 提供 196 个端点（含 36 个路由模块；端点数按 HTTP method 计，`web/routers/` 的 188 个加上 `web/api.py` 直接定义的 8 个，与 `app.openapi()` 实测一致），均为 HTTP JSON 接口。默认端口 8080，可通过 `config.web.port` 调整。
 
 ## 认证
 

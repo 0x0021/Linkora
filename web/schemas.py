@@ -174,6 +174,10 @@ class ConfigUpdate(BaseModel):
     unreplied_todo_owner_user_id: str | None = None
     unreplied_todo_owner_open_dingtalk_id: str | None = None
     unreplied_todo_sender_notice_text: str | None = None
+    unreplied_todo_ignore_system_senders: str | None = None
+    unreplied_todo_ignore_sender_ids: str | None = None
+    unreplied_todo_ignore_content_prefixes: str | None = None
+    unreplied_todo_ignore_trivial_replies: str | None = None
     # 技能引擎
     skills_enabled: bool | None = None
     skills_auto_activate: bool | None = None

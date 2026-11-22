@@ -247,3 +247,187 @@ def test_offhours_routes_registered():
         "/api/offhours-todos/ignore",
     ):
         assert path in paths
+
+
+# ---------------- 平台侧拉取补本地库缺口（服务离线期间未读消息） ----------------
+
+def test_fetch_platform_messages_parses_dingtalk_list_all():
+    """平台侧 list-all 返回结构 → 统一行；AI 代发标记识别为 is_bot。"""
+    from src.offhours_todo.scanner import _fetch_platform_messages
+
+    raw = {
+        "conversationMessagesList": [
+            {
+                "openConversationId": "cid-1",
+                "title": "魏欣悦",
+                "singleChat": True,
+                "messages": [
+                    {
+                        "messageId": "msg-real",
+                        "sender": "魏欣悦",
+                        "senderId": "peer-id",
+                        "text": "周一改流程",
+                        "createTime": "2026-11-21 16:44:02",
+                    },
+                    {
+                        "messageId": "msg-ai",
+                        "sender": "坤子",
+                        "senderId": "self-id",
+                        "text": "收到",
+                        "createTime": "2026-11-21 17:00:00",
+                        "messageAiSendFlag": "DWS",  # AI 代发，不算真人回复
+                    },
+                ],
+            }
+        ]
+    }
+    adapter = SimpleNamespace(chat_message_list_all=lambda **kw: raw)
+    rows = _fetch_platform_messages(
+        adapter, "dingtalk", start="2026-11-21 00:00:00", end="2026-11-22 00:00:00"
+    )
+    assert len(rows) == 2
+    real, ai = rows[0], rows[1]
+    assert real["msg_id"] == "msg-real" and real["is_bot"] == 0
+    assert real["timestamp"] == "2026-11-21T16:44:02"  # 空格→T
+    assert real["chat_type"] == "single" and real["chat_name"] == "魏欣悦"
+    assert ai["is_bot"] == 1  # AI 代发不算真人回复
+
+
+def test_fetch_platform_messages_non_dingtalk_returns_empty():
+    from src.offhours_todo.scanner import _fetch_platform_messages
+
+    adapter = SimpleNamespace(chat_message_list_all=lambda **kw: {"conversationMessagesList": []})
+    assert _fetch_platform_messages(adapter, "feishu", start="", end="") == []
+
+
+def test_merge_rows_dedupes_by_chat_and_msg_id():
+    """本地库与平台侧同 (chat_id, msg_id) 只保留平台侧（判定字段更准）。"""
+    from src.offhours_todo.scanner import _merge_rows
+
+    local = [
+        {"chat_id": "c1", "msg_id": "m1", "sender_name": "旧", "is_bot": 0},
+        {"chat_id": "c1", "msg_id": "m2", "sender_name": "本地独有"},
+    ]
+    platform = [
+        {"chat_id": "c1", "msg_id": "m1", "sender_name": "新", "is_bot": 1},
+    ]
+    merged = _merge_rows(local, platform)
+    assert len(merged) == 2
+    by_id = {r["msg_id"]: r for r in merged}
+    assert by_id["m1"]["is_bot"] == 1 and by_id["m1"]["sender_name"] == "新"
+    assert by_id["m2"]["sender_name"] == "本地独有"
+
+
+def test_scan_platform_finds_message_only_in_platform_side(tmp_path):
+    """核心回归：消息只在平台侧、本地库没有，也要被扫出来建 pending。"""
+    store = _make_store(tmp_path)
+    ctx = SimpleNamespace(store=store, dws=None)
+    raw = {
+        "conversationMessagesList": [{
+            "openConversationId": "cid-offline",
+            "title": "魏欣悦",
+            "singleChat": True,
+            "messages": [{
+                "messageId": "msg-offline",
+                "sender": "魏欣悦",
+                "senderId": "peer",
+                "text": "周末发的消息",
+                "createTime": "2026-11-21 16:44:02",
+            }],
+        }]
+    }
+    # 让 adapter 同时提供未读列表 + 平台侧拉取
+    ctx.dws = SimpleNamespace(
+        chat_message_list_unread_conversations=lambda count: [
+            {"conversationId": "cid-offline"}
+        ],
+        chat_message_list_all=lambda **kw: raw,
+    )
+    cfg = UnrepliedTodoConfig(enabled=True)
+    # now 固定为 11-22 19:00，lookback 48h 覆盖 11-21
+    from datetime import datetime as _dt
+    result = scan_platform(
+        cfg, "dingtalk", ctx, self_ids={"self-id"},
+        lookback_hours=48, now=_dt(2026, 11, 22, 19, 0, tzinfo=TZ),
+    )
+    assert result.pending_new == 1
+    assert result.items[0].dedupe_key == "dingtalk:cid-offline:msg-offline"
+    assert result.items[0].reason == REASON_WEEKEND
+    assert result.items[0].unread is True
+
+
+def test_create_for_item_parses_nested_dws_task_id(tmp_path):
+    """dws todo task create 返回 {"success": true, "result": {"taskId": ...}} 要认出 task_id。"""
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    # 真实 dws 返回结构：result 里再包一层 taskId
+    adapter.todo_task_create.return_value = {
+        "success": True, "result": {"subject": "x", "taskId": "dws-task-999"}
+    }
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid")
+    cfg = UnrepliedTodoConfig(enabled=True, notify_sender=False, notify_owner=False)
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+
+    ok, kind, err = service._create_for_item(_make_item("dingtalk"), ctx, {"self-oid"})
+    assert ok and kind == "platform_todo" and not err
+    rows = store._offhours_todo_repo.list_todo_records()[0]
+    assert rows[0]["todo_id"] == "dws-task-999"
+
+
+# ---------------- 只给真人留言建待办：过滤系统推送与纯确认词 ----------------
+
+def test_ignored_message_filters_system_and_trivial():
+    from src.offhours_todo.scanner import _is_ignored_message
+
+    cfg = UnrepliedTodoConfig()
+    # 系统推送（工作汇报日志）：伪装成 sendType=user，但 sender 名命中
+    assert _is_ignored_message(
+        {"sender_name": "工作汇报(日志)", "content": "[日志]:某某的周报 url: ..."}, cfg
+    ).startswith("system_sender")
+    # 内容前缀命中
+    assert _is_ignored_message(
+        {"sender_name": "某应用", "content": "[日志]:foo"}, cfg
+    ).startswith("system_prefix")
+    # 纯确认词
+    assert _is_ignored_message({"sender_name": "张三", "content": "好的"}, cfg) == "trivial_reply"
+    assert _is_ignored_message({"sender_name": "张三", "content": "收到，谢谢"}, cfg) == "trivial_reply"
+    assert _is_ignored_message({"sender_name": "李四", "content": "ok"}, cfg) == "trivial_reply"
+    # 真留言要保留
+    assert _is_ignored_message(
+        {"sender_name": "魏欣悦", "content": "徐工，周一：SOP 流程表头请增加申请文件编号"}, cfg
+    ) == ""
+    assert _is_ignored_message(
+        {"sender_name": "张三", "content": "好的，明天我把方案发你"}, cfg
+    ) == ""  # 带实质内容的「好的」不能误杀
+
+
+def test_scan_platform_skips_noise_messages(tmp_path):
+    """回归：系统日志推送与纯确认词不进 pending，真留言进。"""
+    store = _make_store(tmp_path)
+    raw = {
+        "conversationMessagesList": [{
+            "openConversationId": "cid-noise",
+            "title": "混合会话",
+            "singleChat": True,
+            "messages": [
+                {"messageId": "m-log", "sender": "工作汇报(日志)", "senderId": "app-id",
+                 "text": "[日志]:某某周报 url: x", "createTime": "2026-11-21 10:00:00"},
+                {"messageId": "m-ok", "sender": "张三", "senderId": "u-ok",
+                 "text": "好的", "createTime": "2026-11-21 10:05:00"},
+                {"messageId": "m-real", "sender": "魏欣悦", "senderId": "u-real",
+                 "text": "请补充 SOP 流程的申请文件编号字段", "createTime": "2026-11-21 16:44:02"},
+            ],
+        }]
+    }
+    ctx = SimpleNamespace(store=store, dws=SimpleNamespace(
+        chat_message_list_unread_conversations=lambda count: [{"conversationId": "cid-noise"}],
+        chat_message_list_all=lambda **kw: raw,
+    ))
+    from datetime import datetime as _dt
+    result = scan_platform(
+        UnrepliedTodoConfig(enabled=True), "dingtalk", ctx, self_ids={"self-id"},
+        lookback_hours=48, now=_dt(2026, 11, 22, 19, 0, tzinfo=TZ),
+    )
+    keys = [i.dedupe_key for i in result.items]
+    assert len(keys) == 1 and keys[0].endswith(":m-real")

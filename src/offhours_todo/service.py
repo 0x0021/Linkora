@@ -60,10 +60,11 @@ class OffhoursTodoService:
         create_todos: bool | None = None,
         dry_run: bool = False,
     ) -> dict[str, Any]:
-        """扫描全部（或指定）平台并处理未回复消息。
+        """扫描平台并处理未回复消息（Linkora 已按平台隔离，跟随当前平台）。
 
         Args:
-            platform: 指定平台 ID 时只扫该平台；空串扫全部。
+            platform: 当前平台 ID（由 Web 请求上下文 / 调度器逐平台传入）；空串时
+                扫描全部已配置平台，仅后台调度器使用。
             create_todos: None 时跟随 ``cfg.auto_create``；True/False 强制覆盖，
                 供 Web「手动建单」使用。
             dry_run: True 时只扫描与统计，不建单、不发通知、不写记录。
@@ -228,13 +229,19 @@ class OffhoursTodoService:
                     # 钉钉 todo task create 无 description 参数，上下文已并入标题
                     result = adapter.todo_task_create(title=title, executors=executors)
                 if isinstance(result, dict):
+                    # dws todo task create 返回 {"success": true, "result": {"taskId": ...}}；
+                    # 飞书适配器直接返回 {"task_id": ...}。两种结构都要认，否则 todo_id
+                    # 记为空，误把「建单成功」记账成没有平台任务 ID。
+                    inner = result.get("result")
+                    inner = inner if isinstance(inner, dict) else {}
                     todo_id = str(
-                        result.get("task_id") or result.get("taskId")
+                        inner.get("task_id") or inner.get("taskId") or inner.get("id")
+                        or result.get("task_id") or result.get("taskId")
                         or result.get("id") or result.get("todo_id") or ""
                     )
                     # dws 失败外壳在 run() 已抛异常；这里再兜一层 result 内部的 error
-                    if result.get("error"):
-                        err = str(result["error"])
+                    if result.get("error") or inner.get("error"):
+                        err = str(result.get("error") or inner.get("error"))
             except IMAdapterUnsupportedTypeError:
                 kind = "notify_only"
                 logger.info("[未回复待办] 平台 %s 待办能力不支持，降级为仅通知", item.platform)

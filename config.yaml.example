@@ -784,6 +784,11 @@ unreplied_todo:
   owner_user_id: ""                                # 本人 user_id（汇总提醒用，二选一）
   owner_open_dingtalk_id: ""                       # 本人 open_dingtalk_id（与上二选一）
   sender_notice_text: "你的消息我已记入待办，稍后回复，谢谢～"  # 给对方的回执话术
+  # 只给真人留言建待办：系统推送 + 纯确认词自动跳过（逗号分隔）
+  ignore_system_senders: "工作汇报(日志),工作汇报,系统通知,机器人,小助手,DING,考勤打卡"
+  ignore_sender_ids: ""                            # 按 senderId 精确排除（应用/机器人账号）
+  ignore_content_prefixes: "[日志]:,[日志],【日志】,[系统],【系统】,[自动],【自动】"
+  ignore_trivial_replies: "ok,OK,好的,好,收到,谢谢,感谢,嗯,是的,明白,知道了,好嘞,收到谢谢,ok感谢,好的谢谢,谢谢感谢,[OK],[ok],[赞],[玫瑰],👌,🙏"
 
 # ============================================================
 # ⑫ Web 管理后台配置

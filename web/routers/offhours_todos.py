@@ -17,7 +17,7 @@ from pydantic import BaseModel
 import web.api as _api
 from src.im_adapter.errors import IMAdapterError
 from src.offhours_todo import OffhoursTodoService
-from web.dependencies import get_app_instance, run_sync
+from web.dependencies import get_app_instance, get_current_platform, run_sync
 
 logger = logging.getLogger("web.api")
 
@@ -25,7 +25,6 @@ router = APIRouter()
 
 
 class ScanBody(BaseModel):
-    platform: str = ""
     create_todos: bool | None = None  # None=跟随配置 auto_create
     dry_run: bool = False
 
@@ -70,17 +69,17 @@ async def get_rules():
 
 @router.get("/api/offhours-todos/unanswered")
 async def list_unanswered(
-    status: str = "all", platform: str = "", chat_id: str = "",
+    status: str = "all", chat_id: str = "",
     limit: int = 100, offset: int = 0,
 ):
-    """分页列出未回复消息（跨已启用平台，按消息时间倒序）。"""
+    """分页列出当前平台的未回复消息（按消息时间倒序）。"""
     try:
         limit = max(1, min(limit, 500))
         offset = max(0, offset)
         service = _get_service()
         result = await run_sync(
             service.list_unanswered,
-            status=status, platform=platform, chat_id=chat_id,
+            status=status, platform=get_current_platform(), chat_id=chat_id,
             limit=limit, offset=offset,
         )
         return {
@@ -95,13 +94,15 @@ async def list_unanswered(
 
 
 @router.get("/api/offhours-todos/records")
-async def list_records(platform: str = "", limit: int = 100, offset: int = 0):
-    """分页列出待办创建记录（含降级为仅通知的企微记录）。"""
+async def list_records(limit: int = 100, offset: int = 0):
+    """分页列出当前平台的待办创建记录（含降级为仅通知的企微记录）。"""
     try:
         limit = max(1, min(limit, 500))
         offset = max(0, offset)
         service = _get_service()
-        result = await run_sync(service.list_records, platform=platform, limit=limit, offset=offset)
+        result = await run_sync(
+            service.list_records, platform=get_current_platform(), limit=limit, offset=offset
+        )
         return {
             "success": True,
             "items": result["items"],
@@ -115,10 +116,12 @@ async def list_records(platform: str = "", limit: int = 100, offset: int = 0):
 
 @router.get("/api/offhours-todos/stats")
 async def stats():
-    """各平台状态计数概览。"""
+    """当前平台状态计数概览。"""
     try:
         service = _get_service()
-        return {"success": True, "stats": await run_sync(service.get_stats)}
+        platform = get_current_platform()
+        result = await run_sync(service.get_stats)
+        return {"success": True, "stats": {platform: result.get(platform, {})}}
     except _CLI_ERRORS as e:
         logger.error("读取未回复待办统计失败: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -132,7 +135,7 @@ async def trigger_scan(body: ScanBody | None = None):
         service = _get_service()
         result = await run_sync(
             service.scan_all,
-            platform=payload.platform,
+            platform=get_current_platform(),
             create_todos=payload.create_todos,
             dry_run=payload.dry_run,
         )
@@ -147,7 +150,10 @@ async def sync_status():
     """同步状态：重新扫描一遍并回填已由真人回复的记录（dry-run 不建单）。"""
     try:
         service = _get_service()
-        result = await run_sync(service.scan_all, dry_run=False, create_todos=False)
+        result = await run_sync(
+            service.scan_all, platform=get_current_platform(),
+            dry_run=False, create_todos=False,
+        )
         return {"success": True, "result": result}
     except _CLI_ERRORS as e:
         logger.error("同步未回复状态失败: %s", e)

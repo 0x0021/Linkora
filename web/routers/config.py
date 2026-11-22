@@ -429,6 +429,10 @@ def _apply_unreplied_todo(update: ConfigUpdate, cfg: AppConfig):
         "owner_user_id": update.unreplied_todo_owner_user_id,
         "owner_open_dingtalk_id": update.unreplied_todo_owner_open_dingtalk_id,
         "sender_notice_text": update.unreplied_todo_sender_notice_text,
+        "ignore_system_senders": update.unreplied_todo_ignore_system_senders,
+        "ignore_sender_ids": update.unreplied_todo_ignore_sender_ids,
+        "ignore_content_prefixes": update.unreplied_todo_ignore_content_prefixes,
+        "ignore_trivial_replies": update.unreplied_todo_ignore_trivial_replies,
     }
     for key, value in field_map.items():
         if value is not None:

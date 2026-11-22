@@ -97,6 +97,12 @@ class UnrepliedTodoConfig(BaseModel):
     owner_user_id: str = ""  # 本人 user_id（钉钉私聊/DING 汇总用）
     owner_open_dingtalk_id: str = ""  # 本人 open_dingtalk_id（与上二选一）
     sender_notice_text: str = "你的消息我已记入待办，稍后回复，谢谢～"  # 给对方的回执话术
+    # 只给「真人消息留言」建待办：系统机器人（工作汇报/日志等）、纯确认词（好的/收到/ok）
+    # 一律跳过——这些不是需要处理的留言。按发送者名/ID 与内容前缀/短语双重过滤。
+    ignore_system_senders: str = "工作汇报(日志),工作汇报,系统通知,机器人,小助手,DING,考勤打卡"
+    ignore_sender_ids: str = ""  # 按 senderId 精确排除（逗号分隔），如已知的应用/机器人账号
+    ignore_content_prefixes: str = "[日志]:,[日志],【日志】,[系统],【系统】,[自动],【自动】"
+    ignore_trivial_replies: str = "ok,OK,好的,好,收到,谢谢,感谢,嗯,是的,明白,知道了,ok,感谢,好嘞,收到谢谢,[OK],[ok],[赞],[玫瑰],👌,🙏"
 
     @model_validator(mode="after")
     def _clamp_values(self) -> "UnrepliedTodoConfig":

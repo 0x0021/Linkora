@@ -41,6 +41,43 @@ logger = logging.getLogger(__name__)
 _SKIP_MSG_TYPES = ("system", "recall", "revoke")
 
 
+def _split_config_list(value: str) -> frozenset[str]:
+    """把逗号分隔的配置项拆成去空集合（大小写保留，调用方按需 lower）。"""
+    return frozenset(x.strip() for x in str(value or "").split(",") if x.strip())
+
+
+def _is_ignored_message(row: dict[str, Any], cfg: UnrepliedTodoConfig) -> str:
+    """判断一条消息是否属于「不需要建待办」的噪声，返回原因码（空串=保留）。
+
+    只给「真人消息留言」建待办。以下一律跳过：
+    1. 系统/机器人发送者（工作汇报日志、考勤打卡等，伪装成 sendType=user）；
+    2. 内容命中系统前缀（`[日志]:` 等）；
+    3. 纯确认/客套短语（ok、好的、收到、谢谢……），这些不是待处理的留言。
+    """
+    sender = str(row.get("sender_name") or "").strip()
+    sender_id = str(row.get("sender_id") or "").strip()
+    content = str(row.get("content") or "").strip()
+
+    for name in _split_config_list(cfg.ignore_system_senders):
+        if name and name in sender:
+            return f"system_sender:{name}"
+    if sender_id and sender_id in _split_config_list(cfg.ignore_sender_ids):
+        return "ignored_sender_id"
+    for prefix in _split_config_list(cfg.ignore_content_prefixes):
+        if prefix and content.startswith(prefix):
+            return f"system_prefix:{prefix}"
+    # 纯确认词：去掉中间及两端标点/空白后精确匹配，兼容「收到，谢谢」这类组合客套，
+    # 同时避免「好的，明天给你」这类带实质内容的留言被误杀（规范化后不在集合里）。
+    trivial_set = _split_config_list(cfg.ignore_trivial_replies)
+    normalized = "".join(
+        ch for ch in content if ch not in " \t\r\n。.!！~～,，;；:：、…"
+    )
+    if normalized and (normalized in trivial_set
+                       or normalized.lower() in {t.lower() for t in trivial_set}):
+        return "trivial_reply"
+    return ""
+
+
 @dataclass
 class UnansweredItem:
     """一条待建单的未回复消息。"""
@@ -71,6 +108,89 @@ class ScanResult:
     replied_backfilled: int = 0
     items: list[UnansweredItem] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+
+def _fetch_platform_messages(
+    adapter: Any, platform: str, *, start: str, end: str,
+) -> list[dict[str, Any]]:
+    """从平台侧按时间窗拉取消息，补上服务离线期间未同步进本地库的未读消息。
+
+    钉钉 ``chat_message_list_all`` 能拉到当前账号时间窗内所有会话消息（不依赖本地
+    会话库是否同步过），这正是「昨天发来、服务没跑就没入库」那条消息能进扫描的关键。
+    飞书/企微暂无等价的「全会话时间窗」封装，返回空列表，退化为本地库扫描。
+
+    返回统一字段的 dict 列表（与本地库 messages 行同构），失败非致命。
+    """
+    if platform != "dingtalk" or adapter is None:
+        return []
+    fn = getattr(adapter, "chat_message_list_all", None)
+    if not callable(fn):
+        return []
+    try:
+        data = fn(start=start, end=end, limit=50, max_pages=10)
+    except (
+        IMAdapterError, OSError, ValueError, TypeError, RuntimeError,
+        KeyError, subprocess.SubprocessError,
+    ) as e:
+        logger.warning("[未回复待办] 平台侧消息拉取失败（降级为本地库）: %s", e)
+        return []
+
+    out: list[dict[str, Any]] = []
+    convs = data.get("conversationMessagesList", []) if isinstance(data, dict) else []
+    for conv in convs or []:
+        if not isinstance(conv, dict):
+            continue
+        chat_id = str(conv.get("openConversationId") or conv.get("conversationId") or "")
+        chat_name = str(conv.get("title") or conv.get("conversationTitle") or "")
+        single = bool(conv.get("singleChat"))
+        for msg in conv.get("messages", []) or []:
+            if not isinstance(msg, dict):
+                continue
+            msg_id = str(msg.get("openMessageId") or msg.get("messageId") or "")
+            if not msg_id or not chat_id:
+                continue
+            # messageAiSendFlag='DWS' 表示 AI 代发；sendType='bot' 为机器人
+            ai_flag = str(msg.get("messageAiSendFlag") or "").strip()
+            send_type = str(msg.get("sendType") or "").strip().lower()
+            is_bot = 1 if (ai_flag or send_type in ("bot", "robot", "ai")) else 0
+            out.append({
+                "msg_id": msg_id,
+                "chat_id": chat_id,
+                "chat_type": "single" if single else "group",
+                "sender_id": str(msg.get("senderId") or msg.get("senderOpenDingTalkId") or ""),
+                "sender_name": str(msg.get("sender") or ""),
+                "content": str(msg.get("text") or msg.get("content") or ""),
+                "msg_type": "text",
+                # createTime 形如 '2026-11-21 16:44:02'，统一成 ISO 'T' 供 parse_message_ts
+                "timestamp": str(msg.get("createTime") or "").replace(" ", "T"),
+                "is_bot": is_bot,
+                "role": "assistant" if is_bot else "user",
+                "is_withdrawn": 0,
+                "chat_name": chat_name,
+            })
+    return out
+
+
+def _merge_rows(local: list[dict[str, Any]], platform_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """按 (chat_id, msg_id) 去重合并；平台侧字段补全本地库空值（如会话名）。
+
+    平台侧排在前面，保证同 ID 时优先采用平台侧的准确 is_bot / sender 标记；
+    本地库独有的历史条目（平台时间窗外）保留。
+    """
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in platform_rows:
+        merged[(str(row.get("chat_id") or ""), str(row.get("msg_id") or ""))] = row
+    for row in local:
+        key = (str(row.get("chat_id") or ""), str(row.get("msg_id") or ""))
+        if key in merged:
+            # 本地库补会话名等空字段，不覆盖平台侧的判定字段
+            exist = merged[key]
+            for field in ("chat_name", "chat_type"):
+                if not exist.get(field) and row.get(field):
+                    exist[field] = row[field]
+            continue
+        merged[key] = row
+    return list(merged.values())
 
 
 def _fetch_unread_chats(adapter: Any, platform: str) -> set[str] | None:
@@ -167,12 +287,25 @@ def scan_platform(
                 ORDER BY chat_id, timestamp ASC""",
             (start_str, end_str, *_SKIP_MSG_TYPES),
         )
-        rows = [dict(r) for r in cur.fetchall()]
+        local_rows = [dict(r) for r in cur.fetchall()]
         cur.close()
     except (sqlite3.Error, AttributeError) as e:
         logger.warning("[未回复待办] 平台 %s 扫描消息失败: %s", platform, e)
         result.errors.append(f"扫描消息失败: {e}")
-        return result
+        local_rows = []
+
+    # 平台侧拉取补本地库缺口（服务离线期间的未读消息从未同步进本地库）
+    platform_rows = _fetch_platform_messages(
+        adapter, platform,
+        start=(now - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S"),
+        end=now.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+    rows = _merge_rows(local_rows, platform_rows)
+    if platform_rows:
+        logger.info(
+            "[未回复待办] 平台 %s 侧补拉 %d 条消息（本地库 %d 条，合并后 %d 条）",
+            platform, len(platform_rows), len(local_rows), len(rows),
+        )
 
     result.scanned = len(rows)
     replies_by_chat = _self_reply_times(rows, self_ids, tz)
@@ -190,6 +323,12 @@ def scan_platform(
     for row in rows:
         if int(row.get("is_bot") or 0) != 0:
             continue  # AI 代发 / 机器人消息，不是「对方发来的消息」
+        # 只给真人消息留言建待办：系统推送（工作汇报日志）、纯确认词（好的/收到）跳过
+        ignored = _is_ignored_message(row, cfg)
+        if ignored:
+            logger.debug("[未回复待办] 跳过非留言消息(%s): %s", ignored,
+                         str(row.get("content") or "")[:40])
+            continue
         sid = str(row.get("sender_id") or "").strip()
         if sid and sid in self_ids:
             continue  # 本人真人消息（不是待回复对象）
@@ -226,7 +365,7 @@ def scan_platform(
             dedupe_key=dedupe_key,
             sender_id=sid,
             sender_name=str(row.get("sender_name") or ""),
-            chat_name="",  # 会话名由 Web 侧 JOIN conversations 补齐，避免热路径额外查询
+            chat_name=str(row.get("chat_name") or ""),  # 平台侧消息自带会话名；本地库为空时由 Web 侧补
             chat_type=str(row.get("chat_type") or ""),
             content_preview=str(row.get("content") or ""),
             msg_timestamp=str(row.get("timestamp") or ""),

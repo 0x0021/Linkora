@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linkora v0.10.0：下班后发来的留言，不再被我漏掉 · 0x0021</title>
+<meta name="description" content="v0.10.0 新增工作时间外未回复消息自动建待办：识别非工作时段 / 非工作日收到、且本人尚未回复的真人留言，自动建为当前平台个人待办并回执对方。AI 代发不算、系统推送与纯客套词跳过，去重 + 已回复回填，默认关闭。" />
+<link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+<div class="post-progress" aria-hidden="true"></div>
+
+<nav>
+  <a href="../index.html" class="nav-brand">0x0021</a>
+  <div class="nav-links">
+    <a href="../index.html#blog">文章</a>
+    <a href="../index.html#timeline">动态</a>
+    <a href="../index.html#projects">项目</a>
+    <a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="切换主题">◑</button>
+  </div>
+</nav>
+
+<main class="post">
+  <a class="post-back" href="../index.html">← 返回博客</a>
+  <header class="post-header">
+    <div class="post-meta">2026-11-22 · 发布记录</div>
+    <h1>Linkora v0.10.0：下班后发来的留言，不再被我漏掉</h1>
+    <div class="post-tags">
+      <span class="tag">AI Agent</span>
+      <span class="tag green">v0.10.0</span>
+      <span class="tag">钉钉</span>
+      <span class="tag">待办</span>
+      <span class="tag">新功能</span>
+    </div>
+  </header>
+
+  <article class="post-content">
+    <p>起因是一条再普通不过的消息：昨天有人给我发了条留言，我没回，第二天翻起来才想起来。工作时间内的消息有分身盯着，可下班后、周末里别人发来的东西，反而最容易漏——没人催、没红点提醒，等想起来已经过了两天。这版就是把这类消息接住：非工作时段收到、且我本人还没回的真人留言，自动建为我的个人待办。</p>
+
+    <blockquote>
+      <p><strong>本文要点</strong></p>
+      <ul>
+        <li>识别工作时段外 / 非工作日收到的<strong>真人留言</strong>，本人未回复的自动建为当前平台个人待办</li>
+        <li>「尚未回复」= 未读，或之后没有我的真人回复——<strong>AI 分身代发不算</strong></li>
+        <li>系统推送（日志 / 考勤机器人）与纯客套词（好的 / 收到 / ok）自动跳过，不建噪声待办</li>
+        <li>建单后在原会话给对方回执，并给我本人推一条汇总；按「平台 + 会话 + 消息 ID」去重，后来我亲自回了自动回填「已回复」</li>
+        <li>跟随平台隔离运行：钉钉走 <code>dws todo</code>、飞书走 <code>lark-cli task</code>，企微无 API 时降级为消息提醒</li>
+        <li>新增 <code>unreplied_todo</code> 配置段，<strong>默认关闭</strong>；内置工具仍 49，不需要补白名单</li>
+      </ul>
+    </blockquote>
+
+    <h2>「没回」这件事，得算得准</h2>
+    <p>判断依据不是简单的「有没有红点」。一条消息算不算待办，看两件事：它是不是在我下班后 / 非工作日收到的，以及那之后我有没有<strong>亲自</strong>回过。这里有个容易踩的坑——分身已经在群里替我答过一句，不能算「我回了」；判据只认真人回复，AI 代发的一概不算。反过来，如果我后来自己回了，这条就自动回填成「已回复」，不再建单、也不重复提醒。</p>
+    <p>还有一个真实教训：服务离线期间的消息根本没进本地库，光扫本地会话表会漏掉一整段。所以消息来源是<strong>平台侧实时拉取 + 本地会话库</strong>两条腿，按「会话 + 消息 ID」合并去重，离线期间的未读也能补齐识别。</p>
+
+    <h2>只给真留言建单，不给机器人和客套话建单</h2>
+    <p>刚上线那次跑出了一堆噪声：工作汇报（日志）机器人的系统推送、还有一堆「ok」「好的」「收到谢谢」的纯确认，全被当成待办建了出来。这些不是要我办的事，是噪声。现在加了四层过滤——系统发送者名单、精确 senderId、内容前缀、纯客套词，都在配置里可改。但有实质内容的「好的，明天我把方案发你」会保留，不会因为开头两个字是「好的」就被丢掉。</p>
+
+    <h2>建了单，还得让我看得见</h2>
+    <p>前面都对了，最后一公里还是栽了：钉钉里的待办建是建了，我却没在「待我处理」里看到。查下来是 <code>dws todo task create --executors</code> 只认<strong>纯数字 userId</strong>，我一开始传的是 openDingTalkId（<code>DDn1…</code> 那种），钉钉不报错、直接静默忽略，执行人列表空的，待办自然不出现。改成用 <code>dws contact user get-self</code> 取数字 userId，并把执行人解析统一收口成「优先数字 ID、非数字仅兜底且告警」，已经建的几单也补上了执行人，现在全部出现在「待我处理」。</p>
+    <p>建单之后是双向通知：原会话给对方一句回执（话术可配），让我知道对方那边有交代；同时给我本人推一条私聊汇总。管理台「未回复待办」页能看到筛选规则、未回复消息、建单记录和统计，也能手动扫描、同步、单条建单或忽略。</p>
+
+    <h2>升级注意</h2>
+    <p>新增 <code>unreplied_todo</code> 配置段，<strong>默认 <code>enabled: false</code></strong>：不配置、不开开关，行为和旧版一模一样。要启用就把该段加进 <code>config.yaml</code> 并置 <code>enabled: true</code>，其他字段不写都走安全默认值。首次启用会自建 <code>offhours_unanswered</code> / <code>offhours_todo_records</code> 两张本地表，无需数据迁移、不动既有消息与会话库。执行人记得填数字 userId，只填 openDingTalkId 待办不会出现在「待我处理」。内置工具仍 49，<strong>不需要补工具白名单</strong>。</p>
+
+    <h2>验证</h2>
+    <p>新增 20 个功能用例覆盖工作时段判定、筛选 / 去重、通知、企微降级、平台侧解析合并、嵌套 taskId 解析、过滤规则与执行人解析，加 149 例相关回归全过；全门禁（ruff / pyright / 依赖 / 宽异常基线 / SSRF / 前端构建与清单 / gitleaks）绿。真实钉钉环境验证：6 条真留言待办均有真实 taskId 与执行人、全部出现在「待我处理」，噪声记录已标忽略。</p>
+
+    <h2>延伸阅读</h2>
+    <ul>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener">完整变更日志（CHANGELOG）</a>——本次全部变更条目</li>
+      <li><a href="https://github.com/0x0021/Linkora/blob/main/docs/configuration.md" target="_blank" rel="noopener">配置参考（unreplied_todo）</a></li>
+      <li><a href="https://github.com/0x0021/Linkora/releases/tag/v0.10.0" target="_blank" rel="noopener">GitHub Release v0.10.0</a></li>
+      <li><a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">项目源码</a>——<a href="https://github.com/0x0021" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </article>
+  <footer class="post-footer">
+    <a class="post-back" href="../index.html">← 返回博客</a>
+  </footer>
+</main>
+<script src="../assets/main.js"></script>
+</body>
+</html>

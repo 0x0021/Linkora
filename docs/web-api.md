@@ -29,6 +29,7 @@ Authorization: Basic base64(username:password)
 | `/api/memories` | 长期记忆 CRUD 与分类 |
 | `/api/dead-letters` | 死信队列重放 / 丢弃 / 导出 |
 | `/api/guard` | 入站防护事件 / 统计 / 策略 / 检测预览（v0.9.0，敏感端点，admin-only） |
+| `/api/offhours-todos` | 工作时间外未回复消息 → 个人待办：筛选规则 / 未回复消息 / 建单记录 / 统计 / 立即扫描 / 同步 / 建单 / 忽略（v0.10.0，敏感端点，跟随当前平台） |
 | `/api/stats` | 消息与工具调用统计 |
 | `/api/drafts` | 草稿审批（预览 / 批准 / 编辑 / 拒绝） |
 | `/api/logs` | 运行日志读取 |
@@ -62,6 +63,7 @@ Authorization: Basic base64(username:password)
 | `decisions` | 决策追踪记录（意图/动作/路由模式/路由工具/回复预览） |
 | `feedback` | 反馈记录（message_id / rating / correction / note） |
 | `style_profiles` | 风格人格画像（profile_json / updated_at，id=1 单例） |
+| `offhours_unanswered` / `offhours_todo_records` | 未回复消息待办：去重键 / 平台会话消息 ID / 状态 / 待办 ID / 通知状态与建单记录（v0.10.0，首次启用自建） |
 
 ## 组织与熔断相关接口
 

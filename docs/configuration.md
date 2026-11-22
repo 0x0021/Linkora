@@ -20,6 +20,7 @@
 | `skills` | `enabled` / `auto_activate` / `semantic_routing` / `combo_enabled` / `combo_gap` / `hot_reload` / `ai_intent_generation_enabled` | 技能引擎：自动激活 / 语义路由 / 组合激活 / 热加载 |
 | `safety` | `default_fallback` / `media_fallback_text` / `sensitive_words` / `guard` | 兜底、敏感词与入站消息防护 |
 | `safety.guard` | `enabled` / `mode` / `block_high_risk` / `block_injection_commands` / `detect_*` / `injection_min_categories` / `sanitize_payload` / `wrap_untrusted_inbound` / `rate_limit_*` / `audit_enabled` | 入站消息提示词注入防护（见下文专节） |
+| `unreplied_todo` | `enabled` / `timezone` / `workdays` / `work_start` / `work_end` / `holidays` / `lookback_hours` / `scan_interval_minutes` / `max_per_scan` / `auto_create` / `notify_sender` / `notify_owner` / `owner_*` / `ignore_*` | 工作时间外未回复消息 → 个人待办（默认关闭，见下文专节） |
 | `dead_letter` | `enabled` | 死信队列：LLM/发消息彻底失败时落库而非静默丢弃，可重放 |
 | `storage` | `type` / `path` / `backup_enabled` / `backup_*` / `decisions_retention_days` / `messages_retention_days` / `doc_sync_interval_hours` | SQLite 路径与自动备份（legacy 兼容段，**运行期以 platforms.dingtalk.storage 为准**） |
 | `logging` | `level` / `file` / `max_size_mb` / `max_backups` | 日志 |
@@ -208,6 +209,39 @@ platforms:
 策略开关。**页面上改的策略只在当前进程生效、不写入 `config.yaml`**，重启后回到本段的值；
 需要持久化请编辑 `config.yaml`。旧配置不含本段时全部走上述默认值，无需数据迁移。
 5 个 `/api/guard/*` 端点均为管理员可见（详见 [安全说明](./security.md)）。
+
+## 工作时间外未回复消息 → 个人待办（`unreplied_todo`）
+
+系统按工作时段 / 工作日配置识别工作时间外收到的**真人消息留言**，把其中你本人尚未回复的
+建为当前平台的个人待办，并在原会话给对方回执、给你本人推一条汇总。跟随平台隔离运行
+（钉钉走 `dws todo`、飞书走 `lark-cli task`，企业微信无个人待办 API 时降级为消息提醒），
+管理台不单独列平台。**默认 `enabled: false`，不开开关行为与旧版完全一致。**
+
+「尚未回复」的判据：消息未读，或该消息之后没有你的真人回复——AI 分身代发的回复不算。
+系统推送（日志 / 考勤机器人）与纯确认客套（好的 / 收到 / ok / 谢谢）自动跳过，不建待办；
+消息来源为平台侧实时拉取 + 本地会话库，离线期间的未读消息也能补齐。按「平台 + 会话 +
+消息 ID」去重，重复扫描不重复建单；后来你亲自回复的自动回填为「已回复」。
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `enabled` | `false` | 总开关；开启后后台按 `scan_interval_minutes` 定时扫描 |
+| `timezone` | `Asia/Shanghai` | IANA 时区名（zoneinfo），工作时段按此时区判定 |
+| `workdays` | `1,2,3,4,5` | ISO 星期，1=周一…7=周日，逗号分隔 |
+| `work_start` / `work_end` | `09:00` / `18:00` | 工作时段（HH:MM，本地时区），支持跨午夜班次 |
+| `holidays` | 空 | 法定节假日 `YYYY-MM-DD` 逗号分隔，覆盖 `workdays` |
+| `lookback_hours` | `24` | 扫描回看窗口（小时） |
+| `scan_interval_minutes` | `15` | 后台扫描周期（分钟） |
+| `max_per_scan` | `20` | 单次扫描最多建单数（1..100） |
+| `auto_create` | `true` | 自动建待办；关掉只记录到管理台等人工处理 |
+| `notify_sender` / `notify_owner` | `true` / `true` | 建单后给对方回执 / 给本人推汇总 |
+| `owner_user_id` / `owner_open_dingtalk_id` | 空 | 本人标识（汇总提醒与执行人用，**优先填数字 userId**） |
+| `sender_notice_text` | `你的消息我已记入待办，稍后回复，谢谢～` | 给对方的回执话术 |
+| `ignore_system_senders` / `ignore_sender_ids` / `ignore_content_prefixes` / `ignore_trivial_replies` | 见 `config.yaml.example` | 过滤名单：系统发送者 / 精确 senderId / 内容前缀 / 纯客套词 |
+
+🔴 建单执行人请用**数字 userId**（`dws contact user get-self` 取 `orgEmployeeModel.userId`）：
+只填 `open_dingtalk_id` 会被钉钉静默忽略、待办不出现在「待我处理」。首次启用会自建
+`offhours_unanswered` / `offhours_todo_records` 两张本地表，无需手工迁移；内置工具数仍 49。
+管理台「未回复待办」页可查看筛选规则、未回复消息、建单记录与统计，并手动扫描 / 同步 / 建单 / 忽略。
 
 ## 规则引擎
 

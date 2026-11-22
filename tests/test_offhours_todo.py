@@ -431,3 +431,17 @@ def test_scan_platform_skips_noise_messages(tmp_path):
     )
     keys = [i.dedupe_key for i in result.items]
     assert len(keys) == 1 and keys[0].endswith(":m-real")
+
+
+def test_resolve_executor_prefers_numeric_user_id():
+    """钉钉待办执行人必须是数字 userId，不能是 openDingTalkId（否则待办不出现在待我处理）。"""
+    # engine 无数字 ID 时，self_ids 里混着 openDingTalkId 和数字 ID，必须挑数字的
+    svc = OffhoursTodoService(UnrepliedTodoConfig(owner_user_id=""), SimpleNamespace(current_user_id=""), {})
+    assert svc._resolve_executor("dingtalk", {"DDn1bYIeDbcOPENID", "999888"}) == "999888"
+    # engine 有数字 ID 时优先用 engine 的（最可信）
+    svc_e = OffhoursTodoService(UnrepliedTodoConfig(owner_user_id=""), SimpleNamespace(current_user_id="3410690324258637"), {})
+    assert svc_e._resolve_executor("dingtalk", {"999888"}) == "3410690324258637"
+    # 配置优先
+    cfg2 = UnrepliedTodoConfig(owner_user_id="3410690324258637")
+    svc2 = OffhoursTodoService(cfg2, SimpleNamespace(current_user_id=""), {})
+    assert svc2._resolve_executor("dingtalk", set()) == "3410690324258637"

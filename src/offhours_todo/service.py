@@ -184,6 +184,36 @@ class OffhoursTodoService:
         preview = (item.content_preview or "").strip().replace("\n", " ")[:30]
         return f"待回复 · {who}{suffix}{' · ' + preview if preview else ''}"
 
+    def _resolve_executor(self, platform: str, self_ids: frozenset[str] | set[str]) -> str:
+        """解析待办执行人。
+
+        钉钉 ``todo task create --executors`` 只认**纯数字 userId**，传 openDingTalkId
+        （``DDn1...``）会被 CLI 静默忽略 → 待办创建成功但没有执行人，不出现在「待我处理」。
+        优先级：配置的 owner_user_id（数字）→ 引擎的 current_user_id（数字）→ self_ids 里
+        第一个纯数字 ID；非数字 ID 只作最后兜底（飞书 open_id 可用，钉钉不行）。
+        """
+        configured = str(getattr(self.cfg, "owner_user_id", "") or "").strip()
+        if configured:
+            return configured
+        engine_uid = str(getattr(self.engine, "current_user_id", "") or "").strip()
+        if engine_uid and engine_uid.isdigit():
+            return engine_uid
+        for sid in self_ids:
+            if str(sid).isdigit():
+                return str(sid)
+        # 飞书的 open_id 不是数字但可作执行人；钉钉若有非数字兜底也会记下，
+        # 但 true fix 是配置正确的数字 userId。
+        next_non_digit = next((str(s) for s in self_ids if str(s)), "")
+        if next_non_digit and platform != "dingtalk":
+            return next_non_digit
+        if next_non_digit:
+            logger.warning(
+                "[未回复待办] 钉钉执行人未配置数字 userId（当前 %s），待办可能不出现在待我处理；"
+                "请在 unreplied_todo.owner_user_id 填数字 userId",
+                next_non_digit[:16],
+            )
+        return next_non_digit
+
     def _create_for_item(
         self, item: UnansweredItem, ctx: "PlatformContext", self_ids: frozenset[str] | set[str],
     ) -> tuple[bool, str, str]:
@@ -215,9 +245,7 @@ class OffhoursTodoService:
             # 企微无个人待办 API → 降级为通知型待办（不调 todo 工具）
             kind = "notify_only"
         else:
-            executors = self.cfg.owner_user_id or (
-                next(iter(self_ids), "") if self_ids else ""
-            )
+            executors = self._resolve_executor(item.platform, self_ids)
             try:
                 if item.platform == "feishu":
                     # 飞书 task +create 支持独立描述字段（适配器已接线）；基类签名无此参数，

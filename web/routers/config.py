@@ -411,6 +411,30 @@ def _apply_dlq(update: ConfigUpdate, cfg: AppConfig):
         cfg.dead_letter.enabled = update.dlq_enabled
 
 
+def _apply_unreplied_todo(update: ConfigUpdate, cfg: AppConfig):
+    """工作时间外未回复消息 → 待办"""
+    field_map = {
+        "enabled": update.unreplied_todo_enabled,
+        "timezone": update.unreplied_todo_timezone,
+        "workdays": update.unreplied_todo_workdays,
+        "work_start": update.unreplied_todo_work_start,
+        "work_end": update.unreplied_todo_work_end,
+        "holidays": update.unreplied_todo_holidays,
+        "lookback_hours": update.unreplied_todo_lookback_hours,
+        "scan_interval_minutes": update.unreplied_todo_scan_interval_minutes,
+        "max_per_scan": update.unreplied_todo_max_per_scan,
+        "auto_create": update.unreplied_todo_auto_create,
+        "notify_sender": update.unreplied_todo_notify_sender,
+        "notify_owner": update.unreplied_todo_notify_owner,
+        "owner_user_id": update.unreplied_todo_owner_user_id,
+        "owner_open_dingtalk_id": update.unreplied_todo_owner_open_dingtalk_id,
+        "sender_notice_text": update.unreplied_todo_sender_notice_text,
+    }
+    for key, value in field_map.items():
+        if value is not None:
+            setattr(cfg.unreplied_todo, key, value)
+
+
 def _apply_skills(update: ConfigUpdate, cfg: AppConfig):
     """技能引擎"""
     if update.skills_enabled is not None:
@@ -656,6 +680,7 @@ async def update_config(update: ConfigUpdate):
         _apply_tool_routing(update, cfg)
         _apply_rule_engine(update, cfg)
         _apply_dlq(update, cfg)
+        _apply_unreplied_todo(update, cfg)
         _apply_skills(update, cfg)
         _apply_conversation_summary(update, cfg)
         _apply_llm_throttle(update, cfg)

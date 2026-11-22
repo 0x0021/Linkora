@@ -420,6 +420,7 @@ function switchPage(page) {
         skills: '技能管理',
         tools: '工具链路',
         deadletters: '死信队列',
+        'offhours-todos': '未回复消息 → 待办',
         drafts: '草稿审阅',
         config: '系统配置',
         persona: '主人风格画像',
@@ -471,6 +472,7 @@ function switchPage(page) {
     if (page === 'tools') loadToolsPage();
     if (page === 'config') loadConfigPage();
     if (page === 'deadletters') loadDeadLettersPage();
+    if (page === 'offhours-todos') loadOffhoursTodosPage();
     if (page === 'drafts') loadDraftsPage();
     if (page === 'persona') { window.loadPersonaPage && window.loadPersonaPage(); }
     if (page === 'metrics') { loadMetricsPage(); startMetricsPolling(); window.loadMetricsReliability && window.loadMetricsReliability(); }
@@ -714,7 +716,7 @@ async function init() {
         // 注意：currentPage 初始为 'dashboard'，switchPage('dashboard') 会因页面未改变而短路返回，
         // 导致 loadDashboard/lodaDashboardData 不会被触发。因此对仪表盘场景需直接调用 loadDashboard。
         // 允许的页面白名单（与 switchPage 的 titles 保持一致）
-        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate', 'summaries', 'gate-rules'];
+        const ALLOWED_PAGES = ['dashboard', 'keywords', 'rag', 'messages', 'intent', 'skills', 'tools', 'config', 'deadletters', 'offhours-todos', 'drafts', 'persona', 'metrics', 'models', 'cost-quality', 'logs', 'simulate', 'summaries', 'gate-rules'];
         const saved = (() => { try { return sessionStorage.getItem('marvis_last_page'); } catch (_) { return null; } })();
         if (saved && ALLOWED_PAGES.includes(saved)) {
             if (saved === 'dashboard') {
@@ -780,6 +782,7 @@ async function init() {
     window.initPlatformSwitcher = initPlatformSwitcher;
     window.loadSkillsPage = loadSkillsPage;
     window.loadDeadLettersPage = loadDeadLettersPage;
+    window.loadOffhoursTodosPage = loadOffhoursTodosPage;
     window.loadDraftsPage = loadDraftsPage;
     // drafts.js 是 type=module（defer 执行），在 app.js 同步求值时 loadDraftsPage 尚不可用。
     // 把 debounced 包装放在 init()（DOMContentLoaded 后）创建，确保函数已暴露到全局。

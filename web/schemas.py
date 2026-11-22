@@ -158,6 +158,22 @@ class ConfigUpdate(BaseModel):
     keyword_denylist: list[str] | None = None
     # 死信队列
     dlq_enabled: bool | None = None
+    # 工作时间外未回复消息 → 待办
+    unreplied_todo_enabled: bool | None = None
+    unreplied_todo_timezone: str | None = None
+    unreplied_todo_workdays: str | None = None
+    unreplied_todo_work_start: str | None = None
+    unreplied_todo_work_end: str | None = None
+    unreplied_todo_holidays: str | None = None
+    unreplied_todo_lookback_hours: int | None = None
+    unreplied_todo_scan_interval_minutes: int | None = None
+    unreplied_todo_max_per_scan: int | None = None
+    unreplied_todo_auto_create: bool | None = None
+    unreplied_todo_notify_sender: bool | None = None
+    unreplied_todo_notify_owner: bool | None = None
+    unreplied_todo_owner_user_id: str | None = None
+    unreplied_todo_owner_open_dingtalk_id: str | None = None
+    unreplied_todo_sender_notice_text: str | None = None
     # 技能引擎
     skills_enabled: bool | None = None
     skills_auto_activate: bool | None = None

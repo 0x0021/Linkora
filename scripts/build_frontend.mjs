@@ -90,6 +90,7 @@ const JS_ORDER = [
   'js/services/dashboardReliabilityService.js',
   'js/pages/config.js',
   'js/pages/dead_letters.js',
+  'js/pages/offhours_todos.js',
   'js/pages/dashboard.js',
   'js/pages/departments.js',
   'js/pages/intent.js',

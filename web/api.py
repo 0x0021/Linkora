@@ -1489,6 +1489,7 @@ from web.routers.models import router as _models_router
 from web.routers.summaries import router as _summaries_router
 from web.routers.alerts import router as _alerts_router
 from web.routers.guard import router as _guard_router
+from web.routers.offhours_todos import router as _offhours_todos_router
 
 app.include_router(_dead_letters_router)
 app.include_router(_drafts_router)
@@ -1525,4 +1526,5 @@ app.include_router(_models_router)
 app.include_router(_summaries_router)
 app.include_router(_alerts_router)
 app.include_router(_guard_router)
+app.include_router(_offhours_todos_router)
 

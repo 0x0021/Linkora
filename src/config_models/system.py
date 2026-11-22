@@ -63,6 +63,56 @@ class ProactiveConfig(BaseModel):
 
 
 
+class UnrepliedTodoConfig(BaseModel):
+    """工作时间外未回复消息 → 个人待办（off-hours todo）。
+
+    默认关闭（enabled=False），开启后由后台扫描器按 ``scan_interval_minutes``
+    周期扫描各平台会话库，筛出「工作时间外 / 非工作日收到、且本人尚未回复」
+    的消息（未读 + 无真人回复；AI 代发不算），按平台建个人待办：
+
+    - 钉钉：``dws todo task create``（个人待办）
+    - 飞书：``lark-cli task +create``（个人任务）
+    - 企微：平台不支持个人待办 API，降级为「通知型待办」——仅给对方发提醒消息并在
+      Web 标注「仅通知」，不写入平台待办。
+
+    去重靠「平台 + 会话 + 消息 ID」业务键落库；重复扫描不重复创建。状态流转：
+    pending → todo_created / notified_only / ignored / replied_later。
+
+    通知策略（``notify_sender`` / ``notify_owner``）：建单后默认既在原会话回执对方，
+    也给我本人推一条汇总提醒（钉钉 DING / 私聊）。``owner_*`` 二者皆空时仅回执对方。
+    """
+
+    enabled: bool = False  # 总开关（默认关；Web 可开）
+    timezone: str = "Asia/Shanghai"  # IANA 时区名（zoneinfo）
+    workdays: str = "1,2,3,4,5"  # ISO 星期 1=周一…7=周日，逗号分隔
+    work_start: str = "09:00"  # 工作开始（本地时间 HH:MM）
+    work_end: str = "18:00"  # 工作结束（本地时间 HH:MM，若开始>结束视为跨午夜）
+    holidays: str = ""  # 法定节假日 YYYY-MM-DD 逗号分隔（覆盖 workdays）
+    lookback_hours: int = 24  # 扫描回看窗口（小时）
+    scan_interval_minutes: int = 15  # 后台扫描周期（分钟），最小 1
+    max_per_scan: int = 20  # 单次扫描最多建单数（防噪声刷屏）
+    auto_create: bool = True  # 自动建待办；关掉则只记录到 Web 待人工处理
+    notify_sender: bool = True  # 建单后给对方回执
+    notify_owner: bool = True  # 建单后给我本人推汇总提醒
+    owner_user_id: str = ""  # 本人 user_id（钉钉私聊/DING 汇总用）
+    owner_open_dingtalk_id: str = ""  # 本人 open_dingtalk_id（与上二选一）
+    sender_notice_text: str = "你的消息我已记入待办，稍后回复，谢谢～"  # 给对方的回执话术
+
+    @model_validator(mode="after")
+    def _clamp_values(self) -> "UnrepliedTodoConfig":
+        """夹紧数值到安全区间，避免误配刷屏或线程空转。"""
+        if self.lookback_hours < 1:
+            self.lookback_hours = 1
+        if self.scan_interval_minutes < 1:
+            self.scan_interval_minutes = 1
+        if self.max_per_scan < 1:
+            self.max_per_scan = 1
+        if self.max_per_scan > 100:
+            self.max_per_scan = 100
+        return self
+
+
+
 class SummaryBackfillConfig(BaseModel):
     """摘要连续性补跑（P4-14）：启动检测停机时长，按自然日补齐遗漏窗口的摘要。
 

@@ -53,6 +53,7 @@ from src.config_models.system import (  # noqa: F401
     ProactiveConfig,
     SafetyConfig,
     SummaryBackfillConfig,
+    UnrepliedTodoConfig,
     WebConfig,
 )
 
@@ -74,6 +75,7 @@ class AppConfig(BaseModel):
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
     summary_backfill: SummaryBackfillConfig = Field(default_factory=SummaryBackfillConfig)
+    unreplied_todo: UnrepliedTodoConfig = Field(default_factory=UnrepliedTodoConfig)
     rag: RagConfig = Field(default_factory=RagConfig)
     skills: SkillsConfig = Field(default_factory=SkillsConfig)
     skillhub: SkillHubConfig = Field(default_factory=SkillHubConfig)

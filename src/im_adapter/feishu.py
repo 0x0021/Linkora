@@ -19,6 +19,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -863,3 +864,80 @@ class FeishuCliAdapter(FeishuDocMixin, FeishuMediaMixin, BaseIMAdapter):
         result = list(discovered.values())
         logger.info("飞书 sync_external_contacts: 最终发现 %d 个外部联系人", len(result))
         return result
+
+    # ------------------------------------------------------------------
+    # 个人任务（待办）—— lark-cli task 域
+    # ------------------------------------------------------------------
+
+    def todo_task_create(self, title: str, executors: str,
+                         due: str = "", priority: str = "",
+                         description: str = "") -> dict:
+        """创建飞书个人任务（``lark-cli task +create``）。
+
+        ``executors`` 传 assignee open_id（``ou_xxx``）；``--idempotency-key`` 由
+        title+assignee 派生，重复调用同标题不会建出两条任务。返回体归一化为
+        ``{"task_id": ..., "raw": ...}``，供上层与钉钉待办记录同构。
+        """
+        idem = hashlib.sha1(f"{title}|{executors}".encode("utf-8")).hexdigest()[:24]
+        args = [
+            "task", "+create", "--as", "user",
+            "--summary", title, "--assignee", executors,
+            "--idempotency-key", idem,
+        ]
+        if description:
+            args.extend(["--description", description])
+        if due:
+            args.extend(["--due", due])
+        # priority 在飞书 task 域无对应 flag（CLI 无 --priority），忽略并记录 debug
+        if priority:
+            logger.debug("[飞书任务] lark-cli task +create 无 priority 参数，忽略: %s", priority)
+        data = self.run(args, operation="feishu_todo_task_create", force_no_dry_run=True)
+        payload = data.get("data", data) if isinstance(data, dict) else data
+        task = payload.get("task", payload) if isinstance(payload, dict) else {}
+        task_id = ""
+        if isinstance(task, dict):
+            task_id = str(task.get("guid") or task.get("task_id") or task.get("id") or "")
+        return {"task_id": task_id, "raw": data}
+
+    def todo_list_mine(self, *, size: int = 20, page: int = 1,
+                       status: str = "", role_types: str = "",
+                       priority: str = "") -> dict:
+        """列出我的飞书任务，归一化成与钉钉 todo_list_mine 相同的结构。"""
+        limit = max(1, min(int(size), 20))
+        args = ["task", "+get-my-tasks", "--as", "user", "--page-limit", str(limit)]
+        if status in ("true", "false"):
+            args.append("--complete")
+            if status == "false":
+                args[-1] = "--complete=false"
+        if role_types:
+            logger.debug("[飞书任务] lark-cli task 无 role_types 参数，忽略: %s", role_types)
+        data = self.run(args, operation="feishu_todo_list_mine", force_no_dry_run=True)
+        payload = data.get("data", data) if isinstance(data, dict) else data
+        raw_items = payload.get("items", []) if isinstance(payload, dict) else []
+        if not isinstance(raw_items, list):
+            raw_items = []
+        todos: list[dict] = []
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            todos.append({
+                "task_id": str(raw.get("guid") or raw.get("task_id") or ""),
+                "subject": str(raw.get("summary") or ""),
+                "due_time": str(raw.get("due") or ""),
+                "done": bool(raw.get("completed_at") or raw.get("completed")),
+            })
+        return {
+            "todos": todos,
+            "count": len(todos),
+            "has_more": bool(payload.get("has_more")) if isinstance(payload, dict) else False,
+            "page": page,
+            "size": limit,
+        }
+
+    def todo_complete(self, task_id: str) -> dict:
+        """完成飞书任务（``lark-cli task +complete``）。"""
+        data = self.run(
+            ["task", "+complete", "--as", "user", "--task-id", task_id],
+            operation="feishu_todo_complete", force_no_dry_run=True,
+        )
+        return {"task_id": task_id, "raw": data}

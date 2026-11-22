@@ -761,6 +761,31 @@ summary_backfill:
   max_summary_age_days: 7                          # 摘要时间上限：早于「现在-N天」的旧自然日/旧消息不再生成摘要（省 token）；0=不启用
 
 # ============================================================
+# ⑪-D 工作时间外未回复消息 → 个人待办（off-hours todo）
+# ============================================================
+# 默认关闭。开启后后台扫描器周期性扫描各平台会话库，筛出「工作时间外 / 非工作日
+# 收到、且本人尚未回复」的消息（未读 + 无真人回复，AI 代发不算），按平台建个人待办：
+# 钉钉走 dws todo，飞书走 lark-cli task；企微不支持个人待办 API，降级为给对方发
+# 提醒消息（Web 标注「仅通知」）。按「平台+会话+消息ID」去重，重复扫描不重复建单。
+# 建单后默认双通知：原会话回执对方 + 钉钉私聊推给我本人汇总。
+unreplied_todo:
+  enabled: false                                   # 总开关（默认关）
+  timezone: "Asia/Shanghai"                        # IANA 时区名（zoneinfo）
+  workdays: "1,2,3,4,5"                            # ISO 星期 1=周一…7=周日，逗号分隔
+  work_start: "09:00"                              # 工作开始（HH:MM，本地时区）
+  work_end: "18:00"                                # 工作结束（HH:MM）
+  holidays: ""                                     # 法定节假日 YYYY-MM-DD 逗号分隔（覆盖 workdays）
+  lookback_hours: 24                               # 扫描回看窗口（小时）
+  scan_interval_minutes: 15                        # 后台扫描周期（分钟）
+  max_per_scan: 20                                 # 单次扫描最多建单数（1..100）
+  auto_create: true                                # 自动建待办；关掉只记录到 Web 等人工处理
+  notify_sender: true                              # 建单后在原会话给对方回执
+  notify_owner: true                               # 建单后给我本人推汇总提醒
+  owner_user_id: ""                                # 本人 user_id（汇总提醒用，二选一）
+  owner_open_dingtalk_id: ""                       # 本人 open_dingtalk_id（与上二选一）
+  sender_notice_text: "你的消息我已记入待办，稍后回复，谢谢～"  # 给对方的回执话术
+
+# ============================================================
 # ⑫ Web 管理后台配置
 # ============================================================
 web:

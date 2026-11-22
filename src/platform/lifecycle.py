@@ -3,6 +3,7 @@ import signal
 import sys
 import threading
 import time
+from typing import Any
 from pydantic import ValidationError
 from src.config import load_config
 from .engine_mixins_base import EngineMixinBase
@@ -15,6 +16,53 @@ logger = logging.getLogger(__name__)
 
 
 class LifecycleMixin(EngineMixinBase):
+    # 工作时间外未回复待办编排服务（后台调度器与 Web 手动触发共用同一实例）
+    offhours_todo_service: Any | None = None
+
+    def _start_offhours_todo_scheduler(self) -> threading.Thread:
+        """工作时间外未回复消息 → 待办 的定时扫描器。
+
+        每 ``scan_interval_minutes`` 分钟跑一轮；默认关闭（配置 ``unreplied_todo.enabled``），
+        开启后由 :class:`OffhoursTodoService` 统一做扫描 / 去重 / 建单 / 双边通知。
+        每轮读运行期配置（热重载生效）；异常只记日志，绝不拖垮主回复链路。
+        """
+        def scan_loop() -> None:
+            import subprocess
+            from src.im_adapter.errors import IMAdapterError
+            from src.offhours_todo import OffhoursTodoService
+            from src.shared_state import get_config
+
+            while self._running:
+                try:
+                    runtime_cfg = get_config() or self.config
+                    todo_cfg = getattr(runtime_cfg, "unreplied_todo", None)
+                    if todo_cfg is not None and todo_cfg.enabled:
+                        existing = getattr(self, "offhours_todo_service", None)
+                        if existing is None:
+                            existing = OffhoursTodoService(todo_cfg, self, self.platforms)
+                            self.offhours_todo_service = existing
+                        else:
+                            existing.cfg = todo_cfg  # 热重载同步
+                        summary = existing.scan_all()
+                        if not summary.get("skipped"):
+                            logger.debug(
+                                "[未回复待办] 本轮扫描：扫描 %d / 工作时间外 %d / 建单 %d / 仅通知 %d",
+                                summary.get("scanned", 0), summary.get("offhours", 0),
+                                summary.get("todos_created", 0), summary.get("notify_only", 0),
+                            )
+                except (
+                    IMAdapterError, sqlite3.Error, OSError, ValueError,
+                    RuntimeError, subprocess.SubprocessError,
+                ) as e:
+                    logger.warning("[未回复待办] 定时扫描异常（下轮重试）: %s", e)
+
+                interval = max(1, getattr(todo_cfg, "scan_interval_minutes", 15)) if todo_cfg else 15
+                for _ in range(interval):
+                    if not self._running or self._shutdown_event.wait(60):
+                        break
+
+        return threading.Thread(target=scan_loop, daemon=True, name="offhours-todo")
+
     def shutdown(self, timeout: float = 10.0) -> None:
         """优雅关闭（P0-1 修复）。
 
@@ -213,6 +261,12 @@ class LifecycleMixin(EngineMixinBase):
             wal_checkpoint_thread.start()
             self._bg_threads.append(wal_checkpoint_thread)
             logger.info("WAL checkpoint 调度器已启动（每30分钟执行一次）")
+
+            # 工作时间外未回复消息 → 待办（默认由配置开关决定，关闭时线程空转极低成本）
+            offhours_thread = self._start_offhours_todo_scheduler()
+            offhours_thread.start()
+            self._bg_threads.append(offhours_thread)
+            logger.info("未回复消息待办调度器已启动（按配置周期扫描）")
 
             # 启动期孤儿会话库扫描 + tmp_images 回收（D4：一次性，非线程）
             try:

@@ -388,6 +388,7 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
         self.__few_shot_repo = None
         self.__baseline_repo = None
         self.__feedback_repo = None
+        self.__offhours_todo_repo = None
         self.__keyword_rule_repo = None
         self.__gate_rule_repo = None
         self.__tool_execution_repo = None
@@ -600,6 +601,14 @@ class SQLiteStore(SQLiteStoreConnMixin, SQLiteStoreIndexMixin):
             from src.memory.draft_repo import DraftRepo
             self.__draft_repo = DraftRepo(self)
         return self.__draft_repo
+
+    @property
+    def _offhours_todo_repo(self):
+        """Lazy-load OffhoursTodoRepo（工作时间外未回复消息 → 待办）。"""
+        if self.__offhours_todo_repo is None:
+            from src.memory.offhours_todo_repo import OffhoursTodoRepo
+            self.__offhours_todo_repo = OffhoursTodoRepo(self)
+        return self.__offhours_todo_repo
 
     @property
     def _external_friend_repo(self):

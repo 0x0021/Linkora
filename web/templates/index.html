@@ -108,6 +108,10 @@
                         <span class="nav-icon" data-page-node-id="Zr8ml0RZH5TCRM0jdaw1rH"><i class="fa-solid fa-inbox" data-page-node-id="m6J4ySigNhWlKNMBAW8IFC"></i></span>
                         <span class="nav-text" data-page-node-id="iN0PNCw7nweunxxEz1NdBL">死信队列</span>
                     </a>
+                    <a href="#" class="nav-item" data-page="offhours-todos">
+                        <span class="nav-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                        <span class="nav-text">未回复待办</span>
+                    </a>
                     <a href="#" class="nav-item" data-page="drafts" data-page-node-id="Fcl3y9Q4KuPHaEenlwHQhi">
                         <span class="nav-icon" data-page-node-id="wFxJ6LffF6iUG7H8fsJyGt"><i class="fa-solid fa-file-pen" data-page-node-id="IQrXkL3AyIaiuXa7th3YCp"></i></span>
                         <span class="nav-text" data-page-node-id="pqAiVo2LRZU118ZFo6EjOs">草稿审阅</span>
@@ -2266,6 +2270,64 @@
                         <div class="empty-state" data-page-node-id="OcIn6kbePJcEMiWiAgBpXe"><i class="fa-solid fa-spinner fa-spin loading-icon" data-page-node-id="y7WzxE07OSDQ9uwD9gMSMs"></i><p class="loading-text" data-page-node-id="YpizhXvzhZelrkSNxRRD6s">加载中…</p></div>
                     </div>
                 </div>
+                <!-- 工作时间外未回复消息 → 待办 -->
+                <div class="page" id="page-offhours-todos">
+                    <style>
+                        .otd-section-title{font-size:13px;font-weight:600;color:var(--text-secondary,#475569);margin:16px 0 8px;}
+                        .otd-rules,.otd-stats{background:var(--card-bg,#fff);border:1px solid var(--border-color,#e2e8f0);border-radius:9px;padding:12px 16px;margin-bottom:8px;}
+                        .otd-rule-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:8px 24px;}
+                        .otd-rule-item{display:flex;gap:10px;font-size:12px;line-height:1.6;}
+                        .otd-rule-key{color:var(--text-muted,#94a3b8);min-width:64px;flex-shrink:0;}
+                        .otd-rule-val{color:var(--text-primary,#1e293b);}
+                        .otd-stats{display:flex;gap:12px;flex-wrap:wrap;}
+                        .otd-stat-card{min-width:210px;border:1px solid var(--border-color,#e2e8f0);border-radius:7px;padding:8px 12px;}
+                        .otd-stat-title{font-size:12px;font-weight:600;margin-bottom:4px;}
+                        .otd-stat-nums{display:flex;align-items:baseline;gap:5px;}
+                        .otd-num{font-size:17px;font-weight:700;}
+                        .otd-num.warn{color:#d97706;}.otd-num.ok{color:#16a34a;}.otd-num.muted{color:#94a3b8;}
+                        .otd-num-label{font-size:10px;color:var(--text-muted,#94a3b8);margin-right:8px;}
+                        .otd-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:14px 0 10px;}
+                        .otd-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border-color,#e2e8f0);}
+                        .otd-tab{border:0;background:none;padding:7px 14px;font-size:13px;cursor:pointer;color:var(--text-secondary,#64748b);}
+                        .otd-tab.active{color:var(--brand-primary,#2563eb);border-bottom:2px solid var(--brand-primary,#2563eb);font-weight:600;}
+                        .otd-toolbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+                        .otd-filters{display:flex;align-items:center;gap:8px;}
+                        .otd-filters select{font-size:12px;padding:5px 8px;border:1px solid var(--border-color,#e2e8f0);border-radius:6px;background:var(--card-bg,#fff);color:var(--text-primary,#1e293b);}
+                        .otd-actions{display:flex;gap:6px;}
+                        .otd-btn{border:1px solid var(--border-color,#e2e8f0);background:var(--card-bg,#fff);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--text-primary,#334155);}
+                        .otd-btn:hover{border-color:var(--brand-primary,#2563eb);}
+                        .otd-btn.primary{color:#fff;background:var(--brand-primary,#2563eb);border-color:var(--brand-primary,#2563eb);}
+                        .otd-btn:disabled{opacity:.5;cursor:not-allowed;}
+                        .otd-table-wrap{overflow:auto;border:1px solid var(--border-color,#e2e8f0);border-radius:9px;background:var(--card-bg,#fff);}
+                        .otd-table{width:100%;border-collapse:collapse;font-size:12px;}
+                        .otd-table th{text-align:left;padding:9px 12px;background:var(--table-header-bg,#f8fafc);color:var(--text-muted,#64748b);font-weight:600;white-space:nowrap;}
+                        .otd-table td{padding:9px 12px;border-top:1px solid var(--border-color,#f1f5f9);vertical-align:top;}
+                        .otd-cell-main{font-weight:600;color:var(--text-primary,#1e293b);}
+                        .otd-cell-sub{font-size:11px;color:var(--text-muted,#94a3b8);}
+                        .otd-cell-preview{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+                        .otd-platform{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--tag-bg,#eff6ff);color:var(--brand-primary,#2563eb);}
+                        .otd-pagination{display:flex;justify-content:flex-end;margin-top:10px;}
+                        .badge-warn{background:#fef3c7;color:#92400e;}.badge-ok{background:#dcfce7;color:#166534;}
+                        .badge-err{background:#fee2e2;color:#991b1b;}.badge-muted{background:#f1f5f9;color:#64748b;}
+                        .badge{font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap;}
+                    </style>
+                    <div class="page-header">
+                        <div class="page-header-text">
+                            <div class="page-header-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                            <div>
+                                <h2 class="page-header-title">未回复消息 → 待办</h2>
+                                <p class="page-header-desc">工作时间外 / 非工作日收到、且本人尚未回复的消息，自动整理为对应平台的个人待办</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding:0 20px 20px;">
+                        <div class="otd-section-title">筛选规则</div>
+                        <div id="otd-rules" class="otd-rules"></div>
+                        <div class="otd-section-title">概览</div>
+                        <div id="otd-stats" class="otd-stats"></div>
+                        <div id="offhours-todos-content"></div>
+                    </div>
+                </div>
                 <!-- Logs Page -->
                 <div class="page" id="page-logs" data-page-node-id="jwibeqsonxhkDltcZ32Lp2">
                     <div class="page-header" data-page-node-id="VUPjtteGpFWVhwobYh5nSV">
@@ -3950,6 +4012,7 @@
          使其 window.X = X 桥接能正确引用各 pages/*.js 中已定义的全局函数。 -->
     <script src="/static/js/pages/config.js?v={{ config_js_v }}"></script>
     <script src="/static/js/pages/dead_letters.js?v={{ dead_letters_js_v }}"></script>
+    <script src="/static/js/pages/offhours_todos.js?v={{ offhours_todos_js_v }}"></script>
     <script src="/static/js/pages/dashboard.js?v={{ dashboard_js_v }}"></script>
     <script src="/static/js/pages/departments.js?v={{ departments_js_v }}"></script>
     <script src="/static/js/pages/intent.js?v={{ intent_js_v }}"></script>

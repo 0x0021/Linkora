@@ -659,6 +659,66 @@ def init_schema(conn: sqlite3.Connection, db_path: str) -> None:
     """)
     conn.commit()
 
+    # ── 工作时间外未回复消息 → 待办（off-hours todo）──────────────────
+    # 扫描发现的「工作时间外/非工作日、且本人未回复」消息，按
+    # dedupe_key(平台+会话+消息ID) 唯一，重复扫描只更新不重复落库。
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS offhours_unanswered (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform       TEXT NOT NULL,
+            chat_id        TEXT NOT NULL,
+            chat_name      TEXT DEFAULT '',
+            chat_type      TEXT DEFAULT '',
+            msg_id         TEXT NOT NULL,
+            sender_id      TEXT DEFAULT '',
+            sender_name    TEXT DEFAULT '',
+            content_preview TEXT DEFAULT '',
+            msg_timestamp  TEXT NOT NULL,
+            reason         TEXT DEFAULT '',          -- off_hours / weekend / holiday
+            status         TEXT NOT NULL DEFAULT 'pending',  -- pending/todo_created/notified_only/ignored/replied_later/todo_failed
+            dedupe_key     TEXT NOT NULL,
+            detected_at    TEXT NOT NULL,
+            updated_at     TEXT NOT NULL,
+            detail         TEXT DEFAULT ''
+        )
+    """)
+    cur.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_oum_dedupe "
+        "ON offhours_unanswered(dedupe_key)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_oum_status_ts "
+        "ON offhours_unanswered(status, msg_timestamp DESC)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_oum_platform_chat "
+        "ON offhours_unanswered(platform, chat_id, status)"
+    )
+
+    # 待办创建记录：每次实际建单/降级通知落一条；dedupe_key 唯一保证幂等。
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS offhours_todo_records (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform        TEXT NOT NULL,
+            chat_id         TEXT NOT NULL,
+            msg_id          TEXT NOT NULL,
+            dedupe_key      TEXT NOT NULL UNIQUE,
+            todo_id         TEXT DEFAULT '',
+            todo_type       TEXT DEFAULT '',   -- platform_todo / notify_only
+            title           TEXT DEFAULT '',
+            status          TEXT DEFAULT '',   -- created / failed
+            sender_notified INTEGER DEFAULT 0,
+            owner_notified  INTEGER DEFAULT 0,
+            error           TEXT DEFAULT '',
+            created_at      TEXT NOT NULL
+        )
+    """)
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_otr_platform_time "
+        "ON offhours_todo_records(platform, created_at DESC)"
+    )
+    conn.commit()
+
     # ── 完整性检查 ─────────────────────────────────────────────────────
     try:
         cur.execute("PRAGMA integrity_check")

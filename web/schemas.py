@@ -174,6 +174,8 @@ class ConfigUpdate(BaseModel):
     unreplied_todo_owner_user_id: str | None = None
     unreplied_todo_owner_open_dingtalk_id: str | None = None
     unreplied_todo_sender_notice_text: str | None = None
+    unreplied_todo_notice_max_age_hours: int | None = None
+    unreplied_todo_notice_only_when_offhours: bool | None = None
     unreplied_todo_ignore_system_senders: str | None = None
     unreplied_todo_ignore_sender_ids: str | None = None
     unreplied_todo_ignore_content_prefixes: str | None = None

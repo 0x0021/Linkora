@@ -34,6 +34,7 @@ from .dws_mixins_base import DwsAdapterBase
 import logging
 import time
 from datetime import datetime, timedelta
+from typing import Any
 
 from src.dws_adapter.core import DwsError
 from src.im_adapter.errors import IMAdapterError
@@ -278,6 +279,73 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                 len(result.get("messages", []) or []),
             )
         return result.get("messages", []) or []
+
+    def chat_message_list_conversation(
+        self, conversation_id: str, time_str: str, limit: int = 50,
+        timeout: int | None = None,
+    ) -> dict[str, Any]:
+        """拉取**单个会话**（单聊/群聊通用）的消息，返回带完整性标志的 dict。
+
+        命令：``dws chat message list --conversation-id <cid> --time <t>
+        --direction newer --page-all``。
+
+        🔴 为什么需要这个方法（2026-11-23 实测）：
+        ``chat_message_list_all``（全会话时间窗）的返回**不稳定且会静默截断**——同一窗口
+        连续三次分别返回 118 / 68 / 118 条。截断时漏掉的可能正是「本人在同会话里更晚的
+        那条真人回复」，导致「未回复」判定被反转：白艳霞 11-22 09:26 的留言本已被坤哥
+        11-22 11:33「没事」回复过，却因截断漏掉该回复而被误判成未回复 → 误建待办 +
+        对外误发「稍后回复」回执。
+
+        本方法走单会话接口，实测返回 ``complete=True`` / ``stopReason=source_complete``，
+        消息完整可判定；调用方据此在**建单前复核**该留言之后是否已有本人真人回复。
+
+        返回：``{"messages": [...], "complete": bool, "partial": bool,
+        "has_more": bool, "stop_reason": str}``；``complete`` 为 False 表示结果被截断，
+        调用方应**保守处理**（不可据此断定「没有回复」）。
+        """
+        if not conversation_id:
+            return {"messages": [], "complete": False, "partial": True,
+                    "has_more": False, "stop_reason": "no_conversation_id"}
+        page_limit = self._MESSAGE_LIST_MAX_PAGES
+        max_items = max(limit, 1) * page_limit
+        try:
+            data = self.run([
+                "chat", "message", "list",
+                "--conversation-id", conversation_id,
+                "--time", time_str,
+                "--direction", "newer",
+                "--limit", str(limit),
+                "--page-all",
+                "--page-limit", str(page_limit),
+                "--max-items", str(max_items),
+            ], operation="chat_message_list_conversation", force_no_dry_run=True,
+                timeout=timeout or self.timeout)
+        except (DwsError, OSError, ValueError, TypeError) as e:
+            logger.warning("[DWS] 单会话消息拉取失败（cid=%s, time=%s）: %s",
+                           conversation_id[:24], time_str, e)
+            return {"messages": [], "complete": False, "partial": True,
+                    "has_more": False, "stop_reason": f"error: {e}"}
+        result = self._get_result(data)
+        if not isinstance(result, dict):
+            return {"messages": [], "complete": False, "partial": True,
+                    "has_more": False, "stop_reason": "bad_result"}
+        messages = result.get("messages", []) or []
+        partial = bool(result.get("partial") or result.get("truncated"))
+        complete = bool(result.get("complete")) and not partial
+        if not complete:
+            logger.warning(
+                "[DWS] 单会话消息未完整返回（cid=%s, time=%s）：stopReason=%s, "
+                "pagesFetched=%s, 已取 %d 条——调用方须保守处理",
+                conversation_id[:24], time_str, result.get("stopReason"),
+                result.get("pagesFetched"), len(messages),
+            )
+        return {
+            "messages": messages,
+            "complete": complete,
+            "partial": partial,
+            "has_more": bool(result.get("hasMore")),
+            "stop_reason": str(result.get("stopReason") or ""),
+        }
 
     def chat_message_list_emotion_replies(self, msg_ids: list[str],
                                          timeout: int | None = None) -> dict[str, list[dict]]:

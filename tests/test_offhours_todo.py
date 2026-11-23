@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 from src.config_models.system import UnrepliedTodoConfig
@@ -35,9 +35,35 @@ class FakeStore:
         self.conn = main_conn
         self._conversation_repo = SimpleNamespace(_cc=lambda _platform: conv_conn)
         self._offhours_todo_repo = OffhoursTodoRepo(self)  # type: ignore[arg-type]
+        # 回执落库走 _message_repo.save_message（与生产同一条路径），
+        # 这里用真实 MessageRepo + 会话库连接，验证 role/is_bot 标记确实落到位。
+        self._message_repo = _FakeMessageRepo(conv_conn)
 
     def write_main_with_retry(self, fn):
         return fn(self.conn)
+
+
+class _FakeMessageRepo:
+    """只实现 save_message 的最小仓储替身（写会话库 messages 表）。"""
+
+    def __init__(self, conv_conn: sqlite3.Connection) -> None:
+        self._conn = conv_conn
+
+    def save_message(self, message, role: str = "user", skip_reason: str = "") -> None:
+        ts = message.timestamp.isoformat() if message.timestamp else ""
+        self._conn.execute(
+            """INSERT OR IGNORE INTO messages
+               (chat_id, chat_type, msg_id, sender_id, sender_name, content, msg_type,
+                timestamp, role, image_path, is_bot, skip_reason, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                message.chat_id, message.chat_type or "single", message.msg_id,
+                message.sender_id, message.sender_name, message.content,
+                message.msg_type or "text", ts, role, message.image_path or "",
+                int(message.is_bot), skip_reason or "", ts,
+            ),
+        )
+        self._conn.commit()
 
 
 def _make_store(tmp_path):
@@ -180,9 +206,9 @@ def test_unanswered_item_dedupe_key_format():
     assert item.dedupe_key == "feishu:oc_x:om_y"
 
 
-def _make_item(platform: str) -> UnansweredItem:
+def _make_item(platform: str, chat_type: str = "single") -> UnansweredItem:
     return UnansweredItem(
-        platform=platform, chat_id="chat-1", chat_name="项目群", chat_type="",
+        platform=platform, chat_id="chat-1", chat_name="项目群", chat_type=chat_type,
         msg_id="m1", sender_id="peer", sender_name="张三",
         content_preview="明天能给我回复吗？", timestamp="2026-11-22T20:05:00",
         reason=REASON_WEEKEND, dedupe_key=f"{platform}:chat-1:m1",
@@ -203,7 +229,11 @@ def test_service_creates_dingtalk_todo_and_notifies_sender(tmp_path):
         dedupe_key="dingtalk:chat-1:m1", msg_timestamp="2026-11-22T20:05:00",
     )
 
-    ok, kind, err = service._create_for_item(_make_item("dingtalk"), ctx, {"self-oid"})
+    ok, kind, err = service._create_for_item(
+        _make_item("dingtalk"), ctx, {"self-oid"},
+        # 留言当天晚上收到、主人同样在非工作时段 → 回执成立
+        now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
 
     assert ok and kind == "platform_todo" and not err
     adapter.todo_task_create.assert_called_once()
@@ -223,13 +253,205 @@ def test_service_wecom_degrades_to_notify_only(tmp_path):
     cfg = UnrepliedTodoConfig(enabled=True, notify_sender=True, notify_owner=False)
     service = OffhoursTodoService(cfg, engine, {"wecom": ctx})
 
-    ok, kind, err = service._create_for_item(_make_item("wecom"), ctx, {"self-oid"})
+    ok, kind, err = service._create_for_item(
+        _make_item("wecom"), ctx, {"self-oid"},
+        now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
 
     assert ok and kind == "notify_only" and not err
     adapter.todo_task_create.assert_not_called()  # 企微无个人待办 API，不许伪装建单
     assert adapter.chat_message_send.call_count == 1
     rows, total = store._offhours_todo_repo.list_todo_records()
     assert total == 1 and rows[0]["todo_type"] == "notify_only"
+
+
+# ---------------- 回执时效 / 时段闸门（2026-11-23 真实事故回归） ----------------
+
+def test_notice_skipped_when_message_too_old(tmp_path):
+    """陈旧留言不再给对方发「稍后回复」——隔天的回执既不合逻辑也像骚扰。
+
+    真实事故：2026-11-22 09:26 白艳霞的留言，服务 11-23 14:25 才扫到并建单，
+    随即发出「稍后回复」，主人当时已坐在工位上。
+
+    本例刻意把「时段闸门」关掉，只让时效闸门单独生效，避免两个条件互相掩盖。
+    """
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    adapter.todo_task_create.return_value = {"task_id": "todo-x"}
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=6, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="白艳霞", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="白艳霞",
+        content_preview="RG626B05 需要加到钉钉", timestamp="2026-11-22T09:26:10",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    # 当前仍在非工作时段（周日晚上），唯一拦住回执的只能是「留言太旧」
+    ok, kind, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 0, tzinfo=TZ),
+    )
+
+    assert ok and kind == "platform_todo" and not err
+    adapter.todo_task_create.assert_called_once()          # 待照建
+    adapter.chat_message_send.assert_not_called()           # 但不回执
+    rows, total = store._offhours_todo_repo.list_todo_records()
+    assert total == 1 and rows[0]["sender_notified"] == 0
+
+
+def test_notice_skipped_when_owner_back_at_work(tmp_path):
+    """当前已回到工作时间 → 不发「稍后回复」（主人此刻就能回，说稍后是假话）。
+
+    刻意把时效闸门放宽到 24h 且留言是 1 小时前，确保只有「时段闸门」生效。
+    """
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    adapter.todo_task_create.return_value = {"task_id": "todo-y"}
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=24, notice_only_when_offhours=True,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="张三", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="张三",
+        content_preview="明天给我回复", timestamp="2026-11-23T13:30:00",
+        reason=REASON_OFF_HOURS, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    ok, _, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 23, 14, 0, tzinfo=TZ),
+    )
+
+    assert ok and not err
+    adapter.chat_message_send.assert_not_called()
+
+
+def test_notice_allowed_when_still_offhours_and_fresh(tmp_path):
+    """留言新鲜且当前仍在非工作时段 → 回执照发（这是功能本意）。"""
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    adapter.todo_task_create.return_value = {"task_id": "todo-z"}
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=6, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="张三", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="张三",
+        content_preview="明天给我回复", timestamp="2026-11-22T20:05:00",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    ok, _, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+
+    assert ok and not err
+    adapter.chat_message_send.assert_called_once()
+
+
+def test_notice_gate_can_be_disabled(tmp_path):
+    """两个闸门都可关：关掉后恢复旧行为（回执照发）。"""
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    adapter.todo_task_create.return_value = {"task_id": "todo-w"}
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="白艳霞", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="白艳霞",
+        content_preview="RG626B05", timestamp="2026-11-22T09:26:10",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    ok, _, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 23, 14, 25, tzinfo=TZ),
+    )
+
+    assert ok and not err
+    adapter.chat_message_send.assert_called_once()
+
+
+# ---------------- 平台侧补拉分窗（漏消息回归） ----------------
+
+def test_window_chunks_covers_whole_lookback():
+    """回看窗口被完整切成不重叠子窗（钉钉整窗翻页会漏消息，见 2026-11-23 事故）。"""
+    from src.offhours_todo.scanner import _window_chunks
+
+    now = datetime(2026, 11, 23, 14, 25, tzinfo=TZ)
+    chunks = _window_chunks(now, 48, 6)
+
+    assert len(chunks) == 8
+    assert chunks[0][0] == now - timedelta(hours=48)
+    assert chunks[-1][1] == now
+    for prev, cur in zip(chunks, chunks[1:], strict=False):
+        assert prev[1] == cur[0]  # 不重叠、不留缝
+
+
+def test_platform_pull_is_split_into_windows(tmp_path):
+    """平台侧补拉按子窗分次调用（不再整窗一把拉）。"""
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    # 平台侧返回空，只验证调用次数与时间窗粒度
+    adapter.chat_message_list_all.return_value = {"conversationMessagesList": []}
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    cfg = UnrepliedTodoConfig(enabled=True, lookback_hours=48)
+
+    with patch("src.offhours_todo.scanner._fetch_unread_chats", return_value=set()):
+        scan_platform(
+            cfg, "dingtalk", ctx, self_ids={"self-oid"},
+            now=datetime(2026, 11, 23, 14, 25, tzinfo=TZ),
+        )
+
+    assert adapter.chat_message_list_all.call_count == 8  # 48h / 6h
+
+
+def test_owner_notified_marked_after_summary_sent(tmp_path):
+    """本人汇总送达后回填标记（否则 Web 上这批记录永远显示「未通知本人」）。"""
+    store = _make_store(tmp_path)
+    adapter = MagicMock()
+    adapter.todo_task_create.return_value = {"task_id": "todo-n"}
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=True, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="张三", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="张三",
+        content_preview="明天给我回复", timestamp="2026-11-22T20:05:00",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    ok, _, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+    assert ok and not err
+    # 建单时先记 0（汇总还没发）
+    assert store._offhours_todo_repo.list_todo_records()[0][0]["owner_notified"] == 0
+
+    # 汇总送达后回填
+    updated = store._offhours_todo_repo.mark_owner_notified(["dingtalk:chat-1:m1"])
+    assert updated == 1
+    assert store._offhours_todo_repo.list_todo_records()[0][0]["owner_notified"] == 1
 
 
 def test_offhours_routes_registered():
@@ -445,3 +667,241 @@ def test_resolve_executor_prefers_numeric_user_id():
     cfg2 = UnrepliedTodoConfig(owner_user_id="3410690324258637")
     svc2 = OffhoursTodoService(cfg2, SimpleNamespace(current_user_id=""), {})
     assert svc2._resolve_executor("dingtalk", set()) == "3410690324258637"
+
+
+# ------------------------------------------------------------------
+# 建单前单会话定向复核（2026-11-23 实测事故修复）
+# ------------------------------------------------------------------
+
+
+def _recheck_adapter(replies: list[dict], *, complete: bool = True) -> MagicMock:
+    """构造带单会话复核接口的 adapter 桩。
+
+    replies: 本人在留言之后的回复列表（每项含 senderId/createTime/text）。
+    """
+    adapter = MagicMock()
+    adapter.todo_task_create.return_value = {"task_id": "todo-r"}
+    adapter.chat_message_list_conversation.return_value = {
+        "messages": replies, "complete": complete, "partial": not complete,
+        "has_more": False, "stop_reason": "source_complete" if complete else "page_limit",
+    }
+    return adapter
+
+
+def test_create_skipped_when_conversation_recheck_finds_human_reply(tmp_path):
+    """建单前复核发现本人已回复 → 不建待办、不发回执（真实事故：白艳霞那条）。
+
+    扫描阶段的「全会话时间窗」补拉会被服务端静默截断（实测 68/118 条），
+    截断时可能漏掉「本人在同会话里更晚的那条真人回复」，把「已回复」反转成
+    「未回复」→ 误建待办 + 对外误发「稍后回复」回执。故建单前必须单会话复核。
+    """
+    store = _make_store(tmp_path)
+    adapter = _recheck_adapter([
+        {"senderId": "self-oid", "createTime": "2026-11-22 11:33:46", "text": "没事",
+         "sendType": "user"},
+    ])
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="白艳霞", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="白艳霞",
+        content_preview="RG626B05 需要加到钉钉", timestamp="2026-11-22T09:26:10",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+    # 模拟 scanner 已先落库的未回复消息
+    store._offhours_todo_repo.upsert_unanswered(
+        platform="dingtalk", chat_id="chat-1", msg_id="m1",
+        dedupe_key="dingtalk:chat-1:m1", msg_timestamp="2026-11-22T09:26:10",
+    )
+
+    ok, kind, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+
+    assert ok and kind == "already_replied" and not err
+    adapter.todo_task_create.assert_not_called()      # 不建待办
+    adapter.chat_message_send.assert_not_called()       # 不发回执
+    assert store._offhours_todo_repo.get_unanswered_by_key(
+        "dingtalk:chat-1:m1")["status"] == "replied_later"
+
+
+def test_create_proceeds_when_conversation_recheck_finds_no_reply(tmp_path):
+    """复核确认未回复 → 正常建单 + 发回执（复核不能误杀正常待办）。"""
+    store = _make_store(tmp_path)
+    adapter = _recheck_adapter([])
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="张三", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="张三",
+        content_preview="明天给我回复", timestamp="2026-11-22T20:05:00",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    ok, kind, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+
+    assert ok and kind == "platform_todo" and not err
+    adapter.todo_task_create.assert_called_once()
+    adapter.chat_message_send.assert_called_once()
+
+
+def test_create_proceeds_when_conversation_recheck_incomplete(tmp_path):
+    """复核结果不完整（接口截断/失败）→ 保守放行建单，不能因探测失败漏掉真待办。
+
+    复核是「防误建」的护栏，不是「准入门禁」：探测不确定时应按原流程走，
+    否则接口一抖就整批待办建不出来。
+    """
+    store = _make_store(tmp_path)
+    adapter = _recheck_adapter([], complete=False)
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = UnansweredItem(
+        platform="dingtalk", chat_id="chat-1", chat_name="张三", chat_type="single",
+        msg_id="m1", sender_id="peer", sender_name="张三",
+        content_preview="明天给我回复", timestamp="2026-11-22T20:05:00",
+        reason=REASON_WEEKEND, dedupe_key="dingtalk:chat-1:m1",
+    )
+
+    ok, kind, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+
+    assert ok and kind == "platform_todo" and not err
+    adapter.todo_task_create.assert_called_once()
+
+
+def test_notice_not_sent_for_group_chat(tmp_path):
+    """群聊不发「稍后回复」回执——那句话是对个人说的承诺，在群里发是噪声。
+
+    真实事故：2026-11-22 19:16 有 10 条回执被发进「工作汇报(日志)」系统日志群。
+    """
+    store = _make_store(tmp_path)
+    adapter = _recheck_adapter([])
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = _make_item("dingtalk", chat_type="group")
+
+    ok, kind, err = service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+
+    assert ok and kind == "platform_todo" and not err
+    adapter.todo_task_create.assert_called_once()      # 待办照建
+    adapter.chat_message_send.assert_not_called()       # 但群聊不发回执
+
+
+def test_notice_message_persisted_as_bot(tmp_path):
+    """回执落库必须标 assistant/is_bot=1，否则会被当成「本人真人回复」污染判定。
+
+    回执是以本人账号发出的，钉钉侧看 sendType='user'、senderId=本人 → 轮询拉回后
+    默认落成 role='user'/is_bot=0。而「未回复」口径正是 is_bot=0 且 sender_id∈本人，
+    于是这条自动回执被当成「本人已亲自回复」，把同会话里更早的真留言误判为已回复。
+    """
+    store = _make_store(tmp_path)
+    adapter = _recheck_adapter([])
+    ctx = SimpleNamespace(store=store, dws=adapter)
+    engine = SimpleNamespace(current_open_dingtalk_id="self-oid", current_user_id="uid")
+    cfg = UnrepliedTodoConfig(
+        enabled=True, notify_sender=True, notify_owner=False, owner_user_id="uid",
+        notice_max_age_hours=0, notice_only_when_offhours=False,
+    )
+    service = OffhoursTodoService(cfg, engine, {"dingtalk": ctx})
+    item = _make_item("dingtalk")
+
+    service._create_for_item(
+        item, ctx, {"self-oid"}, now=datetime(2026, 11, 22, 20, 30, tzinfo=TZ),
+    )
+
+    cur = store._conversation_repo._cc("dingtalk").cursor()
+    rows = cur.execute(
+        "SELECT role, is_bot, content FROM messages WHERE content LIKE '%记入待办%'"
+    ).fetchall()
+    assert rows, "回执未落库"
+    for row in rows:
+        assert row["role"] == "assistant"
+        assert int(row["is_bot"]) == 1
+
+
+def test_recheck_only_counts_own_human_replies():
+    """单会话复核只认「本人真人回复」：他人消息 / AI 代发 / 留言之前的消息都不算。"""
+    from src.offhours_todo.scanner import _recheck_conversation_replies
+
+    adapter = MagicMock()
+    adapter.chat_message_list_conversation.return_value = {
+        "messages": [
+            # 对方的消息 —— 不是本人回复
+            {"senderId": "peer", "createTime": "2026-11-22 10:00:00", "text": "我也想问", "sendType": "user"},
+            # AI 代发 —— 不是本人回复
+            {"senderId": "self-oid", "createTime": "2026-11-22 10:10:00", "text": "AI 代发",
+             "sendType": "user", "messageAiSendFlag": "DWS"},
+            # 机器人 —— 不是本人回复
+            {"senderId": "self-oid", "createTime": "2026-11-22 10:20:00", "text": "机器人", "sendType": "bot"},
+            # 留言之前的本人消息 —— 不算「之后的回复」
+            {"senderId": "self-oid", "createTime": "2026-11-22 09:00:00", "text": "更早的回复", "sendType": "user"},
+        ],
+        "complete": True, "partial": False, "has_more": False, "stop_reason": "source_complete",
+    }
+
+    replied, reason = _recheck_conversation_replies(
+        adapter, "dingtalk", "chat-1", "2026-11-22 09:26:00", {"self-oid"}, TZ,
+    )
+
+    assert replied is False and reason == ""
+
+
+def test_recheck_detects_own_human_reply():
+    """复核命中本人真人回复 → 判定为已回复。"""
+    from src.offhours_todo.scanner import _recheck_conversation_replies
+
+    adapter = MagicMock()
+    adapter.chat_message_list_conversation.return_value = {
+        "messages": [
+            {"senderId": "self-oid", "createTime": "2026-11-22 11:33:46", "text": "没事", "sendType": "user"},
+        ],
+        "complete": True, "partial": False, "has_more": False, "stop_reason": "source_complete",
+    }
+
+    replied, _ = _recheck_conversation_replies(
+        adapter, "dingtalk", "chat-1", "2026-11-22 09:26:00", {"self-oid"}, TZ,
+    )
+
+    assert replied is True
+
+
+def test_recheck_returns_unknown_when_incomplete():
+    """复核结果不完整 → 返回 None（无法判定），调用方据此保守放行。"""
+    from src.offhours_todo.scanner import _recheck_conversation_replies
+
+    adapter = MagicMock()
+    adapter.chat_message_list_conversation.return_value = {
+        "messages": [], "complete": False, "partial": True,
+        "has_more": True, "stop_reason": "page_limit",
+    }
+
+    replied, reason = _recheck_conversation_replies(
+        adapter, "dingtalk", "chat-1", "2026-11-22 09:26:00", {"self-oid"}, TZ,
+    )
+
+    assert replied is None and "incomplete" in reason

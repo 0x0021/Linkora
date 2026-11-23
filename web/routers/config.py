@@ -429,6 +429,8 @@ def _apply_unreplied_todo(update: ConfigUpdate, cfg: AppConfig):
         "owner_user_id": update.unreplied_todo_owner_user_id,
         "owner_open_dingtalk_id": update.unreplied_todo_owner_open_dingtalk_id,
         "sender_notice_text": update.unreplied_todo_sender_notice_text,
+        "notice_max_age_hours": update.unreplied_todo_notice_max_age_hours,
+        "notice_only_when_offhours": update.unreplied_todo_notice_only_when_offhours,
         "ignore_system_senders": update.unreplied_todo_ignore_system_senders,
         "ignore_sender_ids": update.unreplied_todo_ignore_sender_ids,
         "ignore_content_prefixes": update.unreplied_todo_ignore_content_prefixes,

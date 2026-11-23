@@ -20,7 +20,7 @@
 | `skills` | `enabled` / `auto_activate` / `semantic_routing` / `combo_enabled` / `combo_gap` / `hot_reload` / `ai_intent_generation_enabled` | 技能引擎：自动激活 / 语义路由 / 组合激活 / 热加载 |
 | `safety` | `default_fallback` / `media_fallback_text` / `sensitive_words` / `guard` | 兜底、敏感词与入站消息防护 |
 | `safety.guard` | `enabled` / `mode` / `block_high_risk` / `block_injection_commands` / `detect_*` / `injection_min_categories` / `sanitize_payload` / `wrap_untrusted_inbound` / `rate_limit_*` / `audit_enabled` | 入站消息提示词注入防护（见下文专节） |
-| `unreplied_todo` | `enabled` / `timezone` / `workdays` / `work_start` / `work_end` / `holidays` / `lookback_hours` / `scan_interval_minutes` / `max_per_scan` / `auto_create` / `notify_sender` / `notify_owner` / `owner_*` / `ignore_*` | 工作时间外未回复消息 → 个人待办（默认关闭，见下文专节） |
+| `unreplied_todo` | `enabled` / `timezone` / `workdays` / `work_start` / `work_end` / `holidays` / `lookback_hours` / `scan_interval_minutes` / `max_per_scan` / `auto_create` / `notify_sender` / `notify_owner` / `owner_*` / `notice_*` / `ignore_*` | 工作时间外未回复消息 → 个人待办（默认关闭，见下文专节） |
 | `dead_letter` | `enabled` | 死信队列：LLM/发消息彻底失败时落库而非静默丢弃，可重放 |
 | `storage` | `type` / `path` / `backup_enabled` / `backup_*` / `decisions_retention_days` / `messages_retention_days` / `doc_sync_interval_hours` | SQLite 路径与自动备份（legacy 兼容段，**运行期以 platforms.dingtalk.storage 为准**） |
 | `logging` | `level` / `file` / `max_size_mb` / `max_backups` | 日志 |
@@ -236,12 +236,30 @@ platforms:
 | `notify_sender` / `notify_owner` | `true` / `true` | 建单后给对方回执 / 给本人推汇总 |
 | `owner_user_id` / `owner_open_dingtalk_id` | 空 | 本人标识（汇总提醒与执行人用，**优先填数字 userId**） |
 | `sender_notice_text` | `你的消息我已记入待办，稍后回复，谢谢～` | 给对方的回执话术 |
+| `notice_max_age_hours` | `6` | 回执时效闸门：留言距今超过该小时数就不再给对方发回执（待办照建、只提醒本人）；`0` = 不限制 |
+| `notice_only_when_offhours` | `true` | 回执时段闸门：只有当前仍在工作时间外才回执；主人已回到工位时不发「稍后回复」 |
 | `ignore_system_senders` / `ignore_sender_ids` / `ignore_content_prefixes` / `ignore_trivial_replies` | 见 `config.yaml.example` | 过滤名单：系统发送者 / 精确 senderId / 内容前缀 / 纯客套词 |
 
 🔴 建单执行人请用**数字 userId**（`dws contact user get-self` 取 `orgEmployeeModel.userId`）：
 只填 `open_dingtalk_id` 会被钉钉静默忽略、待办不出现在「待我处理」。首次启用会自建
 `offhours_unanswered` / `offhours_todo_records` 两张本地表，无需手工迁移；内置工具数仍 49。
 管理台「未回复待办」页可查看筛选规则、未回复消息、建单记录与统计，并手动扫描 / 同步 / 建单 / 忽略。
+
+🔴 **回执闸门（2026-11-23 加）**：回执的语义是「我现在不方便，稍后回」，只有留言新鲜、
+且主人此刻确实还在非工作时段时才成立。隔天的留言、或主人已坐在工位上时发「稍后回复」
+既不合逻辑也像骚扰，因此这些条件下**只建待办 + 提醒本人，不打扰对方**。此外**群聊一律
+不回执**（该闸门不可关闭）——「稍后回复」是对个人说的承诺，在群里发等于当众承诺，
+系统日志群（如「工作汇报(日志)」）收到这种回执纯属噪声；群聊只建待办 + 提醒本人。
+前两个闸门可关（`notice_max_age_hours: 0` + `notice_only_when_offhours: false` 恢复旧行为）。
+
+🔴 **建单前单会话复核（2026-11-23 加，无需配置）**：建待办前会单独拉一次该会话，确认本人
+确未回复过才建单、才回执。原因：钉钉「全会话时间窗」接口返回不稳定且会静默截断（同一窗口
+连续三次返回 118 / 68 / 118 条），截断时可能正好漏掉「本人在同一会话里更晚的那条真人回复」，
+把「已回复」反转成「未回复」→ 误建待办 + 误发回执。复核不确定时保守放行，不因接口抖动漏建待办。
+
+🔴 **自动回执不算「本人已回复」**：回执是以本人账号发出的，钉钉侧看与真人消息无异；系统
+在回执发出后即落库并标为「AI 代发」，避免这条自动回执把同一会话里更早的真留言误判为
+已回复（漏建单）。
 
 ## 规则引擎
 

@@ -14,9 +14,10 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import subprocess
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from src.config_models.system import UnrepliedTodoConfig
@@ -24,9 +25,11 @@ from src.im_adapter.errors import IMAdapterError, IMAdapterUnsupportedTypeError
 from src.offhours_todo.scanner import (
     ScanResult,
     UnansweredItem,
+    _recheck_conversation_replies,
     collect_platform_self_ids,
     scan_platform,
 )
+from src.offhours_todo.worktime import classify, parse_message_ts, resolve_tz
 
 if TYPE_CHECKING:
     from src.platform.base import PlatformContext
@@ -99,6 +102,7 @@ class OffhoursTodoService:
 
             should_create = self.cfg.auto_create if create_todos is None else bool(create_todos)
             all_notices: list[str] = []
+            created_keys: list[str] = []
 
             from src.memory.platform_context import with_platform
 
@@ -107,7 +111,7 @@ class OffhoursTodoService:
                 with with_platform(pid):
                     ctx_result = self._scan_one(
                         pid, ctx, create_todos=should_create, dry_run=dry_run,
-                        notices=all_notices,
+                        notices=all_notices, created_keys=created_keys,
                     )
                 summary["platforms"].append(ctx_result)
                 for key in ("scanned", "offhours", "pending_new", "replied_backfilled",
@@ -116,7 +120,17 @@ class OffhoursTodoService:
 
             # 本人汇总提醒（仅实际建单后发一次，避免逐条轰炸）
             if all_notices and self.cfg.notify_owner and not dry_run:
-                self._notify_owner(all_notices)
+                if self._notify_owner(all_notices):
+                    # 汇总已送达 → 回填这批记录的「已通知本人」标记（否则 Web 上
+                    # 永远显示未通知，与事实不符）
+                    for pid, ctx in targets:
+                        if ctx.store is None:
+                            continue
+                        try:
+                            with with_platform(pid):
+                                ctx.store._offhours_todo_repo.mark_owner_notified(created_keys)
+                        except (sqlite3.Error, ValueError, AttributeError) as e:
+                            logger.debug("[未回复待办] 回填本人通知标记失败 platform=%s: %s", pid, e)
             summary["finished_at"] = datetime.now().isoformat(timespec="seconds")
             self._last_result = summary
             return summary
@@ -131,6 +145,7 @@ class OffhoursTodoService:
         create_todos: bool,
         dry_run: bool,
         notices: list[str],
+        created_keys: list[str] | None = None,
     ) -> dict[str, Any]:
         self_ids = collect_platform_self_ids(self.engine, ctx)
         result: ScanResult = scan_platform(
@@ -163,6 +178,8 @@ class OffhoursTodoService:
                     f"[{platform}] {item.sender_name or item.sender_id or '未知'}："
                     f"{item.content_preview[:40]}"
                 )
+                if created_keys is not None and kind != "duplicate":
+                    created_keys.append(item.dedupe_key)
             else:
                 out["failed"] += 1
                 logger.warning("[未回复待办] 平台 %s 建单失败 key=%s: %s", platform, item.dedupe_key, err)
@@ -214,10 +231,49 @@ class OffhoursTodoService:
             )
         return next_non_digit
 
+    def _recheck_replied(
+        self, item: UnansweredItem, ctx: "PlatformContext",
+        self_ids: frozenset[str] | set[str],
+    ) -> tuple[bool, str]:
+        """建单前单会话复核：本人是否已在这条留言之后回复过。
+
+        返回 ``(True, reason)`` = 确认已回复（不该建单）；``(False, reason)`` =
+        确认未回复或无法判定（继续建单）。
+
+        复核不依赖扫描阶段的合并数据（那份数据可能被平台侧补拉截断），而是走
+        **单会话**接口单独拉一次——实测该接口返回 ``complete=True``、消息完整。
+        """
+        if item.platform != "dingtalk":
+            return False, "not_dingtalk"
+        adapter = ctx.dws
+        if adapter is None:
+            return False, "no_adapter"
+        fn = getattr(adapter, "chat_message_list_conversation", None)
+        if not callable(fn):
+            return False, "no_conversation_api"
+        # 从留言时间的下一分钟开始拉（覆盖留言本身之后的全部回复）
+        try:
+            base = datetime.fromisoformat(item.timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            base = None
+        since = (base + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S") if base else ""
+        if not since:
+            return False, "bad_timestamp"
+        replied, reason = _recheck_conversation_replies(
+            adapter, item.platform, item.chat_id, since, self_ids, resolve_tz(self.cfg.timezone),
+        )
+        if replied:
+            return True, reason or "本人已回复"
+        return False, reason
+
     def _create_for_item(
         self, item: UnansweredItem, ctx: "PlatformContext", self_ids: frozenset[str] | set[str],
+        now: datetime | None = None,
     ) -> tuple[bool, str, str]:
-        """单条建单 + 双边通知 + 状态落库。返回 (是否成功, 类型, 错误)。"""
+        """单条建单 + 双边通知 + 状态落库。返回 (是否成功, 类型, 错误)。
+
+        ``now`` 供测试注入固定时刻（回执闸门依赖「当前时刻」）。
+        """
         store = ctx.store
         if store is None:
             return False, "", "平台 store 不可用"
@@ -229,6 +285,28 @@ class OffhoursTodoService:
         adapter = ctx.dws
         if adapter is None:
             return False, "", "平台适配器不可用"
+
+        # 🔴 建单前单会话定向复核（2026-11-23 实测事故修复）：
+        # 扫描阶段依赖的「全会话时间窗」补拉会被服务端**静默截断**（同一窗口连续三次
+        # 返回 118/68/118 条），截断时可能正好漏掉「本人在同一会话里更晚的那条真人回复」，
+        # 把「已回复」反转成「未回复」→ 误建待办 + 对外误发「稍后回复」回执。
+        # 真实案例：白艳霞 11-22 09:26 的留言本已被坤哥 11-22 11:33「没事」回复过，
+        # 却因截断漏掉该回复被误判成未回复。
+        # 这里用**单会话**接口复核（实测 complete=True、消息完整），只在**建单前**调用
+        # —— 数量极少（每轮个位数），代价可控，且能把误建单挡在最后一关。
+        replied, recheck_reason = self._recheck_replied(item, ctx, self_ids)
+        if replied:
+            logger.info(
+                "[未回复待办] 单会话复核发现本人已回复，取消建单 key=%s（%s）",
+                item.dedupe_key, recheck_reason,
+            )
+            try:
+                repo.update_unanswered_status(
+                    item.dedupe_key, "replied_later", detail="单会话复核：本人已回复",
+                )
+            except (sqlite3.Error, ValueError) as e:
+                logger.debug("[未回复待办] 标记已回复失败 key=%s: %s", item.dedupe_key, e)
+            return True, "already_replied", ""
 
         title = self._build_title(item)
         description = (
@@ -280,10 +358,19 @@ class OffhoursTodoService:
             repo.update_unanswered_status(item.dedupe_key, "todo_failed", detail=err[:300])
             return False, kind, err
 
-        # 对方回执（建单后"告诉对方"）
+        # 对方回执（建单后"告诉对方"）——先过时效/时段闸门：
+        # 留言太旧、或主人已回到工位时，对方面那句「稍后回复」不合逻辑，不发。
         sender_notified = False
         if self.cfg.notify_sender:
-            sender_notified = self._notify_sender(item, ctx, adapter)
+            allowed, skip_reason = self._should_notify_sender(item, now=now)
+            if allowed:
+                sender_notified = self._notify_sender(item, ctx, adapter)
+            else:
+                logger.info(
+                    "[未回复待办] 跳过回执 key=%s（%s）：留言已陈旧或当前在工作时间，"
+                    "只建待办 + 提醒本人",
+                    item.dedupe_key, skip_reason,
+                )
 
         # 记录落库（唯一键 = 最终幂等闸门）
         inserted = repo.insert_todo_record(
@@ -309,6 +396,40 @@ class OffhoursTodoService:
         )
         return True, kind, ""
 
+    def _should_notify_sender(self, item: UnansweredItem, now: datetime | None = None) -> tuple[bool, str]:
+        """回执闸门：这条留言现在还该不该给对方发「稍后回复」。
+
+        回执的语义是「我现在不方便，稍后回」。三种情况下这句话不成立：
+        1. 留言已经太旧（超过 ``notice_max_age_hours``）——对方看到的是一句隔天的
+           「稍后回复」，既不合逻辑也像骚扰；
+        2. 当前已经回到工作时间——主人此刻就在工位上，对对方说「稍后回复」是假话，
+           不如安静建单、只提醒本人；
+        3. 对方是**群聊**——「稍后回复」是对个人说的承诺，在群里发等于当众承诺，
+           且系统日志群（如「工作汇报(日志)」）收到这种回执纯属噪声。
+           群聊只建待办 + 提醒本人。
+
+        返回 (是否发回执, 原因码)；原因码用于日志与记录，便于排障时解释
+        「为什么这条没有回执」。
+        """
+        now = now or datetime.now(resolve_tz(self.cfg.timezone))
+
+        if (item.chat_type or "").lower() != "single":
+            return False, "group_chat"
+
+        max_age = int(self.cfg.notice_max_age_hours or 0)
+        if max_age > 0:
+            ts = parse_message_ts(item.timestamp, resolve_tz(self.cfg.timezone))
+            if ts is not None:
+                age_hours = (now - ts).total_seconds() / 3600.0
+                if age_hours > max_age:
+                    return False, f"stale_{age_hours:.1f}h"
+
+        if self.cfg.notice_only_when_offhours:
+            if not classify(now, self.cfg):
+                return False, "now_in_work_hours"
+
+        return True, ""
+
     def _notify_sender(self, item: UnansweredItem, ctx: "PlatformContext", adapter: Any) -> bool:
         """在原会话给对方回执。钉钉走 conversation_id 稳定 ID 直通，其它平台走 group。"""
         text = self.cfg.sender_notice_text
@@ -319,10 +440,52 @@ class OffhoursTodoService:
                 )
             else:
                 adapter.chat_message_send(group=item.chat_id, title="", text=text, msg_type="text")
-            return True
         except _CLI_ERRORS as e:
             logger.warning("[未回复待办] 对方回执失败 key=%s: %s", item.dedupe_key, e)
             return False
+        self._persist_notice_message(item, ctx, text)
+        return True
+
+    def _persist_notice_message(
+        self, item: UnansweredItem, ctx: "PlatformContext", text: str,
+    ) -> None:
+        """把刚发出的回执落库为 **assistant / is_bot=1**，避免污染「本人真人回复」判定。
+
+        🔴 为什么必须落库标记（2026-11-23 实测事故）：
+        回执是以**本人账号**发出的，钉钉侧看 sendType='user'、senderId=本人 → 轮询拉回
+        后在本地库被标成 role='user'/is_bot=0。而「未回复」判定口径是
+        「is_bot=0 且 sender_id ∈ 本人 ID」= 本人真人回复 —— 于是这条**自动回执**被
+        当成「本人已亲自回复」，把该会话里更早的、真正未回复的留言误判为已回复（漏建单），
+        也会骗过建单前的单会话复核。
+
+        这里主动落库并标记 is_bot=True（与 AI 回复走同一条路径，见
+        ``src/platform/runtime_dispatch.py``），让轮询拉回同一条时能识别为 AI 代发。
+        """
+        store = ctx.store
+        if store is None:
+            return
+        try:
+            from src.models import Message as MessageModel
+
+            engine = self.engine
+            notice = MessageModel(
+                msg_id=f"offhours-notice-{item.dedupe_key}",
+                chat_id=item.chat_id,
+                chat_type=item.chat_type or "single",
+                chat_name=item.chat_name or "",
+                sender_id=str(getattr(engine, "current_open_dingtalk_id", "") or "") or "ai",
+                sender_name=str(getattr(engine, "current_user_name", "") or "AI助手"),
+                content=text,
+                msg_type="text",
+                timestamp=datetime.now(),
+                raw={},
+                is_bot=True,
+            )
+            store._message_repo.save_message(notice, role="assistant")
+        except (sqlite3.Error, ValueError, TypeError, AttributeError) as e:
+            # 收窄异常类型：DB 写失败 / 模型构造参数非法 / 适配器缺方法。
+            # 标记失败不应阻断回执主流程，故只 debug 不抛。
+            logger.debug("[未回复待办] 回执落库标记失败 key=%s: %s", item.dedupe_key, e)
 
     def _notify_owner(self, notices: list[str]) -> bool:
         """钉钉私聊给我本人推一条汇总提醒（owner_* 二选一；皆空则跳过）。"""

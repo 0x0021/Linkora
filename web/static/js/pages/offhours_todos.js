@@ -52,6 +52,23 @@ async function loadOffhoursTodosPage() {
     }
 }
 
+/** 描述回执闸门：什么情况下不会给对方发「稍后回复」 */
+function _otdNoticeGateText(rules) {
+    var parts = [];
+    var maxAge = Number(rules.notice_max_age_hours || 0);
+    if (maxAge > 0) {
+        parts.push('留言超过 ' + maxAge + ' 小时不回执');
+    }
+    if (rules.notice_only_when_offhours) {
+        parts.push('当前在工作时间不回执');
+    }
+    parts.push('群聊不回执');
+    if (!parts.length) {
+        return '不限制（所有留言都会回执对方）';
+    }
+    return parts.join(' · ') + '（此时只建待办 + 提醒本人）';
+}
+
 function _otdRenderRules(rules) {
     var el = document.getElementById('otd-rules');
     if (!el) return;
@@ -61,8 +78,10 @@ function _otdRenderRules(rules) {
         ['节假日', rules.holidays ? _otdEsc(rules.holidays) : '未配置'],
         ['回看窗口', _otdEsc(rules.lookback_hours || 24) + ' 小时 · 每 ' + _otdEsc(rules.scan_interval_minutes || 15) + ' 分钟扫描'],
         ['判定依据', '未读 <b>或</b> 消息之后无真人回复（AI 回复不算）'],
+        ['建单前复核', '逐条拉取该会话确认本人确未回复，避免误建单并误发回执'],
         ['自动建单', rules.auto_create ? '开启' : '关闭（仅记录，需手动建单）'],
         ['通知策略', (rules.notify_sender ? '回执对方' : '不回执对方') + ' · ' + (rules.notify_owner ? '通知本人' : '不通知本人')],
+        ['回执闸门', _otdNoticeGateText(rules)],
         ['消息来源', '平台侧实时拉取 + 本地会话库（自动补齐未同步的未读消息）'],
         ['留言过滤', '仅真人留言建单；系统推送（工作汇报日志）、纯确认词（好的/收到/ok）自动跳过'],
     ];

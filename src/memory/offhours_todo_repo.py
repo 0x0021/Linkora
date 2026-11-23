@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -215,6 +216,34 @@ class OffhoursTodoRepo:
             return inserted
 
         return bool(self.store.write_main_with_retry(_do))
+
+    def mark_owner_notified(self, dedupe_keys: list[str]) -> int:
+        """回填「本人汇总提醒已送达」标记。
+
+        汇总提醒在整轮扫描结束后统一发一次（见 service.scan_all），发完才知道
+        是否送达；不回填会让 Web 上这批记录永远显示「未通知本人」，与事实不符。
+        """
+        keys = [k for k in dedupe_keys if k]
+        if not keys:
+            return 0
+
+        def _do(conn):
+            cur = conn.cursor()
+            placeholders = ",".join("?" for _ in keys)
+            cur.execute(
+                f"""UPDATE offhours_todo_records SET owner_notified = 1
+                    WHERE dedupe_key IN ({placeholders})""",
+                tuple(keys),
+            )
+            updated = cur.rowcount
+            conn.commit()
+            return updated
+
+        try:
+            return int(self.store.write_main_with_retry(_do))
+        except (sqlite3.Error, ValueError) as e:
+            logger.warning("[未回复待办] 回填本人通知标记失败: %s", e)
+            return 0
 
     def has_todo_record(self, dedupe_key: str) -> bool:
         cur = self.store.conn.cursor()

@@ -40,6 +40,32 @@ logger = logging.getLogger(__name__)
 # 这些消息类型不进待办（与 fetch_messages_in_range 同口径）
 _SKIP_MSG_TYPES = ("system", "recall", "revoke")
 
+# 平台侧补拉的时间窗切片粒度（小时）。钉钉 list-all 的分页游标在整窗拉取时会提前
+# 触顶导致漏消息（实测 48h 整窗只翻到 68/118 条，漏掉 11-22 上午的留言），
+# 切成小窗各自翻页再合并可稳定覆盖整个回看窗口。
+_PLATFORM_CHUNK_HOURS = 6
+# 单个时间窗的翻页上限（每页 50 条 → 上限 2500 条/窗）。
+_PLATFORM_MAX_PAGES = 50
+
+
+def _window_chunks(
+    now: datetime, hours: int, chunk_hours: int,
+) -> list[tuple[datetime, datetime]]:
+    """把回看窗口切成若干 [start, end] 子窗（按时间升序，不重叠、不留缝）。
+
+    用于平台侧补拉：整窗翻页会因服务端游标行为不稳定而漏消息，分窗各自翻页更稳。
+    """
+    chunk_hours = max(1, int(chunk_hours))
+    end = now
+    start = now - timedelta(hours=max(1, int(hours)))
+    chunks: list[tuple[datetime, datetime]] = []
+    cursor = start
+    while cursor < end:
+        nxt = min(cursor + timedelta(hours=chunk_hours), end)
+        chunks.append((cursor, nxt))
+        cursor = nxt
+    return chunks
+
 
 def _split_config_list(value: str) -> frozenset[str]:
     """把逗号分隔的配置项拆成去空集合（大小写保留，调用方按需 lower）。"""
@@ -127,7 +153,7 @@ def _fetch_platform_messages(
     if not callable(fn):
         return []
     try:
-        data = fn(start=start, end=end, limit=50, max_pages=10)
+        data = fn(start=start, end=end, limit=50, max_pages=_PLATFORM_MAX_PAGES)
     except (
         IMAdapterError, OSError, ValueError, TypeError, RuntimeError,
         KeyError, subprocess.SubprocessError,
@@ -243,6 +269,62 @@ def _self_reply_times(
     return out
 
 
+def _recheck_conversation_replies(
+    adapter: Any, platform: str, chat_id: str, since: str,
+    self_ids: frozenset[str] | set[str], tz,
+) -> tuple[bool | None, str]:
+    """单会话定向复核：该留言之后，本人在**同一会话**是否已有真人回复。
+
+    🔴 为什么需要（2026-11-23 实测事故）：
+    ``chat_message_list_all``（全会话时间窗）的返回**不稳定且会静默截断**——同一窗口
+    连续三次分别返回 118 / 68 / 118 条。截断时可能正好漏掉「本人在同会话里更晚的那条
+    真人回复」，把「已回复」反转成「未回复」：白艳霞 11-22 09:26 的留言本已被坤哥
+    11-22 11:33「没事」回复过，却因漏拉该回复被误判为未回复 → 误建待办 + 对外误发
+    「稍后回复」回执。
+
+    本函数走单会话接口（实测 ``complete=True``，消息完整），只复核**一个会话**，
+    代价可控。返回 ``(True, "")`` = 确认已回复；``(False, "")`` = 确认未回复；
+    ``(None, reason)`` = 无法判定（接口失败/结果不完整）——调用方须保守处理。
+    """
+    if platform != "dingtalk" or adapter is None or not chat_id:
+        return None, "unsupported_platform"
+    fn = getattr(adapter, "chat_message_list_conversation", None)
+    if not callable(fn):
+        return None, "no_conversation_api"
+    try:
+        data = fn(chat_id, since)
+    except (
+        IMAdapterError, OSError, ValueError, TypeError, RuntimeError,
+        KeyError, subprocess.SubprocessError,
+    ) as e:
+        logger.warning("[未回复待办] 单会话复核失败（会话=%s）: %s", chat_id[:24], e)
+        return None, f"error: {e}"
+    if not isinstance(data, dict):
+        return None, "bad_result"
+    if not data.get("complete"):
+        return None, f"incomplete: {data.get('stop_reason') or 'unknown'}"
+
+    for msg in data.get("messages") or []:
+        if not isinstance(msg, dict):
+            continue
+        # AI 代发 / 机器人消息不算「本人真人回复」
+        ai_flag = str(msg.get("messageAiSendFlag") or "").strip()
+        send_type = str(msg.get("sendType") or "").strip().lower()
+        if ai_flag or send_type in ("bot", "robot", "ai"):
+            continue
+        sid = str(msg.get("senderId") or msg.get("senderOpenDingTalkId") or "").strip()
+        if not sid or sid not in self_ids:
+            continue
+        ts = parse_message_ts(str(msg.get("createTime") or "").replace(" ", "T"), tz)
+        if ts is None:
+            continue
+        since_ts = parse_message_ts(since.replace(" ", "T"), tz)
+        if since_ts is not None and ts <= since_ts:
+            continue
+        return True, ""
+    return False, ""
+
+
 def scan_platform(
     cfg: UnrepliedTodoConfig,
     platform: str,
@@ -294,12 +376,19 @@ def scan_platform(
         result.errors.append(f"扫描消息失败: {e}")
         local_rows = []
 
-    # 平台侧拉取补本地库缺口（服务离线期间的未读消息从未同步进本地库）
-    platform_rows = _fetch_platform_messages(
-        adapter, platform,
-        start=(now - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S"),
-        end=now.strftime("%Y-%m-%d %H:%M:%S"),
-    )
+    # 平台侧拉取补本地库缺口（服务离线期间的未读消息从未同步进本地库）。
+    # 按 6 小时一片分窗拉取：钉钉 list-all 的分页游标在「大时间窗 + 活跃会话」下会
+    # 提前触顶（实测 48h 整窗只翻到 68/118 条，漏掉 11-22 上午的留言），
+    # 各子窗独立翻页再合并可稳定覆盖整个回看窗口。
+    platform_rows: list[dict[str, Any]] = []
+    for chunk_start, chunk_end in _window_chunks(now, hours, _PLATFORM_CHUNK_HOURS):
+        platform_rows.extend(
+            _fetch_platform_messages(
+                adapter, platform,
+                start=chunk_start.strftime("%Y-%m-%d %H:%M:%S"),
+                end=chunk_end.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        )
     rows = _merge_rows(local_rows, platform_rows)
     if platform_rows:
         logger.info(

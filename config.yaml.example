@@ -784,6 +784,12 @@ unreplied_todo:
   owner_user_id: ""                                # 本人 user_id（汇总提醒用，二选一）
   owner_open_dingtalk_id: ""                       # 本人 open_dingtalk_id（与上二选一）
   sender_notice_text: "你的消息我已记入待办，稍后回复，谢谢～"  # 给对方的回执话术
+  # 回执时效闸门：留言距今超过 notice_max_age_hours 就不再给对方发回执
+  # （隔天的「稍后回复」不合逻辑也像骚扰）；此时仍建待办、只提醒本人。0 = 不限制
+  notice_max_age_hours: 6
+  # 回执只在「当前仍处于工作时间外」时发送：主人已回到工位时对对方说
+  # 「稍后回复」是假话，不如安静建单、只提醒本人
+  notice_only_when_offhours: true
   # 只给真人留言建待办：系统推送 + 纯确认词自动跳过（逗号分隔）
   ignore_system_senders: "工作汇报(日志),工作汇报,系统通知,机器人,小助手,DING,考勤打卡"
   ignore_sender_ids: ""                            # 按 senderId 精确排除（应用/机器人账号）

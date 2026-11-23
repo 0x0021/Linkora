@@ -97,6 +97,13 @@ class UnrepliedTodoConfig(BaseModel):
     owner_user_id: str = ""  # 本人 user_id（钉钉私聊/DING 汇总用）
     owner_open_dingtalk_id: str = ""  # 本人 open_dingtalk_id（与上二选一）
     sender_notice_text: str = "你的消息我已记入待办，稍后回复，谢谢～"  # 给对方的回执话术
+    # 回执时效闸门：留言距今超过 notice_max_age_hours 就不再给对方发回执
+    # （对方看到的是一句隔天的「稍后回复」，既不合逻辑也像骚扰）；此时仍建待办、
+    # 只提醒本人。0 = 不限制（保留旧行为）。
+    notice_max_age_hours: int = 6
+    # 回执只在「当前仍处于工作时间外」时发送：主人已经回到工位上时对对方说
+    # 「稍后回复」是假话，不如不打扰（此时只建待办 + 提醒本人）。
+    notice_only_when_offhours: bool = True
     # 只给「真人消息留言」建待办：系统机器人（工作汇报/日志等）、纯确认词（好的/收到/ok）
     # 一律跳过——这些不是需要处理的留言。按发送者名/ID 与内容前缀/短语双重过滤。
     ignore_system_senders: str = "工作汇报(日志),工作汇报,系统通知,机器人,小助手,DING,考勤打卡"
@@ -115,6 +122,8 @@ class UnrepliedTodoConfig(BaseModel):
             self.max_per_scan = 1
         if self.max_per_scan > 100:
             self.max_per_scan = 100
+        if self.notice_max_age_hours < 0:
+            self.notice_max_age_hours = 0
         return self
 
 

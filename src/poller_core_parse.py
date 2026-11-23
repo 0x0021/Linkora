@@ -134,6 +134,36 @@ def _extract_post_text_and_img(post: dict) -> tuple[str, bool]:
     return " ".join(texts).strip(), has_img
 
 
+def _is_transcribed_media_ref(raw: dict) -> bool:
+    """判断消息里的媒体引用是否只是「转述」，而非本消息真正携带的资源。
+
+    🔴 场景（2026-11-23 线上事故）：Linkora 用主人账号给主人发出一条待办通知，
+    正文里引用了**对方那条消息**的 mediaId（``📋 … [dingtalk] 张旭：[图片消息]
+    (mediaId=@lQLPJyHo-Z-v_DXNAzTNBgSw)``）。这条通知被轮询器回灌时：
+
+    - 正文含 ``mediaId=`` → 被判定成「图片消息」；
+    - 走图片下载 → 用**本通知**的 msgId/会话去换下载地址；
+    - 但那段 mediaId 属于**另一个会话里别人的消息** → 钉钉返回 ``NO_PERMISSION``；
+    - 文件永不落盘 → 每轮轮询重复失败刷屏。
+
+    判据（两条同时成立才算「转述引用」）：
+      1. ``messageAiSendFlag`` 非空 —— 这条消息是 AI 用主人账号代发的（文本消息）；
+      2. mediaId 不是 ``$iw`` 前缀 —— ``$iw`` 是**本账号自己上传**的资源
+         （Linkora 自己发的图），它确实属于这条消息，可正常下载。
+
+    ⚠️ 为何不用「mediaId 长度」判断：截断碎片确实更短（实测 AI 代发恒为 25
+    字符、真人最小 41），但长度是启发式，随 dws 改动会漂。上面两条都是
+    **语义判据**，不依赖具体格式。
+    """
+    if not raw.get("messageAiSendFlag"):
+        return False
+    content = raw.get("content") or ""
+    if "mediaId=" not in content and "fileId=" not in content:
+        return False
+    # $iw 开头 = 本账号上传的资源（Linkora 自己发的图）→ 属于本消息，可下载
+    return "$iw" not in content
+
+
 class ParseMixin(PollerMixinBase):
     """MessagePoller 子系统萃取（mixin，经多继承组合回主类）。"""
 
@@ -508,18 +538,28 @@ class ParseMixin(PollerMixinBase):
         # 历史回填模式（_skip_ocr=True）：完全跳过图片下载 / OCR / 卡片图下载，只存文本。
         # 这样「全部历史」同步不触发重型图片管线，速度显著提升；图片可在日常轮询时补齐。
         if not self._skip_ocr and msg_type == "image":
-            is_self = (
-                (sender_id and (sender_id == self.current_user_id or sender_id == self.current_user_user_id))
-                or (not sender_id and sender and self.current_user_name
-                    and sender.strip() == self.current_user_name.strip())
-            )
-            # chat_name 为空时用发送者名代替，避免下载到「未知」目录
-            effective_name = chat_name or sender or "图片"
-            if is_self:
-                # 【我发送的】跳过 OCR，仅下载落盘供前端对话框展示
-                content, image_path = self._download_image_only(raw, chat_id, effective_name, content, msg_id)
-            elif self.config.image_ocr_enabled:
-                content, image_path = self._submit_image_for_ocr(raw, chat_id, effective_name, content, msg_id)
+            # 🔴 AI 代发消息里的媒体引用只是「转述」（引用别人那条消息的资源），
+            # 不属于本消息 → 用本消息的 msgId/会话去下载必然 NO_PERMISSION，
+            # 且文件永不落盘导致每轮轮询重复失败刷屏。直接跳过下载管线。
+            # 详见 _is_transcribed_media_ref 的事故说明。
+            if _is_transcribed_media_ref(raw):
+                logger.debug(
+                    "[轮询器] AI代发消息中的媒体引用为转述（不属于本消息），跳过下载: msg=%s",
+                    msg_id[:20],
+                )
+            else:
+                is_self = (
+                    (sender_id and (sender_id == self.current_user_id or sender_id == self.current_user_user_id))
+                    or (not sender_id and sender and self.current_user_name
+                        and sender.strip() == self.current_user_name.strip())
+                )
+                # chat_name 为空时用发送者名代替，避免下载到「未知」目录
+                effective_name = chat_name or sender or "图片"
+                if is_self:
+                    # 【我发送的】跳过 OCR，仅下载落盘供前端对话框展示
+                    content, image_path = self._download_image_only(raw, chat_id, effective_name, content, msg_id)
+                elif self.config.image_ocr_enabled:
+                    content, image_path = self._submit_image_for_ocr(raw, chat_id, effective_name, content, msg_id)
         elif not self._skip_ocr and msg_type in ("interactive", "post") and content:
             # 飞书消息卡片 / 图文混排：content 里嵌了多个 🖼️ Image(img_key:...) /
             # ✨(img_key:...) 标签。走 _download_card_images 逐个下载到本地，

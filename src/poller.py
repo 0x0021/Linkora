@@ -214,6 +214,14 @@ class MessagePoller(PollerStrategyMixin, AccessControlMixin, OcrMixin, ParseMixi
         # OCR 完成图片相对路径缓存（供消息记录页缩略图使用）
         self._ocr_image_paths: dict[str, str] = {}
         self._ocr_lock = threading.Lock()
+        # 媒体下载失败记忆：media_id -> (失败时刻, 原因摘要)
+        #
+        # 🔴 为什么需要（2026-11-23 线上事故）：媒体下载失败后文件不落盘，
+        # 「文件已存在则跳过」的去重完全失效 → 同一条消息每轮轮询都会重下、
+        # 每轮失败、每轮刷一条 WARNING（实测每分钟一条，噪音淹没有效日志）。
+        # 而失败原因（如 mediaId 属于别的会话 → NO_PERMISSION）是**永久性**的，
+        # 重试无意义。故记住失败并设冷却窗口，窗口内直接跳过。
+        self._media_download_failures: dict[str, tuple[float, str]] = {}
         # OCR 引擎实例缓存：RapidOCR 初始化需加载模型文件（数秒），
         # 每次图片都重建会带来明显延迟。多线程下用双重检查锁保证只创建一次。
         self._doc_parser = None

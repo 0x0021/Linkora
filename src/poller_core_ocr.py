@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sqlite3
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -360,6 +361,12 @@ class OcrMixin(PollerMixinBase):
         持久化到 data/tmp_images/<chat_name>/ 并返回相对路径，供前端对话框
         <img> 直接展示。带存在性去重：目标文件已存在且非空时直接复用，避免
         每轮轮询对同一张图重复下载。任何失败均优雅降级为占位内容。
+
+        🔴 失败记忆（2026-11-23 线上事故）：下载失败后文件不落盘，「文件已存在
+        则跳过」的去重完全失效 → 同一条消息每轮轮询都会重下并刷一条 WARNING
+        （实测每分钟一条，噪音淹没有效日志）。且失败原因常是**永久性**的
+        （mediaId 属于别的会话 → NO_PERMISSION；mediaId 被截断成无效碎片 →
+        invalid），重试无意义。故记住失败并设冷却窗口，窗口内直接跳过。
         """
         caption = self._extract_image_caption(raw)
         raw_content = raw.get("content") or ""
@@ -390,6 +397,13 @@ class OcrMixin(PollerMixinBase):
             logger.debug("[轮询器] 自发送图片已存在，跳过下载: %s", rel_path)
             return (caption or "[图片]"), rel_path
 
+        # 失败记忆：冷却窗口内不再重试（避免每轮轮询重复失败刷屏）
+        if self._media_download_in_cooldown(media_id):
+            logger.debug("[轮询器] 自发送图片下载处于失败冷却期，跳过: %s", media_id[:20])
+            if caption:
+                return f"{caption}\n[图片] (下载失败)", ""
+            return "[图片] (下载失败)", ""
+
         try:
             self.dws.download_media(
                 media_id=media_id,
@@ -399,18 +413,67 @@ class OcrMixin(PollerMixinBase):
             )
             if not img_path.exists() or img_path.stat().st_size == 0:
                 logger.warning("[轮询器] 自发送图片下载为空: %s", media_id[:20])
+                self._remember_media_download_failure(media_id, "下载产物为空")
                 if caption:
                     return f"{caption}\n[图片] (下载失败或为空)", ""
                 return "[图片] (下载失败或为空)", ""
+            # 下载成功 → 清掉失败记忆（此前可能是瞬时故障）
+            self._clear_media_download_failure(media_id)
             if caption:
                 return caption, rel_path
             return "[图片]", rel_path
-        except (OSError, RuntimeError, IMAdapterError):
-            # 下载失败 → 容错降级
-            logger.warning("[轮询器] 自发送图片下载失败")
+        except (OSError, RuntimeError, IMAdapterError) as e:
+            # 下载失败 → 容错降级。
+            # ⚠️ 必须带上失败原因（原先只记「下载失败」四个字，把真因吞了，
+            # 排障时完全看不出是权限问题还是 ID 无效 —— 这正是本次事故难定位的原因）。
+            reason = str(e)[:200]
+            self._remember_media_download_failure(media_id, reason)
+            logger.warning("[轮询器] 自发送图片下载失败 media=%s 原因=%s",
+                           media_id[:24], reason)
             if caption:
                 return f"{caption}\n[图片] (下载失败)", ""
             return "[图片] (下载失败)", ""
+
+    # ------------------------------------------------------------------
+    # 媒体下载失败记忆（防重复重试刷屏）
+    # ------------------------------------------------------------------
+
+    # 失败冷却时长（秒）。取 30 分钟：足够覆盖一次会话内的多轮轮询
+    # （轮询周期 ~1 分钟），又不会让「瞬时失败」长期得不到重试机会。
+    _MEDIA_FAILURE_COOLDOWN_SECONDS = 1800.0
+
+    def _media_download_in_cooldown(self, media_id: str) -> bool:
+        """该 media_id 是否处于下载失败冷却期（是则应跳过重试）。"""
+        failures = getattr(self, "_media_download_failures", None)
+        if not failures:
+            return False
+        entry = failures.get(media_id)
+        if not entry:
+            return False
+        failed_at, _reason = entry
+        if (time.monotonic() - failed_at) > self._MEDIA_FAILURE_COOLDOWN_SECONDS:
+            # 冷却过期 → 清掉，下一轮允许重试
+            failures.pop(media_id, None)
+            return False
+        return True
+
+    def _remember_media_download_failure(self, media_id: str, reason: str) -> None:
+        """记住一次媒体下载失败（含原因），供冷却期判定使用。"""
+        failures = getattr(self, "_media_download_failures", None)
+        if failures is None:
+            failures = {}
+            self._media_download_failures = failures
+        failures[media_id] = (time.monotonic(), reason)
+        # 防止无限增长：只保留最近 500 条失败记录
+        if len(failures) > 500:
+            for key in list(failures.keys())[:200]:
+                failures.pop(key, None)
+
+    def _clear_media_download_failure(self, media_id: str) -> None:
+        """下载成功后清掉失败记忆。"""
+        failures = getattr(self, "_media_download_failures", None)
+        if failures:
+            failures.pop(media_id, None)
 
     def _file_storage(self, chat_id: str, filename: str) -> tuple[Path, str]:
         """计算接收文件的本地存储路径（与图片同构：<platform>/<account>/<chat>/<name>）。

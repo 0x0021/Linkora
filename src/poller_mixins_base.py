@@ -60,6 +60,7 @@ class PollerMixinBase(LinkoraComponentBase):
     # 实例锁覆盖它，保证各平台轮询器锁隔离。
     _poll_shared_lock = threading.Lock()
     _metadata_unavailable: Any
+    _media_download_failures: Any
     _ocr_cache_lock: Any
     _ocr_call_lock: Any
     _ocr_futures: Any

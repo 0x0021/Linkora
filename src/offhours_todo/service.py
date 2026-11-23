@@ -30,6 +30,7 @@ from src.offhours_todo.scanner import (
     scan_platform,
 )
 from src.offhours_todo.worktime import classify, parse_message_ts, resolve_tz
+from src.utils.media_text import strip_media_refs
 
 if TYPE_CHECKING:
     from src.platform.base import PlatformContext
@@ -40,6 +41,97 @@ _CLI_ERRORS = (
     IMAdapterError, OSError, ValueError, TypeError, KeyError,
     RuntimeError, subprocess.SubprocessError,
 )
+
+
+def _summarize_preview(content: str, *, limit: int = 40) -> str:
+    """把消息正文压成一条可安全外发的摘要。
+
+    🔴 为什么必须剥离媒体引用标记（2026-11-23 线上事故）：
+    原始正文里含 ``[图片消息](mediaId=@lQLPJyHo-Z-v_DXNAzTNBgSwUj8...)`` 这类
+    钉钉媒体引用。直接 ``[:40]`` 截断会把 46 字符的 mediaId 砍成 25 字符的
+    **无效碎片**，并把它带进 Linkora 自己用主人账号发出的待办通知正文。
+
+    后果是双重的：
+      1. 这条通知被轮询器回灌时，会因正文含 ``mediaId=`` 被误判成「图片消息」，
+         进而去下载「本消息的资源」——但那段 mediaId 属于**另一个会话里别人的
+         消息**，用本会话的 msgId 换下载地址必然 ``NO_PERMISSION``；
+      2. 文件始终下载不下来 → 每轮轮询重复失败、每分钟刷一条 WARNING。
+
+    故外发前先把媒体引用整段剥离（``strip_media_refs``），只留人话；
+    剥离后再截断，保证截断不会切进资源 ID 里。
+    """
+    cleaned = strip_media_refs(content or "").replace("\n", " ").strip()
+    if not cleaned:
+        # 整条正文只有媒体标记（如纯图片消息）→ 留个占位，说明「对方发了张图」
+        return "[媒体]"
+    if len(cleaned) <= limit:
+        return cleaned
+
+    # 截断策略：**保住媒体占位符，正文按剩余预算截断**。
+    #
+    # ⚠️ 不能简单 head = cleaned[:limit]：
+    #   1. 截点可能落进 ``[dingtalk]`` 这种方括号组内 → 留下半截 ``[dingtalk``；
+    #   2. 截点可能正好切掉末尾的 ``[媒体]`` 占位符 → 丢掉「对方发了张图」这个
+    #      关键信息（正文尾字反而没什么价值）。
+    #
+    # 做法：占位符若在**尾部**，就把它摘出来单独放末尾，正文用剩下的预算截断
+    # （这样「… [dingtalk] 张旭：」这段能完整保留，占位符也不会丢）；
+    # 占位符若在**中间**（图文混排），则连同其后的内容整体保留、只截前面的正文。
+    placeholder = "[媒体]"
+    idx = cleaned.find(placeholder)
+    if idx < 0:
+        return _trim_at_bracket(cleaned[:limit])
+
+    tail = cleaned[idx:]
+    head_budget = max(0, limit - len(tail) - 1)
+    head = _trim_at_bracket(cleaned[:idx]) if head_budget else ""
+    # 正文被压缩时，从尾部往前保留更靠近占位符的内容（「张旭」比开头更重要），
+    # 并在词边界断开，避免留下「间外未回复」这种半截词。
+    if head_budget and len(cleaned[:idx]) > head_budget:
+        head = _trim_at_bracket(cleaned[:idx])[-head_budget:].lstrip()
+        head = _trim_at_bracket(_trim_at_word_boundary(head))
+    return (head + " " + tail).strip() if head else tail
+
+
+def _trim_at_word_boundary(text: str) -> str:
+    """砍掉开头残留的半截词。
+
+    摘要从尾部压缩时，起始点可能落在词中间（如「间外未回复消息已建待办」里的
+    「间外」）。中文没有空格分隔词边界，故用**标点/空白**作为切分点：
+    若开头到第一个标点之间仍有较长片段，就从该标点后开始。
+    """
+    for sep in ("·", "：", ":", "，", ",", "。", " "):
+        pos = text.find(sep)
+        if 0 < pos < 24:
+            # 标点前的内容是半截词残留 → 从标点后重新取
+            return text[pos + len(sep):].lstrip()
+    return text
+
+
+def _trim_at_bracket(text: str) -> str:
+    """截断文本时不要切进方括号内（避免留下 ``[dingtalk`` 这种半截标记）。
+
+    若截断点落在某个 ``[`` 与其配对 ``]`` 之间，则**只丢弃那段未闭合的方括号
+    片段本身**，保留它之前的正文。
+
+    ⚠️ 不能回退到 ``[`` 之前把整段都砍掉：待办通知形如
+    ``… · [dingtalk] 张旭：[图片消息](…)``，截断点若落在 ``[dingtalk]``
+    内部，回退过头会把「张旭」这段关键信息一起丢掉。
+    """
+    depth = 0
+    cut = -1
+    for i, ch in enumerate(text):
+        if ch == "[":
+            depth += 1
+            cut = i
+        elif ch == "]":
+            depth = max(0, depth - 1)
+            if depth == 0:
+                cut = -1
+    if depth > 0 and cut >= 0:
+        # 末尾有未闭合的 ``[`` → 只删掉从它开始的这一段
+        return text[:cut].rstrip()
+    return text
 
 
 class OffhoursTodoService:
@@ -176,7 +268,7 @@ class OffhoursTodoService:
                     out["todos_created"] += 1
                 notices.append(
                     f"[{platform}] {item.sender_name or item.sender_id or '未知'}："
-                    f"{item.content_preview[:40]}"
+                    f"{_summarize_preview(item.content_preview)}"
                 )
                 if created_keys is not None and kind != "duplicate":
                     created_keys.append(item.dedupe_key)
@@ -198,7 +290,7 @@ class OffhoursTodoService:
             ts = item.timestamp[:16]
         suffix = f"（{ts}）" if ts else ""
         # 钉钉待办无 description 字段，把内容摘要塞进标题，保证待办本身自带上下文
-        preview = (item.content_preview or "").strip().replace("\n", " ")[:30]
+        preview = _summarize_preview(item.content_preview, limit=30)
         return f"待回复 · {who}{suffix}{' · ' + preview if preview else ''}"
 
     def _resolve_executor(self, platform: str, self_ids: frozenset[str] | set[str]) -> str:

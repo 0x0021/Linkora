@@ -22,9 +22,9 @@ classifiers = [
 dependencies = [
     # ---- 配置 / 环境 ----
     "PyYAML==6.0.3",
-    "pydantic==2.14.3",
+    "pydantic==2.14.4",
     "python-dotenv==1.2.4",
-    "platformdirs==4.14.7",
+    "platformdirs==4.14.8",
     # ---- LLM / 嵌入模型 ----
     # openai/ST/hf-hub 维持 2.x/5.x/1.x：3.x/6.x/2.x 是破坏性大版本
     # （openai 3.x 私有 httpx2.Client、ST 6.x encode 返回联合类型），详见
@@ -94,7 +94,7 @@ dependencies = [
 # 开发/CI 期依赖，同样钉版：ruff 版本会直接影响 lint 结果，pytest 版本影响用例行为，
 # 不钉版会导致「本地绿、CI 红」。pytest* 三项必须与 requirements.txt 的测试段保持同版本。
 dev = [
-    "ruff==0.17.5",
+    "ruff==0.17.6",
     "pyright==1.1.414",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",

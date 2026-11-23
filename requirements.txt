@@ -4,9 +4,9 @@
 
 # ---- 配置 / 环境 ----
 PyYAML==6.0.3
-pydantic==2.14.3
+pydantic==2.14.4
 python-dotenv==1.2.4
-platformdirs==4.14.7
+platformdirs==4.14.8
 
 # ---- LLM / 嵌入模型 ----
 # openai / sentence-transformers / huggingface_hub 保持 2.x / 5.x / 1.x：

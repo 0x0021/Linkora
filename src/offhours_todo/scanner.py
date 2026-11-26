@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import subprocess
 from dataclasses import dataclass, field
@@ -24,13 +25,14 @@ from typing import TYPE_CHECKING, Any
 
 from src.config_models.system import UnrepliedTodoConfig
 from src.im_adapter.errors import IMAdapterError
+from src.offhours_todo.at_mention import is_group_at_me
 from src.offhours_todo.worktime import (
     classify,
     is_within_lookback,
     parse_message_ts,
     resolve_tz,
 )
-from src.self_identity import collect_self_ids
+from src.self_identity import collect_self_ids, collect_self_names
 
 if TYPE_CHECKING:
     from src.platform.base import PlatformContext
@@ -95,12 +97,18 @@ def _is_ignored_message(row: dict[str, Any], cfg: UnrepliedTodoConfig) -> str:
     # 纯确认词：去掉中间及两端标点/空白后精确匹配，兼容「收到，谢谢」这类组合客套，
     # 同时避免「好的，明天给你」这类带实质内容的留言被误杀（规范化后不在集合里）。
     trivial_set = _split_config_list(cfg.ignore_trivial_replies)
-    normalized = "".join(
-        ch for ch in content if ch not in " \t\r\n。.!！~～,，;；:：、…"
+    trivial_lower = {t.lower() for t in trivial_set}
+    punctuation = " \t\r\n。.!！~～,，;；:：、…"
+    normalized = "".join(ch for ch in content if ch not in punctuation)
+    # 钉钉表情标记（[抱拳]/[OK]…）夹在客套话里会破坏精确匹配：2026-11-24 的
+    # 「好的，谢谢[抱拳]」本是收尾客套，却因尾部表情被当成待处理留言建了待办。
+    # 剥离短方括号标记后再匹配一次；原始形式照旧保留，避免误伤配置里整条表情短语。
+    no_emoji = "".join(
+        ch for ch in re.sub(r"\[[^\]]{1,8}\]", "", content) if ch not in punctuation
     )
-    if normalized and (normalized in trivial_set
-                       or normalized.lower() in {t.lower() for t in trivial_set}):
-        return "trivial_reply"
+    for text in (normalized, no_emoji):
+        if text and (text in trivial_set or text.lower() in trivial_lower):
+            return "trivial_reply"
     return ""
 
 
@@ -325,12 +333,76 @@ def _recheck_conversation_replies(
     return False, ""
 
 
+def _recheck_prior_own_reply(
+    adapter: Any, platform: str, chat_id: str, before: datetime,
+    self_ids: frozenset[str] | set[str], tz, window_minutes: int,
+) -> tuple[bool, str]:
+    """留言前紧邻一条本人真人回复 → 判定「对方在接续我的回复」（不该建单）。
+
+    🔴 为什么需要（2026-11-25 实测事故）：
+    现有「未回复」判据只看留言**之后**有没有本人真人回复。但下班后的真实对话
+    常是「我先答复 → 对方回一句确认/收尾」：
+      - 18:48:06 本人回话 → 18:48:38 对方「好的，谢谢[抱拳]」
+      - 21:37:02 本人解释 → 21:49:08 对方「我明天问一下，应该不是业绩为 0…」
+    这类留言之后自然不会再有本人回复，于是被误判成未回复。服务关机期间没跑、
+    开机后补拉历史消息时集中爆发（今早一次误建 4 条，4 条全是这个模式）。
+
+    判据保守：只认**紧邻上一条**发言者就是本人真人回复，且间隔不超过窗口；
+    对方连续发多条（紧邻上一条仍是对方）视为新诉求，照常建单。结果不完整时
+    返回 False 让建单流程继续，与现有复核的 fail-open 口径一致。
+    """
+    if platform != "dingtalk" or adapter is None or not chat_id:
+        return False, "unsupported_platform"
+    if window_minutes <= 0:
+        return False, "disabled"
+    fn = getattr(adapter, "chat_message_list_conversation", None)
+    if not callable(fn):
+        return False, "no_conversation_api"
+    # older 从给定时刻往以前拉；+1 秒把留言自身也纳入返回，随后按时间戳排除。
+    time_str = (before + timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        data = fn(chat_id, time_str, direction="older")
+    except (
+        IMAdapterError, OSError, ValueError, TypeError, RuntimeError,
+        KeyError, subprocess.SubprocessError,
+    ) as e:
+        logger.warning("[未回复待办] 留言前上下文拉取失败（会话=%s）: %s", chat_id[:24], e)
+        return False, f"error: {e}"
+    if not isinstance(data, dict):
+        return False, "bad_result"
+    if not data.get("complete"):
+        return False, f"incomplete: {data.get('stop_reason') or 'unknown'}"
+
+    prior: list[tuple[datetime, dict[str, Any]]] = []
+    for msg in data.get("messages") or []:
+        if not isinstance(msg, dict):
+            continue
+        ts = parse_message_ts(str(msg.get("createTime") or "").replace(" ", "T"), tz)
+        if ts is not None and ts < before:
+            prior.append((ts, msg))
+    if not prior:
+        return False, "no_prior_message"
+    # older 返回通常倒序；不依赖顺序，直接取时间最近的一条作为紧邻发言。
+    ts, msg = max(prior, key=lambda pair: pair[0])
+    if before - ts > timedelta(minutes=window_minutes):
+        return False, "prior_reply_too_old"
+    ai_flag = str(msg.get("messageAiSendFlag") or "").strip()
+    send_type = str(msg.get("sendType") or "").strip().lower()
+    if ai_flag or send_type in ("bot", "robot", "ai"):
+        return False, "prior_is_bot"
+    sid = str(msg.get("senderId") or msg.get("senderOpenDingTalkId") or "").strip()
+    if sid and sid in self_ids:
+        return True, "own_reply_just_before"
+    return False, "prior_sender_not_self"
+
+
 def scan_platform(
     cfg: UnrepliedTodoConfig,
     platform: str,
     ctx: "PlatformContext",
     *,
     self_ids: frozenset[str] | set[str],
+    self_names: frozenset[str] | set[str] = frozenset(),
     lookback_hours: int | None = None,
     now: datetime | None = None,
 ) -> ScanResult:
@@ -421,6 +493,21 @@ def scan_platform(
         sid = str(row.get("sender_id") or "").strip()
         if sid and sid in self_ids:
             continue  # 本人真人消息（不是待回复对象）
+
+        # 🔴 群消息必须显式 @ 本人（2026-11-26 事故修复）：
+        # 主轮询链路早有「未 @ 我不处理」门控，但本扫描器从本地库 + 平台侧拉的是
+        # 全量消息，导致群里 @ 别人的消息（如「…这个咋用图纸传递？@同事甲」）在
+        # 工作时间外被误建待办 + 误发回执。单聊本就是对我说的，不受此门控。
+        # 配置 group_require_at_me=false 可恢复旧行为（默认 true）。
+        if bool(getattr(cfg, "group_require_at_me", True)) and not is_group_at_me(
+            row, self_ids=self_ids, self_names=self_names,
+        ):
+            logger.debug(
+                "[未回复待办] 跳过未@本人的群消息: %s",
+                str(row.get("content") or "")[:60],
+            )
+            continue
+
         ts = parse_message_ts(str(row.get("timestamp") or ""), tz)
         if ts is None or not is_within_lookback(ts, now, hours):
             continue
@@ -507,3 +594,20 @@ def collect_platform_self_ids(engine: Any, ctx: "PlatformContext") -> frozenset[
             getattr(cfg, "owner_open_dingtalk_id", ""),
         ])
     return collect_self_ids(*values)
+
+
+def collect_platform_self_names(engine: Any, ctx: "PlatformContext") -> frozenset[str]:
+    """收敛本人姓名 / 别名：正式姓名 + 启动时从单聊学到的昵称。
+
+    @ 提及在钉钉消息里是明文（``@本人昵称`` / ``@本人正式姓名``），姓名集合齐全才能
+    把「真的 @ 我」和「@ 了别人」分开。别名由 ``runtime_setup`` 启动时学习并挂在
+    引擎的 ``_self_sender_aliases`` 上，这里只收集、不重新学习。
+    """
+    values: list[Any] = [
+        getattr(engine, "current_user_name", ""),
+        getattr(ctx, "current_user_name", ""),
+    ]
+    aliases = getattr(engine, "_self_sender_aliases", None)
+    if aliases:
+        values.extend(aliases)
+    return collect_self_names("", values)

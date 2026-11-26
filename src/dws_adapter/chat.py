@@ -282,7 +282,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
 
     def chat_message_list_conversation(
         self, conversation_id: str, time_str: str, limit: int = 50,
-        timeout: int | None = None,
+        timeout: int | None = None, *, direction: str = "newer",
     ) -> dict[str, Any]:
         """拉取**单个会话**（单聊/群聊通用）的消息，返回带完整性标志的 dict。
 
@@ -299,6 +299,9 @@ class DwsAdapterChatMixin(DwsAdapterBase):
         本方法走单会话接口，实测返回 ``complete=True`` / ``stopReason=source_complete``，
         消息完整可判定；调用方据此在**建单前复核**该留言之后是否已有本人真人回复。
 
+        ``direction="older"`` 从给定时刻往以前拉（同样带 ``complete`` 标志），供
+        「对方接续本人回复」判据查看留言之前紧邻的发言者；默认 ``newer`` 保持原行为。
+
         返回：``{"messages": [...], "complete": bool, "partial": bool,
         "has_more": bool, "stop_reason": str}``；``complete`` 为 False 表示结果被截断，
         调用方应**保守处理**（不可据此断定「没有回复」）。
@@ -313,7 +316,7 @@ class DwsAdapterChatMixin(DwsAdapterBase):
                 "chat", "message", "list",
                 "--conversation-id", conversation_id,
                 "--time", time_str,
-                "--direction", "newer",
+                "--direction", direction if direction in ("newer", "older") else "newer",
                 "--limit", str(limit),
                 "--page-all",
                 "--page-limit", str(page_limit),

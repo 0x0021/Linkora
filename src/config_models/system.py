@@ -109,7 +109,19 @@ class UnrepliedTodoConfig(BaseModel):
     ignore_system_senders: str = "工作汇报(日志),工作汇报,系统通知,机器人,小助手,DING,考勤打卡"
     ignore_sender_ids: str = ""  # 按 senderId 精确排除（逗号分隔），如已知的应用/机器人账号
     ignore_content_prefixes: str = "[日志]:,[日志],【日志】,[系统],【系统】,[自动],【自动】"
-    ignore_trivial_replies: str = "ok,OK,好的,好,收到,谢谢,感谢,嗯,是的,明白,知道了,ok,感谢,好嘞,收到谢谢,[OK],[ok],[赞],[玫瑰],👌,🙏"
+    ignore_trivial_replies: str = "ok,OK,好的,好,收到,谢谢,感谢,嗯,是的,明白,知道了,好嘞,收到谢谢,ok感谢,好的谢谢,谢谢感谢,[OK],[ok],[赞],[玫瑰],👌,🙏"
+    # 「对方接续我的回复」判据：留言前紧邻上一条同会话发言是本人真人回复，且间隔
+    # 不超过该分钟数时，视为「已经答复过」，不建待办。0 = 关闭该判据。
+    # 2026-11-25 实测：下班后我先回、对方再发「好的谢谢」「已提交」这类收尾，
+    # 只看「留言之后有没有本人回复」会把这些误判成未回复并建单。
+    prior_reply_window_minutes: int = 30
+    # 建单前意图闸门：本地规则引擎分类为主（零网络依赖），LLM 可用时做语义增强；
+    # 寒暄/致谢/收尾不建单。两者都无法判定时放行，避免漏掉真待办。
+    intent_gate_enabled: bool = True
+    # 群消息必须显式 @ 本人（含 @所有人）才建待办，与主轮询链路「未@我不处理」
+    # 口径一致。2026-11-26 事故：扫描器原先不查 @，把群里 @ 别人的消息也建了单。
+    # 关掉恢复旧行为（所有工作时间外消息都建单），默认开。
+    group_require_at_me: bool = True
 
     @model_validator(mode="after")
     def _clamp_values(self) -> "UnrepliedTodoConfig":
@@ -124,6 +136,8 @@ class UnrepliedTodoConfig(BaseModel):
             self.max_per_scan = 100
         if self.notice_max_age_hours < 0:
             self.notice_max_age_hours = 0
+        if self.prior_reply_window_minutes < 0:
+            self.prior_reply_window_minutes = 0
         return self
 
 

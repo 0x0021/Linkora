@@ -20,6 +20,7 @@
 | `linkora-features-light.png` | 1536×768 | 核心能力概览图（浅色模式） |
 | `linkora-scenarios-dark.png` | 1536×768 | 使用场景流程图（深色模式） |
 | `linkora-scenarios-light.png` | 1536×768 | 使用场景流程图（浅色模式） |
+| `linkora-web-preview.gif` | 1200×926 | 管理台实拍轮播（4 帧，姓名等个人信息已脱敏） |
 
 ## README.md 引用代码
 
@@ -37,6 +38,9 @@ GitHub 支持按当前主题自动切换图片：
 <!-- 使用场景示意 -->
 ![Linkora Scenarios](docs/assets/brand/linkora-scenarios-light.png#gh-light-mode-only)
 ![Linkora Scenarios](docs/assets/brand/linkora-scenarios-dark.png#gh-dark-mode-only)
+
+<!-- 管理台实拍（GIF，姓名已脱敏，无需按主题切换） -->
+![Linkora Web 管理台](docs/assets/brand/linkora-web-preview.gif)
 ```
 
 ## GitHub Pages 引用代码

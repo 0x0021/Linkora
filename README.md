@@ -13,6 +13,10 @@
 ![Linkora · 灵桥](docs/assets/brand/linkora-hero-light.png#gh-light-mode-only)
 ![Linkora · 灵桥](docs/assets/brand/linkora-hero-dark.png#gh-dark-mode-only)
 
+**管理台实拍**（姓名等个人信息已脱敏）
+
+![Linkora Web 管理台](docs/assets/brand/linkora-web-preview.gif)
+
 <br>
 
 [快速开始](#快速开始) · [核心能力](#核心能力) · [配置](#配置速查) · [项目结构](#项目结构) · [贡献指南](#贡献指南) · [文档索引](#文档索引)

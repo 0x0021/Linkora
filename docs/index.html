@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>灵桥 Linkora · 钉钉/飞书/企业微信的 AI 分身</title>
-<meta name="description" content="灵桥（Linkora）把企业级 AI 分身接进钉钉、飞书、企业微信：读得懂公司文档、会调用工具办事、更懂得何时把对话交还真人。" />
+<title>灵桥 Linkora · 给团队一个 AI 分身</title>
+<meta name="description" content="我做了灵桥，把 AI 分身接进钉钉、飞书和企业微信：读公司文档、调工具办事，拿不准时把话头留给真人。" />
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#1b1b1f" media="(prefers-color-scheme: dark)" />
 <meta property="og:title" content="灵桥 Linkora · 钉钉/飞书/企业微信的 AI 分身" />
-<meta property="og:description" content="把 AI 分身接进钉钉、飞书、企业微信——读得懂公司文档，会自己动手办事，也懂得何时该请真人接手。" />
+<meta property="og:description" content="我做了灵桥：读公司文档、调工具办事，拿不准的时候把话头留给真人。" />
 <meta property="og:type" content="website" />
 <link rel="canonical" href="https://0x0021.github.io/Linkora/" />
 
@@ -44,7 +44,7 @@
 
     <div class="nav__links">
       <a href="#features">核心能力</a>
-      <a href="#how">工作原理</a>
+      <a href="./details.html#how">工作方式</a>
       <a href="#platforms">多平台</a>
       <a href="#gate">人工接管</a>
       <a href="#docs">文档</a>
@@ -63,7 +63,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         </button>
       </div>
-      <a class="btn btn--primary btn--sm" href="#start">快速开始</a>
+      <a class="btn btn--primary btn--sm" href="./details.html#start">快速开始</a>
       <button class="burger" id="burger" type="button" aria-label="打开菜单" aria-expanded="false"><span></span><span></span><span></span></button>
     </div>
   </div>
@@ -71,12 +71,12 @@
 
 <div class="mobile-menu" id="mobileMenu">
   <a href="#features">核心能力</a>
-  <a href="#how">工作原理</a>
+  <a href="./details.html#how">工作方式</a>
   <a href="#platforms">多平台</a>
   <a href="#gate">人工接管</a>
   <a href="#docs">文档</a>
   <a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub ↗</a>
-  <a class="btn btn--primary" href="#start">快速开始</a>
+  <a class="btn btn--primary" href="./details.html#start">快速开始</a>
 </div>
 
 <main id="main">
@@ -85,25 +85,20 @@
 <header class="hero">
   <div class="wrap hero__inner">
     <div class="hero__copy">
-      <p class="hero__eyebrow"><span class="tag">v0.10.0</span> 非工作时间别人发来的留言，自动变成你的个人待办并回执对方</p>
+      <p class="hero__eyebrow"><span class="tag">v0.10.0</span> 开源 · 可私有化 · 钉钉 / 飞书 / 企业微信</p>
       <h1 class="hero__title">
-        <span class="hero__title-main"><span class="hero__brand">灵桥</span>，让 AI 分身</span>
-        <span class="hero__title-sub">替你打理日常沟通</span>
+        <span class="hero__title-main">我做了<span class="hero__brand">灵桥</span>，</span>
+        <span class="hero__title-sub">给团队一个 AI 分身</span>
       </h1>
       <p class="hero__lede">
-        <span class="hero__lede-hook">群聊私聊都接得住 · 钉钉、飞书、企业微信全覆盖</span>
-        <span class="hero__lede-proof">读得懂公司资料、会自己动手办事，也懂得在合适的时候把话头交还给同事——让沟通和业务都不掉线。</span>
+        <span class="hero__lede-hook">它会看资料、会动手，也知道什么时候该停。</span>
+        <span class="hero__lede-proof">我让它读公司文档、调工具、按规则办事；拿不准的时候，它把话头留给真人。</span>
       </p>
       <div class="hero__actions">
-        <a class="btn btn--primary btn--lg" href="#start">免费部署 <span aria-hidden="true">→</span></a>
-        <a class="btn btn--secondary btn--lg" href="#how">看看它怎么干活</a>
+        <a class="btn btn--primary btn--lg" href="./details.html#start">自己部署 <span aria-hidden="true">→</span></a>
+        <a class="btn btn--secondary btn--lg" href="./details.html#how">看它怎么工作</a>
       </div>
       <p class="hero__platform-line">钉钉 <span>·</span> 飞书 <span>·</span> 企业微信</p>
-      <div class="hero__meta">
-        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Python ≥ 3.14</span>
-        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> 数据物理隔离</span>
-        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> 私有化部署</span>
-      </div>
     </div>
 
     <div class="hero__visual reveal">
@@ -115,12 +110,12 @@
         </div>
         <div class="demo__body">
           <div class="msg msg--user">
-            <div class="msg__avatar">冯</div>
+            <div class="msg__avatar">林</div>
             <div><div class="msg__bubble">帮我查下北京公司 9 楼打印机怎么连？</div><div class="msg__meta">09:38</div></div>
           </div>
           <div class="msg msg--out msg--bot">
             <div class="msg__avatar">灵</div>
-            <div><div class="msg__bubble">9 楼研发打印机 IP：<strong>10.0.80.21</strong>。云打印暂不可用，建议用 IP 直连。</div><div class="msg__meta">09:38 · 灵桥 AI</div></div>
+            <div><div class="msg__bubble">9 楼研发打印机是 <strong>10.0.80.21</strong>。云打印现在用不了，直接用 IP 连吧。</div><div class="msg__meta">09:38 · 灵桥 AI</div></div>
           </div>
           <div class="msg msg--out msg--human">
             <div class="msg__avatar">人</div>
@@ -128,7 +123,7 @@
           </div>
           <div class="gate-note">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
-            检测到人工已回复 · 已读闸门触发 · AI 不再补刀
+            同事已经回复，这条我不插手。
           </div>
         </div>
       </div>
@@ -139,9 +134,9 @@
 <!-- ============ 指标 ============ -->
 <div class="wrap">
   <div class="stats reveal">
-    <div class="stat"><div class="stat__num" data-count="49">0</div><div class="stat__label">内置工具</div></div>
-    <div class="stat"><div class="stat__num" data-count="41">0</div><div class="stat__label">意图分类</div></div>
-    <div class="stat"><div class="stat__num" data-count="3">0</div><div class="stat__label">接入平台</div></div>
+    <div class="stat"><div class="stat__num" data-count="49">0</div><div class="stat__label">可调用工具</div></div>
+    <div class="stat"><div class="stat__num" data-count="41">0</div><div class="stat__label">识别意图</div></div>
+    <div class="stat"><div class="stat__num" data-count="3">0</div><div class="stat__label">办公平台</div></div>
     <div class="stat"><div class="stat__num" data-count="19">0</div><div class="stat__label">管理台页面</div></div>
   </div>
 </div>
@@ -159,87 +154,44 @@
   <div class="wrap">
     <div class="section__head reveal">
       <p class="section-kicker">核心能力</p>
-      <h2 class="section__title">一个分身，公司里的事都接得住</h2>
-      <p class="section__desc">不是只会陪聊的机器人。灵桥把知识、工具和规则都揉进同一段对话，该找真人时也不抢话。</p>
+      <h2 class="section__title">这几件事，我交给它做</h2>
+      <p class="section__desc">文档、工具、规则都放在同一段对话里。拿不准的，它不会硬答。</p>
     </div>
     <div class="features">
       <article class="feature-card reveal">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
-        <h3>企业知识 RAG</h3>
-        <p>读得懂公司的文档和历史聊天记录。需要的时候把相关资料调出来放进对话，给出的回答都有出处、能溯源。</p>
+        <h3>读得懂公司资料</h3>
+        <p>我把文档和历史聊天记录接进知识库。问到什么，它把原文找出来再回答，出处能点开看。</p>
       </article>
       <article class="feature-card reveal">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
-        <h3>RAG 严格问答模式</h3>
-        <p>一键开启「只依据知识库作答」：回答 100% 来自检索内容、零编造，知识库没收录就直说。制度问答、产品资料这类对出处要求高的场景，用它最稳。</p>
+        <h3>只按资料回答</h3>
+        <p>开启后，它只依据知识库里的内容作答；没找到就说没找到。制度、产品资料这类问题，适合这么用。</p>
       </article>
       <article class="feature-card reveal">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></div>
-        <h3>工具调用 · 49 个</h3>
-        <p>一张统一的能力清单，目前内置 49 个：查考勤、建待办、发通知、搜消息、读日报周报、查别人转发的审批流程……它是真去办事，不是只动嘴给建议。</p>
+        <h3>49 个工具，真去办事</h3>
+        <p>查考勤、建待办、发通知、搜消息、读周报、查审批……这些它自己动手，不只是在旁边出主意。</p>
       </article>
       <article class="feature-card reveal">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 11 16M16 7.5 13 16"/></svg></div>
-        <h3>规则 / 意图引擎</h3>
-        <p>先把消息分个类，41 种意图里能套规则的就走固定流程，只有拿不准的才交给大模型。</p>
+        <h3>规则和模型分工</h3>
+        <p>41 种意图，能按规则处理的直接走固定流程；确实拿不准的，再交给大模型。</p>
       </article>
       <article class="feature-card reveal">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
-        <h3>人工接管与审核</h3>
-        <p>要改数据先确认，敏感操作可审批。双重把关，保证同事在说话时 AI 绝不插嘴。</p>
+        <h3>该确认的，先问人</h3>
+        <p>改数据要确认，敏感操作要审批。同事已经开口时，它不会跟着补一句。</p>
       </article>
       <article class="feature-card reveal">
         <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h8"/></svg></div>
-        <h3>Web 管理台</h3>
-        <p>19 个页面、一百八十多个接口。会话、知识库、工具、审批、实时摘要、安全防护，全在浏览器里看得清、调得了。</p>
+        <h3>19 个页面，都在浏览器里</h3>
+        <p>会话、知识库、工具、审批、摘要和安全防护，都能在管理台查看和调整。</p>
       </article>
       <a class="section__more" href="./details.html#all-features">
-        查看全部 10 项能力 <span aria-hidden="true">→</span>
+        看全部 10 项能力 <span aria-hidden="true">→</span>
       </a>
 
-    </div>
-  </div>
-</section>
-
-<!-- ============ 工作原理 ============ -->
-<section class="section section--tint" id="how">
-  <div class="wrap">
-    <div class="section__head reveal">
-      <p class="section-kicker">工作原理</p>
-      <h2 class="section__title">一条消息的完整旅程</h2>
-      <p class="section__desc">从收到消息到发出回复，每一步都看得见、能插手，全程在管理台留了记录。</p>
-    </div>
-    <div class="pipeline reveal">
-      <div class="node">
-        <span class="node__step">01</span>
-        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-        <h3>消息到达</h3>
-        <p>从办公软件把消息拉回来，按账号分开存好</p>
-      </div>
-      <div class="node">
-        <span class="node__step">02</span>
-        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 11 16M16 7.5 13 16"/></svg></div>
-        <h3>规则 / 意图分流</h3>
-        <p>能套规则的走固定流程，拿不准的才交给大模型</p>
-      </div>
-      <div class="node">
-        <span class="node__step">03</span>
-        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
-        <h3>RAG / 工具</h3>
-        <p>查资料、调工具，把事实补齐</p>
-      </div>
-      <div class="node">
-        <span class="node__step">04</span>
-        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a4 4 0 0 0-4 4 4 4 0 0 0-1 7.9V17h10v-2.1A4 4 0 0 0 16 7a4 4 0 0 0-4-4z"/><path d="M9 21h6"/></svg></div>
-        <h3>LLM 生成</h3>
-        <p>先过一道门控筛掉不用回的，再交给大模型，省 token</p>
-      </div>
-      <div class="node">
-        <span class="node__step">05</span>
-        <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg></div>
-        <h3>原路发回</h3>
-        <p>发出前再核一遍，原样回到原来的对话里</p>
-      </div>
     </div>
   </div>
 </section>
@@ -249,26 +201,26 @@
   <div class="wrap">
     <div class="section__head reveal">
       <p class="section-kicker">多平台</p>
-      <h2 class="section__title">同一套脑子，接三个办公软件</h2>
-      <p class="section__desc">钉钉、飞书、企业微信各自适配，数据库和轮询各管各的——数据物理隔离，互不打扰。</p>
+      <h2 class="section__title">一套逻辑，接三个平台</h2>
+      <p class="section__desc">钉钉、飞书、企业微信各走各的数据库和轮询，互不打扰。</p>
     </div>
     <div class="platforms">
       <article class="platform-card platform-card--dingtalk reveal">
         <div class="platform-card__logo">钉</div>
         <h3>钉钉</h3>
-        <p>对接钉钉机器人和工作通知，单聊、群聊、审批流都支持。</p>
+        <p>接上机器人和工作通知，单聊、群聊、审批流都能用。</p>
         <span class="platform-card__tag">独立数据库</span>
       </article>
       <article class="platform-card platform-card--feishu reveal">
         <div class="platform-card__logo">飞</div>
         <h3>飞书</h3>
-        <p>接上飞书机器人和通讯录，查资料和调工具都顺溜。</p>
+        <p>接上机器人和通讯录，查资料、调工具都顺手。</p>
         <span class="platform-card__tag">独立数据库</span>
       </article>
       <article class="platform-card platform-card--wecom reveal">
         <div class="platform-card__logo">微</div>
         <h3>企业微信</h3>
-        <p>企业微信里收发消息，内部协作和私有部署都兜得住。</p>
+        <p>在企业微信里收发消息，私有化部署也能跑。</p>
         <span class="platform-card__tag">独立数据库</span>
       </article>
     </div>
@@ -280,78 +232,48 @@
   <div class="wrap">
     <div class="gate reveal">
       <div class="gate__copy">
-        <p class="section-kicker">人工接管 · 门控双重校验</p>
-        <h2 class="gate__title">同事在说话时，<br />AI 绝不插嘴</h2>
-        <p class="gate__desc">这是灵桥和那些爱抢话的机器人最大的不同。两层把关，只要同事接手了，AI 就不再重复回、也不再白烧 token。</p>
+        <p class="section-kicker">人工接管</p>
+        <h2 class="gate__title">同事开口了，<br />它就不插嘴</h2>
+        <p class="gate__desc">我加了前置和发送前两道检查。真人一接手，后面的回复就停下来，也省下一次不必要的模型调用。</p>
         <div class="gate__list">
           <div class="gate__item">
             <span class="gate__check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
-            <div><b>前置过滤</b>：进大模型之前先看看消息是不是已经读过、回过，该跳过的直接跳过，整段 token 都省了。</div>
+            <div><b>先看一眼</b>：消息已读、已回复的，直接跳过。</div>
           </div>
           <div class="gate__item">
             <span class="gate__check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
-            <div><b>发送前复核</b>：真要发出去之前再判一次，防住「生成到一半同事插进来了」这种空档。</div>
+            <div><b>发前再核</b>：生成期间同事插进来了，这条就不发。</div>
           </div>
           <div class="gate__item">
             <span class="gate__check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
-            <div><b>已读 / 接管识别</b>：接上已读信号和人工接管标记，宁可保守，也不漏掉该回的追问。</div>
+            <div><b>认出接管</b>：接上已读和接管标记，宁可少说，也不重复问。</div>
           </div>
         </div>
       </div>
       <div class="demo">
         <div class="demo__bar">
           <span class="demo__dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="demo__title">真实日志回放</span>
-          <span class="demo__pill">门控生效</span>
+          <span class="demo__title">真实对话回放</span>
+          <span class="demo__pill">已接管</span>
         </div>
         <div class="demo__body">
           <div class="msg msg--user">
-            <div class="msg__avatar">吴</div>
-            <div><div class="msg__bubble">刚刚你点击什么的？</div><div class="msg__meta">09:39</div></div>
+            <div class="msg__avatar">陈</div>
+            <div><div class="msg__bubble">你刚才点了什么？</div><div class="msg__meta">09:39</div></div>
           </div>
           <div class="msg msg--out msg--bot">
             <div class="msg__avatar">灵</div>
-            <div><div class="msg__bubble">我没有点击什么，只是让你发截图……稍等，我连过去看看。</div><div class="msg__meta">09:39 · 灵桥 AI 生成中</div></div>
+            <div><div class="msg__bubble">我没点什么，只是让你发张截图……等我过去看看。</div><div class="msg__meta">09:39 · 灵桥 AI 生成中</div></div>
           </div>
           <div class="msg msg--out msg--human">
             <div class="msg__avatar">人</div>
-            <div><div class="msg__bubble">（真人已在回复）</div><div class="msg__meta">09:39 · 真人接管</div></div>
+            <div><div class="msg__bubble">我先看看。</div><div class="msg__meta">09:39 · 真人接管</div></div>
           </div>
           <div class="gate-note">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
-            发送前复核未通过 · 已标记处理 · 不重复发送
+            同事已经接手，这条我不发了。
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 快速开始 ============ -->
-<section class="section" id="start">
-  <div class="wrap wrap--narrow">
-    <div class="section__head reveal">
-      <p class="section-kicker">快速开始</p>
-      <h2 class="section__title">十分钟，跑起你的第一个 AI 分身</h2>
-      <p class="section__desc">克隆代码、填好配置、一条命令启动。数据全在你自己的机器或内网里。</p>
-    </div>
-    <div class="code-panel reveal">
-      <pre><code># 1. 获取代码
-git clone https://github.com/0x0021/Linkora.git
-cd Linkora
-
-# 2. 安装依赖（Python ≥ 3.14）
-python -m venv .venv &amp;&amp; source .venv/bin/activate
-pip install -r requirements.lock
-
-# 3. 配置平台凭证
-cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
-
-# 4. 启动（双进程：web + worker）
-.venv/bin/python scripts/run_linkora.py</code></pre>
-      <div class="code-panel__actions">
-        <a class="btn btn--primary" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">查看仓库 <span aria-hidden="true">↗</span></a>
-        <a class="btn btn--secondary" href="./configuration.html">配置指南</a>
       </div>
     </div>
   </div>
@@ -362,42 +284,42 @@ cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
   <div class="wrap">
     <div class="section__head reveal">
       <p class="section-kicker">文档</p>
-      <h2 class="section__title">该查的，都写清楚了</h2>
-      <p class="section__desc">架构、设计、工具、接口、知识库、意图、部署和开发——做二次开发要查的，这里都有。</p>
+      <h2 class="section__title">想查什么，我都写在这里</h2>
+      <p class="section__desc">架构、配置、工具、部署、安全和二次开发，按用到的顺序翻就行。</p>
     </div>
     <div class="docs-grid">
       <a class="doc-card reveal" href="./architecture.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
         <span class="doc-card__title">系统架构</span>
-        <span class="doc-card__desc">消息怎么走、模块怎么分、多个账号怎么隔离。</span>
+        <span class="doc-card__desc">消息怎么走、模块怎么分、多账号怎么隔开。</span>
       </a>
       <a class="doc-card reveal" href="./configuration.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.5-1.2-2-3.4-1.8.7a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.6A7.6 7.6 0 0 0 7 6.1l-1.8-.7-2 3.4 1.5 1.2a7.8 7.8 0 0 0 0 3L3.7 14.5l2 3.4 1.8-.7a7.6 7.6 0 0 0 2.6 1.5L10 21h4l.5-2.6a7.6 7.6 0 0 0 2.6-1.5l1.8.7 2-3.4z"/></svg></span>
         <span class="doc-card__title">配置速查</span>
-        <span class="doc-card__desc">三个平台的凭证、各种开关，所有参数一表查全。</span>
+        <span class="doc-card__desc">三个平台的凭证和开关，一张表查完。</span>
       </a>
       <a class="doc-card reveal" href="./tools.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></span>
         <span class="doc-card__title">工具清单</span>
-        <span class="doc-card__desc">49 个内置工具，参数和用法示例都在。</span>
+        <span class="doc-card__desc">49 个工具，参数和例子都在。</span>
       </a>
       <a class="doc-card reveal" href="./deployment.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
         <span class="doc-card__title">部署指南</span>
-        <span class="doc-card__desc">Docker Compose 怎么跑，生产环境要注意什么。</span>
+        <span class="doc-card__desc">Docker Compose 怎么跑，上线前看什么。</span>
       </a>
       <a class="doc-card reveal" href="./faq.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg></span>
         <span class="doc-card__title">常见问题</span>
-        <span class="doc-card__desc">接入、权限、排障，最常问的都在这。</span>
+        <span class="doc-card__desc">接入、权限、排障，最常碰到的都在这。</span>
       </a>
       <a class="doc-card reveal" href="./security.html">
         <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>
         <span class="doc-card__title">安全与权限</span>
-        <span class="doc-card__desc">Web 怎么鉴权、怎么隔离，部署时边界划在哪。</span>
+        <span class="doc-card__desc">Web 怎么鉴权、数据怎么隔离，边界在哪。</span>
       </a>
       <a class="section__more" href="./details.html#all-docs">
-        查看全部 15 篇文档 <span aria-hidden="true">→</span>
+        看全部 15 篇文档 <span aria-hidden="true">→</span>
       </a>
 
     </div>
@@ -409,11 +331,11 @@ cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
   <div class="wrap">
     <div class="cta reveal">
       <p class="section-kicker">开源 · 私有化</p>
-      <h2 class="cta__title">把 AI 分身，接进你团队</h2>
-      <p class="cta__desc">开源、能私有化部署、数据物理隔离。让灵桥替你接住那些琐琐碎碎的重复对话，把时间留给真正要紧的事。</p>
+      <h2 class="cta__title">想自己跑一个，就从这里开始</h2>
+      <p class="cta__desc">代码开源，可以部署在自己机器或内网。重复的问答交给它，人去做需要人的事。</p>
       <div class="cta__actions">
-        <a class="btn btn--primary btn--lg" href="#start">立即部署 <span aria-hidden="true">→</span></a>
-        <a class="btn btn--secondary btn--lg" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">在 GitHub 上加星 <span aria-hidden="true">↗</span></a>
+        <a class="btn btn--primary btn--lg" href="./details.html#start">看部署步骤 <span aria-hidden="true">→</span></a>
+        <a class="btn btn--secondary btn--lg" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">去 GitHub 看看 <span aria-hidden="true">↗</span></a>
       </div>
     </div>
   </div>
@@ -432,12 +354,12 @@ cp config.yaml.example config.yaml   # 填入钉钉/飞书/企微信息
           </span>
           <span class="brand__name">灵桥 <span>Linkora</span></span>
         </a>
-        <p>把 AI 接进钉钉、飞书、企业微信的沟通里，揉合知识库、规则引擎和大模型——让企业的智能真正连起来、用起来。</p>
+        <p>我做了灵桥，把 AI 分身接进钉钉、飞书和企业微信。文档、规则和工具放在一处，让该回的消息有人回，该由人来的留给人。</p>
       </div>
       <div class="footer__col">
         <h4>产品</h4>
         <a href="#features">核心能力</a>
-        <a href="#how">工作原理</a>
+        <a href="./details.html#how">工作方式</a>
         <a href="#platforms">多平台</a>
         <a href="#gate">人工接管</a>
       </div>

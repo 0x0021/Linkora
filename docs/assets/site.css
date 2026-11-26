@@ -201,7 +201,7 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .mobile-menu .btn { margin-top: 14px; text-align: center; border-bottom: 0; color: #ffffff; }
 
 /* ---------------- Hero ---------------- */
-.hero { padding: 88px 24px 24px; text-align: center; }
+.hero { padding: 80px 24px 24px; text-align: center; }
 .hero__inner { display: flex; flex-direction: column; align-items: center; }
 .hero__copy { max-width: 860px; }
 .hero__eyebrow {
@@ -243,7 +243,7 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .hero__meta { display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; margin-top: 18px; }
 .hero__meta span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 13px; }
 .hero__meta svg { width: 14px; height: 14px; color: var(--brand); }
-.hero__visual { width: min(100%, 760px); margin-top: 48px; }
+.hero__visual { width: min(100%, 760px); margin-top: 40px; }
 
 /* ---------------- 演示对话卡 ---------------- */
 .demo {
@@ -343,8 +343,8 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 :root[data-theme="dark"] .brand-showcase .brand-showcase__dark { display: block; }
 
 /* ---------------- 通用区块 ---------------- */
-.section { padding: 100px 0; }
-.section:first-of-type { padding-top: 104px; }
+.section { padding: 88px 0; }
+.section:first-of-type { padding-top: 80px; }
 .section--tint { background: var(--bg-alt); }
 .section__head { max-width: 780px; margin: 0 auto 56px; text-align: center; }
 .section-kicker {

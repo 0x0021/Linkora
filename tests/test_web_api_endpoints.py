@@ -1390,6 +1390,95 @@ class TestMessages:
         # sender 是 me，receiver 应是 chat_name=张三
         assert m["receiver_name"] == "张三"
 
+    def test_message_nickname_alias_marked_out(self, tmp_config, tmp_db, monkeypatch):
+        """消息里的昵称 ≠ 通讯录正式名时，本人消息仍判 out。
+
+        钉钉 sender 用当前昵称，通讯录 userName 是正式姓名；只比后者会把本人
+        消息显示成「对方 · 昵称 → 正式姓名」。运行时引擎已学到昵称别名与自身
+        oid，Web 读路径必须复用同一口径。
+        """
+        from datetime import datetime
+        from fastapi.testclient import TestClient
+        from src.memory.sqlite_store import SQLiteStore
+        from src.models import Message
+        from web.api import app
+
+        store = SQLiteStore(tmp_db)
+        store.init_db()
+        store._message_repo.save_message(Message(
+            msg_id="m-alias", chat_id="c1", chat_type="single", chat_name="张三",
+            sender_id="oid-self", sender_name="昵称", content="好",
+            msg_type="text", timestamp=datetime.now(),
+        ))
+        store.close()
+
+        fake_inst = MagicMock()
+        fake_inst.platforms = {}
+        fake_inst.current_open_dingtalk_id = "oid-self"
+        fake_inst.current_user_id = "uid-self"
+        fake_inst.current_user_name = "正式姓名"
+        fake_inst.self_sender_names = frozenset({"正式姓名", "昵称"})
+        fake_inst._self_sender_aliases = {"昵称"}
+        monkeypatch.setattr(
+            "web.routers.conversations.get_app_instance", lambda: fake_inst
+        )
+
+        with patch("web.api.get_dws") as mock_dws:
+            dws = MagicMock()
+            dws._get_current_profile_local.return_value = {
+                "userId": "uid-self", "userName": "正式姓名",
+            }
+            dws.dry_run = True
+            mock_dws.return_value = dws
+            resp = TestClient(app).get("/api/messages?chat_id=c1")
+
+        assert resp.status_code == 200
+        m = resp.json()["messages"][0]
+        assert m["direction"] == "out"
+        assert m["receiver_name"] == "张三"
+
+    def test_message_nickname_alias_with_foreign_id_stays_in(
+        self, tmp_config, tmp_db, monkeypatch
+    ):
+        """同名护栏：别名命中但 sender_id 是别人的，不能误判成我。"""
+        from datetime import datetime
+        from fastapi.testclient import TestClient
+        from src.memory.sqlite_store import SQLiteStore
+        from src.models import Message
+        from web.api import app
+
+        store = SQLiteStore(tmp_db)
+        store.init_db()
+        store._message_repo.save_message(Message(
+            msg_id="m-same-name", chat_id="c1", chat_type="single", chat_name="张三",
+            sender_id="oid-other", sender_name="昵称", content="你好",
+            msg_type="text", timestamp=datetime.now(),
+        ))
+        store.close()
+
+        fake_inst = MagicMock()
+        fake_inst.platforms = {}
+        fake_inst.current_open_dingtalk_id = "oid-self"
+        fake_inst.current_user_id = "uid-self"
+        fake_inst.current_user_name = "正式姓名"
+        fake_inst.self_sender_names = frozenset({"正式姓名", "昵称"})
+        fake_inst._self_sender_aliases = {"昵称"}
+        monkeypatch.setattr(
+            "web.routers.conversations.get_app_instance", lambda: fake_inst
+        )
+
+        with patch("web.api.get_dws") as mock_dws:
+            dws = MagicMock()
+            dws._get_current_profile_local.return_value = {
+                "userId": "uid-self", "userName": "正式姓名",
+            }
+            dws.dry_run = True
+            mock_dws.return_value = dws
+            resp = TestClient(app).get("/api/messages?chat_id=c1")
+
+        assert resp.status_code == 200
+        assert resp.json()["messages"][0]["direction"] == "in"
+
 
 # ============ 安全加固测试（P0：认证默认开 + 恒定时间 + 限流 + 图片 token + SSRF） ============
 

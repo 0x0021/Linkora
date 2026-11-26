@@ -22,6 +22,7 @@ import web.api as _api
 from src.config import DEFAULT_TMP_IMAGES_DIR
 from src.image_path import safe_path_component
 from src.memory.message_repo import MessageRepo
+from src.self_identity import collect_self_ids, collect_self_names, is_self_message
 from web.dependencies import logger, get_current_platform, get_app_instance
 from web.errors import SAFE_OPERATION_FAILED
 
@@ -104,6 +105,36 @@ def _resolve_current_user() -> tuple[str, str]:
     return current_user_id, current_user_name
 
 
+def _resolve_self_identity() -> tuple[str, str, frozenset[str], frozenset[str]]:
+    """返回 ``(user_id, user_name, self_ids, self_names)``，供消息方向判定共用。
+
+    Web 旧实现只拿通讯录 ``userName``（正式姓名）去比消息的 ``sender_name``。
+    钉钉消息里 sender 带的是**当前昵称**，昵称与正式名不同时，本人发出的消息
+    会被判成「对方」（消息记录页显示「对方 · 昵称 → 正式名」）。运行时引擎
+    启动期已通过 ``src.self_identity`` 学到昵称别名与自身 openDingTalkId，
+    这里复用同一套口径，避免 Web 与轮询器的身份判定漂移。
+    """
+    current_user_id, current_user_name = _resolve_current_user()
+    self_ids = collect_self_ids(current_user_id)
+    self_names = collect_self_names(current_user_name)
+
+    inst = get_app_instance()
+    if inst is not None:
+        self_ids = self_ids | collect_self_ids(
+            getattr(inst, "current_open_dingtalk_id", ""),
+            getattr(inst, "current_user_id", ""),
+        )
+        self_names = self_names | collect_self_names(
+            getattr(inst, "current_user_name", ""),
+            [
+                *(getattr(inst, "self_sender_names", ()) or ()),
+                # 启动后期学到的别名可能只写回 _self_sender_aliases，两个来源都收。
+                *(getattr(inst, "_self_sender_aliases", ()) or ()),
+            ],
+        )
+    return current_user_id, current_user_name, self_ids, self_names
+
+
 @router.get("/api/conversations")
 async def conversations(limit: int = 50):
     try:
@@ -145,7 +176,12 @@ async def messages(
             background_tasks = BackgroundTasks()
 
         # H1-2026-08-08：DWS 身份解析涉及 subprocess CLI，移出事件循环到 worker 线程
-        current_user_id, current_user_name = await run_in_threadpool(_resolve_current_user)
+        (
+            current_user_id,
+            current_user_name,
+            self_ids,
+            self_names,
+        ) = await run_in_threadpool(_resolve_self_identity)
 
         # 标准化（strip 兼容前后空格差异）
         current_user_id = (current_user_id or "").strip()
@@ -160,14 +196,21 @@ async def messages(
             pending_backfills: list[tuple[str, str, str]] = []
             for d in rows:
                 chat_name = d.get('chat_name') or ''
-                # ★ P-1 修复：方向判断 (sender_name OR sender_id 都对得上 → out)
-                #   之前只判 sender_name，遇到 current_user_name 解析失败就全错位。
-                #   79 条「OWNER」手发消息 role='user'，前端 isMe 误判为"对方"就是这原因。
+                # 方向判断：保留原有精确匹配（正式姓名 / 通讯录 ID），再叠加
+                # self_identity 的「正式名 + 昵称别名 + 自身 ID」口径。钉钉消息
+                # sender 是当前昵称，与通讯录正式名不同时旧逻辑会把自己判成对方。
+                # 别名匹配内置同名护栏：sender_id 有值且不在自身 ID 集合里时不判自我。
                 sender_name_key = (d.get('sender_name') or '').strip()
                 sender_id_key = (d.get('sender_id') or '').strip()
                 is_out = (
                     (current_user_name and sender_name_key == current_user_name)
                     or (current_user_id and sender_id_key == current_user_id)
+                    or is_self_message(
+                        sender_id=sender_id_key,
+                        sender_name=sender_name_key,
+                        self_ids=self_ids,
+                        self_names=self_names,
+                    )
                 )
                 d['direction'] = 'out' if is_out else 'in'
                 if is_out:

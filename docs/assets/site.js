@@ -1,7 +1,6 @@
 /* ============================================================
    Linkora · 灵桥 — 交互脚本
-   主题三态切换 / 滚动进场 / 磁性按钮 / 导航玻璃态 /
-   移动菜单 / 数字计数 / 轻量粒子背景
+   主题三态切换（默认跟随系统）/ 滚动进场 / 移动菜单 / 数字计数
    注意：不使用任何模板语法，避免 GitHub Pages 构建失败。
    ============================================================ */
 (function () {
@@ -9,11 +8,12 @@
 
   var root = document.documentElement;
   var STORE = "linkora-theme";
+  root.classList.add("js");
 
   function currentPref() {
     var p = null;
     try { p = localStorage.getItem(STORE); } catch (e) {}
-    if (p !== "light" && p !== "dark" && p !== "system") p = "dark";
+    if (p !== "light" && p !== "dark" && p !== "system") p = "system";
     return p;
   }
 
@@ -134,107 +134,4 @@
     });
   }
 
-  /* ---- 磁性按钮 ---- */
-  var mags = document.querySelectorAll(".btn--magnetic");
-  mags.forEach(function (btn) {
-    btn.addEventListener("mousemove", function (e) {
-      var r = btn.getBoundingClientRect();
-      var mx = e.clientX - r.left - r.width / 2;
-      var my = e.clientY - r.top - r.height / 2;
-      btn.style.transform = "translate(" + mx * 0.18 + "px," + my * 0.28 + "px)";
-    });
-    btn.addEventListener("mouseleave", function () {
-      btn.style.transform = "";
-    });
-  });
-
-  /* ---- 特性卡鼠标跟随高亮 ---- */
-  document.querySelectorAll(".feature-card").forEach(function (card) {
-    card.addEventListener("mousemove", function (e) {
-      var r = card.getBoundingClientRect();
-      card.style.setProperty("--mx", (e.clientX - r.left) + "px");
-      card.style.setProperty("--my", (e.clientY - r.top) + "px");
-    });
-  });
-
-  /* ---- 轻量粒子背景 ---- */
-  var canvas = document.getElementById("heroCanvas");
-  if (canvas) {
-    var reduce = window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var fine = window.matchMedia &&
-      window.matchMedia("(pointer: fine)").matches;
-
-    if (!reduce && fine) {
-      var ctx = canvas.getContext("2d");
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      var W = 0, H = 0;
-      var pts = [];
-
-      function resize() {
-        var rect = canvas.getBoundingClientRect();
-        W = rect.width; H = rect.height;
-        canvas.width = Math.max(1, Math.floor(W * dpr));
-        canvas.height = Math.max(1, Math.floor(H * dpr));
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        var count = Math.max(20, Math.min(46, Math.floor(W / 26)));
-        pts = [];
-        for (var i = 0; i < count; i++) {
-          pts.push({
-            x: Math.random() * W,
-            y: Math.random() * H,
-            vx: (Math.random() - 0.5) * 0.25,
-            vy: -0.12 - Math.random() * 0.28,
-            r: 1 + Math.random() * 1.8,
-            c: Math.random() > 0.5 ? "99,102,241" : "34,211,238"
-          });
-        }
-      }
-
-      function tick() {
-        if (document.hidden) { raf = 0; return; }
-        ctx.clearRect(0, 0, W, H);
-        for (var i = 0; i < pts.length; i++) {
-          var p = pts[i];
-          p.x += p.vx; p.y += p.vy;
-          if (p.y < -10) { p.y = H + 10; p.x = Math.random() * W; }
-          if (p.x < -10) p.x = W + 10;
-          if (p.x > W + 10) p.x = -10;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(" + p.c + ",0.55)";
-          ctx.fill();
-        }
-        // 近点连线
-        for (var a = 0; a < pts.length; a++) {
-          for (var b = a + 1; b < pts.length; b++) {
-            var dx = pts[a].x - pts[b].x;
-            var dy = pts[a].y - pts[b].y;
-            var d2 = dx * dx + dy * dy;
-            if (d2 < 13000) {
-              var al = (1 - d2 / 13000) * 0.18;
-              ctx.strokeStyle = "rgba(129,140,248," + al.toFixed(3) + ")";
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              ctx.moveTo(pts[a].x, pts[a].y);
-              ctx.lineTo(pts[b].x, pts[b].y);
-              ctx.stroke();
-            }
-          }
-        }
-        raf = requestAnimationFrame(tick);
-      }
-
-      var raf = 0;
-      function start() { if (!raf) raf = requestAnimationFrame(tick); }
-
-      resize();
-      start();
-      window.addEventListener("resize", resize);
-      document.addEventListener("visibilitychange", function () {
-        if (document.hidden) { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-        else start();
-      });
-    }
-  }
 })();

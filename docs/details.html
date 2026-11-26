@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>能力与文档 · 灵桥 Linkora</title>
+<meta name="description" content="灵桥（Linkora）把企业级 AI 分身接进钉钉、飞书、企业微信：读得懂公司文档、会调用工具办事、更懂得何时把对话交还真人。" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#1b1b1f" media="(prefers-color-scheme: dark)" />
+<meta property="og:title" content="灵桥 Linkora · 钉钉/飞书/企业微信的 AI 分身" />
+<meta property="og:description" content="把 AI 分身接进钉钉、飞书、企业微信——读得懂公司文档，会自己动手办事，也懂得何时该请真人接手。" />
+<meta property="og:type" content="website" />
+<link rel="canonical" href="https://0x0021.github.io/Linkora/details.html" />
+
+<!-- 首帧定主题，避免深色模式白屏闪烁；默认跟随系统 -->
+<script>
+  (function () {
+    var p = null;
+    try { p = localStorage.getItem("linkora-theme"); } catch (e) {}
+    if (p !== "light" && p !== "dark" && p !== "system") p = "system";
+    var dark = p === "dark" ||
+      (p === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var r = document.documentElement;
+    r.setAttribute("data-theme", dark ? "dark" : "light");
+    r.setAttribute("data-pref", p);
+  })();
+</script>
+
+<link rel="stylesheet" href="./assets/site.css" />
+</head>
+<body id="top">
+
+<a class="skip-link" href="#main">跳转到主要内容</a>
+
+<nav class="nav" aria-label="主导航">
+  <div class="nav__inner">
+    <a class="brand" href="./index.html#top" aria-label="返回灵桥 Linkora 首页">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16 L12 5 L20 16"/><path d="M3 16.5h18"/><circle cx="8" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="11" r="1.1" fill="currentColor" stroke="none"/></svg>
+      </span>
+      <span class="brand__name">灵桥 <span>Linkora</span></span>
+    </a>
+
+    <div class="nav__links">
+      <a href="./index.html#features">核心能力</a>
+      <a href="./index.html#how">工作原理</a>
+      <a href="./index.html#platforms">多平台</a>
+      <a href="./index.html#gate">人工接管</a>
+      <a href="./index.html#docs">文档</a>
+    </div>
+
+    <div class="nav__actions">
+      <a class="nav__external" href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
+      <div class="theme-seg" id="themeSeg" role="group" aria-label="切换外观">
+        <button type="button" data-value="light" aria-label="浅色模式" aria-pressed="false" title="浅色模式">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2 12h2.4M19.6 12H22M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg>
+        </button>
+        <button type="button" data-value="dark" aria-label="深色模式" aria-pressed="false" title="深色模式">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button type="button" data-value="system" aria-label="跟随系统" aria-pressed="false" title="跟随系统">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </button>
+      </div>
+      <a class="btn btn--primary btn--sm" href="./index.html#start">快速开始</a>
+      <button class="burger" id="burger" type="button" aria-label="打开菜单" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="./index.html#features">核心能力</a>
+  <a href="./index.html#how">工作原理</a>
+  <a href="./index.html#platforms">多平台</a>
+  <a href="./index.html#gate">人工接管</a>
+  <a href="./index.html#docs">文档</a>
+  <a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub ↗</a>
+  <a class="btn btn--primary" href="./index.html#start">快速开始</a>
+</div>
+
+
+<main id="main">
+
+<section class="section" id="all-features">
+  <div class="wrap">
+    <div class="section__head reveal">
+      <p class="section-kicker">完整能力</p>
+      <h1 class="section__title">十项能力，一次看全</h1>
+      <p class="section__desc">首页只放了最常被问到的六项。这里是灵桥目前的完整能力清单，每一项都可以点进文档看细节。</p>
+    </div>
+    <div class="features">
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
+        <h3>企业知识 RAG</h3>
+        <p>读得懂公司的文档和历史聊天记录。需要的时候把相关资料调出来放进对话，给出的回答都有出处、能溯源。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>RAG 严格问答模式</h3>
+        <p>一键开启「只依据知识库作答」：回答 100% 来自检索内容、零编造，知识库没收录就直说。制度问答、产品资料这类对出处要求高的场景，用它最稳。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></div>
+        <h3>工具调用 · 49 个</h3>
+        <p>一张统一的能力清单，目前内置 49 个：查考勤、建待办、发通知、搜消息、读日报周报、查别人转发的审批流程……它是真去办事，不是只动嘴给建议。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 11 16M16 7.5 13 16"/></svg></div>
+        <h3>规则 / 意图引擎</h3>
+        <p>先把消息分个类，41 种意图里能套规则的就走固定流程，只有拿不准的才交给大模型。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>人工接管与审核</h3>
+        <p>要改数据先确认，敏感操作可审批。双重把关，保证同事在说话时 AI 绝不插嘴。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 14h8"/></svg></div>
+        <h3>Web 管理台</h3>
+        <p>19 个页面、一百八十多个接口。会话、知识库、工具、审批、实时摘要、安全防护，全在浏览器里看得清、调得了。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+        <h3>多平台物理隔离</h3>
+        <p>钉钉、飞书、企微各用各的数据库和轮询，数据互不串门，哪个平台想停都能单独停。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 11v4"/><path d="M9 11v4"/><path d="M15 11v4"/></svg></div>
+        <h3>主动触达 &amp; 对话摘要</h3>
+        <p>每天定时把近期的对话摘要推给你（钉钉私聊），后台也能随时看同一份汇总。默认关着，想用再开。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 14h8M8 17h5"/></svg></div>
+        <h3>对话摘要结构化卡片</h3>
+        <p>摘要页用一张张卡片把每段对话摆出来：头像、来自哪个平台、几条消息、自动归纳的关键词和待办，一眼看完。今天、昨天、近七天，随时切换。</p>
+      </article>
+      <article class="feature-card reveal">
+        <div class="feature-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>入站消息安全防护</h3>
+        <p>别人从钉钉、飞书、企微发来的消息，先查伪造的对话模板标记与边界逃逸，再清洗、隔离后交给模型；正常业务话术一字不改。管理台「安全防护」页能看风险趋势、事件明细，还能现场试检测、调策略。</p>
+      </article>
+    </div>
+    <div class="section__more-wrap"><a class="btn btn--secondary" href="./index.html#features">← 返回首页</a></div>
+  </div>
+</section>
+
+<section class="section section--tint">
+  <div class="wrap">
+    <div class="brand-showcase reveal">
+      <picture>
+        <img class="brand-showcase__light" src="./assets/brand/linkora-scenarios-light.png" alt="Linkora 使用场景 — 把 AI 接进企业沟通" loading="lazy" />
+        <img class="brand-showcase__dark" src="./assets/brand/linkora-scenarios-dark.png" alt="Linkora 使用场景 — 把 AI 接进企业沟通" loading="lazy" />
+      </picture>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="all-docs">
+  <div class="wrap">
+    <div class="section__head reveal">
+      <p class="section-kicker">完整文档索引</p>
+      <h2 class="section__title">该查的，都写清楚了</h2>
+      <p class="section__desc">架构、设计、工具、接口、知识库、意图、部署和开发——做二次开发要查的，这里都有。</p>
+    </div>
+    <div class="docs-grid">
+      <a class="doc-card reveal" href="./architecture.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+        <span class="doc-card__title">系统架构</span>
+        <span class="doc-card__desc">消息怎么走、模块怎么分、多个账号怎么隔离。</span>
+      </a>
+      <a class="doc-card reveal" href="./configuration.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.5-1.2-2-3.4-1.8.7a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.6A7.6 7.6 0 0 0 7 6.1l-1.8-.7-2 3.4 1.5 1.2a7.8 7.8 0 0 0 0 3L3.7 14.5l2 3.4 1.8-.7a7.6 7.6 0 0 0 2.6 1.5L10 21h4l.5-2.6a7.6 7.6 0 0 0 2.6-1.5l1.8.7 2-3.4z"/></svg></span>
+        <span class="doc-card__title">配置速查</span>
+        <span class="doc-card__desc">三个平台的凭证、各种开关，所有参数一表查全。</span>
+      </a>
+      <a class="doc-card reveal" href="./tools.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></span>
+        <span class="doc-card__title">工具清单</span>
+        <span class="doc-card__desc">49 个内置工具，参数和用法示例都在。</span>
+      </a>
+      <a class="doc-card reveal" href="./web-api.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>
+        <span class="doc-card__title">Web API</span>
+        <span class="doc-card__desc">管理台一百六十多个接口，含鉴权说明。</span>
+      </a>
+      <a class="doc-card reveal" href="./deployment.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
+        <span class="doc-card__title">部署指南</span>
+        <span class="doc-card__desc">Docker Compose 怎么跑，生产环境要注意什么。</span>
+      </a>
+      <a class="doc-card reveal" href="./faq.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg></span>
+        <span class="doc-card__title">常见问题</span>
+        <span class="doc-card__desc">接入、权限、排障，最常问的都在这。</span>
+      </a>
+      <a class="doc-card reveal" href="./design.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l1.5-1.2-2-3.4-1.8.7a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.5 2.6A7.6 7.6 0 0 0 7 6.1l-1.8-.7-2 3.4 1.5 1.2a7.8 7.8 0 0 0 0 3L3.7 14.5l2 3.4 1.8-.7a7.6 7.6 0 0 0 2.6 1.5L10 21h4l.5-2.6a7.6 7.6 0 0 0 2.6-1.5l1.8.7 2-3.4z"/></svg></span>
+        <span class="doc-card__title">设计总览</span>
+        <span class="doc-card__desc">设计思路、路由写法，还有每次决策为什么这么定。</span>
+      </a>
+      <a class="doc-card reveal" href="./rag.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg></span>
+        <span class="doc-card__title">RAG 知识库</span>
+        <span class="doc-card__desc">支持什么格式、怎么切分、检索和重排怎么配合。</span>
+      </a>
+      <a class="doc-card reveal" href="./intent-model.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg></span>
+        <span class="doc-card__title">意图分类</span>
+        <span class="doc-card__desc">意图分两层，怎么对应到具体工具。</span>
+      </a>
+      <a class="doc-card reveal" href="./DEV_GUIDE.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2 2.6-2.6z"/></svg></span>
+        <span class="doc-card__title">开发指南</span>
+        <span class="doc-card__desc">环境怎么搭、怎么构建测试、怎么提贡献。</span>
+      </a>
+      <a class="doc-card reveal" href="./memory.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01"/></svg></span>
+        <span class="doc-card__title">长期记忆</span>
+        <span class="doc-card__desc">记忆怎么存、怎么写、怎么被想起来。</span>
+      </a>
+      <a class="doc-card reveal" href="./getting-started-platforms.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></span>
+        <span class="doc-card__title">多平台接入</span>
+        <span class="doc-card__desc">钉钉、飞书、企微，一步步接进来。</span>
+      </a>
+      <a class="doc-card reveal" href="./platform-capabilities.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+        <span class="doc-card__title">平台能力对照</span>
+        <span class="doc-card__desc">各平台能用哪些工具、门控开不开，一张表对照。</span>
+      </a>
+      <a class="doc-card reveal" href="./troubleshooting.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></span>
+        <span class="doc-card__title">故障排查</span>
+        <span class="doc-card__desc">登录、权限、收发、平台限制，出问题来对号入座。</span>
+      </a>
+      <a class="doc-card reveal" href="./security.html">
+        <span class="doc-card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <span class="doc-card__title">安全与权限</span>
+        <span class="doc-card__desc">Web 怎么鉴权、怎么隔离，部署时边界划在哪。</span>
+      </a>
+    </div>
+    <div class="section__more-wrap"><a class="btn btn--secondary" href="./index.html#docs">← 返回首页</a></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer__grid">
+      <div class="footer__about">
+        <a class="brand" href="./index.html#top">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16 L12 5 L20 16"/><path d="M3 16.5h18"/><circle cx="8" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="11" r="1.1" fill="currentColor" stroke="none"/></svg>
+          </span>
+          <span class="brand__name">灵桥 <span>Linkora</span></span>
+        </a>
+        <p>把 AI 接进钉钉、飞书、企业微信的沟通里，揉合知识库、规则引擎和大模型——让企业的智能真正连起来、用起来。</p>
+      </div>
+      <div class="footer__col">
+        <h4>产品</h4>
+        <a href="./index.html#features">核心能力</a>
+        <a href="./index.html#how">工作原理</a>
+        <a href="./index.html#platforms">多平台</a>
+        <a href="./index.html#gate">人工接管</a>
+      </div>
+      <div class="footer__col">
+        <h4>文档</h4>
+        <a href="./architecture.html">系统架构</a>
+        <a href="./design.html">设计总览</a>
+        <a href="./configuration.html">配置指南</a>
+        <a href="./tools.html">工具清单</a>
+        <a href="./rag.html">RAG 知识库</a>
+        <a href="./intent-model.html">意图分类</a>
+        <a href="./web-api.html">Web API</a>
+        <a href="./getting-started-platforms.html">多平台接入</a>
+        <a href="./platform-capabilities.html">平台能力对照</a>
+        <a href="./troubleshooting.html">故障排查</a>
+        <a href="./security.html">安全与权限</a>
+        <a href="./third-party.html">第三方组件声明</a>
+      </div>
+      <div class="footer__col">
+        <h4>社区</h4>
+        <a href="https://github.com/0x0021/Linkora" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/0x0021/Linkora/releases" target="_blank" rel="noopener">发行版本</a>
+        <a href="./faq.html">常见问题</a>
+        <a href="./CHANGELOG.html">更新日志</a>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 灵桥 Linkora · 基于 GPL-3.0 开源</span>
+      <div class="footer__badges">
+        <span>Python ≥ 3.14</span>
+        <span>FastAPI</span>
+        <span>Docker</span>
+        <span>RAG</span>
+      </div>
+    </div>
+  </div>
+</footer>
+<script src="./assets/site.js"></script>
+</body>
+</html>

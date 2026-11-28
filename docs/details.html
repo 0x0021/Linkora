@@ -99,14 +99,22 @@
       <h2 class="section__title">一条消息，走五步</h2>
       <p class="section__desc">从收到到发出，每一步都留了记录，也能随时插手。</p>
     </div>
-    <div class="pipeline-shell reveal" data-pipeline>
-      <div class="flow-stage">
-        <div class="flow-lane" aria-hidden="true">
-          <span class="flow-lane__line"><span class="flow-lane__fill"></span></span>
-          <span class="flow-lane__dots"></span>
-          <span class="flow-carrier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>消息</span>
+    <div class="showcase reveal" data-showcase>
+      <div class="showcase__stage">
+        <div class="showcase__visual">
+          <span class="showcase__watermark" aria-hidden="true"></span>
+          <div class="showcase__icon" data-icon aria-hidden="true"></div>
+          <span class="showcase__chip" data-chip></span>
         </div>
-        <div class="pipeline" role="list" aria-label="一条消息，走五步">
+        <div class="showcase__copy">
+          <p class="showcase__count"><span data-count></span> / 05</p>
+          <h3 data-title></h3>
+          <p data-desc></p>
+        </div>
+      </div>
+      <div class="showcase__tabs" role="tablist" aria-label="一条消息，走五步"></div>
+      <div class="showcase__progress" aria-hidden="true"><span></span></div>
+      <div class="pipeline" role="list" aria-label="一条消息，走五步">
       <div class="node">
         <span class="node__step">01</span>
         <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
@@ -137,7 +145,6 @@
         <h3>原路发回</h3>
         <p>发出前再核一遍，回到原对话。</p>
       </div>
-        </div>
       </div>
     </div>
   </div>

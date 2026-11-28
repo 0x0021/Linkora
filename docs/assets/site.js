@@ -134,84 +134,76 @@
     });
   }
 
-  /* ---- 工作方式：消息沿时间线逐站流转 ---- */
-  var shell = document.querySelector("[data-pipeline]");
+  /* ---- 工作方式：五步自动轮播展示台 ---- */
+  var shell = document.querySelector("[data-showcase]");
   if (shell) {
-    var stage = shell.querySelector(".flow-stage");
-    var lane = shell.querySelector(".flow-lane");
-    var dotsLayer = shell.querySelector(".flow-lane__dots");
-    var line = shell.querySelector(".flow-lane__line");
-    var fill = shell.querySelector(".flow-lane__fill");
-    var carrier = shell.querySelector(".flow-carrier");
-    var rail = shell.querySelector(".pipeline");
-    var nodes = Array.prototype.slice.call(rail ? rail.querySelectorAll(".node") : []);
-    if (stage && lane && dotsLayer && line && fill && carrier && nodes.length) {
-      var LINE_X = 26;
-      var CARRIER_X = 64;
-      var dots = nodes.map(function () {
-        var d = document.createElement("span");
-        d.className = "flow-dot";
-        dotsLayer.appendChild(d);
-        return d;
+    var source = shell.querySelectorAll(".pipeline .node");
+    var tabs = shell.querySelector(".showcase__tabs");
+    var stage = shell.querySelector(".showcase__stage");
+    var copy = shell.querySelector(".showcase__copy");
+    var count = shell.querySelector("[data-count]");
+    var icon = shell.querySelector("[data-icon]");
+    var chip = shell.querySelector("[data-chip]");
+    var watermark = shell.querySelector(".showcase__watermark");
+    var title = copy ? copy.querySelector("h3") : null;
+    var desc = copy ? copy.querySelector("[data-desc]") : null;
+    var progress = shell.querySelector(".showcase__progress span");
+    if (source.length && tabs && stage && copy && count && icon && chip && watermark && title && desc && progress) {
+      var steps = Array.prototype.map.call(source, function (n) {
+        var svg = n.querySelector(".node__icon svg");
+        var st = n.querySelector(".node__step");
+        var h = n.querySelector("h3");
+        var p = n.querySelector("p");
+        return {
+          step: st ? st.textContent.trim() : "",
+          title: h ? h.textContent.trim() : "",
+          desc: p ? p.textContent.trim() : "",
+          svg: svg ? svg.cloneNode(true) : null
+        };
+      });
+      copy.id = "showcase-panel";
+      copy.setAttribute("role", "tabpanel");
+      var buttons = steps.map(function (s, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "showcase__tab";
+        b.id = "showcase-tab-" + (i + 1);
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-controls", "showcase-panel");
+        var num = document.createElement("span");
+        num.textContent = s.step;
+        b.appendChild(num);
+        b.appendChild(document.createTextNode(s.title));
+        tabs.appendChild(b);
+        return b;
       });
       var selected = 0;
-      var centers = [];
       var timer = null;
       var paused = false;
       var visible = false;
       var reduceMotion = !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      nodes.forEach(function (n, i) {
-        n.setAttribute("role", "listitem");
-        n.setAttribute("tabindex", "0");
-        if (i === 0) n.setAttribute("aria-current", "step");
-      });
-
-      function layout() {
-        var sr = stage.getBoundingClientRect();
-        centers = nodes.map(function (n, i) {
-          var icon = n.querySelector(".node__icon") || n;
-          var ir = icon.getBoundingClientRect();
-          var y = ir.top + ir.height / 2 - sr.top;
-          dots[i].style.left = LINE_X + "px";
-          dots[i].style.top = y + "px";
-          return { x: LINE_X, y: y };
-        });
-        var first = centers[0];
-        var last = centers[centers.length - 1];
-        line.style.left = (LINE_X - 1) + "px";
-        line.style.top = first.y + "px";
-        line.style.width = "2px";
-        line.style.height = (last.y - first.y) + "px";
-      }
-
-      function place(i, instant) {
-        var c = centers[i];
-        if (!c) return;
-        if (instant) carrier.style.transition = "none";
-        carrier.style.transform = "translate(" + (CARRIER_X - carrier.offsetWidth / 2) + "px," + (c.y - carrier.offsetHeight / 2) + "px)";
-        if (instant) {
-          void carrier.offsetWidth;
-          carrier.style.transition = "";
-        }
-        fill.style.width = "100%";
-        fill.style.height = (nodes.length === 1 ? 0 : (i / (nodes.length - 1)) * 100) + "%";
-        dots.forEach(function (d, j) {
-          d.classList.toggle("is-done", j < i);
-          d.classList.toggle("is-active", j === i);
-        });
-      }
-
-      function select(i, instant) {
-        if (i < 0 || i >= nodes.length) return;
+      function select(i) {
+        if (i < 0 || i >= steps.length) return;
         selected = i;
-        nodes.forEach(function (n, j) {
-          n.classList.toggle("is-active", j === i);
-          n.classList.toggle("is-done", j < i);
-          if (j === i) n.setAttribute("aria-current", "step");
-          else n.removeAttribute("aria-current");
+        var s = steps[i];
+        buttons.forEach(function (b, j) {
+          b.classList.toggle("is-active", j === i);
+          b.setAttribute("aria-selected", j === i ? "true" : "false");
+          b.setAttribute("tabindex", j === i ? "0" : "-1");
         });
-        place(i, instant);
+        copy.setAttribute("aria-labelledby", buttons[i].id);
+        count.textContent = s.step;
+        watermark.textContent = s.step;
+        chip.textContent = s.title;
+        title.textContent = s.title;
+        desc.textContent = s.desc;
+        while (icon.firstChild) icon.removeChild(icon.firstChild);
+        if (s.svg) icon.appendChild(s.svg.cloneNode(true));
+        progress.style.width = ((i + 1) / steps.length * 100) + "%";
+        copy.classList.remove("is-changing");
+        void copy.offsetWidth;
+        copy.classList.add("is-changing");
       }
 
       function stopAuto() {
@@ -224,42 +216,30 @@
       function startAuto() {
         if (reduceMotion || paused || !visible || timer) return;
         timer = window.setInterval(function () {
-          if (selected < nodes.length - 1) {
-            select(selected + 1, false);
-            return;
-          }
-          carrier.classList.add("is-hidden");
-          fill.style.opacity = "0";
-          stopAuto();
-          window.setTimeout(function () {
-            select(0, true);
-            carrier.classList.remove("is-hidden");
-            fill.style.opacity = "";
-            startAuto();
-          }, 420);
-        }, 2600);
+          select((selected + 1) % steps.length);
+        }, 3200);
       }
 
-      nodes.forEach(function (n, i) {
-        n.addEventListener("click", function () { select(i, false); });
-        n.addEventListener("keydown", function (e) {
+      buttons.forEach(function (b, i) {
+        b.addEventListener("click", function () { select(i); });
+        b.addEventListener("keydown", function (e) {
           var next = -1;
-          if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % nodes.length;
-          else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (i - 1 + nodes.length) % nodes.length;
+          if (e.key === "ArrowRight") next = (i + 1) % steps.length;
+          else if (e.key === "ArrowLeft") next = (i - 1 + steps.length) % steps.length;
           else if (e.key === "Home") next = 0;
-          else if (e.key === "End") next = nodes.length - 1;
+          else if (e.key === "End") next = steps.length - 1;
           if (next >= 0) {
             e.preventDefault();
-            select(next, false);
-            nodes[next].focus();
+            select(next);
+            buttons[next].focus();
           }
-        });
-        n.addEventListener("pointerenter", function () {
-          paused = true;
-          stopAuto();
         });
       });
 
+      shell.addEventListener("pointerenter", function () {
+        paused = true;
+        stopAuto();
+      });
       shell.addEventListener("pointerleave", function () {
         paused = false;
         startAuto();
@@ -276,17 +256,7 @@
       });
 
       shell.classList.add("is-enhanced");
-      layout();
-      select(0, true);
-
-      var resizeTimer = null;
-      window.addEventListener("resize", function () {
-        if (resizeTimer) window.clearTimeout(resizeTimer);
-        resizeTimer = window.setTimeout(function () {
-          layout();
-          place(selected, true);
-        }, 120);
-      });
+      select(0);
 
       if ("IntersectionObserver" in window && !reduceMotion) {
         var io = new IntersectionObserver(function (entries) {

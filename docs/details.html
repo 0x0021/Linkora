@@ -99,7 +99,9 @@
       <h2 class="section__title">一条消息，走五步</h2>
       <p class="section__desc">从收到到发出，每一步都留了记录，也能随时插手。</p>
     </div>
-    <div class="pipeline reveal">
+    <div class="pipeline-shell reveal" data-pipeline>
+      <div class="pipeline__progress" aria-hidden="true"><span class="pipeline__progress-fill"></span></div>
+      <div class="pipeline" role="tablist" aria-label="一条消息，走五步">
       <div class="node">
         <span class="node__step">01</span>
         <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
@@ -129,6 +131,14 @@
         <div class="node__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg></div>
         <h3>原路发回</h3>
         <p>发出前再核一遍，回到原对话。</p>
+      </div>
+      </div>
+      <div class="pipeline__detail" id="how-step-detail" role="tabpanel">
+        <span class="pipeline__detail-step" aria-hidden="true"></span>
+        <div class="pipeline__detail-copy">
+          <h3></h3>
+          <p></p>
+        </div>
       </div>
     </div>
   </div>

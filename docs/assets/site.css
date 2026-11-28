@@ -422,6 +422,73 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .node__icon svg { width: 18px; height: 18px; }
 .node h3 { font-size: 15px; font-weight: 650; }
 .node p { margin-top: 6px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+.pipeline__progress, .pipeline__detail { display: none; }
+
+/* ---------------- 工作原理 · 动态步骤（JS 初始化成功后生效） ---------------- */
+.is-enhanced .pipeline__progress {
+  display: block;
+  position: relative;
+  height: 3px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.is-enhanced .pipeline__progress-fill {
+  display: block;
+  width: 20%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+  transition: width 0.38s var(--ease);
+}
+.is-enhanced .pipeline { gap: 10px; }
+.is-enhanced .node {
+  min-height: 128px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.is-enhanced .node::after { display: none; }
+.is-enhanced .node p { display: none; }
+.is-enhanced .node.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-2px);
+}
+.is-enhanced .node.is-done .node__step { color: var(--text-2); }
+.is-enhanced .node:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.is-enhanced .node__icon { margin: 10px 0; transition: background-color 0.2s ease; }
+.is-enhanced .node.is-active .node__icon { background: var(--bg-elev); }
+.is-enhanced .pipeline__detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  min-height: 108px;
+  margin-top: 18px;
+  padding: 24px 28px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+.is-enhanced .pipeline__detail-step {
+  flex: none;
+  color: var(--brand);
+  opacity: 0.3;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.is-enhanced .pipeline__detail-copy h3 { margin: 0; font-size: 19px; font-weight: 650; }
+.is-enhanced .pipeline__detail-copy p { margin: 8px 0 0; color: var(--text-2); font-size: 15px; line-height: 1.7; }
+.is-enhanced .pipeline__detail.is-in .pipeline__detail-copy { animation: step-copy-in 0.28s var(--ease) both; }
+@keyframes step-copy-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* ---------------- 多平台 ---------------- */
 .platforms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -589,6 +656,22 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .footer__badges { display: flex; flex-wrap: wrap; gap: 8px; }
 .footer__badges span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-alt); font-size: 12px; }
 
+@media (max-width: 860px) {
+  .is-enhanced .pipeline {
+    display: flex;
+    gap: 10px;
+    margin-inline: -16px;
+    padding: 0 16px 6px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .is-enhanced .pipeline::-webkit-scrollbar { display: none; }
+  .is-enhanced .node { flex: 0 0 138px; scroll-snap-align: start; }
+  .is-enhanced .pipeline__detail { padding: 20px; gap: 14px; }
+  .is-enhanced .pipeline__detail-step { font-size: 26px; }
+}
+
 /* ---------------- 进场动画 ---------------- */
 .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.55s var(--ease), transform 0.55s var(--ease); }
 .js .reveal.in { opacity: 1; transform: none; }
@@ -602,6 +685,7 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   .docs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .gate { grid-template-columns: 1fr; gap: 40px; padding: 48px 36px; }
   .pipeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .is-enhanced .pipeline { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .node:not(:last-child)::after { display: none; }
   .footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; }
 }

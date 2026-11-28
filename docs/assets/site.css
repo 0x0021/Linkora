@@ -235,8 +235,9 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .hero__brand { color: var(--brand); }
 .hero__title-sub { color: var(--text-3); }
 .hero__lede { max-width: 720px; margin: 28px auto 0 !important; font-size: 18px; line-height: 1.6; color: var(--text-2); }
-.hero__lede-hook, .hero__lede-proof { display: block; }
+.hero__lede-hook, .hero__lede-proof, .hero__lede-kicker { display: block; }
 .hero__lede-proof { margin-top: 4px; font-size: 0.88em; color: var(--text-3); }
+.hero__lede-kicker { margin-top: 12px; color: var(--brand); font-size: 1.05em; font-weight: 700; letter-spacing: 0.01em; }
 .hero__actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 11px; margin-top: 30px; }
 .hero__platform-line { margin-top: 22px !important; color: var(--text-3); font-size: 13px; font-weight: 600; }
 .hero__platform-line span { color: var(--divider); margin-inline: 8px; }

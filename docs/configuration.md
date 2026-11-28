@@ -235,7 +235,7 @@ platforms:
 | `auto_create` | `true` | 自动建待办；关掉只记录到管理台等人工处理 |
 | `notify_sender` / `notify_owner` | `true` / `true` | 建单后给对方回执 / 给本人推汇总 |
 | `owner_user_id` / `owner_open_dingtalk_id` | 空 | 本人标识（汇总提醒与执行人用，**优先填数字 userId**） |
-| `sender_notice_text` | `你的消息我已记入待办，稍后回复，谢谢～` | 给对方的回执话术 |
+| `sender_notice_text` | `你的消息我已记入待办，稍后回复，谢谢～` | 回执固定文案：LLM 生成不可用或未通过校验时回退使用 |
 | `notice_max_age_hours` | `6` | 回执时效闸门：留言距今超过该小时数就不再给对方发回执（待办照建、只提醒本人）；`0` = 不限制 |
 | `notice_only_when_offhours` | `true` | 回执时段闸门：只有当前仍在工作时间外才回执；主人已回到工位时不发「稍后回复」 |
 | `ignore_system_senders` / `ignore_sender_ids` / `ignore_content_prefixes` / `ignore_trivial_replies` | 见 `config.yaml.example` | 过滤名单：系统发送者 / 精确 senderId / 内容前缀 / 纯客套词 |
@@ -244,6 +244,12 @@ platforms:
 只填 `open_dingtalk_id` 会被钉钉静默忽略、待办不出现在「待我处理」。首次启用会自建
 `offhours_unanswered` / `offhours_todo_records` 两张本地表，无需手工迁移；内置工具数仍 49。
 管理台「未回复待办」页可查看筛选规则、未回复消息、建单记录与统计，并手动扫描 / 同步 / 建单 / 忽略。
+
+🔴 **回执文案由 LLM 生成（无需配置）**：建单后给对方的回执优先由 LLM 生成一句自然文案，
+只表达「已收到 / 已记入待办 / 恢复工作后查看或回复 / 感谢理解」。生成结果会经过结构正则
+与禁词表双重校验（具体时间、已处理承诺、引导对方操作、无关内容、媒体引用一律拦下）；
+模型不可用、调用失败或校验不过时，自动回退到 `sender_notice_text` 原固定文案。对方的原始
+正文不会交给模型，避免提示注入把回执带偏。
 
 🔴 **回执闸门（2026-11-23 加）**：回执的语义是「我现在不方便，稍后回」，只有留言新鲜、
 且主人此刻确实还在非工作时段时才成立。隔天的留言、或主人已坐在工位上时发「稍后回复」

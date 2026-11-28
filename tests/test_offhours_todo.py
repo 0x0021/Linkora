@@ -1235,7 +1235,7 @@ def test_intent_gate_fails_open(tmp_path):
 
 
 def test_intent_gate_can_be_disabled(tmp_path):
-    """开关关闭时不调用 LLM，保持旧行为。"""
+    """开关关闭时不做意图判断；LLM 只剩回执文案生成这一处用途。"""
     store = _make_store(tmp_path)
     llm = _FakeLLM("NO")
     service, ctx, adapter = _intent_ctx(store, llm)
@@ -1246,7 +1246,8 @@ def test_intent_gate_can_be_disabled(tmp_path):
     )
 
     assert ok and kind == "platform_todo"
-    assert llm.calls == []
+    assert len(llm.calls) == 1
+    assert "消息意图判别器" not in llm.calls[0][0][0]["content"]
 
 
 def test_local_intent_gate_works_without_llm(tmp_path):

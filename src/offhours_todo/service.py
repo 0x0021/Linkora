@@ -24,6 +24,7 @@ from src.config_models.system import UnrepliedTodoConfig
 from src.exceptions import LLMError
 from src.im_adapter.errors import IMAdapterError, IMAdapterUnsupportedTypeError
 from src.llm.usage_ledger import purpose_scope
+from src.offhours_todo.notice_reply import DEFAULT_SENDER_NOTICE_TEXT, generate_notice_text
 from src.offhours_todo.scanner import (
     ScanResult,
     UnansweredItem,
@@ -657,9 +658,22 @@ class OffhoursTodoService:
 
         return True, ""
 
+    def _resolve_notice_text(self, item: UnansweredItem) -> str:
+        """回执文案：LLM 生成（经硬校验）优先，不合格一律回退原固定文案。
+
+        生成失败不阻断回执主流程；固定文案是配置里原有的 ``sender_notice_text``，
+        只有配置为空时才用代码默认值，保证任何时刻发出的都是已知安全的方向。
+        """
+        generated = generate_notice_text(getattr(self.engine, "llm_client", None))
+        if generated:
+            logger.info("[未回复待办] 使用 LLM 回执文案 key=%s: %s", item.dedupe_key, generated)
+            return generated
+        fallback = str(getattr(self.cfg, "sender_notice_text", "") or "").strip()
+        return fallback or DEFAULT_SENDER_NOTICE_TEXT
+
     def _notify_sender(self, item: UnansweredItem, ctx: "PlatformContext", adapter: Any) -> bool:
         """在原会话给对方回执。钉钉走 conversation_id 稳定 ID 直通，其它平台走 group。"""
-        text = self.cfg.sender_notice_text
+        text = self._resolve_notice_text(item)
         try:
             if item.platform == "dingtalk":
                 adapter.chat_message_send(

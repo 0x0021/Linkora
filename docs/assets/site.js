@@ -134,47 +134,84 @@
     });
   }
 
-  /* ---- 工作方式：五步动态展示 ---- */
+  /* ---- 工作方式：消息沿时间线逐站流转 ---- */
   var shell = document.querySelector("[data-pipeline]");
   if (shell) {
+    var stage = shell.querySelector(".flow-stage");
+    var lane = shell.querySelector(".flow-lane");
+    var dotsLayer = shell.querySelector(".flow-lane__dots");
+    var line = shell.querySelector(".flow-lane__line");
+    var fill = shell.querySelector(".flow-lane__fill");
+    var carrier = shell.querySelector(".flow-carrier");
     var rail = shell.querySelector(".pipeline");
     var nodes = Array.prototype.slice.call(rail ? rail.querySelectorAll(".node") : []);
-    var detail = shell.querySelector(".pipeline__detail");
-    var fill = shell.querySelector(".pipeline__progress-fill");
-    if (nodes.length && detail && fill) {
-      var steps = nodes.map(function (n) {
-        var h = n.querySelector("h3");
-        var p = n.querySelector("p");
-        return {
-          title: h ? h.textContent.trim() : "",
-          desc: p ? p.textContent.trim() : ""
-        };
+    if (stage && lane && dotsLayer && line && fill && carrier && nodes.length) {
+      var LINE_X = 26;
+      var CARRIER_X = 64;
+      var dots = nodes.map(function () {
+        var d = document.createElement("span");
+        d.className = "flow-dot";
+        dotsLayer.appendChild(d);
+        return d;
       });
-      var detailStep = detail.querySelector(".pipeline__detail-step");
-      var detailTitle = detail.querySelector(".pipeline__detail-copy h3");
-      var detailDesc = detail.querySelector(".pipeline__detail-copy p");
       var selected = 0;
+      var centers = [];
       var timer = null;
-      var autoStopped = false;
-      var hoverCapable = !!window.matchMedia && window.matchMedia("(hover: hover)").matches;
+      var paused = false;
+      var visible = false;
       var reduceMotion = !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       nodes.forEach(function (n, i) {
-        n.setAttribute("role", "tab");
-        n.setAttribute("id", "how-step-tab-" + (i + 1));
-        n.setAttribute("aria-controls", "how-step-detail");
-        n.setAttribute("aria-selected", i === 0 ? "true" : "false");
-        n.setAttribute("tabindex", i === 0 ? "0" : "-1");
+        n.setAttribute("role", "listitem");
+        n.setAttribute("tabindex", "0");
+        if (i === 0) n.setAttribute("aria-current", "step");
       });
 
-      function render(i) {
-        detailStep.textContent = ("0" + (i + 1)).slice(-2);
-        detailTitle.textContent = steps[i].title;
-        detailDesc.textContent = steps[i].desc;
-        detail.setAttribute("aria-labelledby", nodes[i].id);
-        detail.classList.remove("is-in");
-        void detail.offsetWidth;
-        detail.classList.add("is-in");
+      function layout() {
+        var sr = stage.getBoundingClientRect();
+        centers = nodes.map(function (n, i) {
+          var icon = n.querySelector(".node__icon") || n;
+          var ir = icon.getBoundingClientRect();
+          var y = ir.top + ir.height / 2 - sr.top;
+          dots[i].style.left = LINE_X + "px";
+          dots[i].style.top = y + "px";
+          return { x: LINE_X, y: y };
+        });
+        var first = centers[0];
+        var last = centers[centers.length - 1];
+        line.style.left = (LINE_X - 1) + "px";
+        line.style.top = first.y + "px";
+        line.style.width = "2px";
+        line.style.height = (last.y - first.y) + "px";
+      }
+
+      function place(i, instant) {
+        var c = centers[i];
+        if (!c) return;
+        if (instant) carrier.style.transition = "none";
+        carrier.style.transform = "translate(" + (CARRIER_X - carrier.offsetWidth / 2) + "px," + (c.y - carrier.offsetHeight / 2) + "px)";
+        if (instant) {
+          void carrier.offsetWidth;
+          carrier.style.transition = "";
+        }
+        fill.style.width = "100%";
+        fill.style.height = (nodes.length === 1 ? 0 : (i / (nodes.length - 1)) * 100) + "%";
+        dots.forEach(function (d, j) {
+          d.classList.toggle("is-done", j < i);
+          d.classList.toggle("is-active", j === i);
+        });
+      }
+
+      function select(i, instant) {
+        if (i < 0 || i >= nodes.length) return;
+        selected = i;
+        nodes.forEach(function (n, j) {
+          n.classList.toggle("is-active", j === i);
+          n.classList.toggle("is-done", j < i);
+          if (j === i) n.setAttribute("aria-current", "step");
+          else n.removeAttribute("aria-current");
+        });
+        place(i, instant);
       }
 
       function stopAuto() {
@@ -185,41 +222,26 @@
       }
 
       function startAuto() {
-        if (autoStopped || reduceMotion || timer) return;
+        if (reduceMotion || paused || !visible || timer) return;
         timer = window.setInterval(function () {
-          if (selected >= nodes.length - 1) {
-            stopAuto();
+          if (selected < nodes.length - 1) {
+            select(selected + 1, false);
             return;
           }
-          select(selected + 1, false);
-        }, 3200);
-      }
-
-      function select(i, userAction) {
-        if (i < 0 || i >= nodes.length) return;
-        selected = i;
-        nodes.forEach(function (n, j) {
-          n.classList.toggle("is-active", j === i);
-          n.classList.toggle("is-done", j < i);
-          n.setAttribute("aria-selected", j === i ? "true" : "false");
-          n.setAttribute("tabindex", j === i ? "0" : "-1");
-        });
-        fill.style.width = ((i + 1) / nodes.length * 100) + "%";
-        render(i);
-        if (userAction) {
-          autoStopped = true;
+          carrier.classList.add("is-hidden");
+          fill.style.opacity = "0";
           stopAuto();
-        }
-        if (rail.scrollWidth > rail.clientWidth + 4) {
-          var nr = nodes[i].getBoundingClientRect();
-          var rr = rail.getBoundingClientRect();
-          var left = rail.scrollLeft + nr.left - rr.left - (rail.clientWidth - nr.width) / 2;
-          rail.scrollLeft = Math.max(0, left);
-        }
+          window.setTimeout(function () {
+            select(0, true);
+            carrier.classList.remove("is-hidden");
+            fill.style.opacity = "";
+            startAuto();
+          }, 420);
+        }, 2600);
       }
 
       nodes.forEach(function (n, i) {
-        n.addEventListener("click", function () { select(i, true); });
+        n.addEventListener("click", function () { select(i, false); });
         n.addEventListener("keydown", function (e) {
           var next = -1;
           if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % nodes.length;
@@ -228,41 +250,54 @@
           else if (e.key === "End") next = nodes.length - 1;
           if (next >= 0) {
             e.preventDefault();
-            select(next, true);
+            select(next, false);
             nodes[next].focus();
           }
         });
-        if (hoverCapable) {
-          n.addEventListener("pointerenter", function () {
-            stopAuto();
-            select(i, false);
-          });
-        }
+        n.addEventListener("pointerenter", function () {
+          paused = true;
+          stopAuto();
+        });
       });
 
       shell.addEventListener("pointerleave", function () {
-        if (!autoStopped) startAuto();
+        paused = false;
+        startAuto();
       });
-      shell.addEventListener("focusin", stopAuto);
+      shell.addEventListener("focusin", function () {
+        paused = true;
+        stopAuto();
+      });
       shell.addEventListener("focusout", function () {
-        if (!autoStopped && !shell.contains(document.activeElement)) startAuto();
+        if (!shell.contains(document.activeElement)) {
+          paused = false;
+          startAuto();
+        }
       });
 
-      select(0, false);
       shell.classList.add("is-enhanced");
+      layout();
+      select(0, true);
+
+      var resizeTimer = null;
+      window.addEventListener("resize", function () {
+        if (resizeTimer) window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(function () {
+          layout();
+          place(selected, true);
+        }, 120);
+      });
 
       if ("IntersectionObserver" in window && !reduceMotion) {
-        var po = new IntersectionObserver(function (entries) {
+        var io = new IntersectionObserver(function (entries) {
           entries.forEach(function (en) {
-            if (en.isIntersecting) {
-              startAuto();
-              po.disconnect();
-            }
+            visible = en.isIntersecting;
+            if (visible) startAuto();
+            else stopAuto();
           });
-        }, { threshold: 0.4 });
-        po.observe(shell);
+        }, { threshold: 0.25 });
+        io.observe(shell);
       }
     }
   }
-
 })();

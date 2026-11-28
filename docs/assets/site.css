@@ -422,72 +422,104 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .node__icon svg { width: 18px; height: 18px; }
 .node h3 { font-size: 15px; font-weight: 650; }
 .node p { margin-top: 6px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
-.pipeline__progress, .pipeline__detail { display: none; }
+.flow-stage, .flow-lane__line, .flow-lane__dots, .flow-lane__fill, .flow-carrier { display: none; }
 
-/* ---------------- 工作原理 · 动态步骤（JS 初始化成功后生效） ---------------- */
-.is-enhanced .pipeline__progress {
+/* ---------------- 工作原理 · 消息流转时间线（JS 初始化成功后生效） ---------------- */
+.is-enhanced .flow-stage {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.is-enhanced .flow-lane { position: relative; height: 100%; align-self: stretch; }
+.is-enhanced .flow-lane__line {
   display: block;
-  position: relative;
-  height: 3px;
-  margin-bottom: 18px;
+  position: absolute;
+  overflow: hidden;
   border-radius: 999px;
   background: var(--border);
-  overflow: hidden;
 }
-.is-enhanced .pipeline__progress-fill {
+.is-enhanced .flow-lane__fill {
   display: block;
-  width: 20%;
-  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--brand-soft), var(--brand));
+  box-shadow: 0 0 12px var(--brand-soft);
+  transition: height 0.72s var(--ease), opacity 0.2s ease;
+}
+.is-enhanced .flow-lane__fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: flow-shine 1.8s linear infinite;
+}
+@keyframes flow-shine {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}
+.is-enhanced .flow-lane__dots { display: block; position: absolute; inset: 0; }
+.is-enhanced .flow-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-elev);
+  transform: translate(-50%, -50%);
+  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+}
+.is-enhanced .flow-dot.is-done { border-color: var(--brand); background: var(--brand); }
+.is-enhanced .flow-dot.is-active {
+  border-color: var(--brand);
+  background: var(--bg-elev);
+  animation: dot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px var(--brand-soft); }
+  50% { box-shadow: 0 0 0 9px transparent; }
+}
+.is-enhanced .flow-carrier {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
   border-radius: 999px;
   background: var(--brand);
-  transition: width 0.38s var(--ease);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 122, 255, 0.25);
+  transition: transform 0.72s var(--ease), opacity 0.25s ease;
 }
-.is-enhanced .pipeline { gap: 10px; }
+.is-enhanced .flow-carrier svg { width: 13px; height: 13px; flex: none; }
+.is-enhanced .flow-carrier.is-hidden { opacity: 0; }
+.is-enhanced .pipeline { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .is-enhanced .node {
-  min-height: 128px;
+  min-height: 88px;
+  padding: 16px 18px;
   cursor: pointer;
   outline: none;
   transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 .is-enhanced .node::after { display: none; }
-.is-enhanced .node p { display: none; }
 .is-enhanced .node.is-active {
   border-color: var(--brand);
   background: var(--brand-soft);
   box-shadow: var(--shadow-soft);
-  transform: translateY(-2px);
+  transform: translateX(3px);
 }
 .is-enhanced .node.is-done .node__step { color: var(--text-2); }
 .is-enhanced .node:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-.is-enhanced .node__icon { margin: 10px 0; transition: background-color 0.2s ease; }
-.is-enhanced .node.is-active .node__icon { background: var(--bg-elev); }
-.is-enhanced .pipeline__detail {
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  min-height: 108px;
-  margin-top: 18px;
-  padding: 24px 28px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-soft);
-}
-.is-enhanced .pipeline__detail-step {
-  flex: none;
-  color: var(--brand);
-  opacity: 0.3;
-  font-size: 34px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-.is-enhanced .pipeline__detail-copy h3 { margin: 0; font-size: 19px; font-weight: 650; }
-.is-enhanced .pipeline__detail-copy p { margin: 8px 0 0; color: var(--text-2); font-size: 15px; line-height: 1.7; }
-.is-enhanced .pipeline__detail.is-in .pipeline__detail-copy { animation: step-copy-in 0.28s var(--ease) both; }
-@keyframes step-copy-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+.is-enhanced .node__icon { margin: 8px 0; transition: background-color 0.2s ease; }
+.is-enhanced .node.is-active .node__icon { background: var(--bg-elev); animation: node-pulse 0.5s var(--ease); }
+@keyframes node-pulse {
+  from { box-shadow: 0 0 0 0 var(--brand-soft); }
+  60% { box-shadow: 0 0 0 8px var(--brand-soft); }
+  to { box-shadow: 0 0 0 0 transparent; }
 }
 
 /* ---------------- 多平台 ---------------- */
@@ -656,20 +688,9 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .footer__badges { display: flex; flex-wrap: wrap; gap: 8px; }
 .footer__badges span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-alt); font-size: 12px; }
 
-@media (max-width: 860px) {
-  .is-enhanced .pipeline {
-    display: flex;
-    gap: 10px;
-    margin-inline: -16px;
-    padding: 0 16px 6px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-  .is-enhanced .pipeline::-webkit-scrollbar { display: none; }
-  .is-enhanced .node { flex: 0 0 138px; scroll-snap-align: start; }
-  .is-enhanced .pipeline__detail { padding: 20px; gap: 14px; }
-  .is-enhanced .pipeline__detail-step { font-size: 26px; }
+@media (max-width: 640px) {
+  .is-enhanced .flow-stage { gap: 8px; }
+  .is-enhanced .node { padding: 16px 12px; min-height: 84px; }
 }
 
 /* ---------------- 进场动画 ---------------- */
@@ -685,7 +706,7 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   .docs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .gate { grid-template-columns: 1fr; gap: 40px; padding: 48px 36px; }
   .pipeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .is-enhanced .pipeline { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .is-enhanced .pipeline { grid-template-columns: 1fr; }
   .node:not(:last-child)::after { display: none; }
   .footer__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px; }
 }

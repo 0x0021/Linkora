@@ -34,6 +34,7 @@ from src.offhours_todo.scanner import (
     collect_platform_self_names,
     scan_platform,
 )
+from src.offhours_todo.thread_summary import summarize_thread
 from src.offhours_todo.worktime import classify, parse_message_ts, resolve_tz
 from src.utils.media_text import strip_media_refs
 
@@ -46,6 +47,10 @@ _CLI_ERRORS = (
     IMAdapterError, OSError, ValueError, TypeError, KeyError,
     RuntimeError, subprocess.SubprocessError,
 )
+
+# 同一会话里连续消息的时间间隔（分钟）：间隔内视为同一件事，合并成一条待办。
+# 取其「连续对话」语义，不引入配置项——避免为了一个内部合并窗口污染配置体系。
+_THREAD_GAP_MINUTES = 15
 
 # 建单前的语义闸门（坤哥 2026-11-25 明确要求）：短语词表只能挡住「好的/谢谢」这类
 # 固定客套，挡不住「已提交」「我明天问一下，应该不是业绩为 0」这种带业务词的收尾。
@@ -195,6 +200,49 @@ def _trim_at_bracket(text: str) -> str:
     return text
 
 
+def _group_thread_items(
+    items: list[UnansweredItem], tz: Any, *, gap_minutes: int = _THREAD_GAP_MINUTES,
+) -> list[list[UnansweredItem]]:
+    """把同一会话、同一发送者、间隔不超过窗口的连续留言分成一组。
+
+    AI 代发的回复在扫描阶段已被过滤，不打断分组；本人真人回复之后的消息同样不会
+    进入 items（会被判为已回复），所以不需要在此额外处理。时间戳缺失时保守拆组。
+    """
+    if len(items) < 2 or gap_minutes <= 0:
+        return [[item] for item in items]
+
+    ordered = sorted(
+        items,
+        key=lambda item: (item.chat_id, parse_message_ts(item.timestamp, tz) or datetime.max),
+    )
+    groups: list[list[UnansweredItem]] = []
+    current: list[UnansweredItem] = []
+    last_key: tuple[str, str, str, str] | None = None
+    last_ts: datetime | None = None
+    for item in ordered:
+        ts = parse_message_ts(item.timestamp, tz)
+        key = (item.platform, item.chat_id, item.sender_id, item.sender_name)
+        same_thread = (
+            current is not None and last_key == key
+            and ts is not None and last_ts is not None
+            and timedelta(0) <= ts - last_ts <= timedelta(minutes=gap_minutes)
+        )
+        if not current or not same_thread:
+            if current:
+                groups.append(current)
+            current = [item]
+            last_key = key
+        else:
+            current.append(item)
+        if ts is not None:
+            last_ts = ts
+        else:
+            last_ts = None
+    if current:
+        groups.append(current)
+    return groups
+
+
 class OffhoursTodoService:
     """扫描与建单编排器（线程安全：单次扫描持锁，防 web/worker 双跑）。"""
 
@@ -319,11 +367,39 @@ class OffhoursTodoService:
         if dry_run or not create_todos or not result.items:
             return out
 
-        # 按会话聚合后逐条建单（scanner 已按 chat_id 分组落库，这里按 limit 截断）
-        items = sorted(result.items, key=lambda x: x.timestamp)[: self.cfg.max_per_scan]
-        for item in items:
+        # 同一会话的连续留言先合并成「一件事」，再按待办数上限截断：
+        # 「电脑坏了 → 开不了机 → 我不会你过来弄」只该建一条带摘要的待办。
+        tz = resolve_tz(self.cfg.timezone)
+        groups = _group_thread_items(
+            sorted(result.items, key=lambda x: x.timestamp), tz
+        )[: self.cfg.max_per_scan]
+        store = ctx.store
+        if store is None:
+            return out
+        repo = store._offhours_todo_repo
+        for group in groups:
+            item = group[0]
+            if len(group) > 1:
+                item.detail = dict(item.detail)
+                item.detail["thread_msg_ids"] = [x.msg_id for x in group]
+                item.detail["thread_size"] = len(group)
+                merged = "；".join(
+                    cleaned for x in group
+                    if (cleaned := strip_media_refs(x.content_preview).strip())
+                )
+                item.content_preview = merged[:500]
             ok, kind, err = self._create_for_item(item, ctx, self_ids)
             if ok:
+                if len(group) > 1 and kind not in ("already_replied", "no_action_intent", "duplicate"):
+                    # 合并进来的其它留言不再单独建单，也不再各自发回执
+                    for extra in group[1:]:
+                        try:
+                            repo.update_unanswered_status(
+                                extra.dedupe_key, "ignored",
+                                detail=f"合并到待办 {item.dedupe_key}",
+                            )
+                        except (sqlite3.Error, ValueError) as e:
+                            logger.debug("[未回复待办] 合并留言标记失败 key=%s: %s", extra.dedupe_key, e)
                 if kind == "notify_only":
                     out["notify_only"] += 1
                 elif kind in ("already_replied", "no_action_intent", "duplicate"):
@@ -333,7 +409,7 @@ class OffhoursTodoService:
                     out["todos_created"] += 1
                 notices.append(
                     f"[{platform}] {item.sender_name or item.sender_id or '未知'}："
-                    f"{_summarize_preview(item.content_preview)}"
+                    f"{item.summary or _summarize_preview(item.content_preview)}"
                 )
                 if created_keys is not None:
                     created_keys.append(item.dedupe_key)
@@ -354,8 +430,8 @@ class OffhoursTodoService:
         except ValueError:
             ts = item.timestamp[:16]
         suffix = f"（{ts}）" if ts else ""
-        # 钉钉待办无 description 字段，把内容摘要塞进标题，保证待办本身自带上下文
-        preview = _summarize_preview(item.content_preview, limit=30)
+        # 钉钉待办无 description 字段，把摘要塞进标题，保证待办本身自带上下文
+        preview = item.summary or _summarize_preview(item.content_preview, limit=30)
         return f"待回复 · {who}{suffix}{' · ' + preview if preview else ''}"
 
     def _resolve_executor(self, platform: str, self_ids: frozenset[str] | set[str]) -> str:
@@ -536,12 +612,17 @@ class OffhoursTodoService:
                 logger.debug("[未回复待办] 标记无诉求失败 key=%s: %s", item.dedupe_key, e)
             return True, "no_action_intent", ""
 
+        # 连续留言压成一条摘要：标题 / 本人汇总 / 飞书描述都只看这一个口径，
+        # 避免同一件事在钉钉待办里出现三条各自截取的碎片。
+        llm = getattr(self.engine, "llm_client", None)
+        item.summary = summarize_thread(llm, item.content_preview)
         title = self._build_title(item)
         description = (
             f"来源：{item.platform} / 会话 {item.chat_name or item.chat_id}\n"
             f"发送人：{item.sender_name or item.sender_id}\n"
             f"时间：{item.timestamp}\n"
-            f"内容：{item.content_preview[:200]}"
+            f"摘要：{item.summary}\n"
+            f"原始留言：{item.content_preview[:300]}"
         )
         todo_id = ""
         kind = "platform_todo"

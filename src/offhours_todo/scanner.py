@@ -129,6 +129,8 @@ class UnansweredItem:
     dedupe_key: str
     unread: bool = False
     detail: dict[str, Any] = field(default_factory=dict)
+    #: 同一会话连续多条消息合并后的核心诉求摘要（由建单服务填充）
+    summary: str = ""
 
 
 @dataclass

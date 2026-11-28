@@ -1246,8 +1246,9 @@ def test_intent_gate_can_be_disabled(tmp_path):
     )
 
     assert ok and kind == "platform_todo"
-    assert len(llm.calls) == 1
-    assert "消息意图判别器" not in llm.calls[0][0][0]["content"]
+    # 意图闸门关闭 → 两次调用分别只是待办摘要与回执文案，不含意图判别
+    assert len(llm.calls) == 2
+    assert all("消息意图判别器" not in call[0][0]["content"] for call in llm.calls)
 
 
 def test_local_intent_gate_works_without_llm(tmp_path):

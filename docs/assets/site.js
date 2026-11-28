@@ -217,7 +217,7 @@
         if (reduceMotion || paused || !visible || timer) return;
         timer = window.setInterval(function () {
           select((selected + 1) % steps.length);
-        }, 3200);
+        }, 1700);
       }
 
       buttons.forEach(function (b, i) {
